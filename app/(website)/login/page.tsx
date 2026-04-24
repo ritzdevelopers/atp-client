@@ -10,6 +10,13 @@ import Loader from "@/components/website/ui/Loader";
 import Modal from "@/components/website/ui/Modal";
 import { type ApiError, loginUser } from "@/services/auth";
 
+const LOGIN_REDIRECT_TO_CREATE_ORG_MESSAGES = new Set([
+  "error fetching user role name",
+  "user role not found",
+  "error fetching user role",
+  "user role name not found",
+]);
+
 export default function LoginPage() {
   const router = useRouter();
   const [formData, setFormData] = useState({
@@ -30,10 +37,15 @@ export default function LoginPage() {
       router.push("/");
     } catch (error) {
       const apiError = error as ApiError;
-      const message = apiError.message?.toLowerCase() || "";
+      const message = (apiError.message || "").trim().toLowerCase();
 
-      if (message === "user role not found") {
-        router.push("/create-organization");
+      if (LOGIN_REDIRECT_TO_CREATE_ORG_MESSAGES.has(message)) {
+        const ownerId = apiError.user_id;
+        if (typeof window !== "undefined" && ownerId != null && ownerId !== "") {
+          sessionStorage.setItem("onboarding_owner_id", String(ownerId));
+          localStorage.setItem("user_id", String(ownerId));
+        }
+        router.replace("/create-organization");
         return;
       }
 

@@ -28,6 +28,8 @@ type LoginResponse = {
   message?: string;
 };
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+
 type GetMeResponse = {
   user?: {
     id?: string | number;
@@ -36,13 +38,22 @@ type GetMeResponse = {
     email?: string;
   };
   organization_id?: string | number | null;
+  success?: boolean;
+  data?: {
+    user_role?: string;
+    role_name?: string;
+    org_details?: Array<{ id?: string | number }>;
+    org_id?: string | number;
+    id?: string | number;
+    user_id?: string | number;
+  };
   message?: string;
 };
 
-export type ApiError = Error & { status?: number };
+export type ApiError = Error & { status?: number; user_id?: string | number };
 
 export const registerUser = async (data: RegisterPayload): Promise<RegisterResponse> => {
-  const res = await fetch("http://localhost:3000/api/auth/register", {
+  const res = await fetch(`${API_URL}/api/register/user`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
@@ -60,7 +71,7 @@ export const registerUser = async (data: RegisterPayload): Promise<RegisterRespo
 };
 
 export const loginUser = async (data: LoginPayload): Promise<LoginResponse> => {
-  const res = await fetch("http://localhost:3000/api/auth/login", {
+  const res = await fetch(`${API_URL}/api/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
@@ -71,16 +82,18 @@ export const loginUser = async (data: LoginPayload): Promise<LoginResponse> => {
   if (!res.ok) {
     const error: ApiError = new Error(result.message || "Something went wrong");
     error.status = res.status;
+    if (result.user_id != null) {
+      error.user_id = result.user_id;
+    }
     throw error;
   }
 
   return result;
 };
 
-export const getMe = async (token: string): Promise<GetMeResponse> => {
-  console.log("Getting Me");
+export const getMe = async (token: string): Promise<GetMeResponse> => { 
   
-  const res = await fetch("http://localhost:3000/api/auth/admin/get-me", {
+  const res = await fetch(`${API_URL}/api/auth/get-me`, {
     method: "GET",
     headers: {
       "Content-Type": "application/json",

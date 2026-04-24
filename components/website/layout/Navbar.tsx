@@ -6,6 +6,8 @@ import { useEffect, useMemo, useState } from "react";
 
 import { getMe, type ApiError } from "@/services/auth";
 
+const ADMIN_ORGS_SESSION_KEY = "admin_org_data";
+
 const baseNavLinks = [
   { label: "About Us", href: "/about" },
   { label: "Pricing", href: "/pricing" },
@@ -17,6 +19,7 @@ export default function Navbar() {
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [hasOrganization, setHasOrganization] = useState(false);
+  const [userRole, setUserRole] = useState<string>("");
   const router = useRouter();
   const pathname = usePathname();
 
@@ -29,6 +32,7 @@ export default function Navbar() {
         if (isMounted) {
           setIsAuthenticated(false);
           setHasOrganization(false);
+          setUserRole("");
           setIsAuthLoading(false);
         }
         return;
@@ -36,19 +40,43 @@ export default function Navbar() {
 
       try {
         const result = await getMe(token);
+        console.log("result", result);
         if (!isMounted) {
           return;
         }
 
-        const resolvedUserId = result.user?.user_id ?? result.user?.id;
+        const resolvedUserId =
+          result.user?.user_id ??
+          result.user?.id ??
+          result.data?.user_id ??
+          result.data?.id;
         if (resolvedUserId !== undefined && resolvedUserId !== null) {
           localStorage.setItem("user_id", String(resolvedUserId));
         }
 
-        const orgExists = Boolean(result.organization_id);
+        const resolvedRole = (result.data?.user_role || result.data?.role_name || "").toLowerCase();
+        const adminOrgDetails = Array.isArray(result.data?.org_details)
+          ? result.data.org_details
+          : [];
+        const orgExists = Boolean(
+          result.organization_id ||
+            result.data?.org_id ||
+            adminOrgDetails.length > 0,
+        );
         setIsAuthenticated(true);
         setHasOrganization(orgExists);
+        setUserRole(resolvedRole);
         setIsAuthLoading(false);
+
+        if (resolvedRole === "admin" && adminOrgDetails.length > 0) {
+          sessionStorage.setItem(
+            ADMIN_ORGS_SESSION_KEY,
+            JSON.stringify({
+              user_role: resolvedRole,
+              org_details: adminOrgDetails,
+            }),
+          );
+        }
 
         if (!orgExists && pathname !== "/create-organization") {
           router.replace("/create-organization");
@@ -61,8 +89,10 @@ export default function Navbar() {
         const apiError = error as ApiError;
         if (apiError.status === 401 || apiError.status === 403) {
           localStorage.removeItem("token");
+          sessionStorage.removeItem(ADMIN_ORGS_SESSION_KEY);
           setIsAuthenticated(false);
           setHasOrganization(false);
+          setUserRole("");
           if (pathname !== "/login") {
             router.replace("/login");
           }
@@ -91,12 +121,16 @@ export default function Navbar() {
       ];
     }
 
-    if (hasOrganization) {
+    if (hasOrganization && userRole === "admin") {
       return [...baseNavLinks, { label: "Admin Panel", href: "/portal" }];
     }
 
+    if (hasOrganization) {
+      return [...baseNavLinks, { label: "Dashboard", href: "/dashboard" }];
+    }
+
     return baseNavLinks;
-  }, [hasOrganization, isAuthLoading, isAuthenticated]);
+  }, [hasOrganization, isAuthLoading, isAuthenticated, userRole]);
 
   return (
     <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur">

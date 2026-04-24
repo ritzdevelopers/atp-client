@@ -14,9 +14,9 @@ export default function CreateOrganizationPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [orgData, setOrgData] = useState({
-    org_name: "",
-    org_email: "",
-    org_phone: "",
+    organization_name: "",
+    organization_email: "",
+    organization_phone: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -44,10 +44,10 @@ export default function CreateOrganizationPage() {
 
     try {
       await createOrganization({
-        org_name: orgData.org_name,
+        organization_name: orgData.organization_name,
         owner_id: ownerId,
-        org_email: orgData.org_email,
-        org_phone: orgData.org_phone,
+        organization_email: orgData.organization_email,
+        organization_phone: orgData.organization_phone,
       });
       setShowSuccessModal(true);
     } catch (error) {
@@ -74,28 +74,28 @@ export default function CreateOrganizationPage() {
         <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
           <Input
             label="Organization Name"
-            name="org_name"
+            name="organization_name"
             placeholder="Enter organization name"
-            value={orgData.org_name}
-            onChange={(value) => setOrgData((prev) => ({ ...prev, org_name: value }))}
+            value={orgData.organization_name}
+            onChange={(value) => setOrgData((prev) => ({ ...prev, organization_name: value }))}
             required
           />
           <Input
             label="Organization Email"
-            name="org_email"
+            name="organization_email"
             type="email"
             placeholder="Enter organization email"
-            value={orgData.org_email}
-            onChange={(value) => setOrgData((prev) => ({ ...prev, org_email: value }))}
+            value={orgData.organization_email}
+            onChange={(value) => setOrgData((prev) => ({ ...prev, organization_email: value }))}
             required
           />
           <Input
             label="Organization Phone"
-            name="org_phone"
+            name="organization_phone"
             type="tel"
             placeholder="Enter organization phone"
-            value={orgData.org_phone}
-            onChange={(value) => setOrgData((prev) => ({ ...prev, org_phone: value }))}
+            value={orgData.organization_phone}
+            onChange={(value) => setOrgData((prev) => ({ ...prev, organization_phone: value }))}
             required
           />
 
