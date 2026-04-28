@@ -1,5 +1,21 @@
 @import "tailwindcss";
 
+@keyframes dashboard-enter {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dashboard-enter {
+  animation: dashboard-enter 0.5s ease-out forwards;
+  opacity: 0;
+}
+
 :root {
   --background: #ffffff;
   --foreground: #0c123a;

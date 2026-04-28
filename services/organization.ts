@@ -20,8 +20,12 @@ export type PortalFeature = {
 };
 
 export type PortalOrgUser = {
+  id?: string | number;
   user_id?: string | number;
+  user_name?: string;
   user_email?: string;
+  user_phone?: string;
+  created_at?: string;
   user_role_id?: string | number;
   user_role_name?: string;
 };
