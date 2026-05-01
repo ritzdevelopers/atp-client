@@ -51,7 +51,7 @@ function LeftSideBar({
 
       {
         id: "employee-onboarding",
-        name: "Employee Onboarding",
+        name: "Employee Management",
         value: "employee-onboarding",
         icon: <BiSolidUserPlus />,
         children: [
@@ -65,9 +65,15 @@ function LeftSideBar({
             name: "New Hires",
             path: `${base}/organization-employees/employee-onboarding`,
           },
+          {
+            id: "manage-leaves",
+            name: "New Hires",
+            path: `${base}/organization-employees/employee-onboarding`,
+          }
         ],
         path: `${base}/organization-employees/manage-employees`,
       },
+
       {
         id: "organization-roles",
         name: "Organization Roles",
@@ -87,6 +93,47 @@ function LeftSideBar({
         ],
         path: `${base}/organization-roles/create-new-role`,
       },
+
+      {
+        id: "organization-settings",
+        name: "Organization Settings",
+        value: "organization-settings",
+        icon: <MdSettings />,
+        children: [
+          {
+            id: "create-new-ip-address",
+            name: "Create New IP Address",
+            path: `${base}/organization-settings/create-new-ip-address`,
+          },
+          {
+            id: "manage-ip-addresses",
+            name: "Manage IP Addresses",
+            path: `${base}/organization-settings/manage-ip-addresses`,
+          },
+          {
+            id: "create-company-shifts",
+            name: "Create Company Shifts",
+            path: `${base}/organization-settings/create-company-shifts`,
+          },
+          {
+            id: "manage-company-shifts",
+            name: "Manage Company Shifts",
+            path: `${base}/organization-settings/manage-company-shifts`,
+          },
+          {
+            id: "organization-holidays",
+            name: "Organization Holidays",
+            path: `${base}/organization-settings/organization-holidays`,
+          },
+          // {
+          //   id: "paid-leaves-management",
+          //   name: "Paid Leaves Management",
+          //   path: `${base}/organization-settings/paid-leaves-management`,
+          // },
+        ],
+ 
+      },
+      
     ],
     [base],
   );

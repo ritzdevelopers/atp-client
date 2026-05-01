@@ -171,7 +171,7 @@ export default function AdminPortalPage() {
               </div>
 
               <Link
-                href={`/dashboard?org_id=${organization.id}`}
+                href={`/dashboard/${organization.id}/home`}
                 className="inline-flex w-full items-center justify-center rounded-xl bg-[#0C123A] px-4 py-3 text-sm font-semibold text-white transition-all hover:bg-[#151e59]"
               >
                 Enter Organization

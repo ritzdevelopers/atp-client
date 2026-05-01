@@ -78,9 +78,9 @@ export default function Navbar() {
           );
         }
 
-        if (!orgExists && pathname !== "/create-organization") {
-          router.replace("/create-organization");
-        }
+        // if (!orgExists && pathname !== "/create-organization") {
+        //   router.replace("/create-organization");
+        // }
       } catch (error) {
         if (!isMounted) {
           return;
