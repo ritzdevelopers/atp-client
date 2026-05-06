@@ -27,13 +27,16 @@ function ManagementDashboardLayout({ children }: { children: React.ReactNode }) 
   return (
     <ManagementDashboardProvider value={{ organization, user, loading }}>
       <main className="relative w-full">
-        <Header />
+        {/* <Header /> */}
 
         <div className="relative z-5 flex w-full">
           <LeftSideBar accessableFeatures={accessableFeatures} />
-          <section className="flex-1">
+        <section className="w-full">
+        <Header />
+          <div className="flex-1">
             <RightMainSide>{children}</RightMainSide>
-          </section>
+          </div>
+        </section>
         </div>
       </main>
     </ManagementDashboardProvider>

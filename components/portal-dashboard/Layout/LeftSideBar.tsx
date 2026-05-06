@@ -65,11 +65,7 @@ function LeftSideBar({
             name: "New Hires",
             path: `${base}/organization-employees/employee-onboarding`,
           },
-          {
-            id: "manage-leaves",
-            name: "New Hires",
-            path: `${base}/organization-employees/employee-onboarding`,
-          }
+          
         ],
         path: `${base}/organization-employees/manage-employees`,
       },
@@ -124,15 +120,27 @@ function LeftSideBar({
             id: "organization-holidays",
             name: "Organization Holidays",
             path: `${base}/organization-settings/organization-holidays`,
-          },
-          // {
-          //   id: "paid-leaves-management",
-          //   name: "Paid Leaves Management",
-          //   path: `${base}/organization-settings/paid-leaves-management`,
-          // },
+          }
         ],
- 
       },
+      {
+        id: "organization-features",
+        name: "Organization Features",
+        value: "organization-features",
+        icon: <MdSecurity />,
+        children: [
+          {
+            id: "manage-organization-features",
+            name: "Manage Organization Features",
+            path: `${base}/organization-features/manage-organization-features`,
+          },
+          {
+            id: "get-employee-accessible-features",
+            name: "Get Employee Accessible Features",
+            path: `${base}/organization-features/get-employee-accessible-features`,
+          }
+        ],
+      }
       
     ],
     [base],

@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { getMe, type ApiError } from "@/services/auth";
 
 const ADMIN_ORGS_SESSION_KEY = "admin_org_data";
+const NAVBAR_AUTH_CACHE_KEY = "navbar_auth_cache_v1";
 
 const baseNavLinks = [
   { label: "About Us", href: "/about" },
@@ -14,14 +14,46 @@ const baseNavLinks = [
   { label: "Contact Us", href: "/contact" },
 ];
 
+type CachedNavbarAuth = {
+  isAuthenticated: boolean;
+  role: string;
+  orgId: string | null;
+};
+
+type Role = "admin" | "hr" | "manager" | "employee" | "";
+
+function toRole(value: unknown): Role {
+  const role = String(value || "").trim().toLowerCase();
+  if (role === "admin" || role === "hr" || role === "manager" || role === "employee") {
+    return role;
+  }
+  return "";
+}
+
+function pickOrgId(result: any): string | null {
+  if (Array.isArray(result?.org_details) && result.org_details[0]?.id != null) {
+    return String(result.org_details[0].id);
+  }
+  if (result?.org_details?.id != null) {
+    return String(result.org_details.id);
+  }
+  if (result?.organization_id != null) {
+    return String(result.organization_id);
+  }
+  if (result?.data?.org_id != null) {
+    return String(result.data.org_id);
+  }
+  return null;
+}
+
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
+  const [auth, setAuth] = useState<CachedNavbarAuth>({
+    isAuthenticated: false,
+    role: "",
+    orgId: null,
+  });
   const [isAuthLoading, setIsAuthLoading] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [hasOrganization, setHasOrganization] = useState(false);
-  const [userRole, setUserRole] = useState<string>("");
-  const router = useRouter();
-  const pathname = usePathname();
 
   useEffect(() => {
     let isMounted = true;
@@ -30,57 +62,68 @@ export default function Navbar() {
       const token = localStorage.getItem("token");
       if (!token) {
         if (isMounted) {
-          setIsAuthenticated(false);
-          setHasOrganization(false);
-          setUserRole("");
+          sessionStorage.removeItem(NAVBAR_AUTH_CACHE_KEY);
+          sessionStorage.removeItem(ADMIN_ORGS_SESSION_KEY);
+          setAuth({ isAuthenticated: false, role: "", orgId: null });
           setIsAuthLoading(false);
         }
         return;
       }
 
+      const cached = sessionStorage.getItem(NAVBAR_AUTH_CACHE_KEY);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached) as CachedNavbarAuth;
+          if (isMounted) {
+            setAuth({
+              isAuthenticated: Boolean(parsed?.isAuthenticated),
+              role: toRole(parsed?.role),
+              orgId: parsed?.orgId ? String(parsed.orgId) : null,
+            });
+            setIsAuthLoading(false);
+          }
+          return;
+        } catch {
+          sessionStorage.removeItem(NAVBAR_AUTH_CACHE_KEY);
+        }
+      }
+
       try {
-        const result = await getMe(token);
-        console.log("result", result);
+        const result: any = await getMe(token);
         if (!isMounted) {
           return;
         }
 
-        const resolvedUserId =
-          result.user?.user_id ??
-          result.user?.id ??
-          result.data?.user_id ??
-          result.data?.id;
+        const resolvedUserId = result?.admin_details?.id ?? result?.user_details?.id;
         if (resolvedUserId !== undefined && resolvedUserId !== null) {
           localStorage.setItem("user_id", String(resolvedUserId));
         }
 
-        const resolvedRole = (result.data?.user_role || result.data?.role_name || "").toLowerCase();
-        const adminOrgDetails = Array.isArray(result.data?.org_details)
-          ? result.data.org_details
-          : [];
-        const orgExists = Boolean(
-          result.organization_id ||
-            result.data?.org_id ||
-            adminOrgDetails.length > 0,
-        );
-        setIsAuthenticated(true);
-        setHasOrganization(orgExists);
-        setUserRole(resolvedRole);
+        const role = toRole(result?.role ?? result?.data?.user_role ?? result?.data?.role_name);
+        const orgId = pickOrgId(result);
+        if (orgId) {
+          localStorage.setItem("org_id", orgId);
+        }
+
+        const nextAuth: CachedNavbarAuth = {
+          isAuthenticated: Boolean(result?.success) && Boolean(role),
+          role,
+          orgId,
+        };
+
+        setAuth(nextAuth);
+        sessionStorage.setItem(NAVBAR_AUTH_CACHE_KEY, JSON.stringify(nextAuth));
         setIsAuthLoading(false);
 
-        if (resolvedRole === "admin" && adminOrgDetails.length > 0) {
+        if (role === "admin" && Array.isArray(result?.org_details) && result.org_details.length > 0) {
           sessionStorage.setItem(
             ADMIN_ORGS_SESSION_KEY,
             JSON.stringify({
-              user_role: resolvedRole,
-              org_details: adminOrgDetails,
+              user_role: role,
+              org_details: result.org_details,
             }),
           );
         }
-
-        // if (!orgExists && pathname !== "/create-organization") {
-        //   router.replace("/create-organization");
-        // }
       } catch (error) {
         if (!isMounted) {
           return;
@@ -89,13 +132,11 @@ export default function Navbar() {
         const apiError = error as ApiError;
         if (apiError.status === 401 || apiError.status === 403) {
           localStorage.removeItem("token");
+          localStorage.removeItem("org_id");
+          localStorage.removeItem("user_id");
           sessionStorage.removeItem(ADMIN_ORGS_SESSION_KEY);
-          setIsAuthenticated(false);
-          setHasOrganization(false);
-          setUserRole("");
-          if (pathname !== "/login") {
-            router.replace("/login");
-          }
+          sessionStorage.removeItem(NAVBAR_AUTH_CACHE_KEY);
+          setAuth({ isAuthenticated: false, role: "", orgId: null });
         }
         setIsAuthLoading(false);
       }
@@ -106,14 +147,14 @@ export default function Navbar() {
     return () => {
       isMounted = false;
     };
-  }, [pathname, router]);
+  }, []);
 
   const navLinks = useMemo(() => {
     if (isAuthLoading) {
       return [...baseNavLinks, { label: "Checking...", href: "#" }];
     }
 
-    if (!isAuthenticated) {
+    if (!auth.isAuthenticated) {
       return [
         ...baseNavLinks,
         { label: "Login", href: "/login" },
@@ -121,16 +162,20 @@ export default function Navbar() {
       ];
     }
 
-    if (hasOrganization && userRole === "admin") {
+    if (auth.role === "admin") {
       return [...baseNavLinks, { label: "Admin Panel", href: "/portal" }];
     }
 
-    if (hasOrganization) {
+    if (auth.role === "hr" || auth.role === "manager" || auth.role === "employee") {
       return [...baseNavLinks, { label: "Dashboard", href: "/dashboard" }];
     }
 
-    return baseNavLinks;
-  }, [hasOrganization, isAuthLoading, isAuthenticated, userRole]);
+    return [
+      ...baseNavLinks,
+      { label: "Login", href: "/login" },
+      { label: "Register", href: "/register" },
+    ];
+  }, [auth, isAuthLoading]);
 
   return (
     <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur">
