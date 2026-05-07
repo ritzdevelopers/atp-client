@@ -14,17 +14,19 @@ type FeatureRow = {
   [key: string]: unknown;
 };
 
-type EmployeeFeatureRow = {
+type EmployeeApiEmployee = {
   user_id: number | string;
   user_name?: string;
   user_email?: string;
   user_phone?: string;
   user_role_id?: number | string;
   user_role_name?: string;
-  feature_id?: number | string | null;
-  feature_is_allowed?: number | boolean | null;
-  feature_name?: string | null;
-  feature_val?: string | null;
+  features_access?: Array<{
+    feature_id?: number | string | null;
+    feature_is_allowed?: number | boolean | null;
+    feature_name?: string | null;
+    feature_val?: string | null;
+  }>;
 };
 
 type EmployeeCard = {
@@ -33,7 +35,9 @@ type EmployeeCard = {
   user_email: string;
   user_phone: string;
   user_role_name: string;
+  user_role_id: number | string | undefined;
   features: string[];
+  featureAccessById: Record<string, number | boolean | null | undefined>;
 };
 
 export default function ManageOrganizationFeaturesPage() {
@@ -46,8 +50,11 @@ export default function ManageOrganizationFeaturesPage() {
   const [assignFeature, setAssignFeature] = useState<FeatureRow | null>(null);
   const [employeeLoading, setEmployeeLoading] = useState(false);
   const [employeeError, setEmployeeError] = useState<string | null>(null);
-  const [employeeRows, setEmployeeRows] = useState<EmployeeFeatureRow[]>([]);
+  const [employeeRows, setEmployeeRows] = useState<EmployeeApiEmployee[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [assigningUserId, setAssigningUserId] = useState<number | string | null>(null);
+  const [assignInlineError, setAssignInlineError] = useState<string | null>(null);
+  const [openUserId, setOpenUserId] = useState<number | string | null>(null);
 
   useEffect(() => {
     async function loadFeatures() {
@@ -93,28 +100,32 @@ export default function ManageOrganizationFeaturesPage() {
   const totalFeatures = useMemo(() => features.length, [features.length]);
 
   const employeeCards = useMemo(() => {
-    const grouped = new Map<string, EmployeeCard>();
-    for (const row of employeeRows) {
-      const role = String(row.user_role_name || "").toLowerCase();
+    const cards: EmployeeCard[] = [];
+    for (const emp of employeeRows) {
+      const role = String(emp.user_role_name || "").toLowerCase();
       if (role === "admin") continue;
-      const key = String(row.user_id);
-      if (!grouped.has(key)) {
-        grouped.set(key, {
-          user_id: row.user_id,
-          user_name: String(row.user_name || "Unknown User"),
-          user_email: String(row.user_email || "No email"),
-          user_phone: String(row.user_phone || "No phone"),
-          user_role_name: String(row.user_role_name || "employee"),
-          features: [],
-        });
+      const features: string[] = [];
+      const featureAccessById: Record<string, number | boolean | null | undefined> = {};
+      for (const f of emp.features_access ?? []) {
+        const name = String(f.feature_name ?? f.feature_val ?? "").trim();
+        if (name && !features.includes(name)) features.push(name);
+        const fId = f.feature_id;
+        if (fId !== undefined && fId !== null && fId !== "") {
+          featureAccessById[String(fId)] = f.feature_is_allowed;
+        }
       }
-      const card = grouped.get(key)!;
-      const featureName = String(row.feature_name || row.feature_val || "").trim();
-      if (featureName && !card.features.includes(featureName)) {
-        card.features.push(featureName);
-      }
+      cards.push({
+        user_id: emp.user_id,
+        user_name: String(emp.user_name || "Unknown User"),
+        user_email: String(emp.user_email || "No email"),
+        user_phone: String(emp.user_phone || "No phone"),
+        user_role_name: String(emp.user_role_name || "employee"),
+        user_role_id: emp.user_role_id,
+        features,
+        featureAccessById,
+      });
     }
-    return Array.from(grouped.values());
+    return cards;
   }, [employeeRows]);
 
   const filteredEmployeeCards = useMemo(() => {
@@ -131,11 +142,9 @@ export default function ManageOrganizationFeaturesPage() {
     });
   }, [employeeCards, searchQuery]);
 
-  async function openAssignModal(feature: FeatureRow) {
-    setAssignFeature(feature);
-    setSearchQuery("");
-    setEmployeeError(null);
+  async function loadEmployeesForModal() {
     setEmployeeLoading(true);
+    setEmployeeError(null);
     try {
       const token = localStorage.getItem("token");
       if (!token) throw new Error("Not signed in.");
@@ -149,7 +158,7 @@ export default function ManageOrganizationFeaturesPage() {
           },
         }
       );
-      const data = (await res.json()) as { employees?: EmployeeFeatureRow[]; message?: string };
+      const data = (await res.json()) as { employees?: EmployeeApiEmployee[]; message?: string };
       if (!res.ok) {
         throw new Error(data.message || "Could not load employees.");
       }
@@ -162,11 +171,122 @@ export default function ManageOrganizationFeaturesPage() {
     }
   }
 
+  async function openAssignModal(feature: FeatureRow) {
+    setAssignFeature(feature);
+    setSearchQuery("");
+    setAssignInlineError(null);
+    await loadEmployeesForModal();
+  }
+
+  async function assignFeatureToUser(user: EmployeeCard) {
+    if (!assignFeature) return;
+    const roleId = user.user_role_id;
+    if (roleId === undefined || roleId === null || roleId === "") {
+      setAssignInlineError("This user has no role id; cannot assign.");
+      return;
+    }
+    setAssigningUserId(user.user_id);
+    setAssignInlineError(null);
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("Not signed in.");
+      const res = await fetch(`${API_URL}/api/organization-features/assign-feature-to-employee`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          org_id: orgId,
+          user_id: user.user_id,
+          user_role_id: roleId,
+          feature_id: assignFeature.id,
+        }),
+      });
+      const data = (await res.json()) as { message?: string; error?: string };
+      if (!res.ok) {
+        throw new Error(data.message || data.error || "Could not assign feature.");
+      }
+      await loadEmployeesForModal();
+    } catch (e) {
+      setAssignInlineError(e instanceof Error ? e.message : "Could not assign feature.");
+    } finally {
+      setAssigningUserId(null);
+    }
+  }
+
+  async function reassignFeatureToUser(user: EmployeeCard) {
+    if (!assignFeature) return;
+    setAssigningUserId(user.user_id);
+    setAssignInlineError(null);
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("Not signed in.");
+      const res = await fetch(`${API_URL}/api/organization-features/update-feature-of-employee`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          org_id: orgId,
+          user_id: user.user_id,
+          feature_id: assignFeature.id,
+          is_allowed: 1,
+        }),
+      });
+      const data = (await res.json()) as { message?: string; error?: string };
+      if (!res.ok) {
+        throw new Error(data.message || data.error || "Could not assign again.");
+      }
+      await loadEmployeesForModal();
+    } catch (e) {
+      setAssignInlineError(e instanceof Error ? e.message : "Could not assign again.");
+    } finally {
+      setAssigningUserId(null);
+    }
+  }
+
+  async function removeFeatureAccessFromUser(user: EmployeeCard) {
+    if (!assignFeature) return;
+    setAssigningUserId(user.user_id);
+    setAssignInlineError(null);
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("Not signed in.");
+      const res = await fetch(`${API_URL}/api/organization-features/update-feature-of-employee`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          org_id: orgId,
+          user_id: user.user_id,
+          feature_id: assignFeature.id,
+          is_allowed: 0,
+        }),
+      });
+      const data = (await res.json()) as { message?: string; error?: string };
+      if (!res.ok) {
+        throw new Error(data.message || data.error || "Could not remove access.");
+      }
+      await loadEmployeesForModal();
+    } catch (e) {
+      setAssignInlineError(e instanceof Error ? e.message : "Could not remove access.");
+    } finally {
+      setAssigningUserId(null);
+    }
+  }
+
   function closeAssignModal() {
     setAssignFeature(null);
     setEmployeeError(null);
     setEmployeeRows([]);
     setSearchQuery("");
+    setAssignInlineError(null);
+    setAssigningUserId(null);
+    setOpenUserId(null);
   }
 
   return (
@@ -266,6 +386,9 @@ export default function ManageOrganizationFeaturesPage() {
                 placeholder="Search by name, email, role, phone, feature..."
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none ring-indigo-200 focus:ring-2"
               />
+              {assignInlineError ? (
+                <p className="mt-2 text-sm text-red-600">{assignInlineError}</p>
+              ) : null}
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6">
@@ -294,6 +417,14 @@ export default function ManageOrganizationFeaturesPage() {
                       key={String(user.user_id)}
                       className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
                     >
+                      {(() => {
+                        const selectedFeatureStatus = assignFeature
+                          ? user.featureAccessById[String(assignFeature.id)]
+                          : undefined;
+                        const canAssignAgain =
+                          selectedFeatureStatus === 0 || selectedFeatureStatus === false;
+                        return (
+                          <>
                       <div className="flex items-start gap-3">
                         <img
                           src={`https://i.pravatar.cc/120?u=${encodeURIComponent(String(user.user_id))}`}
@@ -329,6 +460,75 @@ export default function ManageOrganizationFeaturesPage() {
                           )}
                         </div>
                       </div>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setOpenUserId((prev) =>
+                            String(prev) === String(user.user_id) ? null : user.user_id,
+                          )
+                        }
+                        className="mt-4 inline-flex w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                      >
+                        {String(openUserId) === String(user.user_id)
+                          ? "Hide feature controls"
+                          : "Show feature controls"}
+                      </button>
+
+                      {String(openUserId) === String(user.user_id) ? (
+                        <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                            Selected Feature
+                          </p>
+                          <div className="mt-2 rounded-md border border-slate-200 bg-white p-3">
+                            <p className="text-xs font-semibold text-[#0C123A]">
+                              {assignFeature?.feature_name ||
+                                assignFeature?.feature_key ||
+                                `Feature #${assignFeature?.id ?? ""}`}
+                            </p>
+                            <p className="mt-1 text-[11px] text-slate-500">
+                              Status:{" "}
+                              {selectedFeatureStatus === 1 || selectedFeatureStatus === true
+                                ? "Assigned and allowed"
+                                : selectedFeatureStatus === 0 || selectedFeatureStatus === false
+                                  ? "Assigned but disabled"
+                                  : "Not assigned"}
+                            </p>
+                            <button
+                              type="button"
+                              disabled={
+                                assigningUserId !== null ||
+                                user.user_role_id === undefined ||
+                                user.user_role_id === null ||
+                                user.user_role_id === ""
+                              }
+                              onClick={() => {
+                                if (selectedFeatureStatus === 1 || selectedFeatureStatus === true) {
+                                  void removeFeatureAccessFromUser(user);
+                                  return;
+                                }
+                                if (selectedFeatureStatus === 0 || selectedFeatureStatus === false) {
+                                  void reassignFeatureToUser(user);
+                                  return;
+                                }
+                                void assignFeatureToUser(user);
+                              }}
+                              className="mt-3 inline-flex w-full items-center justify-center rounded-lg border border-[#0C123A] bg-white px-3 py-2 text-sm font-semibold text-[#0C123A] transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {assigningUserId !== null && String(assigningUserId) === String(user.user_id)
+                                ? "Updating…"
+                                : selectedFeatureStatus === 1 || selectedFeatureStatus === true
+                                  ? "Remove access"
+                                  : selectedFeatureStatus === 0 || selectedFeatureStatus === false
+                                    ? "Assign again"
+                                    : "Assign user feature"}
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
+                          </>
+                        );
+                      })()}
                     </article>
                   ))}
                 </div>
