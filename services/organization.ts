@@ -65,6 +65,37 @@ export function hasServicesFeature(features: PortalFeature[] | undefined | null)
   });
 }
 
+export type CreateOrganizationPayload = {
+  organization_name: string;
+  owner_id: string;
+  organization_email: string;
+  organization_phone: string;
+};
+
+export const createOrganization = async (
+  data: CreateOrganizationPayload,
+): Promise<unknown> => {
+  const res = await fetch(`${API_URL}/api/register/organization`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+
+  const result = await res.json();
+
+  if (!res.ok) {
+    const error: ApiError = new Error(
+      (typeof result.message === "string" && result.message) ||
+        (typeof result.error === "string" && result.error) ||
+        "Failed to create organization",
+    );
+    error.status = res.status;
+    throw error;
+  }
+
+  return result;
+};
+
 export const getOrganization = async (
   token: string
 ): Promise<any> => {

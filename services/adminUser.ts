@@ -235,6 +235,13 @@ export type OrgUserRow = {
   role_id?: number | string;
   created_at?: string;
   orgID?: number | string;
+  /** From `get_all_users` join with `user_shifts` / `shifts` */
+  user_shift_id?: number | string | null;
+  user_shift_name?: string | null;
+  user_shift_start_time?: string | null;
+  user_shift_end_time?: string | null;
+  user_shift_working_days?: string | null;
+  shift_assigned_by_name?: string | null;
   [key: string]: unknown;
 };
 
