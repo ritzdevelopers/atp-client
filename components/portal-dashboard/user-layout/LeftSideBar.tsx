@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, usePathname, useRouter } from "next/navigation";
 import { MdCalendarMonth, MdDashboard, MdOutlineSettings } from "react-icons/md";
 import { BsPerson } from "react-icons/bs";
 import { PiBagSimple } from "react-icons/pi";
@@ -9,13 +9,21 @@ import { LuFileSpreadsheet } from "react-icons/lu";
 import { RiQuestionLine } from "react-icons/ri";
 
 const navigationItems = [
-  { id: "dashboard", label: "Dashboard", icon: MdDashboard, active: true },  
+  { id: "dashboard", label: "Dashboard", icon: MdDashboard, href: "/user-dashboard/[org_id]/home" },
+  {
+    id: "attendance-history",
+    label: "Attendance History",
+    icon: LuFileSpreadsheet,
+    href: "/user-dashboard/[org_id]/attendance-history",
+  }
 ];
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
 function LeftSideBar() {
   const params = useParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const orgIdParam = params?.org_id;
   const orgId = Number(orgIdParam);
 
@@ -95,12 +103,15 @@ function LeftSideBar() {
       <nav className="flex-1 space-y-1 px-3 py-4">
         {navigationItems.map((item) => {
           const Icon = item.icon;
+          const href = (item.href || "/user-dashboard/[org_id]/home").replace("[org_id]", String(orgIdParam ?? ""));
+          const isActive = pathname === href;
           return (
             <button
               key={item.id}
               type="button"
+              onClick={() => router.push(href)}
               className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition ${
-                item.active
+                isActive
                   ? "bg-indigo-50 text-indigo-700"
                   : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
               }`}

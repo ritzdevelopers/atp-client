@@ -30,7 +30,24 @@ type AttendanceHistoryRow = {
 
 type EmployeeDashboardResponse = {
   attendance_history?: AttendanceHistoryRow[];
+  employee?: {
+    mark_attendance_late_after?: string | null;
+  };
+  employees?: {
+    mark_attendance_late_after?: string | null;
+  };
 };
+
+function formatElapsedDuration(ms: number): string {
+  if (ms < 0) ms = 0;
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  if (h > 0) return `${h}:${pad(m)}:${pad(s)}`;
+  return `${m}:${pad(s)}`;
+}
 
 function formatJoinedDate(value: string | Date | null | undefined): string {
   if (value == null || value === "") return "—";
@@ -151,6 +168,7 @@ function HomeOverview({
   const [attendanceData, setAttendanceData] = useState<EmployeeDashboardResponse | null>(null);
   const [checkInSubmitting, setCheckInSubmitting] = useState(false);
   const [checkOutSubmitting, setCheckOutSubmitting] = useState(false);
+  const [tick, setTick] = useState(0);
 
   useEffect(() => {
     async function loadAttendance() {
@@ -189,6 +207,25 @@ function HomeOverview({
   const todayRecord = historyMap.get(todayYmd);
   const hasCheckedInToday = Boolean(todayRecord?.check_in);
   const hasCheckedOutToday = Boolean(todayRecord?.check_out);
+  const checkInInstant = todayRecord?.check_in ? new Date(String(todayRecord.check_in)) : null;
+  const checkInValid = checkInInstant && !Number.isNaN(checkInInstant.getTime());
+  const showLiveTimer = Boolean(checkInValid && hasCheckedInToday && !hasCheckedOutToday);
+
+  useEffect(() => {
+    if (!showLiveTimer) return;
+    const id = window.setInterval(() => setTick((t) => t + 1), 1000);
+    return () => window.clearInterval(id);
+  }, [showLiveTimer]);
+
+  const liveElapsedMs =
+    showLiveTimer && checkInValid ? Date.now() - checkInInstant.getTime() + 0 * tick : 0;
+  const workingHoursDisplay = showLiveTimer
+    ? formatElapsedDuration(liveElapsedMs)
+    : formatWorkingTimeDisplay(todayRecord?.working_time);
+  const attendanceEmployee = attendanceData?.employee ?? attendanceData?.employees;
+  const lateAfter = attendanceEmployee?.mark_attendance_late_after
+    ? String(attendanceEmployee.mark_attendance_late_after).slice(0, 5)
+    : "—";
 
   async function markCheckIn() {
     if (!orgId || Number.isNaN(orgId)) return;
@@ -347,7 +384,7 @@ function HomeOverview({
           </div>
           {attendanceLoading ? <p className="mt-3 text-sm text-slate-500">Loading attendance...</p> : null}
           {attendanceError ? <p className="mt-3 text-sm text-red-600">{attendanceError}</p> : null}
-          <div className="mt-4 grid gap-3 sm:grid-cols-4">
+          <div className="mt-4 grid gap-3 sm:grid-cols-5">
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
               <p className="text-[11px] uppercase tracking-wide text-slate-400">Today Log</p>
               <p className="mt-1 text-sm font-semibold text-slate-800">
@@ -355,10 +392,19 @@ function HomeOverview({
               </p>
             </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <p className="text-[11px] uppercase tracking-wide text-slate-400">Working Hours</p>
-              <p className="mt-1 text-sm font-semibold text-slate-800">
-                {formatWorkingTimeDisplay(todayRecord?.working_time)}
+              <p className="text-[11px] uppercase tracking-wide text-slate-400">
+                {showLiveTimer ? "Working (live)" : "Working Hours"}
               </p>
+              <p className="mt-1 text-sm font-semibold tabular-nums text-slate-800">
+                {String(workingHoursDisplay)}
+              </p>
+              {showLiveTimer ? (
+                <p className="mt-1 text-[10px] text-slate-500">Timer runs until you check out</p>
+              ) : null}
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p className="text-[11px] uppercase tracking-wide text-slate-400">Late After</p>
+              <p className="mt-1 text-sm font-semibold text-rose-500">{lateAfter}</p>
             </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
               <p className="text-[11px] uppercase tracking-wide text-slate-400">Check Out Time</p>

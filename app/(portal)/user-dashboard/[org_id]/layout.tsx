@@ -6,10 +6,14 @@ import RightMainSide from "@/components/portal-dashboard/user-layout/RightMainSi
 
 function UserDashboardComponent({ children }: { children: React.ReactNode }) { 
     return (
-        <main className="relative flex min-h-screen w-full overflow-x-hidden bg-slate-50">
+        <main className="relative min-h-screen w-full overflow-x-hidden bg-slate-50">
             <DraggableClock />
-            <LeftSideBar />
-            <RightMainSide>{children}</RightMainSide>
+            <div className="fixed left-0 top-0 z-30 h-screen">
+                <LeftSideBar />
+            </div>
+            <div className="w-full pl-[250px]">
+                <RightMainSide>{children}</RightMainSide>
+            </div>
         </main>
     )
 }

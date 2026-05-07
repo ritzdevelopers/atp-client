@@ -165,7 +165,6 @@ function RightSide({ children }: { children: React.ReactNode }) {
       setAssigning(false);
     }
   }
-
   return (
     <div className="w-full space-y-6 p-6">
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
