@@ -247,38 +247,6 @@ export default function ManageOrganizationFeaturesPage() {
     }
   }
 
-  async function removeFeatureAccessFromUser(user: EmployeeCard) {
-    if (!assignFeature) return;
-    setAssigningUserId(user.user_id);
-    setAssignInlineError(null);
-    try {
-      const token = localStorage.getItem("token");
-      if (!token) throw new Error("Not signed in.");
-      const res = await fetch(`${API_URL}/api/organization-features/update-feature-of-employee`, {
-        method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          org_id: orgId,
-          user_id: user.user_id,
-          feature_id: assignFeature.id,
-          is_allowed: 0,
-        }),
-      });
-      const data = (await res.json()) as { message?: string; error?: string };
-      if (!res.ok) {
-        throw new Error(data.message || data.error || "Could not remove access.");
-      }
-      await loadEmployeesForModal();
-    } catch (e) {
-      setAssignInlineError(e instanceof Error ? e.message : "Could not remove access.");
-    } finally {
-      setAssigningUserId(null);
-    }
-  }
-
   function closeAssignModal() {
     setAssignFeature(null);
     setEmployeeError(null);
@@ -441,88 +409,66 @@ export default function ManageOrganizationFeaturesPage() {
                         </div>
                       </div>
 
-                      <div className="mt-3">
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                          Assigned Features
-                        </p>
-                        <div className="mt-1 flex flex-wrap gap-1.5">
-                          {user.features.length > 0 ? (
-                            user.features.slice(0, 5).map((f) => (
-                              <span
-                                key={f}
-                                className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-700"
-                              >
-                                {f}
-                              </span>
-                            ))
-                          ) : (
-                            <span className="text-xs text-slate-500">No features assigned</span>
-                          )}
-                        </div>
-                      </div>
+                      <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setOpenUserId((prev) =>
+                              String(prev) === String(user.user_id) ? null : user.user_id,
+                            )
+                          }
+                          className="inline-flex w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                        >
+                          {String(openUserId) === String(user.user_id)
+                            ? "Hide Previous Assigned Features"
+                            : "Show Previous Assigned Features"}
+                        </button>
 
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setOpenUserId((prev) =>
-                            String(prev) === String(user.user_id) ? null : user.user_id,
-                          )
-                        }
-                        className="mt-4 inline-flex w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-                      >
-                        {String(openUserId) === String(user.user_id)
-                          ? "Hide feature controls"
-                          : "Show feature controls"}
-                      </button>
+                        <button
+                          type="button"
+                          disabled={
+                            assigningUserId !== null ||
+                            selectedFeatureStatus === 1 ||
+                            selectedFeatureStatus === true ||
+                            user.user_role_id === undefined ||
+                            user.user_role_id === null ||
+                            user.user_role_id === ""
+                          }
+                          onClick={() => {
+                            if (selectedFeatureStatus === 0 || selectedFeatureStatus === false) {
+                              void reassignFeatureToUser(user);
+                              return;
+                            }
+                            void assignFeatureToUser(user);
+                          }}
+                          className="inline-flex w-full items-center justify-center rounded-lg bg-[#0C123A] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#151e59] disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {assigningUserId !== null && String(assigningUserId) === String(user.user_id)
+                            ? "Assigning..."
+                            : selectedFeatureStatus === 1 || selectedFeatureStatus === true
+                              ? "Already Assigned"
+                              : "Assign Now"}
+                        </button>
+                      </div>
 
                       {String(openUserId) === String(user.user_id) ? (
                         <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
                           <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                            Selected Feature
+                            Previous Assigned Features
                           </p>
-                          <div className="mt-2 rounded-md border border-slate-200 bg-white p-3">
-                            <p className="text-xs font-semibold text-[#0C123A]">
-                              {assignFeature?.feature_name ||
-                                assignFeature?.feature_key ||
-                                `Feature #${assignFeature?.id ?? ""}`}
-                            </p>
-                            <p className="mt-1 text-[11px] text-slate-500">
-                              Status:{" "}
-                              {selectedFeatureStatus === 1 || selectedFeatureStatus === true
-                                ? "Assigned and allowed"
-                                : selectedFeatureStatus === 0 || selectedFeatureStatus === false
-                                  ? "Assigned but disabled"
-                                  : "Not assigned"}
-                            </p>
-                            <button
-                              type="button"
-                              disabled={
-                                assigningUserId !== null ||
-                                user.user_role_id === undefined ||
-                                user.user_role_id === null ||
-                                user.user_role_id === ""
-                              }
-                              onClick={() => {
-                                if (selectedFeatureStatus === 1 || selectedFeatureStatus === true) {
-                                  void removeFeatureAccessFromUser(user);
-                                  return;
-                                }
-                                if (selectedFeatureStatus === 0 || selectedFeatureStatus === false) {
-                                  void reassignFeatureToUser(user);
-                                  return;
-                                }
-                                void assignFeatureToUser(user);
-                              }}
-                              className="mt-3 inline-flex w-full items-center justify-center rounded-lg border border-[#0C123A] bg-white px-3 py-2 text-sm font-semibold text-[#0C123A] transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              {assigningUserId !== null && String(assigningUserId) === String(user.user_id)
-                                ? "Updating…"
-                                : selectedFeatureStatus === 1 || selectedFeatureStatus === true
-                                  ? "Remove access"
-                                  : selectedFeatureStatus === 0 || selectedFeatureStatus === false
-                                    ? "Assign again"
-                                    : "Assign user feature"}
-                            </button>
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {user.features.length > 0 ? (
+                              user.features.map((f) => (
+                                <span
+                                  key={f}
+                                  className="rounded-full bg-white px-2 py-0.5 text-[10px] font-medium text-slate-700 ring-1 ring-slate-200"
+                                >
+                                  {f}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-xs text-slate-500">No features assigned previously</span>
+                            )}
                           </div>
                         </div>
                       ) : null}

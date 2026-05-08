@@ -82,7 +82,7 @@ export default function Navbar() {
             });
             setIsAuthLoading(false);
           }
-          return;
+          // Still call getMe below so auth stays fresh and expired tokens are cleared.
         } catch {
           sessionStorage.removeItem(NAVBAR_AUTH_CACHE_KEY);
         }

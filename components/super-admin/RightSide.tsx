@@ -18,9 +18,17 @@ type OrgRow = {
   org_phone?: string;
 };
 
+/** Turns "Get Organization Info" into "get-organization-info". */
+function slugifyFeatureName(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 function RightSide({ children }: { children: React.ReactNode }) {
   const [featureName, setFeatureName] = useState("");
-  const [featureVal, setFeatureVal] = useState("");
   const [creating, setCreating] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
 
@@ -99,9 +107,12 @@ function RightSide({ children }: { children: React.ReactNode }) {
     });
   }, [allFeatures, featureSearch]);
 
+  const featureVal = useMemo(() => slugifyFeatureName(featureName), [featureName]);
+
   async function createFeature() {
-    if (!featureName.trim() || !featureVal.trim()) {
-      setActionMessage("Feature name and value are required.");
+    const slug = slugifyFeatureName(featureName);
+    if (!featureName.trim() || !slug) {
+      setActionMessage("Feature name is required (must produce a valid feature value).");
       return;
     }
     setCreating(true);
@@ -112,14 +123,13 @@ function RightSide({ children }: { children: React.ReactNode }) {
         headers: authHeaders(),
         body: JSON.stringify({
           feature_name: featureName.trim(),
-          feature_val: featureVal.trim(),
+          feature_val: slug,
         }),
       });
       const data = (await res.json()) as { message?: string; error?: string };
       if (!res.ok) throw new Error(data.message || data.error || "Could not create feature");
       setActionMessage(data.message || "Feature created successfully.");
       setFeatureName("");
-      setFeatureVal("");
       if (showAssignModal) await loadFeatures();
     } catch (e) {
       setActionMessage(e instanceof Error ? e.message : "Could not create feature");
@@ -180,10 +190,12 @@ function RightSide({ children }: { children: React.ReactNode }) {
           />
           <input
             type="text"
+            readOnly
+            aria-readonly="true"
             value={featureVal}
-            onChange={(e) => setFeatureVal(e.target.value)}
-            placeholder="Feature value (e.g. manage-employees)"
-            className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none ring-indigo-200 focus:ring-2"
+            placeholder="Auto-generated from feature name"
+            title="Generated from the feature name; not editable"
+            className="cursor-not-allowed rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 outline-none"
           />
         </div>
         <button

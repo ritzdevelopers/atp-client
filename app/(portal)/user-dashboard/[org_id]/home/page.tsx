@@ -450,7 +450,7 @@ function Home() {
                 <span>{roleName}</span>
               </div>
               <div className="flex items-center justify-between border-b border-indigo-500/70 pb-2">
-                <span className="text-indigo-100">Manager</span>
+                <span className="text-indigo-100">Admin</span>
                 <span>{managerName}</span>
               </div>
               <div className="flex items-center justify-between">
