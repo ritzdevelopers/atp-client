@@ -43,7 +43,8 @@ function parseJwtUserId(token: string | null): number | null {
 function toNumberWorkingHours(value: string | number | null | undefined): number {
   if (value == null) return 0;
   const n = Number(value);
-  return Number.isNaN(n) ? 0 : n;
+
+  return Number.isNaN(n) ? 0 : n / 60;
 }
 
 function statusColorClass(status: string | null | undefined): string {
