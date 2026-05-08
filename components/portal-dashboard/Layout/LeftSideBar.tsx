@@ -3,11 +3,16 @@ import { useRouter, useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { BiSolidUserPlus } from "react-icons/bi";
 import {
+  MdAdminPanelSettings,
+  MdEvent,
+  MdFactCheck,
   MdHome,
   MdMoreHoriz,
+  MdSchedule,
   MdSettings,
   MdMenu,
-  MdSecurity,
+  MdVpnKey,
+  MdWifi,
 } from "react-icons/md";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
@@ -63,7 +68,10 @@ function LeftSideBar({
       if (Array.isArray(accessableFeatures) && accessableFeatures.length > 0) {
         setResolvedFeatures(accessableFeatures);
         try {
-          sessionStorage.setItem("accessible_features", JSON.stringify(accessableFeatures));
+          sessionStorage.setItem(
+            "accessible_features",
+            JSON.stringify(accessableFeatures),
+          );
         } catch {
           // ignore quota / private mode
         }
@@ -77,9 +85,13 @@ function LeftSideBar({
           method: "GET",
           headers: { Authorization: `Bearer ${token}` },
         });
-        const data = (await res.json()) as { accessible_features?: PortalFeature[] };
+        const data = (await res.json()) as {
+          accessible_features?: PortalFeature[];
+        };
         if (!res.ok) return;
-        const list = Array.isArray(data.accessible_features) ? data.accessible_features : [];
+        const list = Array.isArray(data.accessible_features)
+          ? data.accessible_features
+          : [];
         if (!cancelled) setResolvedFeatures(list);
         try {
           sessionStorage.setItem("accessible_features", JSON.stringify(list));
@@ -119,10 +131,14 @@ function LeftSideBar({
     if (!requiredFeature) return true;
     const wanted = requiredFeature.toLowerCase();
     if (accessibleTokens.has(wanted)) return true;
-    if (wanted === "get-organization" && accessibleTokens.has("get-organization-information")) return true;
+    if (
+      wanted === "get-organization" &&
+      accessibleTokens.has("get-organization-info")
+    )
+      return true;
     return false;
   };
-  
+
   const navItems: NavItem[] = useMemo(
     () => [
       {
@@ -132,50 +148,65 @@ function LeftSideBar({
         icon: <MdHome />,
         children: [],
         path: `${base}/home`,
-        requiredFeature: "get-organization-information",
+        requiredFeature: "get-organization-info",
       },
 
       {
-        id: "employee-onboarding",
+        id: "employee-management",
         name: "Employee Management",
-        value: "employee-onboarding",
+        value: "employee-management",
         icon: <BiSolidUserPlus />,
+        path: `${base}/organization-employees/manage-employees`,
         children: [
           {
             id: "manage-employees",
             name: "Manage Employees",
             path: `${base}/organization-employees/manage-employees`,
-            requiredFeature: "manage-employees",
           },
           {
             id: "new-hires",
             name: "New Hires",
             path: `${base}/organization-employees/employee-onboarding`,
-            requiredFeature: "employee-onboarding",
           },
-          
         ],
-        path: `${base}/organization-employees/manage-employees`,
-        requiredFeature: "manage-employees",
+        requiredFeature: "employee-management",
       },
-
+      // employees-roles-management
       {
-        id: "organization-roles",
+        id: "employees-roles-management",
         name: "Organization Roles",
-        value: "organization-roles",
-        icon: <MdSecurity />,
+        value: "employees-roles-management",
+        icon: <MdAdminPanelSettings />,
         children: [
           {
             id: "create-new-role",
             name: "Create New Role",
             path: `${base}/organization-roles/create-new-role`,
-            requiredFeature: "create-new-role",
           },
           {
             id: "manage-roles",
             name: "Manage Roles",
             path: `${base}/organization-roles/manage-roles`,
-            requiredFeature: "manage-roles",
+          },
+        ],
+        path: `${base}/organization-roles/create-new-role`,
+        requiredFeature: "employees-roles-management",
+      },
+      {
+        id: "employees-roles-management",
+        name: "Organization Roles",
+        value: "employees-roles-management",
+        icon: <MdAdminPanelSettings />,
+        children: [
+          {
+            id: "create-new-role",
+            name: "Create New Role",
+            path: `${base}/organization-roles/create-new-role`,
+          },
+          {
+            id: "manage-roles",
+            name: "Manage Roles",
+            path: `${base}/organization-roles/manage-roles`,
           },
         ],
         path: `${base}/organization-roles/create-new-role`,
@@ -183,73 +214,107 @@ function LeftSideBar({
       },
 
       {
-        id: "organization-settings",
-        name: "Organization Settings",
-        value: "organization-settings",
-        icon: <MdSettings />,
-        children: [
-          {
-            id: "create-new-ip-address",
-            name: "Create New IP Address",
-            path: `${base}/organization-settings/create-new-ip-address`,
-            requiredFeature: "create-new-ip-address",
-          },
-          {
-            id: "manage-ip-addresses",
-            name: "Manage IP Addresses",
-            path: `${base}/organization-settings/manage-ip-addresses`,
-            requiredFeature: "manage-ip-addresses",
-          },
-          {
-            id: "create-company-shifts",
-            name: "Create Company Shifts",
-            path: `${base}/organization-settings/create-company-shifts`,
-            requiredFeature: "create-company-shifts",
-          },
-          {
-            id: "manage-company-shifts",
-            name: "Manage Company Shifts",
-            path: `${base}/organization-settings/manage-company-shifts`,
-            requiredFeature: "manage-company-shifts",
-          },
-          {
-            id: "organization-holidays",
-            name: "Organization Holidays",
-            path: `${base}/organization-settings/organization-holidays`,
-            requiredFeature: "organization-holidays",
-          }
-        ],
-        requiredFeature: "organization-settings",
-      },
-      {
-        id: "organization-features",
-        name: "Organization Features",
-        value: "organization-features",
-        icon: <MdSecurity />,
+        id: "employees-features-management",
+        name: "Company Features Access Management",
+        value: "employees-features-management",
+        icon: <MdVpnKey />,
+        path: `${base}/organization-features/manage-organization-features`,
+        requiredFeature: "employees-features-management",
         children: [
           {
             id: "manage-organization-features",
             name: "Manage Organization Features",
             path: `${base}/organization-features/manage-organization-features`,
-            requiredFeature: "manage-organization-features",
           },
           {
             id: "get-employee-accessible-features",
             name: "Get Employee Accessible Features",
             path: `${base}/organization-features/get-employee-accessible-features`,
-            requiredFeature: "get-employee-accessible-features",
           },
           //assign-features-role-wise
           {
             id: "assign-features-role-wise",
             name: "Assign Features Role Wise",
             path: `${base}/organization-features/assign-features-role-wise`,
-            requiredFeature: "assign-features-role-wise",
-          }
+          },
         ],
-        requiredFeature: "organization-features",
-      }
-      
+      },
+      // company-ip-addresses-management
+      {
+        id: "company-ip-addresses-management",
+        name: "Company IP Addresses Management",
+        value: "company-ip-addresses-management",
+        icon: <MdWifi />,
+        children: [
+          {
+            id: "create-new-ip-address",
+            name: "Create New IP Address",
+            path: `${base}/organization-settings/create-new-ip-address`,
+          },
+          {
+            id: "manage-ip-addresses",
+            name: "Manage IP Addresses",
+            path: `${base}/organization-settings/manage-ip-addresses`,
+          },
+        ],
+        requiredFeature: "company-ip-addresses-management",
+      },
+
+      // company-shift-management
+      {
+        id: "company-shift-management",
+        name: "Company Shift Management",
+        value: "company-shift-management",
+        icon: <MdSchedule />,
+        path: `${base}/organization-settings/manage-company-shifts`,
+        children: [
+          {
+            id: "manage-shifts",
+            name: "Manage Shifts",
+            path: `${base}/organization-settings/manage-company-shifts`,
+          },
+          {
+            id: "create-new-shift",
+            name: "Create New Shift",
+            path: `${base}/organization-settings/create-company-shifts`,
+          },
+        ],
+        requiredFeature: "company-shift-management",
+      },
+
+      // company-holiday-management
+      {
+        id: "company-holiday-management",
+        name: "Company Holiday Management",
+        value: "company-holiday-management",
+        icon: <MdEvent />,
+        path: `${base}/organization-settings/organization-holidays`,
+        children: [
+          {
+            id: "manage-holidays",
+            name: "Manage Holidays",
+            path: `${base}/organization-settings/organization-holidays`,
+          },    
+        ],
+        requiredFeature: "company-holiday-management",
+      },
+
+      // company-attendance-management
+      {
+        id: "company-attendance-management",
+        name: "Company Attendance Management",
+        value: "company-attendance-management",
+        icon: <MdFactCheck />,
+        path: `${base}/attendance-management/manage-attendance`,
+        children: [
+          {
+            id: "manage-attendances",
+            name: "Manage Attendances",
+            path: `${base}/attendance-management/manage-attendance`,
+          },
+        ],
+        requiredFeature: "company-attendance-management",
+      },
     ],
     [base],
   );
@@ -257,18 +322,13 @@ function LeftSideBar({
   const filteredNavItems = useMemo(() => {
     const result: NavItem[] = [];
     for (const item of navItems) {
-      const children = item.children.filter((sub) => hasFeatureAccess(sub.requiredFeature));
-      if (children.length > 0) {
-        result.push({
-          ...item,
-          children,
-          path: children[0].path ?? item.path,
-        });
-        continue;
-      }
-      if (hasFeatureAccess(item.requiredFeature)) {
-        result.push({ ...item, children: [] });
-      }
+      if (!hasFeatureAccess(item.requiredFeature)) continue;
+      const children = item.children;
+      result.push({
+        ...item,
+        children,
+        path: item.path ?? children[0]?.path,
+      });
     }
     return result;
   }, [navItems, accessibleTokens]);
@@ -284,7 +344,10 @@ function LeftSideBar({
       setActiveSub(filteredNavItems[0].children[0]?.id ?? "");
       return;
     }
-    if (active.children.length > 0 && !active.children.some((sub) => sub.id === activeSub)) {
+    if (
+      active.children.length > 0 &&
+      !active.children.some((sub) => sub.id === activeSub)
+    ) {
       setActiveSub(active.children[0].id);
     }
   }, [filteredNavItems, activeMain, activeSub]);
@@ -318,7 +381,7 @@ function LeftSideBar({
     <div className="flex h-screen sticky top-0">
       {/* ── LEFT RAIL ── */}
       <div
-        className="flex flex-col items-center w-[72px] py-3 overflow-y-auto overflow-x-hidden flex-shrink-0 scrollbar-hide"
+        className="flex flex-col items-center w-[72px] py-3 overflow-y-auto overflow-x-hidden flex-shrink-0 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
         style={{ backgroundColor: "#131C23" }}
       >
         <div className="flex flex-col items-center w-full flex-1">
@@ -427,7 +490,7 @@ function LeftSideBar({
 
       {subItems.length > 0 && (
         <div
-          className="flex flex-col w-48 py-4 flex-shrink-0 overflow-y-auto"
+          className="flex flex-col w-48 py-4 flex-shrink-0 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
           style={{ backgroundColor: "#1E2C39" }}
         >
           {subItems.map((sub) => {
