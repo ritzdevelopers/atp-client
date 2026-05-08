@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 
 import { getMe, type ApiError } from "@/services/auth";
@@ -180,8 +181,15 @@ export default function Navbar() {
   return (
     <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur">
       <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
-        <Link href="/" className="text-lg font-bold text-[#0C123A]">
-          Attendance Portal
+        <Link href="/" className="inline-flex items-center">
+          <Image
+            src="/portal/layout/logo.png"
+            alt="Attendance Portal"
+            width={160}
+            height={40}
+            className="h-10 w-auto"
+            priority
+          />
         </Link>
 
         <button
