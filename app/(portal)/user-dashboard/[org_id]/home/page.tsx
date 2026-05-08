@@ -6,7 +6,6 @@ import { MdNotificationsNone, MdSearch } from "react-icons/md";
 import {
   formatAttendanceLogLocal,
   formatAttendanceTimeLocal,
-  formatWorkingTimeDisplay,
   getAttendanceDayVisual,
   getLocalYmdFromDate,
   getTodayLocalYmd,
@@ -71,6 +70,17 @@ function formatElapsedDuration(ms: number): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   if (h > 0) return `${h}:${pad(m)}:${pad(s)}`;
   return `${m}:${pad(s)}`;
+}
+
+function formatMinutesAsHours(value: string | number | null | undefined): string {
+  if (value == null || value === "") return "—";
+  const minutes = Number(value);
+  if (Number.isNaN(minutes) || minutes < 0) return "—";
+  const h = Math.floor(minutes / 60);
+  const m = Math.round(minutes % 60);
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
 }
 
 function historyByLocalYmd(history: AttendanceHistoryRow[] | undefined): Map<string, AttendanceHistoryRow> {
@@ -225,7 +235,7 @@ function Home() {
 
   const workingHoursDisplay = showLiveTimer
     ? formatElapsedDuration(liveElapsedMs)
-    : formatWorkingTimeDisplay(todayRecord?.working_time);
+    : formatMinutesAsHours(todayRecord?.working_time);
 
   const todayLog = hasCheckedInToday ? formatAttendanceLogLocal(todayRecord?.check_in) : "—";
   const checkOutTime = hasCheckedOutToday ? formatAttendanceTimeLocal(todayRecord?.check_out) : "—";
