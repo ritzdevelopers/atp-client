@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import Button from "@/components/website/ui/Button";
@@ -10,7 +10,7 @@ import Modal from "@/components/website/ui/Modal";
 import { type ApiError } from "@/services/auth";
 import { createOrganization } from "@/services/organization";
 
-export default function CreateOrganizationPage() {
+function CreateOrganizationContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [orgData, setOrgData] = useState({
@@ -124,5 +124,13 @@ export default function CreateOrganizationPage() {
         onClose={() => setErrorMessage("")}
       />
     </div>
+  );
+}
+
+export default function CreateOrganizationPage() {
+  return (
+    <Suspense fallback={<div className="mx-auto w-full max-w-xl p-8 text-center text-sm text-slate-500">Loading...</div>}>
+      <CreateOrganizationContent />
+    </Suspense>
   );
 }

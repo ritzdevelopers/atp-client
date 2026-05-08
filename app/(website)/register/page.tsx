@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import Button from "@/components/website/ui/Button";
@@ -30,7 +30,7 @@ const getUserIdentifier = (payload: {
   payload.user?.user_id ??
   payload.user?.id;
 
-export default function RegisterPage() {
+function RegisterPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const selectedPlan = searchParams.get("plan") || "basic";
@@ -161,5 +161,13 @@ export default function RegisterPage() {
         onClose={() => setErrorMessage("")}
       />
     </div>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={<div className="mx-auto w-full max-w-xl p-8 text-center text-sm text-slate-500">Loading...</div>}>
+      <RegisterPageContent />
+    </Suspense>
   );
 }
