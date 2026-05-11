@@ -62,20 +62,25 @@ function parseDisplayInstant(value: string | null | undefined): Date | null {
   return Number.isNaN(inst.getTime()) ? null : inst;
 }
 
-export function formatAttendanceLogLocal(value: string | null | undefined): string {
+export function formatAttendanceLogLocal(
+  value: string | null | undefined
+): string {
+
   const d = parseDisplayInstant(value);
+
   if (!d) return "—";
+
   const datePart = d.toLocaleDateString(undefined, {
     weekday: "long",
     month: "long",
     day: "numeric",
     year: "numeric",
   });
-  const timePart = d.toLocaleTimeString(undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
+
+  const timePart =
+    `${String(d.getHours()).padStart(2, "0")}:` +
+    `${String(d.getMinutes()).padStart(2, "0")}`;
+
   return `${datePart} • ${timePart}`;
 }
 
