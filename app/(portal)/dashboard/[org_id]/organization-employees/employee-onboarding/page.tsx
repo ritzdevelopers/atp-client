@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { UserPlus, Loader2, CheckCircle2, AlertCircle, Eye, EyeOff } from "lucide-react";
+import { UserPlus, Loader2, CheckCircle2, AlertCircle, Eye, EyeOff, MapPin } from "lucide-react";
 import { useManagementDashboardContext } from "@/components/portal-dashboard/Layout/ManagementDashboardContext";
 import {
+  addUserAddress,
   createEmployee,
   getOrganizationRoles,
   type OrgRoleRow,
@@ -46,12 +47,40 @@ export default function EmployeOnboardingPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  const [createdEmployeeId, setCreatedEmployeeId] = useState<number | string | null>(null);
+  const [createdEmployeeName, setCreatedEmployeeName] = useState("");
+  const [addressCountry, setAddressCountry] = useState("");
+  const [addressState, setAddressState] = useState("");
+  const [addressDistrict, setAddressDistrict] = useState("");
+  const [addressCity, setAddressCity] = useState("");
+  const [addressIsFromVillage, setAddressIsFromVillage] = useState(false);
+  const [addressVillage, setAddressVillage] = useState("");
+  const [addressStreet, setAddressStreet] = useState("");
+  const [addressHouseNumber, setAddressHouseNumber] = useState("");
+  const [addressZipCode, setAddressZipCode] = useState("");
+  const [addressSubmitting, setAddressSubmitting] = useState(false);
+  const [addressError, setAddressError] = useState<string | null>(null);
+  const [addressSuccess, setAddressSuccess] = useState<string | null>(null);
+
   const organizationIdNum =
     ctx?.organization?.id != null ? Number(ctx.organization.id) : Number(orgIdParam);
   const orgName = ctx?.organization?.org_name?.trim() || `Organization ${orgIdParam ?? ""}`;
 
   const passwordsValid =
     passwordLengthOk(password) && password === confirmPassword && confirmPassword.length > 0;
+
+  function resetAddressForm() {
+    setAddressCountry("");
+    setAddressState("");
+    setAddressDistrict("");
+    setAddressCity("");
+    setAddressIsFromVillage(false);
+    setAddressVillage("");
+    setAddressStreet("");
+    setAddressHouseNumber("");
+    setAddressZipCode("");
+    setAddressError(null);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -129,15 +158,25 @@ export default function EmployeOnboardingPage() {
 
     setSubmitting(true);
     try {
-      await createEmployee(token, {
-        name: name.trim(),
+      const employeeName = name.trim();
+      const result = await createEmployee(token, {
+        name: employeeName,
         email: email.trim().toLowerCase(),
         password,
         phone: phone.trim(),
         user_role_id: Number(userRoleId),
         organization_id: organizationIdNum,
       });
-      setSuccess("Employee registered successfully.");
+      const newUserId = result.data?.user_id ?? result.user_id;
+      if (!newUserId) {
+        setSuccess("Employee registered successfully, but user id was not returned.");
+        return;
+      }
+      setCreatedEmployeeId(newUserId);
+      setCreatedEmployeeName(employeeName);
+      setAddressSuccess(null);
+      resetAddressForm();
+      setSuccess("Employee registered successfully. Add the employee address below.");
       setName("");
       setEmail("");
       setPhone("");
@@ -149,6 +188,65 @@ export default function EmployeOnboardingPage() {
       setFormError(err instanceof Error ? err.message : "Registration failed.");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleAddressSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setAddressError(null);
+    setAddressSuccess(null);
+
+    if (!createdEmployeeId) {
+      setAddressError("Create an employee first.");
+      return;
+    }
+    if (!organizationIdNum || Number.isNaN(organizationIdNum)) {
+      setAddressError("Invalid organization.");
+      return;
+    }
+    if (
+      !addressCountry.trim() ||
+      !addressState.trim() ||
+      !addressDistrict.trim() ||
+      !addressCity.trim() ||
+      !addressStreet.trim() ||
+      !addressHouseNumber.trim() ||
+      !addressZipCode.trim() ||
+      (addressIsFromVillage && !addressVillage.trim())
+    ) {
+      setAddressError("Please fill in all required address fields.");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setAddressError("Not signed in.");
+      return;
+    }
+
+    setAddressSubmitting(true);
+    try {
+      await addUserAddress(token, {
+        user_id: createdEmployeeId,
+        org_id: organizationIdNum,
+        country: addressCountry.trim(),
+        state: addressState.trim(),
+        district: addressDistrict.trim(),
+        city: addressCity.trim(),
+        is_from_village: addressIsFromVillage,
+        village_name: addressIsFromVillage ? addressVillage.trim() : null,
+        street: addressStreet.trim(),
+        house_number: addressHouseNumber.trim(),
+        zip_code: addressZipCode.trim(),
+      });
+      setAddressSuccess("Employee address added successfully.");
+      resetAddressForm();
+      setCreatedEmployeeId(null);
+      setCreatedEmployeeName("");
+    } catch (err) {
+      setAddressError(err instanceof Error ? err.message : "Could not add employee address.");
+    } finally {
+      setAddressSubmitting(false);
     }
   }
 
@@ -377,6 +475,10 @@ export default function EmployeOnboardingPage() {
               onClick={() => {
                 setFormError(null);
                 setSuccess(null);
+                setCreatedEmployeeId(null);
+                setCreatedEmployeeName("");
+                setAddressSuccess(null);
+                resetAddressForm();
                 setName("");
                 setEmail("");
                 setPhone("");
@@ -412,6 +514,212 @@ export default function EmployeOnboardingPage() {
           </div>
         </form>
       </div>
+
+      {(createdEmployeeId || addressSuccess) && (
+        <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm sm:p-8">
+          <div className="mb-6 flex gap-3">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#C99237]/12">
+              <MapPin className="h-6 w-6 text-[#C99237]" aria-hidden />
+            </span>
+            <div>
+              <h2 className="text-xl font-bold text-[#0C123A] sm:text-2xl">
+                Employee address
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                {createdEmployeeId
+                  ? `Add address details for ${createdEmployeeName || "the new employee"}.`
+                  : "Employee address saved. You can create another employee above."}
+              </p>
+            </div>
+          </div>
+
+          {addressSuccess && (
+            <div
+              className="mb-6 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
+              role="status"
+            >
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
+              <span>{addressSuccess}</span>
+            </div>
+          )}
+
+          {addressError && (
+            <div
+              className="mb-6 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900"
+              role="alert"
+            >
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" aria-hidden />
+              <span>{addressError}</span>
+            </div>
+          )}
+
+          {createdEmployeeId && (
+            <form onSubmit={handleAddressSubmit} className="space-y-5">
+              <div className="grid gap-5 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="addr-country" className={labelCls()}>
+                    Country <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="addr-country"
+                    className={inputCls()}
+                    value={addressCountry}
+                    onChange={(e) => setAddressCountry(e.target.value)}
+                    placeholder="India"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="addr-state" className={labelCls()}>
+                    State <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="addr-state"
+                    className={inputCls()}
+                    value={addressState}
+                    onChange={(e) => setAddressState(e.target.value)}
+                    placeholder="Maharashtra"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="addr-district" className={labelCls()}>
+                    District <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="addr-district"
+                    className={inputCls()}
+                    value={addressDistrict}
+                    onChange={(e) => setAddressDistrict(e.target.value)}
+                    placeholder="Pune"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="addr-city" className={labelCls()}>
+                    City <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="addr-city"
+                    className={inputCls()}
+                    value={addressCity}
+                    onChange={(e) => setAddressCity(e.target.value)}
+                    placeholder="Pune"
+                    required
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="flex items-center gap-2 text-sm font-medium text-[#0C123A]">
+                    <input
+                      type="checkbox"
+                      checked={addressIsFromVillage}
+                      onChange={(e) => {
+                        setAddressIsFromVillage(e.target.checked);
+                        if (!e.target.checked) setAddressVillage("");
+                      }}
+                      className="h-4 w-4 rounded border-slate-300 text-[#C99237] focus:ring-[#C99237]/30"
+                    />
+                    Employee is from a village
+                  </label>
+                </div>
+
+                {addressIsFromVillage && (
+                  <div className="sm:col-span-2">
+                    <label htmlFor="addr-village" className={labelCls()}>
+                      Village name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      id="addr-village"
+                      className={inputCls()}
+                      value={addressVillage}
+                      onChange={(e) => setAddressVillage(e.target.value)}
+                      placeholder="Village name"
+                      required={addressIsFromVillage}
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label htmlFor="addr-street" className={labelCls()}>
+                    Street <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="addr-street"
+                    className={inputCls()}
+                    value={addressStreet}
+                    onChange={(e) => setAddressStreet(e.target.value)}
+                    placeholder="Street / Area"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="addr-house" className={labelCls()}>
+                    House number <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="addr-house"
+                    className={inputCls()}
+                    value={addressHouseNumber}
+                    onChange={(e) => setAddressHouseNumber(e.target.value)}
+                    placeholder="A-101"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="addr-zip" className={labelCls()}>
+                    ZIP / PIN code <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="addr-zip"
+                    className={inputCls()}
+                    value={addressZipCode}
+                    onChange={(e) => setAddressZipCode(e.target.value)}
+                    placeholder="411001"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-3 border-t border-slate-100 pt-6 sm:flex-row sm:items-center sm:justify-end">
+                <button
+                  type="button"
+                  disabled={addressSubmitting}
+                  onClick={() => {
+                    setAddressSuccess(null);
+                    resetAddressForm();
+                  }}
+                  className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-[#0C123A] shadow-sm transition hover:bg-slate-50 disabled:opacity-60"
+                >
+                  Clear address
+                </button>
+                <button
+                  type="submit"
+                  disabled={addressSubmitting}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#C99237] px-5 py-2.5 text-sm font-bold text-[#0C123A] shadow-sm transition hover:bg-[#b87d2e] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {addressSubmitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                      Saving…
+                    </>
+                  ) : (
+                    <>
+                      <MapPin className="h-4 w-4" aria-hidden />
+                      Save address
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      )}
     </div>
   );
 }

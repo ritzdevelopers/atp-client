@@ -27,19 +27,6 @@ type AttendanceApiResponse = {
   message?: string;
 };
 
-function parseJwtUserId(token: string | null): number | null {
-  if (!token) return null;
-  try {
-    const base64 = token.split(".")[1];
-    if (!base64) return null;
-    const payload = JSON.parse(atob(base64)) as { user_id?: number | string; id?: number | string };
-    const id = Number(payload.user_id ?? payload.id);
-    return Number.isNaN(id) ? null : id;
-  } catch {
-    return null;
-  }
-}
-
 function toNumberWorkingHours(value: string | number | null | undefined): number {
   if (value == null) return 0;
   const n = Number(value);
@@ -80,8 +67,7 @@ export default function AttendanceHistoryPage() {
         return;
       }
       const token = localStorage.getItem("token");
-      const userId = parseJwtUserId(token);
-      if (!token || !userId) {
+      if (!token) {
         setError("Not signed in.");
         setLoading(false);
         return;
@@ -90,7 +76,6 @@ export default function AttendanceHistoryPage() {
       setError(null);
       try {
         const search = new URLSearchParams({
-          userId: String(userId),
           month: String(month),
           year: String(year),
           page: String(page),
