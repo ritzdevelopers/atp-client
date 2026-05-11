@@ -65,6 +65,15 @@ export type CreateEmployeePayload = {
   organization_id: number;
 };
 
+export type CreateEmployeeResponse = {
+  message?: string;
+  user_id?: number | string;
+  data?: {
+    user_id?: number | string;
+    org_id?: number | string;
+  };
+};
+
 export async function getOrganizationRoles(
   token: string,
   organizationId: number | string,
@@ -95,7 +104,7 @@ export async function getOrganizationRoles(
 export async function createEmployee(
   token: string,
   payload: CreateEmployeePayload,
-): Promise<{ message?: string }> {
+): Promise<CreateEmployeeResponse> {
   const res = await fetch(`${API_URL}/api/user/create-employee`, {
     method: "POST",
     headers: {
@@ -116,6 +125,105 @@ export async function createEmployee(
 
   if (!res.ok) {
     const error: ApiError = new Error(result.message || "Could not create employee");
+    error.status = res.status;
+    throw error;
+  }
+
+  return result;
+}
+
+export type AddUserAddressPayload = {
+  user_id: number | string;
+  org_id: number | string;
+  country: string;
+  state: string;
+  district: string;
+  city: string;
+  is_from_village: boolean;
+  village_name?: string | null;
+  street: string;
+  house_number: string;
+  zip_code: string;
+};
+
+export type UserAddressRow = AddUserAddressPayload & {
+  id?: number | string;
+  address_id?: number | string;
+  created_at?: string;
+  updated_at?: string;
+  [key: string]: unknown;
+};
+
+export type UpdateUserAddressPayload = Partial<
+  Omit<AddUserAddressPayload, "user_id" | "org_id">
+> & {
+  address_id: number | string;
+  user_id: number | string;
+  org_id: number | string;
+};
+
+export async function addUserAddress(
+  token: string,
+  payload: AddUserAddressPayload,
+): Promise<{ message?: string; data?: unknown }> {
+  const res = await fetch(`${API_URL}/api/user/add-user-address`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const result = await res.json();
+  if (!res.ok) {
+    const error: ApiError = new Error(result.message || "Could not add employee address");
+    error.status = res.status;
+    throw error;
+  }
+
+  return result;
+}
+
+export async function getUserAddresses(
+  token: string,
+  orgId: number | string,
+  userId: number | string,
+): Promise<UserAddressRow[]> {
+  const res = await fetch(`${API_URL}/api/user/get-user-address/${orgId}/${userId}`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const result = await res.json();
+  if (!res.ok) {
+    const error: ApiError = new Error(result.message || "Could not fetch employee addresses");
+    error.status = res.status;
+    throw error;
+  }
+
+  return Array.isArray(result.data) ? result.data : [];
+}
+
+export async function updateUserAddress(
+  token: string,
+  payload: UpdateUserAddressPayload,
+): Promise<{ message?: string; data?: unknown }> {
+  const res = await fetch(`${API_URL}/api/user/update-user-address`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const result = await res.json();
+  if (!res.ok) {
+    const error: ApiError = new Error(result.message || "Could not update employee address");
     error.status = res.status;
     throw error;
   }
@@ -385,6 +493,50 @@ export async function deleteOrgUser(
   const result = await res.json();
   if (!res.ok) {
     const error: ApiError = new Error(result.message || "Could not delete user");
+    error.status = res.status;
+    throw error;
+  }
+  return result;
+}
+
+export type AssignPaidLeavesPayload = {
+  org_id: number | string;
+  user_id: number | string;
+  year: number | string;
+  month: number | string;
+  total_leaves: number | string;
+};
+
+export type AssignPaidLeavesResponse = {
+  message?: string;
+  data?: {
+    id?: number | string;
+    user_id?: number | string;
+    org_id?: number | string;
+    year?: number;
+    month?: number;
+    total_leaves?: number;
+    used_leaves?: number;
+    remaining_leaves?: number;
+  };
+};
+
+export async function assignPaidLeaves(
+  token: string,
+  payload: AssignPaidLeavesPayload,
+): Promise<AssignPaidLeavesResponse> {
+  const res = await fetch(`${API_URL}/api/user/assign-leaves-to-users`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const result = await res.json();
+  if (!res.ok) {
+    const error: ApiError = new Error(result.message || "Could not assign paid leaves");
     error.status = res.status;
     throw error;
   }

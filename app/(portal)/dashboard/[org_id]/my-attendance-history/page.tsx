@@ -1,0 +1,469 @@
+"use client";
+
+import { useManagementDashboardContext } from "@/components/portal-dashboard/Layout/ManagementDashboardContext";
+import {
+  formatAttendanceTimeLocal,
+  getLocalYmdFromDate,
+  localYmdFromAttendanceValue,
+} from "@/lib/attendanceDates";
+import { BarChart3, Eye, RefreshCw } from "lucide-react";
+import { useParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+
+type AttendanceRow = {
+  attendance_id: number | string;
+  date?: string;
+  check_in?: string | null;
+  check_out?: string | null;
+  status?: string | null;
+  working_time?: string | number | null;
+};
+
+type AttendanceApiResponse = {
+  success?: boolean;
+  page?: number;
+  limit?: number;
+  data?: AttendanceRow[];
+  message?: string;
+};
+
+function toNumberWorkingHours(value: string | number | null | undefined): number {
+  if (value == null) return 0;
+  const n = Number(value);
+  return Number.isNaN(n) ? 0 : n / 60;
+}
+
+function statusColorClass(status: string | null | undefined): string {
+  const s = String(status || "").toLowerCase();
+  if (s.includes("late")) return "bg-orange-500 text-white";
+  if (s.includes("absent")) return "bg-red-600 text-white";
+  if (s.includes("half_day")) return "bg-sky-400 text-white";
+  if (s.includes("short_leave")) return "bg-yellow-400 text-slate-900";
+  if (s.includes("full_day")) return "bg-emerald-600 text-white";
+  return "bg-slate-100 text-slate-700";
+}
+
+function getDefaultMonthValue(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  return `${y}-${m}`;
+}
+
+export default function MyAttendanceHistoryPage() {
+  const params = useParams();
+  const orgId = String(params?.org_id ?? "");
+  const dashboardCtx = useManagementDashboardContext();
+  const displayName = dashboardCtx?.user?.user_name?.trim() || "You";
+
+  const [monthYear, setMonthYear] = useState(getDefaultMonthValue);
+  const [status, setStatus] = useState("");
+  const [sort, setSort] = useState<"DESC" | "ASC">("DESC");
+  const [page, setPage] = useState(1);
+  const limit = 100;
+
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [rows, setRows] = useState<AttendanceRow[]>([]);
+  const [meta, setMeta] = useState<{ page: number; limit: number }>({ page: 1, limit });
+
+  const [yStr, mStr] = monthYear.split("-");
+  const year = yStr || String(new Date().getFullYear());
+  const month = mStr || "1";
+
+  const loadHistory = useCallback(
+    async (isRefresh = false) => {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        setError("Not signed in.");
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
+      if (!orgId) {
+        setError("Invalid organization.");
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
+      if (isRefresh) setRefreshing(true);
+      else setLoading(true);
+      setError(null);
+      try {
+        const search = new URLSearchParams({
+          month: String(Number(month)),
+          year: String(Number(year)),
+          page: String(page),
+          limit: String(limit),
+          sort,
+        });
+        if (status) search.set("status", status);
+        const res = await fetch(
+          `${API_URL}/api/attendance-history/get-attendance-history-of-employee?${search.toString()}`,
+          {
+            method: "GET",
+            headers: { Authorization: `Bearer ${token}` },
+          },
+        );
+        const data = (await res.json()) as AttendanceApiResponse;
+        if (!res.ok) throw new Error(data.message || "Could not load attendance history.");
+        setRows(Array.isArray(data.data) ? data.data : []);
+        setMeta({
+          page: data.page ?? page,
+          limit: data.limit ?? limit,
+        });
+      } catch (e) {
+        setRows([]);
+        setError(e instanceof Error ? e.message : "Could not load attendance history.");
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [month, year, orgId, page, sort, status, limit],
+  );
+
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      void loadHistory(false);
+    }, 0);
+    return () => window.clearTimeout(t);
+  }, [loadHistory]);
+
+  const stats = useMemo(() => {
+    let fullDay = 0;
+    let late = 0;
+    let absent = 0;
+    let halfDay = 0;
+    let shortLeave = 0;
+    let totalHours = 0;
+    for (const r of rows) {
+      const s = String(r.status || "").toLowerCase();
+      if (s.includes("full_day")) fullDay += 1;
+      if (s.includes("late")) late += 1;
+      if (s.includes("absent")) absent += 1;
+      if (s.includes("half_day")) halfDay += 1;
+      if (s.includes("short_leave")) shortLeave += 1;
+      totalHours += toNumberWorkingHours(r.working_time);
+    }
+    return { fullDay, late, absent, halfDay, shortLeave, totalHours };
+  }, [rows]);
+
+  const maxHours = useMemo(() => {
+    let m = 1;
+    for (const r of rows) {
+      const h = toNumberWorkingHours(r.working_time);
+      if (h > m) m = h;
+    }
+    return m;
+  }, [rows]);
+
+  const monthCalendar = useMemo(() => {
+    const y = Number(year);
+    const m = Number(month);
+    if (Number.isNaN(y) || Number.isNaN(m)) return [];
+    const first = new Date(y, m - 1, 1);
+    const total = new Date(y, m, 0).getDate();
+    const firstWeekday = first.getDay();
+    const map = new Map<string, AttendanceRow>();
+    for (const r of rows) {
+      const key = localYmdFromAttendanceValue(r.date);
+      if (key) map.set(key, r);
+    }
+    const cells: Array<{ dateNum: number | null; row?: AttendanceRow }> = [];
+    for (let i = 0; i < firstWeekday; i += 1) cells.push({ dateNum: null });
+    for (let d = 1; d <= total; d += 1) {
+      const date = new Date(y, m - 1, d);
+      const key = getLocalYmdFromDate(date);
+      cells.push({ dateNum: d, row: map.get(key) });
+    }
+    return cells;
+  }, [rows, month, year]);
+
+  const hasNextPage = rows.length >= limit;
+
+  return (
+    <section className="mx-auto max-w-[1400px] space-y-6 p-4 sm:p-6 lg:p-8">
+      <header className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+        <div className="border-b border-slate-100 bg-gradient-to-r from-slate-900/[0.03] via-white to-indigo-600/[0.06] px-6 py-6 sm:px-8 sm:py-8">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-indigo-600/90">
+                Personal · Read only
+              </p>
+              <h1 className="mt-2 flex flex-wrap items-center gap-2 text-2xl font-bold tracking-tight text-[#0C123A] sm:text-3xl">
+                <BarChart3 className="hidden h-8 w-8 text-indigo-600 sm:inline" aria-hidden />
+                My attendance analytics
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600">
+                Signed in as <span className="font-semibold text-slate-800">{displayName}</span>. This
+                workspace shows only your own records from the attendance ledger. HR and managers use
+                it for self-service insights; team actions stay in Attendance Management.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void loadHistory(true)}
+              disabled={loading || refreshing}
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-indigo-200 hover:bg-indigo-50/60 disabled:cursor-not-allowed disabled:opacity-55"
+            >
+              <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin text-indigo-600" : ""}`} aria-hidden />
+              {refreshing ? "Refreshing…" : "Refresh data"}
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <div
+        className="flex items-start gap-3 rounded-xl border border-sky-200/80 bg-sky-50/90 px-4 py-3 text-sm text-sky-950"
+        role="note"
+      >
+        <Eye className="mt-0.5 h-4 w-4 shrink-0 text-sky-700" aria-hidden />
+        <p>
+          <span className="font-semibold">View only.</span> You cannot edit attendance from this page.
+          Filters and refresh only reload your personal history from the server.
+        </p>
+      </div>
+
+      <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
+        <h2 className="text-sm font-semibold text-[#0C123A]">Filters</h2>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+          <label className="block lg:col-span-2">
+            <span className="mb-1 block text-xs font-medium text-slate-500">Month</span>
+            <input
+              type="month"
+              value={monthYear}
+              onChange={(e) => {
+                setMonthYear(e.target.value);
+                setPage(1);
+              }}
+              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2.5 text-sm outline-none ring-indigo-500/20 focus:border-indigo-300 focus:bg-white focus:ring-2"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-slate-500">Status</span>
+            <select
+              value={status}
+              onChange={(e) => {
+                setStatus(e.target.value);
+                setPage(1);
+              }}
+              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2.5 text-sm outline-none ring-indigo-500/20 focus:border-indigo-300 focus:bg-white focus:ring-2"
+            >
+              <option value="">All statuses</option>
+              <option value="full_day">Full day</option>
+              <option value="late">Late</option>
+              <option value="absent">Absent</option>
+              <option value="half_day">Half day</option>
+              <option value="short_leave">Short leave</option>
+            </select>
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-slate-500">Sort</span>
+            <select
+              value={sort}
+              onChange={(e) => {
+                setSort(e.target.value as "DESC" | "ASC");
+                setPage(1);
+              }}
+              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2.5 text-sm outline-none ring-indigo-500/20 focus:border-indigo-300 focus:bg-white focus:ring-2"
+            >
+              <option value="DESC">Newest first</option>
+              <option value="ASC">Oldest first</option>
+            </select>
+          </label>
+          <div className="flex items-end gap-2 lg:col-span-2">
+            <button
+              type="button"
+              disabled={page <= 1 || loading}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Previous
+            </button>
+            <span className="flex flex-1 items-center justify-center rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5 text-xs font-semibold text-slate-600">
+              Page {meta.page}
+            </span>
+            <button
+              type="button"
+              disabled={!hasNextPage || loading}
+              onClick={() => setPage((p) => p + 1)}
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {loading ? (
+        <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center text-sm text-slate-500">
+          <RefreshCw className="mx-auto mb-3 h-8 w-8 animate-spin text-indigo-500" aria-hidden />
+          Loading your attendance…
+        </div>
+      ) : null}
+
+      {error && !loading ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</div>
+      ) : null}
+
+      {!loading && !error ? (
+        <>
+          <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+            <article className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
+              <p className="text-xs font-medium text-slate-500">Full day</p>
+              <p className="mt-1 text-2xl font-bold text-emerald-600">{stats.fullDay}</p>
+            </article>
+            <article className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
+              <p className="text-xs font-medium text-slate-500">Late</p>
+              <p className="mt-1 text-2xl font-bold text-orange-500">{stats.late}</p>
+            </article>
+            <article className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
+              <p className="text-xs font-medium text-slate-500">Absent</p>
+              <p className="mt-1 text-2xl font-bold text-red-600">{stats.absent}</p>
+            </article>
+            <article className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
+              <p className="text-xs font-medium text-slate-500">Half day</p>
+              <p className="mt-1 text-2xl font-bold text-sky-500">{stats.halfDay}</p>
+            </article>
+            <article className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
+              <p className="text-xs font-medium text-slate-500">Short leave</p>
+              <p className="mt-1 text-2xl font-bold text-amber-500">{stats.shortLeave}</p>
+            </article>
+            <article className="rounded-2xl border border-slate-200/80 bg-gradient-to-br from-indigo-600 to-indigo-800 p-4 text-white shadow-sm">
+              <p className="text-xs font-medium text-indigo-100">Recorded hours (page)</p>
+              <p className="mt-1 text-2xl font-bold">{stats.totalHours.toFixed(1)}h</p>
+            </article>
+          </section>
+
+          <section className="grid gap-6 xl:grid-cols-[1.35fr_1fr]">
+            <article className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
+              <h2 className="text-sm font-semibold text-slate-800">Working time by day</h2>
+              <p className="mt-1 text-xs text-slate-500">Based on loaded page (up to {limit} rows).</p>
+              <div className="mt-5 space-y-3">
+                {rows.length === 0 ? (
+                  <p className="text-sm text-slate-500">No rows for these filters.</p>
+                ) : (
+                  rows.slice(0, 31).map((r) => {
+                    const hours = toNumberWorkingHours(r.working_time);
+                    const pct = Math.max(4, Math.round((hours / maxHours) * 100));
+                    const dateLabel = localYmdFromAttendanceValue(r.date) || "—";
+                    return (
+                      <div key={String(r.attendance_id)} className="space-y-1">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-medium text-slate-700">{dateLabel}</span>
+                          <span className="tabular-nums text-slate-500">{hours.toFixed(2)}h</span>
+                        </div>
+                        <div className="h-2 rounded-full bg-slate-100">
+                          <div
+                            className="h-2 rounded-full bg-indigo-600 transition-all"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </article>
+
+            <article className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
+              <h2 className="text-sm font-semibold text-slate-800">Month map</h2>
+              <p className="mt-1 text-xs text-slate-500">Each cell is a calendar day in the selected month.</p>
+              <div className="mt-4 grid grid-cols-7 gap-2 text-center text-[11px] font-medium text-slate-500">
+                {["S", "M", "T", "W", "T", "F", "S"].map((d, idx) => (
+                  <span key={`${d}-${idx}`}>{d}</span>
+                ))}
+              </div>
+              <div className="mt-2 grid grid-cols-7 gap-2">
+                {monthCalendar.map((cell, idx) => (
+                  <div
+                    key={idx}
+                    className={`flex h-9 items-center justify-center rounded-lg text-xs font-semibold ${
+                      cell.dateNum == null
+                        ? "bg-transparent text-transparent"
+                        : statusColorClass(cell.row?.status)
+                    }`}
+                    title={cell.row?.status ? String(cell.row.status) : "No record"}
+                  >
+                    {cell.dateNum ?? ""}
+                  </div>
+                ))}
+              </div>
+              <div className="mt-5 grid grid-cols-2 gap-2 border-t border-slate-100 pt-4 text-xs text-slate-600">
+                <p>
+                  <span className="mr-1 inline-block h-2 w-2 rounded bg-orange-500" /> Late
+                </p>
+                <p>
+                  <span className="mr-1 inline-block h-2 w-2 rounded bg-red-600" /> Absent
+                </p>
+                <p>
+                  <span className="mr-1 inline-block h-2 w-2 rounded bg-sky-400" /> Half day
+                </p>
+                <p>
+                  <span className="mr-1 inline-block h-2 w-2 rounded bg-yellow-400" /> Short leave
+                </p>
+                <p>
+                  <span className="mr-1 inline-block h-2 w-2 rounded bg-emerald-600" /> Full day
+                </p>
+              </div>
+            </article>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
+            <h2 className="text-sm font-semibold text-slate-800">Detailed log</h2>
+            <div className="mt-4 overflow-x-auto rounded-xl border border-slate-100">
+              <table className="min-w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50/90 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                    <th className="px-4 py-3">Date</th>
+                    <th className="px-4 py-3">Check in</th>
+                    <th className="px-4 py-3">Check out</th>
+                    <th className="px-4 py-3">Hours</th>
+                    <th className="px-4 py-3">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {rows.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-10 text-center text-slate-500">
+                        No attendance rows for this view.
+                      </td>
+                    </tr>
+                  ) : (
+                    rows.map((r) => (
+                      <tr key={String(r.attendance_id)} className="bg-white hover:bg-slate-50/60">
+                        <td className="px-4 py-3 font-medium text-slate-800">
+                          {localYmdFromAttendanceValue(r.date) || "—"}
+                        </td>
+                        <td className="px-4 py-3 text-slate-600">
+                          {formatAttendanceTimeLocal(r.check_in)}
+                        </td>
+                        <td className="px-4 py-3 text-slate-600">
+                          {formatAttendanceTimeLocal(r.check_out)}
+                        </td>
+                        <td className="px-4 py-3 tabular-nums text-slate-600">
+                          {toNumberWorkingHours(r.working_time).toFixed(2)}h
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusColorClass(r.status)}`}
+                          >
+                            {String(r.status || "—").replace(/_/g, " ")}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </>
+      ) : null}
+    </section>
+  );
+}

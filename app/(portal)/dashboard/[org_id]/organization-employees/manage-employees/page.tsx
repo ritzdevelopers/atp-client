@@ -13,7 +13,10 @@ import {
   Search,
   Loader2,
   AlertCircle,
+  BadgeDollarSign,
   CalendarDays,
+  MapPin,
+  PlusCircle,
   Pencil,
   Trash2,
   Shield,
@@ -21,12 +24,17 @@ import {
 import { useManagementDashboardContext } from "@/components/portal-dashboard/Layout/ManagementDashboardContext";
 import {
   deleteOrgUser,
+  addUserAddress,
   getAllOrgUsers,
   getOrganizationRoles,
+  getUserAddresses,
+  assignPaidLeaves,
+  updateUserAddress,
   updateUserDetails,
   updateUserRoleAssignment,
   type OrgUserRow,
   type OrgRoleRow,
+  type UserAddressRow,
 } from "@/services/adminUser";
 
 type EmployeeTier = "employees" | "management";
@@ -44,9 +52,32 @@ type EmployeeCard = {
   avatarSeed: string;
 };
 
+type AddressDraft = {
+  country: string;
+  state: string;
+  district: string;
+  city: string;
+  is_from_village: boolean;
+  village_name: string;
+  street: string;
+  house_number: string;
+  zip_code: string;
+};
+
 const ACCENT = "#0d9488";
 const ACCENT_SOFT = "rgba(13, 148, 136, 0.12)";
 const PASSWORD_MIN = 8;
+const emptyAddressDraft: AddressDraft = {
+  country: "",
+  state: "",
+  district: "",
+  city: "",
+  is_from_village: false,
+  village_name: "",
+  street: "",
+  house_number: "",
+  zip_code: "",
+};
 
 function avatarUrl(seed: string) {
   return `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(seed)}`;
@@ -107,6 +138,48 @@ function inputCls() {
   return "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20";
 }
 
+function normalizeBool(value: unknown): boolean {
+  return (
+    value === true ||
+    value === 1 ||
+    String(value).toLowerCase() === "true" ||
+    String(value) === "1"
+  );
+}
+
+function makeAddressDraft(row?: Partial<UserAddressRow>): AddressDraft {
+  const isVillage = normalizeBool(row?.is_from_village);
+  return {
+    country: String(row?.country ?? ""),
+    state: String(row?.state ?? ""),
+    district: String(row?.district ?? ""),
+    city: String(row?.city ?? ""),
+    is_from_village: isVillage,
+    village_name: isVillage ? String(row?.village_name ?? "") : "",
+    street: String(row?.street ?? ""),
+    house_number: String(row?.house_number ?? ""),
+    zip_code: String(row?.zip_code ?? ""),
+  };
+}
+
+function validateAddressDraft(draft: AddressDraft): string | null {
+  if (
+    !draft.country.trim() ||
+    !draft.state.trim() ||
+    !draft.district.trim() ||
+    !draft.city.trim() ||
+    !draft.street.trim() ||
+    !draft.house_number.trim() ||
+    !draft.zip_code.trim()
+  ) {
+    return "Please fill in all required address fields.";
+  }
+  if (draft.is_from_village && !draft.village_name.trim()) {
+    return "Village name is required when employee is from a village.";
+  }
+  return null;
+}
+
 export default function ManageEmployeesPage() {
   const params = useParams();
   const ctx = useManagementDashboardContext();
@@ -118,6 +191,8 @@ export default function ManageEmployeesPage() {
 
   const viewerRole = (ctx?.user?.user_role_name ?? "").trim().toLowerCase();
   const viewerIsAdmin = viewerRole === "admin";
+  const viewerCanAssignLeaves = viewerRole === "admin" || viewerRole === "hr";
+  const viewerCanManageAddresses = viewerRole === "admin" || viewerRole === "hr";
 
   const [userRows, setUserRows] = useState<OrgUserRow[]>([]);
   const [tab, setTab] = useState<EmployeeTier>("employees");
@@ -148,6 +223,24 @@ export default function ManageEmployeesPage() {
   const [deleteRow, setDeleteRow] = useState<OrgUserRow | null>(null);
   const [deleteSaving, setDeleteSaving] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const now = new Date();
+  const [paidLeaveRow, setPaidLeaveRow] = useState<OrgUserRow | null>(null);
+  const [paidLeaveYear, setPaidLeaveYear] = useState(String(now.getFullYear()));
+  const [paidLeaveMonth, setPaidLeaveMonth] = useState(String(now.getMonth() + 1));
+  const [paidLeaveTotal, setPaidLeaveTotal] = useState("");
+  const [paidLeaveSaving, setPaidLeaveSaving] = useState(false);
+  const [paidLeaveError, setPaidLeaveError] = useState<string | null>(null);
+  const [paidLeaveSuccess, setPaidLeaveSuccess] = useState<string | null>(null);
+
+  const [addressRow, setAddressRow] = useState<OrgUserRow | null>(null);
+  const [addressMode, setAddressMode] = useState<"add" | "update">("add");
+  const [addressRows, setAddressRows] = useState<UserAddressRow[]>([]);
+  const [addressDrafts, setAddressDrafts] = useState<Record<string, AddressDraft>>({});
+  const [addressLoading, setAddressLoading] = useState(false);
+  const [addressSavingKey, setAddressSavingKey] = useState<string | null>(null);
+  const [addressError, setAddressError] = useState<string | null>(null);
+  const [addressSuccess, setAddressSuccess] = useState<string | null>(null);
 
   const allCards = useMemo(() => userRows.map(mapApiUserToCard), [userRows]);
 
@@ -198,8 +291,8 @@ export default function ManageEmployeesPage() {
 
   useEffect(() => {
     if (!roleRow || !organizationIdNum || Number.isNaN(organizationIdNum)) {
-      setRoleOptions([]);
-      return;
+      const t = window.setTimeout(() => setRoleOptions([]), 0);
+      return () => window.clearTimeout(t);
     }
     const currentRoleId = roleRow.role_id;
     let cancelled = false;
@@ -271,6 +364,271 @@ export default function ManageEmployeesPage() {
     setRoleError(null);
     setRoleRow(row);
     setRoleSelectId("");
+  }
+
+  function openPaidLeaveModal(row: OrgUserRow) {
+    const d = new Date();
+    setPaidLeaveRow(row);
+    setPaidLeaveYear(String(d.getFullYear()));
+    setPaidLeaveMonth(String(d.getMonth() + 1));
+    setPaidLeaveTotal("");
+    setPaidLeaveError(null);
+    setPaidLeaveSuccess(null);
+  }
+
+  function updateAddressDraft(
+    key: string,
+    field: keyof AddressDraft,
+    value: string | boolean,
+  ) {
+    setAddressDrafts((prev) => {
+      const current = prev[key] ?? emptyAddressDraft;
+      const next = { ...current, [field]: value };
+      if (field === "is_from_village" && value === false) {
+        next.village_name = "";
+      }
+      return { ...prev, [key]: next };
+    });
+  }
+
+  function openAddAddressModal(row: OrgUserRow) {
+    setAddressRow(row);
+    setAddressMode("add");
+    setAddressRows([]);
+    setAddressDrafts({ new: { ...emptyAddressDraft } });
+    setAddressError(null);
+    setAddressSuccess(null);
+    setAddressLoading(false);
+    setAddressSavingKey(null);
+  }
+
+  async function openUpdateAddressesModal(row: OrgUserRow) {
+    if (!row.id || Number.isNaN(organizationIdNum)) {
+      setListError("Invalid user or organization.");
+      return;
+    }
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setListError("Not signed in.");
+      return;
+    }
+
+    setAddressRow(row);
+    setAddressMode("update");
+    setAddressRows([]);
+    setAddressDrafts({});
+    setAddressError(null);
+    setAddressSuccess(null);
+    setAddressLoading(true);
+    setAddressSavingKey(null);
+
+    try {
+      const addresses = await getUserAddresses(token, organizationIdNum, row.id);
+      const drafts: Record<string, AddressDraft> = {};
+      for (const address of addresses) {
+        const id = address.id ?? address.address_id;
+        if (id == null) continue;
+        drafts[String(id)] = makeAddressDraft(address);
+      }
+      setAddressRows(addresses);
+      setAddressDrafts(drafts);
+    } catch (err) {
+      setAddressError(err instanceof Error ? err.message : "Could not load addresses.");
+    } finally {
+      setAddressLoading(false);
+    }
+  }
+
+  async function submitAddAddress(e: React.FormEvent) {
+    e.preventDefault();
+    if (!addressRow?.id || Number.isNaN(organizationIdNum)) {
+      setAddressError("Invalid user or organization.");
+      return;
+    }
+    const draft = addressDrafts.new ?? emptyAddressDraft;
+    const validation = validateAddressDraft(draft);
+    if (validation) {
+      setAddressError(validation);
+      return;
+    }
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setAddressError("Not signed in.");
+      return;
+    }
+
+    setAddressSavingKey("new");
+    setAddressError(null);
+    setAddressSuccess(null);
+    try {
+      await addUserAddress(token, {
+        user_id: addressRow.id,
+        org_id: organizationIdNum,
+        country: draft.country.trim(),
+        state: draft.state.trim(),
+        district: draft.district.trim(),
+        city: draft.city.trim(),
+        is_from_village: draft.is_from_village,
+        village_name: draft.is_from_village ? draft.village_name.trim() : null,
+        street: draft.street.trim(),
+        house_number: draft.house_number.trim(),
+        zip_code: draft.zip_code.trim(),
+      });
+      setAddressDrafts({ new: { ...emptyAddressDraft } });
+      setAddressSuccess("Address added successfully.");
+    } catch (err) {
+      setAddressError(err instanceof Error ? err.message : "Could not add address.");
+    } finally {
+      setAddressSavingKey(null);
+    }
+  }
+
+  async function submitUpdateAddress(address: UserAddressRow) {
+    if (!addressRow?.id || Number.isNaN(organizationIdNum)) {
+      setAddressError("Invalid user or organization.");
+      return;
+    }
+    const addressId = address.id ?? address.address_id;
+    if (addressId == null) {
+      setAddressError("Address id is missing.");
+      return;
+    }
+    const key = String(addressId);
+    const draft = addressDrafts[key] ?? makeAddressDraft(address);
+    const validation = validateAddressDraft(draft);
+    if (validation) {
+      setAddressError(validation);
+      return;
+    }
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setAddressError("Not signed in.");
+      return;
+    }
+
+    setAddressSavingKey(key);
+    setAddressError(null);
+    setAddressSuccess(null);
+    try {
+      await updateUserAddress(token, {
+        address_id: addressId,
+        user_id: addressRow.id,
+        org_id: organizationIdNum,
+        country: draft.country.trim(),
+        state: draft.state.trim(),
+        district: draft.district.trim(),
+        city: draft.city.trim(),
+        is_from_village: draft.is_from_village,
+        village_name: draft.is_from_village ? draft.village_name.trim() : null,
+        street: draft.street.trim(),
+        house_number: draft.house_number.trim(),
+        zip_code: draft.zip_code.trim(),
+      });
+      setAddressSuccess("Address updated successfully.");
+      const addresses = await getUserAddresses(token, organizationIdNum, addressRow.id);
+      const drafts: Record<string, AddressDraft> = {};
+      for (const item of addresses) {
+        const id = item.id ?? item.address_id;
+        if (id == null) continue;
+        drafts[String(id)] = makeAddressDraft(item);
+      }
+      setAddressRows(addresses);
+      setAddressDrafts(drafts);
+    } catch (err) {
+      setAddressError(err instanceof Error ? err.message : "Could not update address.");
+    } finally {
+      setAddressSavingKey(null);
+    }
+  }
+
+  function renderAddressFields(key: string, draft: AddressDraft) {
+    return (
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-600">Country</label>
+          <input
+            className={inputCls()}
+            value={draft.country}
+            onChange={(e) => updateAddressDraft(key, "country", e.target.value)}
+            required
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-600">State</label>
+          <input
+            className={inputCls()}
+            value={draft.state}
+            onChange={(e) => updateAddressDraft(key, "state", e.target.value)}
+            required
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-600">District</label>
+          <input
+            className={inputCls()}
+            value={draft.district}
+            onChange={(e) => updateAddressDraft(key, "district", e.target.value)}
+            required
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-600">City</label>
+          <input
+            className={inputCls()}
+            value={draft.city}
+            onChange={(e) => updateAddressDraft(key, "city", e.target.value)}
+            required
+          />
+        </div>
+        <label className="flex items-center gap-2 text-sm font-medium text-slate-700 sm:col-span-2">
+          <input
+            type="checkbox"
+            checked={draft.is_from_village}
+            onChange={(e) => updateAddressDraft(key, "is_from_village", e.target.checked)}
+            className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500/30"
+          />
+          Employee is from a village
+        </label>
+        {draft.is_from_village ? (
+          <div className="sm:col-span-2">
+            <label className="mb-1 block text-xs font-medium text-slate-600">Village name</label>
+            <input
+              className={inputCls()}
+              value={draft.village_name}
+              onChange={(e) => updateAddressDraft(key, "village_name", e.target.value)}
+              required={draft.is_from_village}
+            />
+          </div>
+        ) : null}
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-600">Street</label>
+          <input
+            className={inputCls()}
+            value={draft.street}
+            onChange={(e) => updateAddressDraft(key, "street", e.target.value)}
+            required
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-600">House number</label>
+          <input
+            className={inputCls()}
+            value={draft.house_number}
+            onChange={(e) => updateAddressDraft(key, "house_number", e.target.value)}
+            required
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-600">ZIP / PIN code</label>
+          <input
+            className={inputCls()}
+            value={draft.zip_code}
+            onChange={(e) => updateAddressDraft(key, "zip_code", e.target.value)}
+            required
+          />
+        </div>
+      </div>
+    );
   }
 
   async function submitEdit(e: React.FormEvent) {
@@ -384,6 +742,59 @@ export default function ManageEmployeesPage() {
       setDeleteError(err instanceof Error ? err.message : "Delete failed.");
     } finally {
       setDeleteSaving(false);
+    }
+  }
+
+  async function submitPaidLeaves(e: React.FormEvent) {
+    e.preventDefault();
+    if (!paidLeaveRow?.id) return;
+    if (!viewerCanAssignLeaves) {
+      setPaidLeaveError("You do not have permission to assign paid leaves.");
+      return;
+    }
+    if (Number.isNaN(organizationIdNum)) {
+      setPaidLeaveError("Invalid organization.");
+      return;
+    }
+
+    const y = parseInt(paidLeaveYear, 10);
+    const mo = parseInt(paidLeaveMonth, 10);
+    const total = parseInt(paidLeaveTotal, 10);
+    if (
+      Number.isNaN(y) ||
+      Number.isNaN(mo) ||
+      mo < 1 ||
+      mo > 12 ||
+      Number.isNaN(total) ||
+      total < 0
+    ) {
+      setPaidLeaveError("Enter a valid year, month (1-12), and non-negative leaves.");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setPaidLeaveError("Not signed in.");
+      return;
+    }
+
+    setPaidLeaveSaving(true);
+    setPaidLeaveError(null);
+    setPaidLeaveSuccess(null);
+    try {
+      const result = await assignPaidLeaves(token, {
+        org_id: organizationIdNum,
+        user_id: paidLeaveRow.id,
+        year: y,
+        month: mo,
+        total_leaves: total,
+      });
+      setPaidLeaveSuccess(result.message || "Paid leaves assigned successfully.");
+      await loadUsers();
+    } catch (err) {
+      setPaidLeaveError(err instanceof Error ? err.message : "Could not assign paid leaves.");
+    } finally {
+      setPaidLeaveSaving(false);
     }
   }
 
@@ -574,6 +985,48 @@ export default function ManageEmployeesPage() {
                                 <Shield className="h-4 w-4 text-teal-600" aria-hidden />
                                 Update role
                               </button>
+                              {viewerCanAssignLeaves && (
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                                  onClick={() => {
+                                    openPaidLeaveModal(row);
+                                    setMenuUserId(null);
+                                  }}
+                                >
+                                  <BadgeDollarSign className="h-4 w-4 text-teal-600" aria-hidden />
+                                  Assign paid leaves
+                                </button>
+                              )}
+                              {viewerCanManageAddresses && (
+                                <>
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                                    onClick={() => {
+                                      void openUpdateAddressesModal(row);
+                                      setMenuUserId(null);
+                                    }}
+                                  >
+                                    <MapPin className="h-4 w-4 text-teal-600" aria-hidden />
+                                    Update prev address
+                                  </button>
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                                    onClick={() => {
+                                      openAddAddressModal(row);
+                                      setMenuUserId(null);
+                                    }}
+                                  >
+                                    <PlusCircle className="h-4 w-4 text-teal-600" aria-hidden />
+                                    Add one more address
+                                  </button>
+                                </>
+                              )}
                             </div>
                           )}
                         </div>
@@ -849,6 +1302,266 @@ export default function ManageEmployeesPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Assign paid leaves modal */}
+      {paidLeaveRow && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="paid-leaves-title"
+        >
+          <button
+            type="button"
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-[1px]"
+            aria-label="Close"
+            onClick={() => !paidLeaveSaving && setPaidLeaveRow(null)}
+          />
+          <div className="relative z-10 w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
+            <div className="mb-4 flex items-start justify-between gap-2">
+              <div>
+                <h2 id="paid-leaves-title" className="text-lg font-bold text-slate-900">
+                  Assign paid leaves
+                </h2>
+                <p className="mt-1 text-sm text-slate-600">
+                  Assign monthly paid leaves to{" "}
+                  <span className="font-semibold text-slate-900">{paidLeaveRow.user_name}</span>.
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={paidLeaveSaving}
+                onClick={() => setPaidLeaveRow(null)}
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900">
+              This updates the selected month&apos;s balance and the employee&apos;s default monthly
+              leave value used for future auto-assignment.
+            </div>
+
+            {paidLeaveError && (
+              <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                {paidLeaveError}
+              </div>
+            )}
+            {paidLeaveSuccess && (
+              <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                {paidLeaveSuccess}
+              </div>
+            )}
+
+            <form onSubmit={submitPaidLeaves} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">Year</label>
+                  <input
+                    type="number"
+                    min="2000"
+                    max="2100"
+                    className={inputCls()}
+                    value={paidLeaveYear}
+                    onChange={(e) => setPaidLeaveYear(e.target.value)}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">Month</label>
+                  <select
+                    className={inputCls()}
+                    value={paidLeaveMonth}
+                    onChange={(e) => setPaidLeaveMonth(e.target.value)}
+                    required
+                  >
+                    {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                      <option key={m} value={String(m)}>
+                        {new Date(2024, m - 1, 1).toLocaleString("en-US", {
+                          month: "long",
+                        })}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">
+                  Total paid leaves
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  className={inputCls()}
+                  value={paidLeaveTotal}
+                  onChange={(e) => setPaidLeaveTotal(e.target.value)}
+                  placeholder="Example: 2"
+                  required
+                />
+                <p className="mt-1 text-xs text-slate-500">
+                  If this month already has used leaves, total cannot be less than used.
+                </p>
+              </div>
+
+              <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  disabled={paidLeaveSaving}
+                  onClick={() => setPaidLeaveRow(null)}
+                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={paidLeaveSaving}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-bold text-white hover:bg-teal-700 disabled:opacity-60"
+                >
+                  {paidLeaveSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  Assign leaves
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add / update address modal */}
+      {addressRow && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="address-modal-title"
+        >
+          <button
+            type="button"
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-[1px]"
+            aria-label="Close"
+            onClick={() => addressSavingKey == null && setAddressRow(null)}
+          />
+          <div className="relative z-10 max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
+            <div className="mb-4 flex items-start justify-between gap-2">
+              <div>
+                <h2 id="address-modal-title" className="text-lg font-bold text-slate-900">
+                  {addressMode === "add" ? "Add one more address" : "Update previous addresses"}
+                </h2>
+                <p className="mt-1 text-sm text-slate-600">
+                  <span className="font-medium text-slate-900">{addressRow.user_name}</span>
+                  {addressMode === "add"
+                    ? " can have multiple saved addresses."
+                    : " addresses are shown below in separate forms."}
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={addressSavingKey != null}
+                onClick={() => setAddressRow(null)}
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {addressError ? (
+              <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                {addressError}
+              </div>
+            ) : null}
+            {addressSuccess ? (
+              <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                {addressSuccess}
+              </div>
+            ) : null}
+
+            {addressMode === "add" ? (
+              <form onSubmit={submitAddAddress} className="space-y-4">
+                {renderAddressFields("new", addressDrafts.new ?? emptyAddressDraft)}
+                <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
+                  <button
+                    type="button"
+                    disabled={addressSavingKey != null}
+                    onClick={() => setAddressRow(null)}
+                    className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={addressSavingKey === "new"}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-bold text-white hover:bg-teal-700 disabled:opacity-60"
+                  >
+                    {addressSavingKey === "new" ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : null}
+                    Add address
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="space-y-4">
+                {addressLoading ? (
+                  <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading addresses...
+                  </div>
+                ) : null}
+
+                {!addressLoading && addressRows.length === 0 ? (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    No saved addresses found. Use “Add one more address” to create one.
+                  </div>
+                ) : null}
+
+                {addressRows.map((address, index) => {
+                  const addressId = address.id ?? address.address_id;
+                  const key = String(addressId ?? index);
+                  const draft = addressDrafts[key] ?? makeAddressDraft(address);
+                  return (
+                    <form
+                      key={key}
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        void submitUpdateAddress(address);
+                      }}
+                      className="rounded-xl border border-slate-200 bg-slate-50/50 p-4"
+                    >
+                      <div className="mb-3 flex items-center justify-between gap-2">
+                        <h3 className="text-sm font-bold text-slate-800">
+                          Address {index + 1}
+                        </h3>
+                        {addressId != null ? (
+                          <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-slate-500">
+                            ID: {String(addressId)}
+                          </span>
+                        ) : null}
+                      </div>
+                      {renderAddressFields(key, draft)}
+                      <div className="mt-4 flex justify-end">
+                        <button
+                          type="submit"
+                          disabled={addressSavingKey === key || addressId == null}
+                          className="inline-flex items-center justify-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-bold text-white hover:bg-teal-700 disabled:opacity-60"
+                        >
+                          {addressSavingKey === key ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : null}
+                          Update this address
+                        </button>
+                      </div>
+                    </form>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}

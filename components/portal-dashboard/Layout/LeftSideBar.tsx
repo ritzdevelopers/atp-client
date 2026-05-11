@@ -1,11 +1,13 @@
 import { PortalFeature } from "@/services/organization";
-import { useRouter, useParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useManagementDashboardContext } from "@/components/portal-dashboard/Layout/ManagementDashboardContext";
+import { useRouter, useParams, usePathname } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { BiSolidUserPlus } from "react-icons/bi";
 import {
   MdAdminPanelSettings,
   MdEvent,
   MdFactCheck,
+  MdHistory,
   MdHome,
   MdMoreHoriz,
   MdSchedule,
@@ -16,6 +18,20 @@ import {
 } from "react-icons/md";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+
+function readRoleNameFromToken(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const token = localStorage.getItem("token");
+    if (!token) return null;
+    const part = token.split(".")[1];
+    if (!part) return null;
+    const payload = JSON.parse(atob(part)) as { user_role_name?: string };
+    return payload.user_role_name ?? null;
+  } catch {
+    return null;
+  }
+}
 
 type NavSubItem = {
   id: string;
@@ -42,9 +58,15 @@ function LeftSideBar({
   accessableFeatures: PortalFeature[];
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const params = useParams();
   const orgId = String(params?.org_id ?? "1");
   const base = `/dashboard/${orgId}`;
+  const dashboardCtx = useManagementDashboardContext();
+  const effectiveRoleName =
+    dashboardCtx?.user?.user_role_name ?? readRoleNameFromToken();
+  const isAdmin = String(effectiveRoleName || "").trim().toLowerCase() === "admin";
+  const myHistoryActive = Boolean(pathname?.includes("/my-attendance-history"));
   const [resolvedFeatures, setResolvedFeatures] = useState<PortalFeature[]>(
     Array.isArray(accessableFeatures) ? accessableFeatures : [],
   );
@@ -127,7 +149,7 @@ function LeftSideBar({
     return set;
   }, [resolvedFeatures]);
 
-  const hasFeatureAccess = (requiredFeature?: string) => {
+  const hasFeatureAccess = useCallback((requiredFeature?: string) => {
     if (!requiredFeature) return true;
     const wanted = requiredFeature.toLowerCase();
     if (accessibleTokens.has(wanted)) return true;
@@ -137,7 +159,7 @@ function LeftSideBar({
     )
       return true;
     return false;
-  };
+  }, [accessibleTokens]);
 
   const navItems: NavItem[] = useMemo(
     () => [
@@ -168,6 +190,11 @@ function LeftSideBar({
             name: "New Hires",
             path: `${base}/organization-employees/employee-onboarding`,
           },
+          {
+            id: "employee-leaves",
+            name: "Manage Employee Leaves",
+            path: `${base}/organization-employees/manage-employee-leaves`,
+          }
         ],
         requiredFeature: "employee-management",
       },
@@ -331,25 +358,28 @@ function LeftSideBar({
       });
     }
     return result;
-  }, [navItems, accessibleTokens]);
+  }, [navItems, hasFeatureAccess]);
 
   const [activeMain, setActiveMain] = useState("organization");
   const [activeSub, setActiveSub] = useState("employee");
 
   useEffect(() => {
     if (filteredNavItems.length === 0) return;
-    const active = filteredNavItems.find((item) => item.id === activeMain);
-    if (!active) {
-      setActiveMain(filteredNavItems[0].id);
-      setActiveSub(filteredNavItems[0].children[0]?.id ?? "");
-      return;
-    }
-    if (
-      active.children.length > 0 &&
-      !active.children.some((sub) => sub.id === activeSub)
-    ) {
-      setActiveSub(active.children[0].id);
-    }
+    const t = window.setTimeout(() => {
+      const active = filteredNavItems.find((item) => item.id === activeMain);
+      if (!active) {
+        setActiveMain(filteredNavItems[0].id);
+        setActiveSub(filteredNavItems[0].children[0]?.id ?? "");
+        return;
+      }
+      if (
+        active.children.length > 0 &&
+        !active.children.some((sub) => sub.id === activeSub)
+      ) {
+        setActiveSub(active.children[0].id);
+      }
+    }, 0);
+    return () => window.clearTimeout(t);
   }, [filteredNavItems, activeMain, activeSub]);
 
   const activeItem = filteredNavItems.find((item) => item.id === activeMain);
@@ -374,7 +404,7 @@ function LeftSideBar({
 
   const handleMoreClick = () => {
     setActiveMain("more");
-    router.push(base);
+    router.push(`${base}/home`);
   };
 
   return (
@@ -426,10 +456,12 @@ function LeftSideBar({
         </div>
 
         <div className="flex flex-col items-center w-full">
-          <button
-            type="button"
-            onClick={handleMoreClick}
-            className={`
+          {isAdmin ? (
+            <>
+              <button
+                type="button"
+                onClick={handleMoreClick}
+                className={`
               relative flex flex-col items-center justify-center w-full px-1 py-[10px] gap-[5px]
               cursor-pointer transition-all duration-150 border-0 bg-transparent outline-none
               ${
@@ -438,53 +470,87 @@ function LeftSideBar({
                   : "text-[#8A9BAD] hover:text-[#CBD5DF] hover:bg-white/[0.04]"
               }
             `}
-          >
-            {activeMain === "more" && (
-              <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[55%] bg-[#C99237] rounded-r-[2px]" />
-            )}
-            <span className="text-[20px] leading-none flex items-center justify-center">
-              <MdMoreHoriz />
-            </span>
-            <span
-              className="text-[10px] font-medium text-center leading-[1.25] w-full px-1"
-              style={{
-                letterSpacing: "0.01em",
-                wordBreak: "break-word",
-                hyphens: "auto",
-              }}
-            >
-              More
-            </span>
-          </button>
+              >
+                {activeMain === "more" && (
+                  <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[55%] bg-[#C99237] rounded-r-[2px]" />
+                )}
+                <span className="text-[20px] leading-none flex items-center justify-center">
+                  <MdMoreHoriz />
+                </span>
+                <span
+                  className="text-[10px] font-medium text-center leading-[1.25] w-full px-1"
+                  style={{
+                    letterSpacing: "0.01em",
+                    wordBreak: "break-word",
+                    hyphens: "auto",
+                  }}
+                >
+                  More
+                </span>
+              </button>
 
-          <button
-            type="button"
-            className="flex flex-col items-center justify-center w-full px-1 py-[10px] gap-[5px]
+              <button
+                type="button"
+                className="flex flex-col items-center justify-center w-full px-1 py-[10px] gap-[5px]
               cursor-pointer transition-all duration-150 border-0 bg-transparent outline-none
               text-[#8A9BAD] hover:text-[#CBD5DF] hover:bg-white/[0.04]"
-          >
-            <span className="text-[20px] leading-none flex items-center justify-center">
-              <MdSettings />
-            </span>
-            <span
-              className="text-[10px] font-medium text-center leading-[1.25]"
-              style={{ letterSpacing: "0.01em" }}
-            >
-              Settings
-            </span>
-          </button>
+              >
+                <span className="text-[20px] leading-none flex items-center justify-center">
+                  <MdSettings />
+                </span>
+                <span
+                  className="text-[10px] font-medium text-center leading-[1.25]"
+                  style={{ letterSpacing: "0.01em" }}
+                >
+                  Settings
+                </span>
+              </button>
 
-          <button
-            type="button"
-            className="flex items-center justify-center w-full px-1 py-[12px]
+              <button
+                type="button"
+                className="flex items-center justify-center w-full px-1 py-[12px]
               cursor-pointer transition-all duration-150 border-0 bg-transparent outline-none
               text-[#8A9BAD] hover:text-[#CBD5DF] hover:bg-white/[0.04]"
-            aria-label="Menu"
-          >
-            <span className="text-[20px] leading-none flex items-center justify-center">
-              <MdMenu />
-            </span>
-          </button>
+                aria-label="Menu"
+              >
+                <span className="text-[20px] leading-none flex items-center justify-center">
+                  <MdMenu />
+                </span>
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => router.push(`${base}/my-attendance-history`)}
+              className={`
+              relative flex flex-col items-center justify-center w-full px-1 py-[10px] gap-[5px]
+              cursor-pointer transition-all duration-150 border-0 bg-transparent outline-none
+              ${
+                myHistoryActive
+                  ? "text-white bg-white/[0.06]"
+                  : "text-[#8A9BAD] hover:text-[#CBD5DF] hover:bg-white/[0.04]"
+              }
+            `}
+              title="View your own attendance history (read-only)"
+            >
+              {myHistoryActive && (
+                <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[55%] bg-[#C99237] rounded-r-[2px]" />
+              )}
+              <span className="text-[20px] leading-none flex items-center justify-center">
+                <MdHistory />
+              </span>
+              <span
+                className="text-[10px] font-medium text-center leading-[1.25] w-full px-1"
+                style={{
+                  letterSpacing: "0.01em",
+                  wordBreak: "break-word",
+                  hyphens: "auto",
+                }}
+              >
+                My attendance
+              </span>
+            </button>
+          )}
         </div>
       </div>
 
