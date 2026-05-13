@@ -16,6 +16,7 @@ import {
   getAttendanceDayVisual,
   getTodayLocalYmd,
   localYmdFromAttendanceValue,
+  parseAttendanceNaiveLocal,
 } from "@/lib/attendanceDates";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
@@ -207,18 +208,22 @@ function HomeOverview({
   const todayRecord = historyMap.get(todayYmd);
   const hasCheckedInToday = Boolean(todayRecord?.check_in);
   const hasCheckedOutToday = Boolean(todayRecord?.check_out);
-  const checkInInstant = todayRecord?.check_in ? new Date(String(todayRecord.check_in)) : null;
+  const checkInInstant = parseAttendanceNaiveLocal(todayRecord?.check_in);
   const checkInValid = checkInInstant && !Number.isNaN(checkInInstant.getTime());
   const showLiveTimer = Boolean(checkInValid && hasCheckedInToday && !hasCheckedOutToday);
 
   useEffect(() => {
     if (!showLiveTimer) return;
-    const id = window.setInterval(() => setTick((t) => t + 1), 1000);
-    return () => window.clearInterval(id);
+    const firstTick = window.setTimeout(() => setTick(Date.now()), 0);
+    const id = window.setInterval(() => setTick(Date.now()), 1000);
+    return () => {
+      window.clearTimeout(firstTick);
+      window.clearInterval(id);
+    };
   }, [showLiveTimer]);
 
   const liveElapsedMs =
-    showLiveTimer && checkInValid ? Date.now() - checkInInstant.getTime() + 0 * tick : 0;
+    showLiveTimer && checkInValid && tick > 0 ? tick - checkInInstant.getTime() : 0;
   const workingHoursDisplay = showLiveTimer
     ? formatElapsedDuration(liveElapsedMs)
     : formatWorkingTimeDisplay(todayRecord?.working_time);

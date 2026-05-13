@@ -2,6 +2,7 @@ import { PortalFeature } from "@/services/organization";
 import { useManagementDashboardContext } from "@/components/portal-dashboard/Layout/ManagementDashboardContext";
 import { useRouter, useParams, usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { BiSolidUserPlus } from "react-icons/bi";
 import {
   MdAdminPanelSettings,
@@ -13,6 +14,7 @@ import {
   MdSchedule,
   MdSettings,
   MdMenu,
+  MdLogout,
   MdVpnKey,
   MdWifi,
 } from "react-icons/md";
@@ -67,6 +69,7 @@ function LeftSideBar({
     dashboardCtx?.user?.user_role_name ?? readRoleNameFromToken();
   const isAdmin = String(effectiveRoleName || "").trim().toLowerCase() === "admin";
   const myHistoryActive = Boolean(pathname?.includes("/my-attendance-history"));
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [resolvedFeatures, setResolvedFeatures] = useState<PortalFeature[]>(
     Array.isArray(accessableFeatures) ? accessableFeatures : [],
   );
@@ -407,7 +410,54 @@ function LeftSideBar({
     router.push(`${base}/home`);
   };
 
+  function confirmLogout() {
+    try {
+      localStorage.removeItem("token");
+    } catch {
+      // ignore
+    }
+    setShowLogoutConfirm(false);
+    router.push("/");
+  }
+
+  const logoutDialog =
+    showLogoutConfirm && typeof document !== "undefined" ? (
+      <div
+        className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 p-4"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="logout-dialog-title"
+      >
+        <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-5 shadow-xl">
+          <h2 id="logout-dialog-title" className="text-base font-semibold text-slate-900">
+            Sign out?
+          </h2>
+          <p className="mt-2 text-sm text-slate-600">
+            You will be signed out of the portal. Unsaved work may be lost. You must sign in again to
+            continue.
+          </p>
+          <div className="mt-5 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setShowLogoutConfirm(false)}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={confirmLogout}
+              className="rounded-lg bg-rose-600 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-700"
+            >
+              Sign out
+            </button>
+          </div>
+        </div>
+      </div>
+    ) : null;
+
   return (
+    <>
     <div className="flex h-screen sticky top-0">
       {/* ── LEFT RAIL ── */}
       <div
@@ -458,7 +508,7 @@ function LeftSideBar({
         <div className="flex flex-col items-center w-full">
           {isAdmin ? (
             <>
-              <button
+              {/* <button
                 type="button"
                 onClick={handleMoreClick}
                 className={`
@@ -516,7 +566,7 @@ function LeftSideBar({
                 <span className="text-[20px] leading-none flex items-center justify-center">
                   <MdMenu />
                 </span>
-              </button>
+              </button> */}
             </>
           ) : (
             <button
@@ -551,6 +601,29 @@ function LeftSideBar({
               </span>
             </button>
           )}
+
+          <button
+            type="button"
+            onClick={() => setShowLogoutConfirm(true)}
+            className="flex flex-col items-center justify-center w-full px-1 py-[10px] gap-[5px]
+              cursor-pointer transition-all duration-150 border-0 bg-transparent outline-none
+              text-[#8A9BAD] hover:text-rose-300 hover:bg-white/[0.04]"
+            title="Sign out"
+          >
+            <span className="text-[20px] leading-none flex items-center justify-center">
+              <MdLogout />
+            </span>
+            <span
+              className="text-[10px] font-medium text-center leading-[1.25] w-full px-1"
+              style={{
+                letterSpacing: "0.01em",
+                wordBreak: "break-word",
+                hyphens: "auto",
+              }}
+            >
+              Log out
+            </span>
+          </button>
         </div>
       </div>
 
@@ -583,6 +656,8 @@ function LeftSideBar({
         </div>
       )}
     </div>
+    {logoutDialog ? createPortal(logoutDialog, document.body) : null}
+    </>
   );
 }
 
