@@ -579,8 +579,7 @@ function Home() {
       setAttendanceActionError("Not signed in.");
       return;
     }
-    const { user_date } = getCurrentDateAndTime();
-    const user_time = new Date().toISOString();
+    const { user_date, user_time } = getCurrentDateAndTime();
     setCheckOutSubmitting(true);
     setAttendanceActionError(null);
     try {
@@ -606,7 +605,7 @@ function Home() {
       const wm = result.workingMinutes;
       const workingDisplay =
         wm != null && !Number.isNaN(Number(wm)) ? Number(wm) / 60 : undefined;
-      const patch: Partial<AttendanceHistoryRow> = { check_out: user_time };
+      const patch: Partial<AttendanceHistoryRow> = { check_out: `${user_date} ${user_time}:00` };
       if (result.finalStatus != null)
         patch.attendance_status = result.finalStatus;
       if (workingDisplay !== undefined) patch.working_time = workingDisplay;

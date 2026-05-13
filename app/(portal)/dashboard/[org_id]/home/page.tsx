@@ -280,13 +280,15 @@ function HomeOverview({
       const yyyy = n.getFullYear();
       const mm = String(n.getMonth() + 1).padStart(2, "0");
       const dd = String(n.getDate()).padStart(2, "0");
+      const hh = String(n.getHours()).padStart(2, "0");
+      const min = String(n.getMinutes()).padStart(2, "0");
       const res = await fetch(`${API_URL}/api/employees/mark-attendance-check-out`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ org_id: orgId, user_date: `${yyyy}-${mm}-${dd}`, user_time: new Date().toISOString() }),
+        body: JSON.stringify({ org_id: orgId, user_date: `${yyyy}-${mm}-${dd}`, user_time: `${hh}:${min}` }),
       });
       const result = (await res.json()) as { message?: string };
       if (!res.ok) throw new Error(result.message || "Could not mark check-out");
