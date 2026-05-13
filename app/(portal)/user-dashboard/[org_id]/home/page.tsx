@@ -10,10 +10,12 @@ import {
   getLocalYmdFromDate,
   getTodayLocalYmd,
   localYmdFromAttendanceValue,
+  parseAttendanceNaiveLocal,
 } from "@/lib/attendanceDates";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 const HOME_CACHE_TTL_MS = 5 * 60 * 1000;
+const HOME_CACHE_VERSION = "v2";
 
 type AttendanceHistoryRow = {
   attendance_date?: string;
@@ -149,7 +151,7 @@ function parseJwtUserId(token: string | null): string {
 }
 
 function getHomeCacheKey(orgId: number, token: string | null): string {
-  return `user-dashboard-home:${orgId}:${parseJwtUserId(token)}`;
+  return `user-dashboard-home:${HOME_CACHE_VERSION}:${orgId}:${parseJwtUserId(token)}`;
 }
 
 function readHomeCache(cacheKey: string): HomeCachePayload | null {
@@ -409,9 +411,7 @@ function Home() {
   const hasCheckedInToday = Boolean(todayRecord?.check_in);
   const hasCheckedOutToday = Boolean(todayRecord?.check_out);
 
-  const checkInInstant = todayRecord?.check_in
-    ? new Date(String(todayRecord.check_in))
-    : null;
+  const checkInInstant = parseAttendanceNaiveLocal(todayRecord?.check_in);
   const checkInValid =
     checkInInstant && !Number.isNaN(checkInInstant.getTime());
 
@@ -552,11 +552,11 @@ function Home() {
         status?: string;
       };
       if (!res.ok) throw new Error(result.message || "Could not mark check-in");
-      const checkInIso = new Date().toISOString();
+      const checkInDateTime = `${user_date} ${user_time}:00`;
       clearHomeCache(orgId, token);
       setData((prev) =>
         upsertTodayHistory(prev, todayYmd, {
-          check_in: checkInIso,
+          check_in: checkInDateTime,
           check_out: null,
           attendance_status: result.status || "present",
           working_time: null,

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useParams, usePathname, useRouter } from "next/navigation";
-import { MdCalendarMonth, MdDashboard, MdOutlineSettings } from "react-icons/md";
+import { MdCalendarMonth, MdDashboard, MdLogout, MdOutlineSettings } from "react-icons/md";
 import { BsPerson } from "react-icons/bs";
 import { PiBagSimple } from "react-icons/pi";
 import { LuFileSpreadsheet } from "react-icons/lu";
@@ -35,6 +35,7 @@ function LeftSideBar() {
   const [submittingLeave, setSubmittingLeave] = useState(false);
   const [leaveError, setLeaveError] = useState<string | null>(null);
   const [leaveSuccess, setLeaveSuccess] = useState<string | null>(null);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   async function submitLeave(e: React.FormEvent) {
     e.preventDefault();
@@ -86,6 +87,16 @@ function LeftSideBar() {
     } finally {
       setSubmittingLeave(false);
     }
+  }
+
+  function confirmLogout() {
+    try {
+      localStorage.removeItem("token");
+    } catch {
+      // ignore
+    }
+    setShowLogoutConfirm(false);
+    router.push("/");
   }
 
   return (
@@ -150,7 +161,53 @@ function LeftSideBar() {
           <RiQuestionLine className="text-[18px]" />
           Support
         </button>
+        <button
+          type="button"
+          onClick={() => setShowLogoutConfirm(true)}
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm text-rose-600 transition hover:bg-rose-50 hover:text-rose-700"
+        >
+          <MdLogout className="text-[18px]" />
+          Log out
+        </button>
       </div>
+
+      {showLogoutConfirm ? (
+        <div
+          style={{ zIndex: 10000 }}
+          className="fixed inset-0 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="user-logout-dialog-title"
+        >
+          <div className="relative w-full max-w-md rounded-xl border border-slate-200 bg-white shadow-xl">
+            <div className="border-b border-slate-100 px-5 py-4">
+              <h3 id="user-logout-dialog-title" className="text-base font-semibold text-slate-800">
+                Sign out?
+              </h3>
+              <p className="mt-1 text-sm text-slate-600">
+                You will be signed out of the portal. Unsaved work may be lost. You must sign in again to
+                continue.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setShowLogoutConfirm(false)}
+                className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmLogout}
+                className="rounded-md bg-rose-600 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-700"
+              >
+                Sign out
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {showLeaveModal && (
         <div 
