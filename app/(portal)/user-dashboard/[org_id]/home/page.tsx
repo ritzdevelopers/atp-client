@@ -15,9 +15,10 @@ import {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 const HOME_CACHE_TTL_MS = 5 * 60 * 1000;
-const HOME_CACHE_VERSION = "v2";
+const HOME_CACHE_VERSION = "v3";
 
 type AttendanceHistoryRow = {
+  id?: number | string;
   attendance_date?: string;
   check_in?: string | null;
   check_out?: string | null;
@@ -206,6 +207,7 @@ function upsertTodayHistory(
     history[idx] = { ...history[idx], ...patch };
   } else {
     history.unshift({
+      id: patch.id,
       attendance_date: todayYmd,
       check_in: patch.check_in ?? null,
       check_out: patch.check_out ?? null,
@@ -271,6 +273,8 @@ function Home() {
   const [addressesError, setAddressesError] = useState<string | null>(null);
   const [checkInSubmitting, setCheckInSubmitting] = useState(false);
   const [checkOutSubmitting, setCheckOutSubmitting] = useState(false);
+  const [logSubmitting, setLogSubmitting] = useState(false);
+  const [logSuccessMessage, setLogSuccessMessage] = useState<string | null>(null);
   const [attendanceActionError, setAttendanceActionError] = useState<
     string | null
   >(null);
@@ -535,6 +539,7 @@ function Home() {
     const { user_date, user_time } = getCurrentDateAndTime();
     setCheckInSubmitting(true);
     setAttendanceActionError(null);
+    setLogSuccessMessage(null);
     try {
       const res = await fetch(
         `${API_URL}/api/employees/mark-attendance-check-in`,
@@ -550,12 +555,14 @@ function Home() {
       const result = (await res.json()) as {
         message?: string;
         status?: string;
+        attendance_id?: number | string;
       };
       if (!res.ok) throw new Error(result.message || "Could not mark check-in");
       const checkInDateTime = `${user_date} ${user_time}:00`;
       clearHomeCache(orgId, token);
       setData((prev) =>
         upsertTodayHistory(prev, todayYmd, {
+          id: result.attendance_id,
           check_in: checkInDateTime,
           check_out: null,
           attendance_status: result.status || "present",
@@ -582,6 +589,7 @@ function Home() {
     const { user_date, user_time } = getCurrentDateAndTime();
     setCheckOutSubmitting(true);
     setAttendanceActionError(null);
+    setLogSuccessMessage(null);
     try {
       const res = await fetch(
         `${API_URL}/api/employees/mark-attendance-check-out`,
@@ -617,6 +625,52 @@ function Home() {
       );
     } finally {
       setCheckOutSubmitting(false);
+    }
+  }
+
+  async function markAttendanceLog() {
+    if (!orgId || Number.isNaN(orgId)) return;
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setAttendanceActionError("Not signed in.");
+      return;
+    }
+    const attendanceId = todayRecord?.id;
+    if (attendanceId == null || attendanceId === "") {
+      setAttendanceActionError("No attendance row for today. Check in first.");
+      return;
+    }
+    setLogSubmitting(true);
+    setAttendanceActionError(null);
+    setLogSuccessMessage(null);
+    try {
+      const res = await fetch(`${API_URL}/api/employees/add-attendance-log`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ org_id: orgId, attendance_id: attendanceId }),
+      });
+      const result = (await res.json()) as {
+        success?: boolean;
+        message?: string;
+        data?: { action_type?: string; message?: string };
+      };
+      if (!res.ok)
+        throw new Error(result.message || "Could not mark attendance log");
+      const action = result.data?.action_type;
+      setLogSuccessMessage(
+        action
+          ? `Recorded: ${action}`
+          : (result.data?.message ?? result.message ?? "Log saved."),
+      );
+    } catch (e) {
+      setAttendanceActionError(
+        e instanceof Error ? e.message : "Could not mark attendance log.",
+      );
+    } finally {
+      setLogSubmitting(false);
     }
   }
 
@@ -852,7 +906,7 @@ function Home() {
                 <p className="mt-1 text-sm font-semibold leading-relaxed text-slate-800">
                   {todayLog}
                 </p>
-                <div className="mt-3 flex gap-2">
+                <div className="mt-3 flex flex-wrap gap-2">
                   <button
                     type="button"
                     onClick={() => void markCheckIn()}
@@ -872,6 +926,21 @@ function Home() {
                       : checkOutSubmitting
                         ? "Processing..."
                         : "Check Out"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void markAttendanceLog()}
+                    disabled={
+                      !hasCheckedInToday ||
+                      hasCheckedOutToday ||
+                      logSubmitting ||
+                      todayRecord?.id == null ||
+                      todayRecord?.id === ""
+                    }
+                    className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    title="Log stepping out / back in (washroom, errand, etc.)"
+                  >
+                    {logSubmitting ? "Saving…" : "Mark log"}
                   </button>
                 </div>
               </div>
@@ -931,6 +1000,11 @@ function Home() {
                 </p>
               </div>
             </div>
+            {logSuccessMessage ? (
+              <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                {logSuccessMessage}
+              </div>
+            ) : null}
             {attendanceActionError && (
               <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
                 {attendanceActionError}

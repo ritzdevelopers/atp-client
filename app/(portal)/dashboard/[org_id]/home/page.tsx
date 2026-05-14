@@ -22,6 +22,7 @@ import {
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
 type AttendanceHistoryRow = {
+  id?: number | string;
   attendance_date?: string;
   check_in?: string | null;
   check_out?: string | null;
@@ -169,6 +170,8 @@ function HomeOverview({
   const [attendanceData, setAttendanceData] = useState<EmployeeDashboardResponse | null>(null);
   const [checkInSubmitting, setCheckInSubmitting] = useState(false);
   const [checkOutSubmitting, setCheckOutSubmitting] = useState(false);
+  const [logSubmitting, setLogSubmitting] = useState(false);
+  const [logSuccessMessage, setLogSuccessMessage] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
@@ -238,6 +241,7 @@ function HomeOverview({
     if (!token) return;
     setCheckInSubmitting(true);
     setAttendanceActionError(null);
+    setLogSuccessMessage(null);
     try {
       const n = new Date();
       const yyyy = n.getFullYear();
@@ -275,6 +279,7 @@ function HomeOverview({
     if (!token) return;
     setCheckOutSubmitting(true);
     setAttendanceActionError(null);
+    setLogSuccessMessage(null);
     try {
       const n = new Date();
       const yyyy = n.getFullYear();
@@ -303,6 +308,44 @@ function HomeOverview({
       setAttendanceActionError(e instanceof Error ? e.message : "Could not mark check-out.");
     } finally {
       setCheckOutSubmitting(false);
+    }
+  }
+
+  async function markAttendanceLog() {
+    if (!orgId || Number.isNaN(orgId)) return;
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    const attendanceId = todayRecord?.id;
+    if (attendanceId == null || attendanceId === "") {
+      setAttendanceActionError("No attendance row for today. Check in first.");
+      return;
+    }
+    setLogSubmitting(true);
+    setAttendanceActionError(null);
+    setLogSuccessMessage(null);
+    try {
+      const res = await fetch(`${API_URL}/api/employees/add-attendance-log`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ org_id: orgId, attendance_id: attendanceId }),
+      });
+      const result = (await res.json()) as {
+        success?: boolean;
+        message?: string;
+        data?: { action_type?: string; message?: string };
+      };
+      if (!res.ok) throw new Error(result.message || "Could not mark attendance log");
+      const action = result.data?.action_type;
+      setLogSuccessMessage(
+        action ? `Recorded: ${action}` : (result.data?.message ?? result.message ?? "Log saved."),
+      );
+    } catch (e) {
+      setAttendanceActionError(e instanceof Error ? e.message : "Could not mark attendance log.");
+    } finally {
+      setLogSubmitting(false);
     }
   }
 
@@ -447,7 +490,25 @@ function HomeOverview({
             >
               {checkOutSubmitting ? "Processing..." : hasCheckedOutToday ? "Checked Out" : "Check Out"}
             </button>
+            <button
+              type="button"
+              onClick={() => void markAttendanceLog()}
+              disabled={
+                !hasCheckedInToday ||
+                hasCheckedOutToday ||
+                logSubmitting ||
+                todayRecord?.id == null ||
+                todayRecord?.id === ""
+              }
+              className="rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              title="Log stepping out / back in (washroom, errand, etc.)"
+            >
+              {logSubmitting ? "Saving…" : "Mark log"}
+            </button>
           </div>
+          {logSuccessMessage ? (
+            <p className="mt-2 text-sm text-emerald-700">{logSuccessMessage}</p>
+          ) : null}
           {attendanceActionError ? <p className="mt-3 text-sm text-red-600">{attendanceActionError}</p> : null}
         </section>
       ) : null}
