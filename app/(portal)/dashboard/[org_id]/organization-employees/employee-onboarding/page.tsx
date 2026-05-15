@@ -2,12 +2,24 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { UserPlus, Loader2, CheckCircle2, AlertCircle, Eye, EyeOff, MapPin } from "lucide-react";
+import {
+  UserPlus,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
+  Eye,
+  EyeOff,
+  MapPin,
+  FileText,
+  Upload,
+} from "lucide-react";
 import { useManagementDashboardContext } from "@/components/portal-dashboard/Layout/ManagementDashboardContext";
 import {
   addUserAddress,
   createEmployee,
   getOrganizationRoles,
+  uploadEmployeeDocuments,
+  type EmployeeOnboardingDocumentField,
   type OrgRoleRow,
 } from "@/services/adminUser";
 
@@ -21,8 +33,49 @@ function inputCls() {
 
 const PASSWORD_MIN = 8;
 
+const ONBOARDING_DOC_FIELDS: {
+  field: EmployeeOnboardingDocumentField;
+  label: string;
+  hint: string;
+}[] = [
+  {
+    field: "user_image",
+    label: "Employee photo",
+    hint: "Recent photo of the employee (PNG, JPG, or PDF, max 5 MB).",
+  },
+  {
+    field: "user_pan_card",
+    label: "PAN card",
+    hint: "PAN card scan or photo.",
+  },
+  {
+    field: "user_aadhar_front",
+    label: "Aadhaar — front",
+    hint: "Front side of Aadhaar.",
+  },
+  {
+    field: "user_aadhar_back",
+    label: "Aadhaar — back",
+    hint: "Back side of Aadhaar.",
+  },
+  {
+    field: "user_passbook",
+    label: "Bank passbook",
+    hint: "Passbook page showing account details.",
+  },
+  {
+    field: "user_passport_photo",
+    label: "Passport-size photo",
+    hint: "Passport-size photograph.",
+  },
+];
+
 function passwordLengthOk(value: string) {
   return value.length >= PASSWORD_MIN;
+}
+
+function fileInputCls() {
+  return "block w-full cursor-pointer rounded-lg border border-dashed border-slate-200 bg-slate-50/80 px-3.5 py-2.5 text-sm text-[#0C123A] shadow-sm outline-none transition file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-[#C99237]/15 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-[#0C123A] hover:border-[#C99237]/50 focus:border-[#C99237] focus:ring-2 focus:ring-[#C99237]/20";
 }
 
 export default function EmployeOnboardingPage() {
@@ -62,6 +115,11 @@ export default function EmployeOnboardingPage() {
   const [addressError, setAddressError] = useState<string | null>(null);
   const [addressSuccess, setAddressSuccess] = useState<string | null>(null);
 
+  const [onboardingStep, setOnboardingStep] = useState<"basic" | "documents" | "address">("basic");
+  const [docFiles, setDocFiles] = useState<Partial<Record<EmployeeOnboardingDocumentField, File>>>({});
+  const [documentsSubmitting, setDocumentsSubmitting] = useState(false);
+  const [documentsError, setDocumentsError] = useState<string | null>(null);
+
   const organizationIdNum =
     ctx?.organization?.id != null ? Number(ctx.organization.id) : Number(orgIdParam);
   const orgName = ctx?.organization?.org_name?.trim() || `Organization ${orgIdParam ?? ""}`;
@@ -80,6 +138,31 @@ export default function EmployeOnboardingPage() {
     setAddressHouseNumber("");
     setAddressZipCode("");
     setAddressError(null);
+  }
+
+  function resetDocumentsForm() {
+    setDocFiles({});
+    setDocumentsError(null);
+  }
+
+  function resetFullOnboarding() {
+    setFormError(null);
+    setSuccess(null);
+    setCreatedEmployeeId(null);
+    setCreatedEmployeeName("");
+    setAddressSuccess(null);
+    setAddressError(null);
+    resetAddressForm();
+    resetDocumentsForm();
+    setOnboardingStep("basic");
+    setName("");
+    setEmail("");
+    setPhone("");
+    setPassword("");
+    setConfirmPassword("");
+    setShowPassword(false);
+    setShowConfirmPassword(false);
+    if (roles.length > 0) setUserRoleId(String(roles[0].id));
   }
 
   useEffect(() => {
@@ -169,14 +252,18 @@ export default function EmployeOnboardingPage() {
       });
       const newUserId = result.data?.user_id ?? result.user_id;
       if (!newUserId) {
-        setSuccess("Employee registered successfully, but user id was not returned.");
+        setFormError("Employee was created but no user id was returned. Check the API response or try again.");
         return;
       }
       setCreatedEmployeeId(newUserId);
       setCreatedEmployeeName(employeeName);
       setAddressSuccess(null);
       resetAddressForm();
-      setSuccess("Employee registered successfully. Add the employee address below.");
+      resetDocumentsForm();
+      setOnboardingStep("documents");
+      setSuccess(
+        `Account created for ${employeeName}. Upload the required documents below (PNG, JPG, or PDF, up to 5 MB each).`,
+      );
       setName("");
       setEmail("");
       setPhone("");
@@ -188,6 +275,48 @@ export default function EmployeOnboardingPage() {
       setFormError(err instanceof Error ? err.message : "Registration failed.");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleDocumentsSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setDocumentsError(null);
+
+    if (!createdEmployeeId) {
+      setDocumentsError("Create an employee first.");
+      return;
+    }
+    if (!organizationIdNum || Number.isNaN(organizationIdNum)) {
+      setDocumentsError("Invalid organization.");
+      return;
+    }
+
+    const missing = ONBOARDING_DOC_FIELDS.filter((s) => !docFiles[s.field]);
+    if (missing.length > 0) {
+      setDocumentsError(`Please attach all required documents (${missing.map((m) => m.label).join(", ")}).`);
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setDocumentsError("Not signed in.");
+      return;
+    }
+
+    setDocumentsSubmitting(true);
+    try {
+      await uploadEmployeeDocuments(token, {
+        org_id: organizationIdNum,
+        employee_user_id: createdEmployeeId,
+        files: docFiles as Record<EmployeeOnboardingDocumentField, File>,
+      });
+      resetDocumentsForm();
+      setOnboardingStep("address");
+      setSuccess(null);
+    } catch (err) {
+      setDocumentsError(err instanceof Error ? err.message : "Document upload failed.");
+    } finally {
+      setDocumentsSubmitting(false);
     }
   }
 
@@ -241,6 +370,8 @@ export default function EmployeOnboardingPage() {
       });
       setAddressSuccess("Employee address added successfully.");
       resetAddressForm();
+      resetDocumentsForm();
+      setOnboardingStep("basic");
       setCreatedEmployeeId(null);
       setCreatedEmployeeName("");
     } catch (err) {
@@ -269,7 +400,77 @@ export default function EmployeOnboardingPage() {
         </div>
       </div>
 
+      <nav
+        className="rounded-2xl border border-slate-200/90 bg-white px-4 py-4 shadow-sm sm:px-8"
+        aria-label="Onboarding steps"
+      >
+        <ol className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-8 sm:text-sm">
+          <li
+            className={`flex items-center gap-2 font-semibold ${
+              onboardingStep === "basic" ? "text-[#C99237]" : "text-emerald-700"
+            }`}
+          >
+            {onboardingStep !== "basic" ? (
+              <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />
+            ) : (
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#C99237]/20 text-xs text-[#0C123A]">
+                1
+              </span>
+            )}
+            Basic information
+          </li>
+          <li
+            className={`flex items-center gap-2 font-semibold ${
+              onboardingStep === "documents"
+                ? "text-[#C99237]"
+                : onboardingStep === "address"
+                  ? "text-emerald-700"
+                  : "text-slate-400"
+            }`}
+          >
+            {onboardingStep === "address" ? (
+              <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />
+            ) : (
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs text-slate-600">
+                2
+              </span>
+            )}
+            Documents
+          </li>
+          <li
+            className={`flex items-center gap-2 font-semibold ${
+              onboardingStep === "address" ? "text-[#C99237]" : "text-slate-400"
+            }`}
+          >
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs text-slate-600">
+              3
+            </span>
+            Address
+          </li>
+        </ol>
+      </nav>
+
+      {onboardingStep === "basic" && (
       <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm sm:p-8">
+        {addressSuccess && (
+          <div
+            className="mb-6 flex flex-col gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 sm:flex-row sm:items-center sm:justify-between"
+            role="status"
+          >
+            <div className="flex items-start gap-2">
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
+              <span>{addressSuccess}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setAddressSuccess(null)}
+              className="shrink-0 rounded-lg border border-emerald-300/80 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-900 shadow-sm transition hover:bg-emerald-100/80"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
         {success && (
           <div
             className="mb-6 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
@@ -472,22 +673,7 @@ export default function EmployeOnboardingPage() {
           <div className="flex flex-col gap-3 border-t border-slate-100 pt-6 sm:flex-row sm:items-center sm:justify-end">
             <button
               type="button"
-              onClick={() => {
-                setFormError(null);
-                setSuccess(null);
-                setCreatedEmployeeId(null);
-                setCreatedEmployeeName("");
-                setAddressSuccess(null);
-                resetAddressForm();
-                setName("");
-                setEmail("");
-                setPhone("");
-                setPassword("");
-                setConfirmPassword("");
-                setShowPassword(false);
-                setShowConfirmPassword(false);
-                if (roles.length > 0) setUserRoleId(String(roles[0].id));
-              }}
+              onClick={resetFullOnboarding}
               className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-[#0C123A] shadow-sm transition hover:bg-slate-50"
             >
               Clear form
@@ -514,8 +700,106 @@ export default function EmployeOnboardingPage() {
           </div>
         </form>
       </div>
+      )}
 
-      {(createdEmployeeId || addressSuccess) && (
+      {onboardingStep === "documents" && createdEmployeeId && (
+        <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm sm:p-8">
+          <div className="mb-6 flex gap-3">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#C99237]/12">
+              <FileText className="h-6 w-6 text-[#C99237]" aria-hidden />
+            </span>
+            <div>
+              <h2 className="text-xl font-bold text-[#0C123A] sm:text-2xl">Employee documents</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Upload KYC files for{" "}
+                <span className="font-medium text-slate-700">{createdEmployeeName || "the new employee"}</span>.
+                Each file must be PNG, JPG, or PDF and under 5 MB.
+              </p>
+            </div>
+          </div>
+
+          {success && (
+            <div
+              className="mb-6 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
+              role="status"
+            >
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
+              <span>{success}</span>
+            </div>
+          )}
+
+          {documentsError && (
+            <div
+              className="mb-6 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900"
+              role="alert"
+            >
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" aria-hidden />
+              <span>{documentsError}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleDocumentsSubmit} className="space-y-5">
+            <div className="grid gap-5 sm:grid-cols-2">
+              {ONBOARDING_DOC_FIELDS.map(({ field, label, hint }) => (
+                <div key={field} className={field === "user_image" ? "sm:col-span-2" : ""}>
+                  <label htmlFor={`doc-${field}`} className={labelCls()}>
+                    {label} <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id={`doc-${field}`}
+                    name={field}
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg,application/pdf"
+                    className={fileInputCls()}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      setDocFiles((prev) => {
+                        const next = { ...prev };
+                        if (f) next[field] = f;
+                        else delete next[field];
+                        return next;
+                      });
+                    }}
+                  />
+                  <p className="mt-1.5 text-xs text-slate-500">{hint}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-col gap-3 border-t border-slate-100 pt-6 sm:flex-row sm:items-center sm:justify-end">
+              <button
+                type="button"
+                disabled={documentsSubmitting}
+                onClick={() => {
+                  resetDocumentsForm();
+                }}
+                className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-[#0C123A] shadow-sm transition hover:bg-slate-50 disabled:opacity-60"
+              >
+                Clear files
+              </button>
+              <button
+                type="submit"
+                disabled={documentsSubmitting}
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#C99237] px-5 py-2.5 text-sm font-bold text-[#0C123A] shadow-sm transition hover:bg-[#b87d2e] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {documentsSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    Uploading…
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-4 w-4" aria-hidden />
+                    Upload & continue
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {onboardingStep === "address" && createdEmployeeId && (
         <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm sm:p-8">
           <div className="mb-6 flex gap-3">
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#C99237]/12">
@@ -526,22 +810,11 @@ export default function EmployeOnboardingPage() {
                 Employee address
               </h2>
               <p className="mt-1 text-sm text-slate-500">
-                {createdEmployeeId
-                  ? `Add address details for ${createdEmployeeName || "the new employee"}.`
-                  : "Employee address saved. You can create another employee above."}
+                Add address details for {createdEmployeeName || "the new employee"}. Documents are on file; finish
+                onboarding with their postal address.
               </p>
             </div>
           </div>
-
-          {addressSuccess && (
-            <div
-              className="mb-6 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
-              role="status"
-            >
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
-              <span>{addressSuccess}</span>
-            </div>
-          )}
 
           {addressError && (
             <div
@@ -553,8 +826,7 @@ export default function EmployeOnboardingPage() {
             </div>
           )}
 
-          {createdEmployeeId && (
-            <form onSubmit={handleAddressSubmit} className="space-y-5">
+          <form onSubmit={handleAddressSubmit} className="space-y-5">
               <div className="grid gap-5 sm:grid-cols-2">
                 <div>
                   <label htmlFor="addr-country" className={labelCls()}>
@@ -717,7 +989,6 @@ export default function EmployeOnboardingPage() {
                 </button>
               </div>
             </form>
-          )}
         </div>
       )}
     </div>

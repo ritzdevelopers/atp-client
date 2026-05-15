@@ -42,6 +42,8 @@ export type CompanyIpRow = {
   label: string | null;
   created_at: string;
   ip_added_by_name: string | null;
+  /** Count of org members with this IP allow-list assignment (from server). */
+  total_assigned_users?: number | string | null;
 };
 
 export async function getCompanyIPAddresses(
@@ -126,6 +128,60 @@ export async function deleteCompanyIPAddress(
 
   if (!res.ok) {
     const error: ApiError = new Error(result.message || "Could not delete IP address");
+    error.status = res.status;
+    throw error;
+  }
+
+  return result;
+}
+
+export async function assignIpToEmployee(
+  token: string,
+  payload: { employee_id: number | string; ip_id: number | string },
+): Promise<{ message?: string; success?: boolean }> {
+  const res = await fetch(`${API_URL}/api/organization-settings/assign-ip-address-to-user`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      employee_id: payload.employee_id,
+      ip_id: payload.ip_id,
+    }),
+  });
+
+  const result = (await res.json()) as { message?: string; success?: boolean };
+
+  if (!res.ok) {
+    const error: ApiError = new Error(result.message || "Could not assign IP address");
+    error.status = res.status;
+    throw error;
+  }
+
+  return result;
+}
+
+export async function unassignIpFromEmployee(
+  token: string,
+  payload: { employee_id: number | string; ip_id: number | string },
+): Promise<{ message?: string; success?: boolean }> {
+  const res = await fetch(`${API_URL}/api/organization-settings/unassign-ip-address-from-user`, {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      employee_id: payload.employee_id,
+      ip_id: payload.ip_id,
+    }),
+  });
+
+  const result = (await res.json()) as { message?: string; success?: boolean };
+
+  if (!res.ok) {
+    const error: ApiError = new Error(result.message || "Could not remove IP assignment");
     error.status = res.status;
     throw error;
   }

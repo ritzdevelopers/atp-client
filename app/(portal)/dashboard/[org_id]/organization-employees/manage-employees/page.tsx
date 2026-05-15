@@ -13,6 +13,7 @@ import {
   Search,
   Loader2,
   AlertCircle,
+  CheckCircle2,
   BadgeDollarSign,
   CalendarDays,
   MapPin,
@@ -20,6 +21,8 @@ import {
   Pencil,
   Trash2,
   Shield,
+  FileText,
+  Upload,
 } from "lucide-react";
 import { useManagementDashboardContext } from "@/components/portal-dashboard/Layout/ManagementDashboardContext";
 import {
@@ -32,6 +35,8 @@ import {
   updateUserAddress,
   updateUserDetails,
   updateUserRoleAssignment,
+  uploadEmployeeDocuments,
+  type EmployeeOnboardingDocumentField,
   type OrgUserRow,
   type OrgRoleRow,
   type UserAddressRow,
@@ -138,6 +143,53 @@ function inputCls() {
   return "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20";
 }
 
+/** Same field names as employee onboarding / `uploadEmployeeDocuments` API. */
+const EMPLOYEE_DOC_FIELDS: {
+  field: EmployeeOnboardingDocumentField;
+  label: string;
+  hint: string;
+}[] = [
+  {
+    field: "user_image",
+    label: "Employee photo",
+    hint: "Recent photo (PNG, JPG, or PDF, max 5 MB).",
+  },
+  {
+    field: "user_pan_card",
+    label: "PAN card",
+    hint: "PAN card scan or photo.",
+    
+  },
+  {
+    field: "user_aadhar_front",
+    label: "Aadhaar — front",
+    hint: "Front side of Aadhaar.",
+  },
+  {
+    field: "user_aadhar_back",
+    label: "Aadhaar — back",
+    hint: "Back side of Aadhaar.",
+  },
+  {
+    field: "user_passbook",
+    label: "Bank passbook",
+    hint: "Passbook page showing account details.",
+  },
+  {
+    field: "user_passport_photo",
+    label: "Passport-size photo",
+    hint: "Passport-size photograph.",
+  },
+];
+
+function docFileInputCls() {
+  return "block w-full cursor-pointer rounded-lg border border-dashed border-slate-200 bg-slate-50/80 px-3 py-2 text-sm text-slate-800 shadow-sm outline-none transition file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-teal-600/15 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-teal-900 hover:border-teal-500/50 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20";
+}
+
+function docLabelCls() {
+  return "mb-1 block text-sm font-medium text-slate-700";
+}
+
 function normalizeBool(value: unknown): boolean {
   return (
     value === true ||
@@ -241,6 +293,12 @@ export default function ManageEmployeesPage() {
   const [addressSavingKey, setAddressSavingKey] = useState<string | null>(null);
   const [addressError, setAddressError] = useState<string | null>(null);
   const [addressSuccess, setAddressSuccess] = useState<string | null>(null);
+
+  const [documentsRow, setDocumentsRow] = useState<OrgUserRow | null>(null);
+  const [docFiles, setDocFiles] = useState<Partial<Record<EmployeeOnboardingDocumentField, File>>>({});
+  const [documentsSaving, setDocumentsSaving] = useState(false);
+  const [documentsError, setDocumentsError] = useState<string | null>(null);
+  const [documentsSuccess, setDocumentsSuccess] = useState<string | null>(null);
 
   const allCards = useMemo(() => userRows.map(mapApiUserToCard), [userRows]);
 
@@ -374,6 +432,57 @@ export default function ManageEmployeesPage() {
     setPaidLeaveTotal("");
     setPaidLeaveError(null);
     setPaidLeaveSuccess(null);
+  }
+
+  function openDocumentsModal(row: OrgUserRow) {
+    setDocumentsRow(row);
+    setDocFiles({});
+    setDocumentsError(null);
+    setDocumentsSuccess(null);
+  }
+
+  async function submitEmployeeDocuments(e: React.FormEvent) {
+    e.preventDefault();
+    setDocumentsError(null);
+    setDocumentsSuccess(null);
+
+    if (!documentsRow?.id) {
+      setDocumentsError("Invalid employee.");
+      return;
+    }
+    if (!organizationIdNum || Number.isNaN(organizationIdNum)) {
+      setDocumentsError("Invalid organization.");
+      return;
+    }
+
+    const missing = EMPLOYEE_DOC_FIELDS.filter((s) => !docFiles[s.field]);
+    if (missing.length > 0) {
+      setDocumentsError(
+        `Please attach all required documents (${missing.map((m) => m.label).join(", ")}).`,
+      );
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setDocumentsError("Not signed in.");
+      return;
+    }
+
+    setDocumentsSaving(true);
+    try {
+      await uploadEmployeeDocuments(token, {
+        org_id: organizationIdNum,
+        employee_user_id: documentsRow.id,
+        files: docFiles as Record<EmployeeOnboardingDocumentField, File>,
+      });
+      setDocumentsSuccess("Documents uploaded successfully.");
+      setDocFiles({});
+    } catch (err) {
+      setDocumentsError(err instanceof Error ? err.message : "Document upload failed.");
+    } finally {
+      setDocumentsSaving(false);
+    }
   }
 
   function updateAddressDraft(
@@ -903,7 +1012,7 @@ export default function ManageEmployeesPage() {
                 return (
                   <article
                     key={emp.id}
-                    className="overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-sm transition-shadow hover:shadow-md"
+                    className="overflow-visible rounded-xl border border-slate-200/90 bg-white shadow-sm transition-shadow hover:shadow-md"
                   >
                     <div className="relative px-4 pb-3 pt-3">
                       <div className="flex items-start justify-between">
@@ -944,7 +1053,7 @@ export default function ManageEmployeesPage() {
                           {menuOpen && row && (
                             <div
                               role="menu"
-                              className="absolute right-0 top-full z-30 mt-1 min-w-[180px] rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+                              className="absolute right-0 top-full z-30 mt-1 max-h-[min(70vh,20rem)] min-w-[180px] overflow-y-auto overscroll-contain rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
                             >
                               <button
                                 type="button"
@@ -986,18 +1095,32 @@ export default function ManageEmployeesPage() {
                                 Update role
                               </button>
                               {viewerCanAssignLeaves && (
-                                <button
-                                  type="button"
-                                  role="menuitem"
-                                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
-                                  onClick={() => {
-                                    openPaidLeaveModal(row);
-                                    setMenuUserId(null);
-                                  }}
-                                >
-                                  <BadgeDollarSign className="h-4 w-4 text-teal-600" aria-hidden />
-                                  Assign paid leaves
-                                </button>
+                                <>
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                                    onClick={() => {
+                                      openDocumentsModal(row);
+                                      setMenuUserId(null);
+                                    }}
+                                  >
+                                    <FileText className="h-4 w-4 text-teal-600" aria-hidden />
+                                    Add documents
+                                  </button>
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                                    onClick={() => {
+                                      openPaidLeaveModal(row);
+                                      setMenuUserId(null);
+                                    }}
+                                  >
+                                    <BadgeDollarSign className="h-4 w-4 text-teal-600" aria-hidden />
+                                    Assign paid leaves
+                                  </button>
+                                </>
                               )}
                               {viewerCanManageAddresses && (
                                 <>
@@ -1059,7 +1182,7 @@ export default function ManageEmployeesPage() {
                       </div>
                     </div>
 
-                    <div className="space-y-2.5 border-t border-slate-100 bg-slate-50/50 px-4 py-3">
+                    <div className="space-y-2.5 rounded-b-xl border-t border-slate-100 bg-slate-50/50 px-4 py-3">
                       <div className="flex items-center gap-2 text-sm">
                         <Users className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
                         <span className="min-w-0 font-medium" style={{ color: ACCENT }}>
@@ -1426,6 +1549,120 @@ export default function ManageEmployeesPage() {
                 >
                   {paidLeaveSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                   Assign leaves
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add documents modal */}
+      {documentsRow && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="documents-modal-title"
+        >
+          <button
+            type="button"
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-[1px]"
+            aria-label="Close"
+            onClick={() => !documentsSaving && setDocumentsRow(null)}
+          />
+          <div className="relative z-10 max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
+            <div className="mb-4 flex items-start justify-between gap-2">
+              <div>
+                <h2 id="documents-modal-title" className="text-lg font-bold text-slate-900">
+                  Add documents
+                </h2>
+                <p className="mt-1 text-sm text-slate-600">
+                  Upload KYC files for{" "}
+                  <span className="font-medium text-slate-900">{documentsRow.user_name}</span>. Each file
+                  must be PNG, JPG, or PDF and under 5 MB.
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={documentsSaving}
+                onClick={() => setDocumentsRow(null)}
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 disabled:opacity-50"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {documentsError ? (
+              <div className="mb-4 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                <span>{documentsError}</span>
+              </div>
+            ) : null}
+            {documentsSuccess ? (
+              <div className="mb-4 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                <span>{documentsSuccess}</span>
+              </div>
+            ) : null}
+
+            <form onSubmit={(e) => void submitEmployeeDocuments(e)} className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                {EMPLOYEE_DOC_FIELDS.map(({ field, label, hint }) => (
+                  <div key={field} className={field === "user_image" ? "sm:col-span-2" : ""}>
+                    <label htmlFor={`manage-doc-${field}`} className={docLabelCls()}>
+                      {label} <span className="text-red-600">*</span>
+                    </label>
+                    <input
+                      id={`manage-doc-${field}`}
+                      name={field}
+                      type="file"
+                      accept="image/png,image/jpeg,image/jpg,application/pdf"
+                      className={docFileInputCls()}
+                      disabled={documentsSaving}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        setDocFiles((prev) => {
+                          const next = { ...prev };
+                          if (f) next[field] = f;
+                          else delete next[field];
+                          return next;
+                        });
+                      }}
+                    />
+                    <p className="mt-1 text-xs text-slate-500">{hint}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex flex-col-reverse gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  disabled={documentsSaving}
+                  onClick={() => {
+                    setDocFiles({});
+                    setDocumentsError(null);
+                  }}
+                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                >
+                  Clear files
+                </button>
+                <button
+                  type="button"
+                  disabled={documentsSaving}
+                  onClick={() => setDocumentsRow(null)}
+                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                >
+                  Close
+                </button>
+                <button
+                  type="submit"
+                  disabled={documentsSaving}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-bold text-white hover:bg-teal-700 disabled:opacity-60"
+                >
+                  {documentsSaving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
+                  <Upload className="h-4 w-4" aria-hidden />
+                  Upload documents
                 </button>
               </div>
             </form>

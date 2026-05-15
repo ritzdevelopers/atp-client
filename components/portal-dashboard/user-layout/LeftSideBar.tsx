@@ -147,20 +147,7 @@ function LeftSideBar() {
       </div>
 
       <div className="space-y-1 border-t border-slate-200 px-3 py-4">
-        <button
-          type="button"
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
-        >
-          <MdOutlineSettings className="text-[18px]" />
-          Settings
-        </button>
-        <button
-          type="button"
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
-        >
-          <RiQuestionLine className="text-[18px]" />
-          Support
-        </button>
+      
         <button
           type="button"
           onClick={() => setShowLogoutConfirm(true)}

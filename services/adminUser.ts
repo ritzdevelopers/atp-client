@@ -132,6 +132,53 @@ export async function createEmployee(
   return result;
 }
 
+/** Field names must match multer `file.fieldname` / server `document_type` in `user_docs`. */
+export type EmployeeOnboardingDocumentField =
+  | "user_image"
+  | "user_pan_card"
+  | "user_aadhar_front"
+  | "user_aadhar_back"
+  | "user_passbook"
+  | "user_passport_photo";
+
+export async function uploadEmployeeDocuments(
+  token: string,
+  payload: {
+    org_id: number | string;
+    employee_user_id: number | string;
+    files: Record<EmployeeOnboardingDocumentField, File>;
+  },
+): Promise<{ success?: boolean; message?: string; documents?: unknown[] }> {
+  const fd = new FormData();
+  fd.append("employee_user_id", String(payload.employee_user_id));
+  fd.append("org_id", String(payload.org_id));
+  (Object.keys(payload.files) as EmployeeOnboardingDocumentField[]).forEach((key) => {
+    fd.append(key, payload.files[key]);
+  });
+
+  const res = await fetch(`${API_URL}/api/employee-documents/upload-document`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: fd,
+  });
+
+  const result = (await res.json()) as {
+    success?: boolean;
+    message?: string;
+    documents?: unknown[];
+  };
+
+  if (!res.ok) {
+    const error: ApiError = new Error(result.message || "Could not upload documents");
+    error.status = res.status;
+    throw error;
+  }
+
+  return result;
+}
+
 export type AddUserAddressPayload = {
   user_id: number | string;
   org_id: number | string;
@@ -329,6 +376,13 @@ export async function deleteOrganizationRole(
   return result;
 }
 
+/** Single entry inside `assigned_ips` from `get_all_users_controller` (`JSON_ARRAYAGG`). */
+export type OrgUserAssignedIp = {
+  ip_id?: number | string | null;
+  ip_address?: string | null;
+  ip_label?: string | null;
+};
+
 /** Row from `get_all_users_controller` (shape may include `role_name` or legacy `user_role_name`). */
 export type OrgUserRow = {
   id?: number | string;
@@ -350,6 +404,8 @@ export type OrgUserRow = {
   user_shift_end_time?: string | null;
   user_shift_working_days?: string | null;
   shift_assigned_by_name?: string | null;
+  /** Organization IP assignments (`JSON_ARRAYAGG`); may arrive as parsed array or JSON string from MySQL/driver. */
+  assigned_ips?: OrgUserAssignedIp[] | string | null;
   [key: string]: unknown;
 };
 
