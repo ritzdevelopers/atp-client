@@ -158,6 +158,7 @@ const EMPLOYEE_DOC_FIELDS: {
     field: "user_pan_card",
     label: "PAN card",
     hint: "PAN card scan or photo.",
+    
   },
   {
     field: "user_aadhar_front",
@@ -1011,7 +1012,7 @@ export default function ManageEmployeesPage() {
                 return (
                   <article
                     key={emp.id}
-                    className="overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-sm transition-shadow hover:shadow-md"
+                    className="overflow-visible rounded-xl border border-slate-200/90 bg-white shadow-sm transition-shadow hover:shadow-md"
                   >
                     <div className="relative px-4 pb-3 pt-3">
                       <div className="flex items-start justify-between">
@@ -1052,7 +1053,7 @@ export default function ManageEmployeesPage() {
                           {menuOpen && row && (
                             <div
                               role="menu"
-                              className="absolute right-0 top-full z-30 mt-1 min-w-[180px] rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+                              className="absolute right-0 top-full z-30 mt-1 max-h-[min(70vh,20rem)] min-w-[180px] overflow-y-auto overscroll-contain rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
                             >
                               <button
                                 type="button"
@@ -1181,7 +1182,7 @@ export default function ManageEmployeesPage() {
                       </div>
                     </div>
 
-                    <div className="space-y-2.5 border-t border-slate-100 bg-slate-50/50 px-4 py-3">
+                    <div className="space-y-2.5 rounded-b-xl border-t border-slate-100 bg-slate-50/50 px-4 py-3">
                       <div className="flex items-center gap-2 text-sm">
                         <Users className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
                         <span className="min-w-0 font-medium" style={{ color: ACCENT }}>

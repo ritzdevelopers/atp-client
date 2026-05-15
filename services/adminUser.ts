@@ -376,6 +376,13 @@ export async function deleteOrganizationRole(
   return result;
 }
 
+/** Single entry inside `assigned_ips` from `get_all_users_controller` (`JSON_ARRAYAGG`). */
+export type OrgUserAssignedIp = {
+  ip_id?: number | string | null;
+  ip_address?: string | null;
+  ip_label?: string | null;
+};
+
 /** Row from `get_all_users_controller` (shape may include `role_name` or legacy `user_role_name`). */
 export type OrgUserRow = {
   id?: number | string;
@@ -397,6 +404,8 @@ export type OrgUserRow = {
   user_shift_end_time?: string | null;
   user_shift_working_days?: string | null;
   shift_assigned_by_name?: string | null;
+  /** Organization IP assignments (`JSON_ARRAYAGG`); may arrive as parsed array or JSON string from MySQL/driver. */
+  assigned_ips?: OrgUserAssignedIp[] | string | null;
   [key: string]: unknown;
 };
 
