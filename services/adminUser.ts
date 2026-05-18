@@ -135,26 +135,33 @@ export async function createEmployee(
 /** Field names must match multer `file.fieldname` / server `document_type` in `user_docs`. */
 export type EmployeeOnboardingDocumentField =
   | "user_image"
+  | "user_passbook"
   | "user_pan_card"
   | "user_aadhar_front"
   | "user_aadhar_back"
-  | "user_passbook"
-  | "user_passport_photo";
+  | "user_passport_photo"
+  | "user_resignation_letter"
+  | "user_10th_marksheet"
+  | "user_12th_marksheet"
+  | "user_higher_education_marksheet"
+  | "user_other_certificate";
 
 export async function uploadEmployeeDocuments(
   token: string,
   payload: {
     org_id: number | string;
     employee_user_id: number | string;
-    files: Record<EmployeeOnboardingDocumentField, File>;
+    files: Partial<Record<EmployeeOnboardingDocumentField, File>>;
   },
 ): Promise<{ success?: boolean; message?: string; documents?: unknown[] }> {
   const fd = new FormData();
   fd.append("employee_user_id", String(payload.employee_user_id));
   fd.append("org_id", String(payload.org_id));
-  (Object.keys(payload.files) as EmployeeOnboardingDocumentField[]).forEach((key) => {
-    fd.append(key, payload.files[key]);
-  });
+  (Object.entries(payload.files) as [EmployeeOnboardingDocumentField, File | undefined][]).forEach(
+    ([key, file]) => {
+      if (file) fd.append(key, file);
+    },
+  );
 
   const res = await fetch(`${API_URL}/api/employee-documents/upload-document`, {
     method: "POST",
@@ -177,6 +184,68 @@ export async function uploadEmployeeDocuments(
   }
 
   return result;
+}
+
+export async function addUserExternalInformation(
+  token: string,
+  payload: {
+    user_id: number | string;
+    org_id: number | string;
+    emergency_contact_name: string;
+    emergency_number: string;
+    relation_blood_line: string;
+  },
+): Promise<{
+  success?: boolean;
+  message?: string;
+  data?: {
+    id?: number | string;
+    user_id?: number | string;
+    org_id?: number | string;
+    emergency_contact_name?: string;
+    emergency_number?: string;
+    relation_blood_line?: string;
+  };
+}> {
+  const res = await fetch(`${API_URL}/api/user/add-user-external-information`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      user_id: payload.user_id,
+      org_id: payload.org_id,
+      emergency_contact_name: payload.emergency_contact_name,
+      emergency_number: payload.emergency_number,
+      relation_blood_line: payload.relation_blood_line,
+    }),
+  });
+
+  const result = (await res.json()) as {
+    success?: boolean;
+    message?: string;
+    data?: unknown;
+  };
+
+  if (!res.ok) {
+    const error: ApiError = new Error(result.message || "Could not save emergency contact details");
+    error.status = res.status;
+    throw error;
+  }
+
+  return result as {
+    success?: boolean;
+    message?: string;
+    data?: {
+      id?: number | string;
+      user_id?: number | string;
+      org_id?: number | string;
+      emergency_contact_name?: string;
+      emergency_number?: string;
+      relation_blood_line?: string;
+    };
+  };
 }
 
 export type AddUserAddressPayload = {
