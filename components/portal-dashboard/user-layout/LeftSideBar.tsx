@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useParams, usePathname, useRouter } from "next/navigation";
-import { MdCalendarMonth, MdDashboard, MdLogout, MdOutlineSettings } from "react-icons/md";
+import { MdCalendarMonth, MdDashboard, MdGroups, MdLogout, MdOutlineSettings } from "react-icons/md";
 import { BsPerson } from "react-icons/bs";
 import { PiBagSimple } from "react-icons/pi";
 import { LuFileSpreadsheet } from "react-icons/lu";
@@ -10,6 +10,12 @@ import { RiQuestionLine } from "react-icons/ri";
 
 const navigationItems = [
   { id: "dashboard", label: "Dashboard", icon: MdDashboard, href: "/user-dashboard/[org_id]/home" },
+  {
+    id: "my-team",
+    label: "My team",
+    icon: MdGroups,
+    href: "/user-dashboard/[org_id]/my-team",
+  },
   {
     id: "attendance-history",
     label: "Attendance History",

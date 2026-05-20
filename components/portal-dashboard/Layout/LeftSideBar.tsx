@@ -197,7 +197,17 @@ function LeftSideBar({
             id: "employee-leaves",
             name: "Manage Employee Leaves",
             path: `${base}/organization-employees/manage-employee-leaves`,
-          }
+          },
+          {
+            id: "team-creation",
+            name: "Team creation",
+            path: `${base}/organization-employees/create-team`,
+          },
+          {
+            id: "team-management",
+            name: "Team management",
+            path: `${base}/organization-employees/manage-teams`,
+          },
         ],
         requiredFeature: "employee-management",
       },

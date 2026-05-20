@@ -19,17 +19,36 @@ import {
   IdCard,
   ImageIcon,
   FileStack,
+  Users,
+  Package,
+  PlusCircle,
 } from "lucide-react";
 import { useManagementDashboardContext } from "@/components/portal-dashboard/Layout/ManagementDashboardContext";
 import {
   addUserAddress,
   addUserExternalInformation,
+  addEmployeeReference,
   createEmployee,
+  EMPLOYEE_ASSET_TYPES,
+  getManagementEmployeesPage,
   getOrganizationRoles,
+  uploadEmployeeAssetsBatch,
   uploadEmployeeDocuments,
   type EmployeeOnboardingDocumentField,
+  type ManagementEmployeeRow,
   type OrgRoleRow,
 } from "@/services/adminUser";
+
+const ONBOARDING_STEPS_ORDER = [
+  "basic",
+  "external",
+  "reference",
+  "assets",
+  "documents",
+  "address",
+] as const;
+
+type OnboardingWizardStep = (typeof ONBOARDING_STEPS_ORDER)[number];
 
 function labelCls() {
   return "mb-1.5 block text-sm font-medium text-[#0C123A]";
@@ -107,6 +126,22 @@ const ONBOARDING_DOC_SLOTS: {
     icon: FileText,
   },
   {
+    field: "user_appointment_letter",
+    label: "Appointment / offer letter",
+    hint: "Current role appointment or offer (optional).",
+    required: false,
+    skeleton: "letter",
+    icon: FileText,
+  },
+  {
+    field: "user_previous_company_leaving_letter",
+    label: "Previous company leaving / relieving letter",
+    hint: "Relieving or experience letter from last employer (optional).",
+    required: false,
+    skeleton: "letter",
+    icon: FileText,
+  },
+  {
     field: "user_10th_marksheet",
     label: "10th marksheet / certificate",
     hint: "Board exam result.",
@@ -138,6 +173,14 @@ const ONBOARDING_DOC_SLOTS: {
     skeleton: "marksheet",
     icon: FileStack,
   },
+  {
+    field: "user_other_document",
+    label: "Other document",
+    hint: "Any other supporting file (optional).",
+    required: false,
+    skeleton: "letter",
+    icon: FileText,
+  },
 ];
 
 function skeletonFrameClass(skeleton: (typeof ONBOARDING_DOC_SLOTS)[number]["skeleton"]): string {
@@ -167,6 +210,35 @@ function fileInputCls() {
 
 function isPdfFile(f: File) {
   return f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf");
+}
+
+type AssetDraftRow = {
+  key: string;
+  asset_name: string;
+  asset_type: string;
+  asset_summary: string;
+  handover_date_time: string;
+  file: File | null;
+};
+
+function formatReferrerOptionLabel(row: ManagementEmployeeRow) {
+  const name = (row.user_name ?? "").trim() || "Unknown";
+  const email = (row.user_email ?? "").trim() || "—";
+  const designations =
+    row.roles?.map((r) => (r.role_name ?? "").trim()).filter(Boolean).join(", ") ||
+    "No role assigned";
+  return `${name} · ${email} · ${designations}`;
+}
+
+function createEmptyAssetDraft(): AssetDraftRow {
+  return {
+    key: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+    asset_name: "",
+    asset_type: "other",
+    asset_summary: "",
+    handover_date_time: "",
+    file: null,
+  };
 }
 
 export default function EmployeOnboardingPage() {
@@ -200,6 +272,18 @@ export default function EmployeOnboardingPage() {
   const [externalSubmitting, setExternalSubmitting] = useState(false);
   const [externalError, setExternalError] = useState<string | null>(null);
 
+  const [referrersLoading, setReferrersLoading] = useState(false);
+  const [referrerOptions, setReferrerOptions] = useState<ManagementEmployeeRow[]>([]);
+  const [referredById, setReferredById] = useState<string>("");
+  const [referredByNameOverride, setReferredByNameOverride] = useState("");
+  const [referredByDesignationId, setReferredByDesignationId] = useState<string>("");
+  const [referenceSubmitting, setReferenceSubmitting] = useState(false);
+  const [referenceError, setReferenceError] = useState<string | null>(null);
+
+  const [assetDraftRows, setAssetDraftRows] = useState<AssetDraftRow[]>([]);
+  const [assetsSubmitting, setAssetsSubmitting] = useState(false);
+  const [assetsError, setAssetsError] = useState<string | null>(null);
+
   const [addressCountry, setAddressCountry] = useState("");
   const [addressState, setAddressState] = useState("");
   const [addressDistrict, setAddressDistrict] = useState("");
@@ -213,9 +297,7 @@ export default function EmployeOnboardingPage() {
   const [addressError, setAddressError] = useState<string | null>(null);
   const [addressSuccess, setAddressSuccess] = useState<string | null>(null);
 
-  const [onboardingStep, setOnboardingStep] = useState<
-    "basic" | "external" | "documents" | "address"
-  >("basic");
+  const [onboardingStep, setOnboardingStep] = useState<OnboardingWizardStep>("basic");
   const [docFiles, setDocFiles] = useState<
     Partial<Record<EmployeeOnboardingDocumentField, File>>
   >({});
@@ -292,6 +374,19 @@ export default function EmployeOnboardingPage() {
     setExternalError(null);
   }
 
+  function resetReferenceForm() {
+    setReferredById("");
+    setReferredByNameOverride("");
+    setReferredByDesignationId("");
+    setReferenceError(null);
+    setReferrerOptions([]);
+  }
+
+  function resetAssetDraftRows() {
+    setAssetDraftRows([]);
+    setAssetsError(null);
+  }
+
   function resetDocumentsForm() {
     setDocFiles({});
     setDocumentsError(null);
@@ -308,6 +403,8 @@ export default function EmployeOnboardingPage() {
     resetAddressForm();
     resetDocumentsForm();
     resetExternalForm();
+    resetReferenceForm();
+    resetAssetDraftRows();
     setOnboardingStep("basic");
     setName("");
     setEmail("");
@@ -415,9 +512,11 @@ export default function EmployeOnboardingPage() {
       resetAddressForm();
       resetDocumentsForm();
       resetExternalForm();
+      resetReferenceForm();
+      resetAssetDraftRows();
       setOnboardingStep("external");
       setSuccess(
-        `Step 1 done — ${employeeName} has an account. Add emergency contact (step 2), then documents.`,
+        `Step 1 done — ${employeeName} has an account. Next: emergency contact, reference, assets (optional), documents, optional address.`,
       );
       setName("");
       setEmail("");
@@ -477,14 +576,231 @@ export default function EmployeOnboardingPage() {
         emergency_number: emergencyNumber.trim(),
         relation_blood_line: relationBloodLine,
       });
-      setOnboardingStep("documents");
+      setOnboardingStep("reference");
       setSuccess(
-        `${createdEmployeeName || "Employee"}: emergency contact saved. Upload documents (step 3).`,
+        `${createdEmployeeName || "Employee"}: emergency contact saved. Add internal reference (next step).`,
       );
     } catch (err) {
       setExternalError(err instanceof Error ? err.message : "Could not save emergency contact.");
     } finally {
       setExternalSubmitting(false);
+    }
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadReferrerDirectory() {
+      if (
+        onboardingStep !== "reference" ||
+        !createdEmployeeId ||
+        !organizationIdNum ||
+        Number.isNaN(organizationIdNum)
+      ) {
+        return;
+      }
+      const token = localStorage.getItem("token");
+      if (!token) {
+        if (!cancelled) {
+          setReferenceError("Not signed in.");
+          setReferrerOptions([]);
+        }
+        return;
+      }
+
+      setReferrersLoading(true);
+      setReferenceError(null);
+      try {
+        const merged: ManagementEmployeeRow[] = [];
+        let page = 1;
+        while (true) {
+          const res = await getManagementEmployeesPage(token, organizationIdNum, page, 100);
+          if (cancelled) return;
+          merged.push(...res.data);
+          if (!res.pagination.has_next) break;
+          page += 1;
+          if (page > 40) break;
+        }
+        const newbie = String(createdEmployeeId);
+        if (!cancelled) {
+          setReferrerOptions(merged.filter((r) => String(r.user_id) !== newbie));
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setReferrerOptions([]);
+          setReferenceError(
+            err instanceof Error ? err.message : "Could not load organization members for reference.",
+          );
+        }
+      } finally {
+        if (!cancelled) setReferrersLoading(false);
+      }
+    }
+
+    void loadReferrerDirectory();
+    return () => {
+      cancelled = true;
+    };
+  }, [onboardingStep, createdEmployeeId, organizationIdNum]);
+
+  async function handleReferenceSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setReferenceError(null);
+
+    if (!createdEmployeeId) {
+      setReferenceError("Create an employee first.");
+      return;
+    }
+    if (!organizationIdNum || Number.isNaN(organizationIdNum)) {
+      setReferenceError("Invalid organization.");
+      return;
+    }
+    if (!referredById.trim()) {
+      setReferenceError("Choose who referred this employee.");
+      return;
+    }
+    if (String(referredById).trim() === String(createdEmployeeId).trim()) {
+      setReferenceError("Referrer cannot be the new employee.");
+      return;
+    }
+    if (referredByNameOverride.trim().length > 200) {
+      setReferenceError("Optional referrer display name must be at most 200 characters.");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setReferenceError("Not signed in.");
+      return;
+    }
+
+    setReferenceSubmitting(true);
+    try {
+      await addEmployeeReference(token, {
+        org_id: organizationIdNum,
+        employee_id: createdEmployeeId,
+        referred_by_id: referredById,
+        referred_by_name:
+          referredByNameOverride.trim() !== "" ? referredByNameOverride.trim() : undefined,
+        referred_by_designation_id:
+          referredByDesignationId.trim() !== ""
+            ? Number(referredByDesignationId)
+            : undefined,
+      });
+      setReferenceError(null);
+      setOnboardingStep("assets");
+      setSuccess(
+        `${createdEmployeeName || "Employee"}: reference saved. Assign assets next (optional) or skip.`,
+      );
+    } catch (err) {
+      setReferenceError(err instanceof Error ? err.message : "Could not save reference.");
+    } finally {
+      setReferenceSubmitting(false);
+    }
+  }
+
+  function assetRowIsEmpty(row: AssetDraftRow) {
+    return (
+      row.asset_name.trim() === "" &&
+      row.asset_summary.trim() === "" &&
+      row.handover_date_time.trim() === "" &&
+      row.file === null
+    );
+  }
+
+  function handleAssetsSkip() {
+    setAssetsError(null);
+    resetAssetDraftRows();
+    setOnboardingStep("documents");
+    setSuccess(
+      `${createdEmployeeName || "Employee"}: skipped asset assignment. Upload documents.`,
+    );
+  }
+
+  async function handleAssetsSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setAssetsError(null);
+
+    if (!createdEmployeeId) {
+      setAssetsError("Create an employee first.");
+      return;
+    }
+    if (!organizationIdNum || Number.isNaN(organizationIdNum)) {
+      setAssetsError("Invalid organization.");
+      return;
+    }
+
+    const typesSet = new Set<string>([...EMPLOYEE_ASSET_TYPES]);
+    const candidates = assetDraftRows.filter((r) => !assetRowIsEmpty(r));
+
+    if (candidates.length === 0) {
+      handleAssetsSkip();
+      return;
+    }
+
+    for (let i = 0; i < candidates.length; i++) {
+      const row = candidates[i];
+      if (!row.asset_name.trim()) {
+        setAssetsError(`Asset ${i + 1}: name is required.`);
+        return;
+      }
+      if (row.asset_name.trim().length > 250) {
+        setAssetsError(`Asset ${i + 1}: name is too long (max 250).`);
+        return;
+      }
+      if (!typesSet.has(row.asset_type)) {
+        setAssetsError(`Asset ${i + 1}: pick a valid asset type.`);
+        return;
+      }
+      if (row.asset_summary.trim().length > 600) {
+        setAssetsError(`Asset ${i + 1}: summary is too long (max 600).`);
+        return;
+      }
+      if (row.file && row.file.size > MAX_FILE_BYTES) {
+        setAssetsError(`Asset ${i + 1}: file must be 5 MB or smaller.`);
+        return;
+      }
+      if (
+        row.file &&
+        !/^image\/(png|jpeg|webp)$/.test(row.file.type) &&
+        row.file.type !== "application/pdf"
+      ) {
+        setAssetsError(`Asset ${i + 1}: use PNG, JPG, WebP, or PDF only.`);
+        return;
+      }
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setAssetsError("Not signed in.");
+      return;
+    }
+
+    setAssetsSubmitting(true);
+    try {
+      const items = candidates.map((row, index) => ({
+        employee_id: createdEmployeeId,
+        asset_name: row.asset_name.trim(),
+        asset_type: row.asset_type,
+        asset_summary: row.asset_summary.trim() !== "" ? row.asset_summary.trim() : null,
+        handover_date_time:
+          row.handover_date_time.trim() !== "" ? row.handover_date_time.trim() : null,
+        image_field: `asset_image_${index}`,
+        file: row.file,
+      }));
+
+      await uploadEmployeeAssetsBatch(token, {
+        org_id: organizationIdNum,
+        items,
+      });
+
+      resetAssetDraftRows();
+      setOnboardingStep("documents");
+      setSuccess(`${createdEmployeeName || "Employee"}: assets assigned. Upload documents next.`);
+    } catch (err) {
+      setAssetsError(err instanceof Error ? err.message : "Could not upload assets.");
+    } finally {
+      setAssetsSubmitting(false);
     }
   }
 
@@ -530,7 +846,7 @@ export default function EmployeOnboardingPage() {
       });
       resetDocumentsForm();
       setOnboardingStep("address");
-      setSuccess(`${createdEmployeeName || "Employee"}: documents uploaded. Address is optional (step 4).`);
+      setSuccess(`${createdEmployeeName || "Employee"}: documents uploaded. Address is optional (last step).`);
     } catch (err) {
       setDocumentsError(err instanceof Error ? err.message : "Document upload failed.");
     } finally {
@@ -547,6 +863,8 @@ export default function EmployeOnboardingPage() {
     setCreatedEmployeeName("");
     resetDocumentsForm();
     resetExternalForm();
+    resetReferenceForm();
+    resetAssetDraftRows();
   }
 
   async function handleAddressSubmit(e: React.FormEvent) {
@@ -601,6 +919,8 @@ export default function EmployeOnboardingPage() {
       resetAddressForm();
       resetDocumentsForm();
       resetExternalForm();
+      resetReferenceForm();
+      resetAssetDraftRows();
       setOnboardingStep("basic");
       setCreatedEmployeeId(null);
       setCreatedEmployeeName("");
@@ -626,8 +946,8 @@ export default function EmployeOnboardingPage() {
             <div>
               <h1 className="text-xl font-bold text-[#0C123A] sm:text-2xl">Employee onboarding</h1>
               <p className="mt-1 text-sm text-slate-500">
-                Four steps for <span className="font-medium text-slate-700">{orgName}</span>: basics →
-                emergency contact → documents → optional address.
+                Six steps for <span className="font-medium text-slate-700">{orgName}</span>: basics → emergency
+                contact → internal reference → optional assets → documents → optional address.
               </p>
             </div>
           </div>
@@ -643,11 +963,13 @@ export default function EmployeOnboardingPage() {
             [
               { key: "basic" as const, n: "1", label: "Basics" },
               { key: "external" as const, n: "2", label: "Emergency" },
-              { key: "documents" as const, n: "3", label: "Documents" },
-              { key: "address" as const, n: "4", label: "Address" },
+              { key: "reference" as const, n: "3", label: "Reference" },
+              { key: "assets" as const, n: "4", label: "Assets" },
+              { key: "documents" as const, n: "5", label: "Documents" },
+              { key: "address" as const, n: "6", label: "Address" },
             ] as const
           ).map(({ key, n, label }) => {
-            const order = ["basic", "external", "documents", "address"];
+            const order = [...ONBOARDING_STEPS_ORDER];
             const cur = order.indexOf(onboardingStep);
             const ix = order.indexOf(key);
             const done = cur > ix;
@@ -907,7 +1229,7 @@ export default function EmployeOnboardingPage() {
               <p className="mt-1 text-sm text-slate-500">
                 For{" "}
                 <span className="font-medium text-slate-700">{createdEmployeeName}</span>.
-                Saved to organizational records (step 2 of 4).
+                Saved to organizational records (step&nbsp;2 of&nbsp;6).
               </p>
             </div>
           </div>
@@ -995,10 +1317,382 @@ export default function EmployeOnboardingPage() {
                 ) : (
                   <>
                     <ShieldCheck className="h-4 w-4" aria-hidden />
-                    Continue to documents
+                    Continue to reference
                   </>
                 )}
               </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {onboardingStep === "reference" && createdEmployeeId && (
+        <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm sm:p-8">
+          <div className="mb-6 flex gap-3">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#C99237]/12">
+              <Users className="h-6 w-6 text-[#C99237]" aria-hidden />
+            </span>
+            <div>
+              <h2 className="text-xl font-bold text-[#0C123A] sm:text-2xl">Internal reference</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Who referred{" "}
+                <span className="font-medium text-slate-700">{createdEmployeeName}</span>? Choose an
+                existing org member — their user id is sent to HR records (step&nbsp;3 of&nbsp;6).
+              </p>
+            </div>
+          </div>
+
+          {referenceError && (
+            <div
+              className="mb-6 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900"
+              role="alert"
+            >
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" aria-hidden />
+              <span>{referenceError}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleReferenceSubmit} className="space-y-5">
+            <div>
+              <label htmlFor="referred-by" className={labelCls()}>
+                Referred by (org member) <span className="text-red-500">*</span>
+              </label>
+              <select
+                id="referred-by"
+                className={inputCls()}
+                disabled={referrersLoading || referenceSubmitting}
+                value={referredById}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setReferredById(next);
+                  const row = referrerOptions.find((r) => String(r.user_id) === next);
+                  const primary = row?.roles?.[0]?.role_id;
+                  setReferredByDesignationId(
+                    primary != null && primary !== undefined ? String(primary) : "",
+                  );
+                }}
+                required={!referrersLoading}
+              >
+                <option value="">
+                  {referrersLoading ? "Loading members…" : "Select name / email / role…"}
+                </option>
+                {referrerOptions.map((row) => (
+                  <option key={String(row.user_id)} value={String(row.user_id)}>
+                    {formatReferrerOptionLabel(row)}
+                  </option>
+                ))}
+              </select>
+              {!referrersLoading && referrerOptions.length === 0 && (
+                <p className="mt-2 text-xs text-amber-800">
+                  No other members loaded. Ensure people exist in this org or check permissions.
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label htmlFor="referrer-display-name" className={labelCls()}>
+                Referrer display name <span className="text-xs font-normal text-slate-400">(optional)</span>
+              </label>
+              <input
+                id="referrer-display-name"
+                className={inputCls()}
+                value={referredByNameOverride}
+                onChange={(e) => setReferredByNameOverride(e.target.value)}
+                placeholder="Override stored label (max 200 characters)"
+                maxLength={200}
+              />
+            </div>
+
+            <div>
+              <label htmlFor="referrer-designation" className={labelCls()}>
+                Referrer designation (organization role)&nbsp;
+                <span className="text-xs font-normal text-slate-400">(optional)</span>
+              </label>
+              <select
+                id="referrer-designation"
+                className={inputCls()}
+                value={referredByDesignationId}
+                disabled={rolesLoading || referenceSubmitting || roles.length === 0}
+                onChange={(e) => setReferredByDesignationId(e.target.value)}
+              >
+                <option value="">
+                  Auto from selected member&apos;s primary role — or choose…
+                </option>
+                {roles.map((r) => (
+                  <option key={String(r.id)} value={String(r.id)}>
+                    {(r.role_name ?? "Role").replace(/\b\w/g, (c) => c.toUpperCase())}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-wrap gap-3 border-t border-slate-100 pt-6">
+              <button
+                type="button"
+                disabled={referenceSubmitting}
+                onClick={() => {
+                  setReferredById("");
+                  setReferredByNameOverride("");
+                  setReferredByDesignationId("");
+                  setReferenceError(null);
+                }}
+                className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-[#0C123A] shadow-sm transition hover:bg-slate-50 disabled:opacity-60"
+              >
+                Reset selection
+              </button>
+              <button
+                type="submit"
+                disabled={
+                  referenceSubmitting ||
+                  referrersLoading ||
+                  !referredById ||
+                  referrerOptions.length === 0
+                }
+                className="inline-flex items-center gap-2 rounded-lg bg-[#C99237] px-5 py-2.5 text-sm font-bold text-[#0C123A] shadow-sm transition hover:bg-[#b87d2e] disabled:opacity-60"
+              >
+                {referenceSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    Saving…
+                  </>
+                ) : (
+                  <>
+                    <Users className="h-4 w-4" aria-hidden />
+                    Save reference &amp; continue
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {onboardingStep === "assets" && createdEmployeeId && (
+        <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm sm:p-8">
+          <div className="mb-6 flex gap-3">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#C99237]/12">
+              <Package className="h-6 w-6 text-[#C99237]" aria-hidden />
+            </span>
+            <div>
+              <h2 className="text-xl font-bold text-[#0C123A] sm:text-2xl">Assign assets</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Optional — allocate laptops, badges, SIMs, etc. for{" "}
+                <span className="font-medium text-slate-700">{createdEmployeeName}</span>. Add rows with
+                <span className="font-semibold text-slate-600"> Add asset</span>, or skip (step&nbsp;4 of&nbsp;6).
+              </p>
+            </div>
+          </div>
+
+          {assetsError && (
+            <div
+              className="mb-6 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900"
+              role="alert"
+            >
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" aria-hidden />
+              <span>{assetsError}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleAssetsSubmit} className="space-y-6">
+            <div className="space-y-6">
+              {assetDraftRows.length === 0 && (
+                <p className="text-sm text-slate-500">
+                  No rows yet. Click <strong>Add asset</strong> to attach one or more assignments, or skip.
+                </p>
+              )}
+              {assetDraftRows.map((row, idx) => (
+                <div
+                  key={row.key}
+                  className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 sm:p-5"
+                >
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-sm font-bold text-[#0C123A]">Asset {idx + 1}</span>
+                    <button
+                      type="button"
+                      disabled={assetsSubmitting}
+                      onClick={() =>
+                        setAssetDraftRows((prev) => prev.filter((r) => r.key !== row.key))
+                      }
+                      className="text-xs font-semibold text-red-700 underline underline-offset-2 hover:text-red-900 disabled:opacity-50"
+                    >
+                      Remove row
+                    </button>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="sm:col-span-2">
+                      <label className={labelCls()} htmlFor={`asset-name-${row.key}`}>
+                        Asset name <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        id={`asset-name-${row.key}`}
+                        className={inputCls()}
+                        value={row.asset_name}
+                        onChange={(e) =>
+                          setAssetDraftRows((prev) =>
+                            prev.map((r) =>
+                              r.key === row.key ? { ...r, asset_name: e.target.value } : r,
+                            ),
+                          )
+                        }
+                        placeholder="e.g. Dell Latitude 5420"
+                        maxLength={250}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelCls()} htmlFor={`asset-type-${row.key}`}>
+                        Type <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        id={`asset-type-${row.key}`}
+                        className={inputCls()}
+                        value={row.asset_type}
+                        onChange={(e) =>
+                          setAssetDraftRows((prev) =>
+                            prev.map((r) =>
+                              r.key === row.key ? { ...r, asset_type: e.target.value } : r,
+                            ),
+                          )
+                        }
+                      >
+                        {(EMPLOYEE_ASSET_TYPES as readonly string[]).map((t) => (
+                          <option key={t} value={t}>
+                            {t.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className={labelCls()} htmlFor={`asset-handover-${row.key}`}>
+                        Handover date/time{" "}
+                        <span className="text-xs font-normal text-slate-400">(optional)</span>
+                      </label>
+                      <input
+                        id={`asset-handover-${row.key}`}
+                        type="datetime-local"
+                        className={inputCls()}
+                        value={row.handover_date_time}
+                        onChange={(e) =>
+                          setAssetDraftRows((prev) =>
+                            prev.map((r) =>
+                              r.key === row.key
+                                ? { ...r, handover_date_time: e.target.value }
+                                : r,
+                            ),
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className={labelCls()} htmlFor={`asset-summary-${row.key}`}>
+                        Summary{" "}
+                        <span className="text-xs font-normal text-slate-400">(optional)</span>
+                      </label>
+                      <input
+                        id={`asset-summary-${row.key}`}
+                        className={inputCls()}
+                        value={row.asset_summary}
+                        onChange={(e) =>
+                          setAssetDraftRows((prev) =>
+                            prev.map((r) =>
+                              r.key === row.key ? { ...r, asset_summary: e.target.value } : r,
+                            ),
+                          )
+                        }
+                        placeholder="Serial, condition, vendor…"
+                        maxLength={600}
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className={labelCls()} htmlFor={`asset-file-${row.key}`}>
+                        Photo / receipt (PNG, JPG, WebP, PDF, max 5&nbsp;MB){" "}
+                        <span className="text-xs font-normal text-slate-400">(optional)</span>
+                      </label>
+                      <input
+                        id={`asset-file-${row.key}`}
+                        type="file"
+                        accept={ACCEPT_MIME}
+                        className={`${inputCls()} cursor-pointer`}
+                        disabled={assetsSubmitting}
+                        onChange={(e) => {
+                          const f = e.target.files?.[0] ?? null;
+                          setAssetsError(null);
+                          if (f && f.size > MAX_FILE_BYTES) {
+                            setAssetsError("Each asset file must be 5 MB or smaller.");
+                            e.target.value = "";
+                            return;
+                          }
+                          if (
+                            f &&
+                            !/^image\/(png|jpeg|webp)$/.test(f.type) &&
+                            f.type !== "application/pdf"
+                          ) {
+                            setAssetsError("Use PNG, JPG, WebP, or PDF only.");
+                            e.target.value = "";
+                            return;
+                          }
+                          setAssetDraftRows((prev) =>
+                            prev.map((r) => (r.key === row.key ? { ...r, file: f } : r)),
+                          );
+                        }}
+                      />
+                      {row.file && (
+                        <p className="mt-1 text-xs text-slate-600">Attached: {row.file.name}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-col gap-3 border-t border-slate-100 pt-6 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
+              <button
+                type="button"
+                disabled={assetsSubmitting}
+                onClick={() => setAssetDraftRows((prev) => [...prev, createEmptyAssetDraft()])}
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-dashed border-[#C99237]/60 bg-[#C99237]/5 px-4 py-2.5 text-sm font-semibold text-[#0C123A] transition hover:bg-[#C99237]/15 disabled:opacity-60"
+              >
+                <PlusCircle className="h-4 w-4" aria-hidden />
+                Add asset
+              </button>
+              <div className="flex flex-wrap gap-2 lg:justify-end">
+                <button
+                  type="button"
+                  disabled={assetsSubmitting}
+                  onClick={() => handleAssetsSkip()}
+                  className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-white disabled:opacity-60"
+                >
+                  Skip assets — documents next
+                </button>
+                <button
+                  type="button"
+                  disabled={assetsSubmitting}
+                  onClick={() => {
+                    setAssetDraftRows([]);
+                    setAssetsError(null);
+                  }}
+                  className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-[#0C123A] shadow-sm transition hover:bg-slate-50 disabled:opacity-60"
+                >
+                  Clear rows
+                </button>
+                <button
+                  type="submit"
+                  disabled={assetsSubmitting}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#C99237] px-5 py-2.5 text-sm font-bold text-[#0C123A] shadow-sm transition hover:bg-[#b87d2e] disabled:opacity-60"
+                >
+                  {assetsSubmitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                      Uploading…
+                    </>
+                  ) : (
+                    <>
+                      <Package className="h-4 w-4" aria-hidden />
+                      Save assets &amp; continue
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </form>
         </div>
@@ -1013,8 +1707,8 @@ export default function EmployeOnboardingPage() {
             <div>
               <h2 className="text-xl font-bold text-[#0C123A] sm:text-2xl">Employee documents</h2>
               <p className="mt-1 text-sm text-slate-500">
-                Tap a frame to preview in full screen. Wrong file? Use{' '}
-                <span className="font-semibold text-slate-600">Change file</span>. PNG/JPG/WebP/PDF · max{' '}
+                Step&nbsp;5 of&nbsp;6 — tap a frame for full screen preview. Wrong file? Use{" "}
+                <span className="font-semibold text-slate-600">Change file</span>. PNG/JPG/WebP/PDF · max{" "}
                 5&nbsp;MB each.
               </p>
             </div>

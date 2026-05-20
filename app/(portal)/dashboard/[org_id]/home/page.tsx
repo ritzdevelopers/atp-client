@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { BarChart3, Building2, UserCircle } from "lucide-react";
+import Link from "next/link";
+import { BarChart3, Building2, UserCircle, UsersRound } from "lucide-react";
 import { MdWorkspacePremium } from "react-icons/md";
 import { useManagementDashboardContext } from "@/components/portal-dashboard/Layout/ManagementDashboardContext";
 import type {
@@ -384,6 +385,34 @@ function HomeOverview({
           </span>
         </div>
       </header>
+
+      {roleKey !== "admin" ? (
+        <section
+          className="dashboard-enter rounded-2xl border border-[#C99237]/35 bg-gradient-to-r from-[#0C123A] to-[#151f52] p-6 shadow-md sm:p-7"
+          style={{ animationDelay: "50ms" }}
+        >
+          <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#C99237]/20">
+                <UsersRound className="h-6 w-6 text-[#C99237]" aria-hidden />
+              </span>
+              <div>
+                <h2 className="text-base font-semibold text-white">Your team group</h2>
+                <p className="mt-1 max-w-xl text-sm leading-relaxed text-slate-300">
+                  Open your team workspace to see the full roster, when the team was created, who
+                  invited each member, and a live activity feed for this team.
+                </p>
+              </div>
+            </div>
+            <Link
+              href={`/dashboard/${orgId}/organization-employees/team-group`}
+              className="inline-flex w-full shrink-0 items-center justify-center rounded-xl bg-[#C99237] px-5 py-2.5 text-sm font-semibold text-[#0C123A] shadow-lg transition hover:bg-[#d9a343] sm:w-auto"
+            >
+              Go to team group
+            </Link>
+          </div>
+        </section>
+      ) : null}
 
       <div className={`grid grid-cols-1 gap-6 ${ownerMatchesUser ? "lg:grid-cols-2" : "lg:grid-cols-3"}`}>
         <DashboardCard icon={Building2} title="Organization" delayMs={100} id="dash-org-card">
