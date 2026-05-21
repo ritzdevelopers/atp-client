@@ -4,14 +4,19 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
+  AlertTriangle,
   ArrowLeft,
   CalendarClock,
+  ClipboardList,
   Crown,
+  Eye,
   Layers,
   Loader2,
+  Mail,
   RefreshCw,
   Search,
   Settings2,
+  ShieldAlert,
   Trash2,
   UserPlus,
   Users,
@@ -24,8 +29,14 @@ import {
   removeMemberFromOrgTeam,
   updateOrgTeam,
   type OrgTeamDetail,
+  type OrgTeamMemberRow,
   type OrgTeamRow,
 } from "@/services/orgTeams";
+import {
+  createEmployeeExitProcess,
+  fetchEmployeeExitProcesses,
+  type EmployeeExitProcessRow,
+} from "@/services/employeeExit";
 
 type ModalKind = null | "add" | "remove" | "admin" | "update";
 
@@ -45,6 +56,29 @@ function fmtLong(iso: string | null | undefined) {
     dateStyle: "medium",
     timeStyle: "short",
   });
+}
+
+function memberInitials(name: string | null | undefined) {
+  const parts = String(name ?? "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  return parts
+    .slice(0, 2)
+    .map((w) => w.charAt(0).toUpperCase())
+    .join("");
+}
+
+function exitStatusPillClass(status: string) {
+  const s = String(status).toLowerCase();
+  if (s === "approved") {
+    return "bg-emerald-50 text-emerald-800 ring-emerald-200/80";
+  }
+  if (s === "rejected") {
+    return "bg-rose-50 text-rose-800 ring-rose-200/80";
+  }
+  if (s === "in_progress") {
+    return "bg-sky-50 text-sky-800 ring-sky-200/80";
+  }
+  return "bg-amber-50 text-amber-800 ring-amber-200/80";
 }
 
 function detailToRow(d: OrgTeamDetail): OrgTeamRow {
@@ -135,12 +169,32 @@ export default function TeamDetailPage() {
   const [updateName, setUpdateName] = useState("");
   const [updateInfo, setUpdateInfo] = useState("");
 
+  const [terminateMember, setTerminateMember] = useState<OrgTeamMemberRow | null>(
+    null,
+  );
+  const [terminateReason, setTerminateReason] = useState("");
+  const [terminateExitDate, setTerminateExitDate] = useState("");
+  const [terminateLastWorkingDay, setTerminateLastWorkingDay] = useState("");
+  const [terminateStatus, setTerminateStatus] = useState<
+    "pending" | "approved" | "rejected" | "in_progress"
+  >("pending");
+  const [terminateInternalNote, setTerminateInternalNote] = useState("");
+  const [changeAdminBeforeTerminateOpen, setChangeAdminBeforeTerminateOpen] =
+    useState(false);
+
+  const [exitProcesses, setExitProcesses] = useState<EmployeeExitProcessRow[]>([]);
+  const [exitListError, setExitListError] = useState<string | null>(null);
+  const [exitTotalRecords, setExitTotalRecords] = useState<number | null>(null);
+
   const backHref = `/dashboard/${orgId}/organization-employees/manage-teams`;
 
+  const EXIT_LIST_LIMIT = 100;
+
   const loadAll = useCallback(async () => {
-    if (!teamId) return;
+    if (!teamId || !orgId) return;
     setLoading(true);
     setBanner(null);
+    setExitListError(null);
     try {
       const token = localStorage.getItem("token");
       if (!token) {
@@ -153,8 +207,29 @@ export default function TeamDetailPage() {
       ]);
       setDetail(d);
       setOrgUsers(users);
+
+      try {
+        const exits = await fetchEmployeeExitProcesses(token, {
+          org_id: orgId,
+          team_id: teamId,
+          page: 1,
+          limit: EXIT_LIST_LIMIT,
+          sort: "desc",
+          sort_by: "created_at",
+        });
+        setExitProcesses(Array.isArray(exits.data) ? exits.data : []);
+        setExitTotalRecords(exits.pagination?.total_records ?? null);
+      } catch (exitErr) {
+        setExitProcesses([]);
+        setExitTotalRecords(null);
+        setExitListError(
+          exitErr instanceof Error ? exitErr.message : "Could not load exit processes.",
+        );
+      }
     } catch (e) {
       setDetail(null);
+      setExitProcesses([]);
+      setExitTotalRecords(null);
       setBanner({
         type: "err",
         text: e instanceof Error ? e.message : "Failed to load team.",
@@ -162,7 +237,7 @@ export default function TeamDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [teamId]);
+  }, [teamId, orgId]);
 
   useEffect(() => {
     void loadAll();
@@ -173,6 +248,15 @@ export default function TeamDetailPage() {
     [detail],
   );
 
+  function closeTerminateModal() {
+    setTerminateMember(null);
+    setTerminateReason("");
+    setTerminateExitDate("");
+    setTerminateLastWorkingDay("");
+    setTerminateStatus("pending");
+    setTerminateInternalNote("");
+  }
+
   function closeModal() {
     setModal(null);
     setAddSearch("");
@@ -180,6 +264,10 @@ export default function TeamDetailPage() {
     setAdminSearch("");
     setUpdateName("");
     setUpdateInfo("");
+  }
+
+  function closeChangeAdminBeforeTerminatePrompt() {
+    setChangeAdminBeforeTerminateOpen(false);
   }
 
   const inTeamIds = useCallback((row: OrgTeamRow) => {
@@ -282,6 +370,8 @@ export default function TeamDetailPage() {
 
   const title = displayTeamTitle(detail.team_name);
   const token = () => localStorage.getItem("token");
+  const sessionUserId =
+    typeof window !== "undefined" ? localStorage.getItem("user_id") : null;
 
   return (
     <div className="min-h-full bg-[#f4f6f9] pb-24">
@@ -363,6 +453,58 @@ export default function TeamDetailPage() {
               </button>
             </div>
           </div>
+
+          <div className="mt-8 w-full overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.09] via-white/[0.04] to-transparent p-5 shadow-[0_20px_50px_-15px_rgba(0,0,0,0.45)] backdrop-blur-md ring-1 ring-white/10 sm:p-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <h2 className="text-sm font-semibold tracking-tight text-white">
+                  Admin membership
+                </h2>
+                <p className="mt-1 text-xs leading-relaxed text-slate-400">
+                  How this person entered the team roster.
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-3 rounded-xl border border-amber-400/25 bg-amber-500/10 px-4 py-2.5 ring-1 ring-amber-400/15">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-400/20">
+                  <Crown className="h-5 w-5 text-amber-300" aria-hidden />
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-white">
+                    {detail.admin_name ?? `User #${detail.admin_id}`}
+                  </p>
+                  <p className="text-[11px] text-amber-200/80">Team admin</p>
+                </div>
+              </div>
+            </div>
+            <dl className="mt-6 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-white/10 bg-white/[0.05] px-4 py-3">
+                <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  Joined team
+                </dt>
+                <dd className="mt-1.5 text-sm font-medium text-white">
+                  {fmtLong(detail.admin_joined_date)}
+                </dd>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-white/[0.05] px-4 py-3">
+                <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  Added by
+                </dt>
+                <dd className="mt-1.5 truncate text-sm font-medium text-white">
+                  {detail.admin_added_by_name ?? "—"}
+                </dd>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-white/[0.05] px-4 py-3 sm:col-span-1">
+                <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  Team focus
+                </dt>
+                <dd className="mt-1.5 line-clamp-2 text-sm leading-snug text-slate-300">
+                  {detail.team_info?.trim()
+                    ? detail.team_info
+                    : "No description — capture scope so admins stay aligned."}
+                </dd>
+              </div>
+            </dl>
+          </div>
         </div>
       </div>
 
@@ -431,103 +573,540 @@ export default function TeamDetailPage() {
           </div>
         </div>
 
-        <div className="mt-6 grid gap-6 lg:grid-cols-5">
-          <div className="rounded-2xl border border-slate-200/90 bg-gradient-to-b from-white to-slate-50/80 p-6 shadow-lg shadow-slate-200/25 lg:col-span-2">
-            <h2 className="text-sm font-semibold text-slate-900">Admin membership</h2>
-            <p className="mt-1 text-xs text-slate-500">
-              How this person entered the team roster.
-            </p>
-            <dl className="mt-5 space-y-4 text-sm">
-              <div className="flex justify-between gap-4 border-b border-slate-100 pb-3">
-                <dt className="text-slate-500">Joined team</dt>
-                <dd className="text-right font-medium text-slate-900">
-                  {fmtLong(detail.admin_joined_date)}
-                </dd>
-              </div>
-              <div className="flex justify-between gap-4 border-b border-slate-100 pb-3">
-                <dt className="text-slate-500">Added by</dt>
-                <dd className="max-w-[60%] truncate text-right font-medium text-slate-900">
-                  {detail.admin_added_by_name ?? "—"}
-                </dd>
-              </div>
-              <div className="flex justify-between gap-4">
-                <dt className="text-slate-500">Team description</dt>
-                <dd className="max-w-[55%] text-right text-slate-700">
-                  {detail.team_info?.trim() ? detail.team_info : "—"}
-                </dd>
-              </div>
-            </dl>
-          </div>
-
-          <div className="rounded-2xl border border-slate-200/90 bg-white p-0 shadow-lg shadow-slate-200/25 lg:col-span-3">
-            <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-6 w-full overflow-hidden rounded-[22px] border border-slate-200/90 bg-gradient-to-b from-white via-white to-slate-50/40 shadow-[0_12px_40px_-12px_rgba(15,23,42,0.12)] ring-1 ring-slate-950/[0.04]">
+          <div className="relative border-b border-slate-100/90 bg-gradient-to-r from-teal-600/[0.06] via-transparent to-indigo-600/[0.05] px-5 py-5 sm:px-6">
+            <div className="pointer-events-none absolute inset-y-0 right-0 w-40 bg-gradient-to-l from-teal-400/10 to-transparent blur-2xl" />
+            <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <h2 className="text-sm font-semibold text-slate-900">Roster</h2>
-                <p className="text-xs text-slate-500">
-                  Join dates and who added each member.
+                <h2 className="text-base font-semibold tracking-tight text-slate-900">
+                  Roster
+                </h2>
+                <p className="mt-1 text-xs text-slate-500">
+                  Everyone on this team — cards stay easy to scan on any screen width.
                 </p>
               </div>
-              <div className="relative w-full sm:max-w-xs">
+              <div className="relative w-full lg:max-w-md">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input
                   type="search"
-                  placeholder="Search roster…"
+                  placeholder="Search by name or email…"
                   value={memberTableSearch}
                   onChange={(e) => setMemberTableSearch(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50/80 py-2 pl-9 pr-3 text-sm outline-none focus:border-teal-500/60 focus:bg-white focus:ring-2 focus:ring-teal-500/15"
+                  className="w-full rounded-xl border border-slate-200/90 bg-white py-2.5 pl-10 pr-4 text-sm shadow-sm outline-none ring-slate-950/[0.03] transition focus:border-teal-500/45 focus:ring-2 focus:ring-teal-500/15"
                 />
               </div>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px] text-left text-sm">
-                <thead>
-                  <tr className="border-b border-slate-100 bg-slate-50/80 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                    <th className="px-5 py-3">Member</th>
-                    <th className="px-5 py-3">Contact</th>
-                    <th className="px-5 py-3">Joined</th>
-                    <th className="px-5 py-3">Added by</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filteredTableMembers.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="px-5 py-12 text-center text-slate-500">
-                        No members match your search.
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredTableMembers.map((m) => (
-                      <tr
-                        key={m.team_member_id}
-                        className="bg-white transition hover:bg-slate-50/80"
-                      >
-                        <td className="px-5 py-3">
+          </div>
+
+          <div className="p-5 sm:p-6">
+            {filteredTableMembers.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 py-16 text-center">
+                <Users className="mx-auto h-10 w-10 text-slate-300" aria-hidden />
+                <p className="mt-3 text-sm font-medium text-slate-600">No members match your search.</p>
+                <p className="mt-1 text-xs text-slate-400">Try another keyword or clear the filter.</p>
+              </div>
+            ) : (
+              <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+                {filteredTableMembers.map((m) => {
+                  const isAdmin = Number(m.user_id) === Number(detail.admin_id);
+                  const hideTerminate =
+                    sessionUserId != null && Number(sessionUserId) === Number(m.user_id);
+                  return (
+                    <article
+                      key={m.team_member_id}
+                      className={`group relative flex flex-col overflow-hidden rounded-2xl border bg-white p-5 shadow-md shadow-slate-200/50 ring-1 ring-slate-950/[0.04] transition duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-slate-900/10 ${
+                        isAdmin
+                          ? "border-amber-200/70 hover:border-amber-300/80"
+                          : "border-slate-200/90 hover:border-teal-200/70"
+                      }`}
+                    >
+                      <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-gradient-to-br from-teal-400/15 to-transparent opacity-0 transition group-hover:opacity-100" />
+                      <div className="relative flex gap-4">
+                        <div
+                          className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-lg font-bold text-white shadow-inner ${
+                            isAdmin
+                              ? "bg-gradient-to-br from-amber-500 to-amber-700 shadow-amber-900/25"
+                              : "bg-gradient-to-br from-teal-600 to-slate-800 shadow-black/20"
+                          }`}
+                          aria-hidden
+                        >
+                          {memberInitials(m.user_name)}
+                        </div>
+                        <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
-                            {Number(m.user_id) === Number(detail.admin_id) ? (
-                              <Crown className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                            {isAdmin ? (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800 ring-1 ring-amber-200/80">
+                                <Crown className="h-3 w-3" aria-hidden />
+                                Admin
+                              </span>
                             ) : null}
-                            <span className="font-medium text-slate-900">{m.user_name}</span>
+                            <h3 className="truncate text-[15px] font-semibold text-slate-900">
+                              {m.user_name}
+                            </h3>
+                          </div>
+                          <p className="mt-2 flex items-start gap-1.5 text-xs text-slate-600">
+                            <Mail className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
+                            <span className="break-all">{m.user_email}</span>
+                          </p>
+                          {m.user_phone ? (
+                            <p className="mt-1 pl-[22px] text-xs text-slate-400">{m.user_phone}</p>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      <dl className="relative mt-5 grid gap-2 rounded-xl bg-slate-50/90 px-3.5 py-3 text-xs ring-1 ring-slate-100">
+                        <div className="flex items-start justify-between gap-3">
+                          <dt className="shrink-0 text-slate-500">Joined</dt>
+                          <dd className="text-right font-medium text-slate-800">{fmtLong(m.joined_date)}</dd>
+                        </div>
+                        <div className="flex items-start justify-between gap-3 border-t border-slate-200/70 pt-2">
+                          <dt className="shrink-0 text-slate-500">Added by</dt>
+                          <dd className="max-w-[65%] truncate text-right font-medium text-slate-800">
+                            {m.added_by_name ?? "—"}
+                          </dd>
+                        </div>
+                      </dl>
+
+                      <div className="relative mt-4 flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-4">
+                        {hideTerminate ? (
+                          <span className="text-[11px] text-slate-400">Your account</span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (isAdmin) {
+                                setChangeAdminBeforeTerminateOpen(true);
+                                return;
+                              }
+                              setTerminateMember(m);
+                              setTerminateReason("");
+                              setTerminateExitDate("");
+                              setTerminateLastWorkingDay("");
+                              setTerminateStatus("pending");
+                              setTerminateInternalNote("");
+                            }}
+                            className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200/90 bg-gradient-to-b from-white to-rose-50 px-3.5 py-2 text-[11px] font-semibold uppercase tracking-wide text-rose-700 shadow-sm shadow-rose-900/[0.06] ring-rose-900/[0.04] transition hover:border-rose-300 hover:from-rose-50 hover:to-rose-100/90 hover:text-rose-900"
+                          >
+                            <ShieldAlert className="h-3.5 w-3.5" aria-hidden />
+                            Terminate
+                          </button>
+                        )}
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-6 w-full overflow-hidden rounded-[22px] border border-slate-200/90 bg-gradient-to-b from-white via-white to-slate-50/40 shadow-[0_12px_40px_-12px_rgba(15,23,42,0.12)] ring-1 ring-slate-950/[0.04]">
+          <div className="relative border-b border-slate-100/90 bg-gradient-to-r from-slate-800/[0.04] via-transparent to-rose-600/[0.05] px-5 py-5 sm:px-6">
+            <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white shadow-md shadow-slate-900/20">
+                  <ClipboardList className="h-5 w-5" aria-hidden />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold tracking-tight text-slate-900">
+                    Exit &amp; offboarding
+                  </h2>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Exit processes filed for members of this team (
+                    <span className="font-medium text-slate-600">{title}</span>).
+                  </p>
+                </div>
+              </div>
+              {exitTotalRecords != null && exitTotalRecords > 0 ? (
+                <p className="text-xs font-medium tabular-nums text-slate-500 sm:text-right">
+                  {exitTotalRecords} record
+                  {exitTotalRecords !== 1 ? "s" : ""}
+                  {exitTotalRecords > EXIT_LIST_LIMIT
+                    ? ` — showing newest ${EXIT_LIST_LIMIT}`
+                    : ""}
+                </p>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="p-5 sm:p-6">
+            {exitListError ? (
+              <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
+                {exitListError}
+              </div>
+            ) : exitProcesses.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 py-14 text-center">
+                <ClipboardList className="mx-auto h-9 w-9 text-slate-300" aria-hidden />
+                <p className="mt-3 text-sm font-medium text-slate-600">
+                  No exit processes for this team yet.
+                </p>
+                <p className="mt-1 text-xs text-slate-400">
+                  Terminations or resignations linked to this team appear here once created.
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-xl border border-slate-100 ring-1 ring-slate-950/[0.03]">
+                <table className="w-full min-w-[860px] border-collapse text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-100 bg-slate-50/90">
+                      <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        Employee
+                      </th>
+                      <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        Type
+                      </th>
+                      <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        Status
+                      </th>
+                      <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        Dates
+                      </th>
+                      <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        Opened
+                      </th>
+                      <th className="whitespace-nowrap px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {exitProcesses.map((row) => (
+                      <tr
+                        key={row.id}
+                        className="border-b border-slate-100 bg-white transition hover:bg-slate-50/80"
+                      >
+                        <td className="max-w-[200px] px-4 py-3">
+                          <p className="truncate font-semibold text-slate-900">
+                            {row.employee_name ?? `Employee #${row.employee_id}`}
+                          </p>
+                          <p className="truncate text-xs text-slate-500">{row.employee_email}</p>
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3">
+                          <span className="capitalize text-slate-700">{row.action_type}</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide ring-1 ${exitStatusPillClass(
+                              row.application_status,
+                            )}`}
+                          >
+                            {String(row.application_status).replace(/_/g, " ")}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-slate-600">
+                          <div className="space-y-0.5">
+                            <div>
+                              <span className="text-slate-400">Last day: </span>
+                              {row.last_working_day
+                                ? fmtLong(row.last_working_day)
+                                : "—"}
+                            </div>
+                            <div>
+                              <span className="text-slate-400">Exit: </span>
+                              {row.exit_date ? fmtLong(row.exit_date) : "—"}
+                            </div>
                           </div>
                         </td>
-                        <td className="px-5 py-3 text-slate-600">
-                          <div className="text-xs">{m.user_email}</div>
-                          {m.user_phone ? (
-                            <div className="text-xs text-slate-400">{m.user_phone}</div>
-                          ) : null}
+                        <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-600">
+                          {fmtLong(row.created_at)}
                         </td>
-                        <td className="px-5 py-3 text-slate-700">{fmtLong(m.joined_date)}</td>
-                        <td className="px-5 py-3 text-slate-700">
-                          {m.added_by_name ?? "—"}
+                        <td className="px-4 py-3 text-right">
+                          <Link
+                            href={`/dashboard/${orgId}/organization-employees/teams/${teamId}/exit/${row.id}`}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-teal-200 bg-teal-50 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-teal-800 transition hover:border-teal-300 hover:bg-teal-100/80"
+                          >
+                            <Eye className="h-3.5 w-3.5" aria-hidden />
+                            View full info
+                          </Link>
                         </td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       </div>
+
+      {terminateMember ? (
+        <div
+          className="fixed inset-0 z-[1001] flex items-end justify-center bg-slate-950/55 p-4 backdrop-blur-md sm:items-center"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="terminate-exit-dialog-title"
+        >
+          <button
+            type="button"
+            className="absolute inset-0 cursor-default"
+            aria-label="Close dialog"
+            onClick={() => !busy && closeTerminateModal()}
+          />
+          <div className="relative flex max-h-[92vh] w-full max-w-xl flex-col overflow-hidden rounded-[22px] border border-white/10 bg-white shadow-[0_24px_80px_-12px_rgba(15,23,42,0.45)] ring-1 ring-slate-950/[0.06]">
+            <div className="relative overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-rose-950 px-6 pb-8 pt-7 text-white">
+              <div className="pointer-events-none absolute -right-16 top-0 h-40 w-40 rounded-full bg-rose-500/25 blur-3xl" />
+              <div className="pointer-events-none absolute -left-10 bottom-0 h-32 w-32 rounded-full bg-teal-500/15 blur-3xl" />
+              <div className="relative flex items-start gap-4">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/15 backdrop-blur">
+                  <ShieldAlert className="h-6 w-6 text-rose-300" aria-hidden />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-teal-300/90">
+                    Offboarding
+                  </p>
+                  <h2
+                    id="terminate-exit-dialog-title"
+                    className="mt-1 text-xl font-semibold tracking-tight text-white sm:text-2xl"
+                  >
+                    Initiate termination
+                  </h2>
+                  <p className="mt-2 max-w-md text-sm leading-relaxed text-slate-300">
+                    Opens an employee exit record for HR review. You can refine dates before approvals are finalized.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="max-h-[min(52vh,520px)] overflow-y-auto px-6 py-5">
+              <div className="flex items-center gap-4 rounded-2xl border border-slate-100 bg-gradient-to-r from-slate-50 to-white p-4 ring-1 ring-slate-950/[0.03]">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-800 to-slate-950 text-lg font-semibold text-white shadow-inner shadow-black/30">
+                  {String(terminateMember.user_name ?? "?")
+                    .split(/\s+/)
+                    .filter(Boolean)
+                    .slice(0, 2)
+                    .map((w) => w.charAt(0).toUpperCase())
+                    .join("") || "?"}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-semibold text-slate-900">{terminateMember.user_name}</p>
+                  <p className="truncate text-sm text-slate-500">{terminateMember.user_email}</p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Team{" "}
+                    <span className="font-medium text-slate-600">{displayTeamTitle(detail.team_name)}</span>
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-5 flex gap-3 rounded-xl border border-amber-200/80 bg-amber-50/90 px-4 py-3 text-sm text-amber-950">
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" aria-hidden />
+                <p className="leading-snug">
+                  This creates an exit workflow tied to your organization. Ensure documentation and policies are followed before confirming.
+                </p>
+              </div>
+
+              <div className="mt-6 space-y-5">
+                <div>
+                  <label
+                    htmlFor="terminate-reason"
+                    className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-slate-500"
+                  >
+                    <span>Termination reason</span>
+                    <span className="font-normal normal-case text-slate-400">
+                      {terminateReason.trim().length}/2000
+                    </span>
+                  </label>
+                  <textarea
+                    id="terminate-reason"
+                    rows={4}
+                    maxLength={2000}
+                    value={terminateReason}
+                    onChange={(e) => setTerminateReason(e.target.value)}
+                    placeholder="Summarize grounds, policy references, or context for approvers…"
+                    className="mt-2 w-full resize-none rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm leading-relaxed text-slate-900 shadow-sm outline-none ring-slate-950/[0.04] transition placeholder:text-slate-400 focus:border-teal-500/50 focus:ring-2 focus:ring-teal-500/15"
+                  />
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label
+                      htmlFor="terminate-last-day"
+                      className="text-xs font-semibold uppercase tracking-wide text-slate-500"
+                    >
+                      Last working day
+                    </label>
+                    <input
+                      id="terminate-last-day"
+                      type="date"
+                      value={terminateLastWorkingDay}
+                      onChange={(e) => setTerminateLastWorkingDay(e.target.value)}
+                      className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 shadow-sm outline-none focus:border-teal-500/50 focus:ring-2 focus:ring-teal-500/15"
+                    />
+                    <p className="mt-1.5 text-xs text-slate-500">Final day active on payroll.</p>
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="terminate-exit-date"
+                      className="text-xs font-semibold uppercase tracking-wide text-slate-500"
+                    >
+                      Exit date
+                    </label>
+                    <input
+                      id="terminate-exit-date"
+                      type="date"
+                      value={terminateExitDate}
+                      onChange={(e) => setTerminateExitDate(e.target.value)}
+                      className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 shadow-sm outline-none focus:border-teal-500/50 focus:ring-2 focus:ring-teal-500/15"
+                    />
+                    <p className="mt-1.5 text-xs text-slate-500">Official separation date if different.</p>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label
+                      htmlFor="terminate-status"
+                      className="text-xs font-semibold uppercase tracking-wide text-slate-500"
+                    >
+                      Initial status
+                    </label>
+                    <select
+                      id="terminate-status"
+                      value={terminateStatus}
+                      onChange={(e) =>
+                        setTerminateStatus(
+                          e.target.value as typeof terminateStatus,
+                        )
+                      }
+                      className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 shadow-sm outline-none focus:border-teal-500/50 focus:ring-2 focus:ring-teal-500/15"
+                    >
+                      <option value="pending">Pending review</option>
+                      <option value="in_progress">In progress</option>
+                      <option value="approved">Approved</option>
+                      <option value="rejected">Rejected</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="terminate-internal"
+                      className="text-xs font-semibold uppercase tracking-wide text-slate-500"
+                    >
+                      Internal note{" "}
+                      <span className="font-normal normal-case text-slate-400">(optional)</span>
+                    </label>
+                    <input
+                      id="terminate-internal"
+                      type="text"
+                      value={terminateInternalNote}
+                      onChange={(e) => setTerminateInternalNote(e.target.value)}
+                      placeholder="Reference ticket or case ID"
+                      className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 shadow-sm outline-none placeholder:text-slate-400 focus:border-teal-500/50 focus:ring-2 focus:ring-teal-500/15"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50/95 px-6 py-4 sm:flex-row sm:justify-end sm:gap-3">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => closeTerminateModal()}
+                className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={busy || !terminateReason.trim()}
+                onClick={() =>
+                  void (async () => {
+                    const t = token();
+                    if (!t) {
+                      setBanner({ type: "err", text: "Sign in required." });
+                      return;
+                    }
+                    if (
+                      terminateExitDate &&
+                      terminateLastWorkingDay &&
+                      new Date(terminateLastWorkingDay) > new Date(terminateExitDate)
+                    ) {
+                      setBanner({
+                        type: "err",
+                        text: "Last working day cannot be after exit date.",
+                      });
+                      return;
+                    }
+                    setBusy(true);
+                    setBanner(null);
+                    try {
+                      await createEmployeeExitProcess(t, {
+                        org_id: orgId,
+                        user_id: terminateMember.user_id,
+                        team_id: teamId,
+                        action_type: "termination",
+                        action_reason: terminateReason.trim(),
+                        application_status: terminateStatus,
+                        exit_date: terminateExitDate || null,
+                        last_working_day: terminateLastWorkingDay || null,
+                        response_message: terminateInternalNote.trim() || null,
+                      });
+                      await loadAll();
+                      closeTerminateModal();
+                      setBanner({
+                        type: "ok",
+                        text: "Exit process created. The termination workflow is now on file.",
+                      });
+                    } catch (e) {
+                      setBanner({
+                        type: "err",
+                        text: e instanceof Error ? e.message : "Request failed.",
+                      });
+                    } finally {
+                      setBusy(false);
+                    }
+                  })()
+                }
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-rose-600 to-rose-700 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-rose-900/25 transition hover:from-rose-500 hover:to-rose-600 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {busy ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    Submitting…
+                  </>
+                ) : (
+                  <>
+                    <ShieldAlert className="h-4 w-4" aria-hidden />
+                    Confirm termination
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {changeAdminBeforeTerminateOpen
+        ? modalShell(
+            "Change Admin of the team",
+            closeChangeAdminBeforeTerminatePrompt,
+            <>
+              <p className="text-sm text-slate-700 leading-relaxed">
+                This employee is the team admin. Assign a different member as admin
+                before you can start termination for them.
+              </p>
+            </>,
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                onClick={closeChangeAdminBeforeTerminatePrompt}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700"
+                onClick={() => {
+                  closeChangeAdminBeforeTerminatePrompt();
+                  setModal("admin");
+                }}
+              >
+                <Crown className="h-4 w-4 text-amber-200" aria-hidden />
+                Change admin
+              </button>
+            </div>,
+          )
+        : null}
 
       {modal && focusRow
         ? (() => {

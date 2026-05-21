@@ -552,6 +552,7 @@ export default function TeamGroupPage() {
       return;
     }
 
+
     setAttResolveSubmitting(true);
     setBanner(null);
     try {

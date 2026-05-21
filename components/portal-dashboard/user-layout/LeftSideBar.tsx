@@ -21,7 +21,13 @@ const navigationItems = [
     label: "Attendance History",
     icon: LuFileSpreadsheet,
     href: "/user-dashboard/[org_id]/attendance-history",
-  }
+  },
+  {
+    id:"exit-process",
+    label: "Exit Process",
+    icon: MdLogout,
+    href: "/user-dashboard/[org_id]/exit-process",
+  },
 ];
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
