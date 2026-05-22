@@ -238,9 +238,60 @@ export type TeamLeaveQueryRow = {
   updated_at: string | null;
 };
 
+/** In-progress employee exit processes tied to this team (from activity feed API). */
+export type TeamExitProcessFeedRow = {
+  id: number;
+  employee_id: number;
+  action_type: string | null;
+  exit_date: string | null;
+  last_working_day: string | null;
+  employee_name: string | null;
+  employee_email: string | null;
+  action_performed_by_name: string | null;
+};
+
 export type TeamActivityFeedData = {
   notifications: TeamActivityNotification[];
   leave_queries: TeamLeaveQueryRow[];
+  exit_processes_reports: TeamExitProcessFeedRow[];
+};
+
+export type TeamMemberExitReportHandoverRow = {
+  handover_query_id: number;
+  asset_id: number | null;
+  custom_task_name: string | null;
+  handover_status: string | null;
+  remarks: string | null;
+  handover_date: string | null;
+  created_at: string | null;
+};
+
+/** Manager-facing exit rollup from `GET /api/org-teams/exit-process-report/:employee_id`. */
+export type TeamMemberExitReportProcess = {
+  exit_process_id: number;
+  employee_id: number;
+  employee_name: string | null;
+  employee_email: string | null;
+  employee_phone: string | null;
+  org_id: number;
+  team_id: number | null;
+  team_name: string | null;
+  team_admin_id: number | null;
+  application_status: string | null;
+  response_message: string | null;
+  resolved_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  action_type: string | null;
+  action_reason: string | null;
+  exit_date: string | null;
+  last_working_day: string | null;
+  team_joining_date: string | null;
+};
+
+export type TeamMemberExitProcessReportData = {
+  exit_process: TeamMemberExitReportProcess;
+  handover_queries: TeamMemberExitReportHandoverRow[];
 };
 
 /** Current user's team (`GET /api/org-teams/get-my-team`). Pass `orgId` when the user belongs to multiple orgs. */
@@ -308,11 +359,54 @@ export async function fetchTeamActivityFeed(
   }
   const data = json.data as TeamActivityFeedData | undefined;
   if (!data || typeof data !== "object") {
-    return { notifications: [], leave_queries: [] };
+    return {
+      notifications: [],
+      leave_queries: [],
+      exit_processes_reports: [],
+    };
   }
   return {
     notifications: Array.isArray(data.notifications) ? data.notifications : [],
     leave_queries: Array.isArray(data.leave_queries) ? data.leave_queries : [],
+    exit_processes_reports: Array.isArray(data.exit_processes_reports)
+      ? data.exit_processes_reports
+      : [],
+  };
+}
+
+/** `GET /api/org-teams/exit-process-report/:employee_id` — full exit rollup for team member view. */
+export async function fetchTeamMemberExitProcessReport(
+  token: string,
+  orgId: number | string,
+  employeeId: number | string,
+): Promise<TeamMemberExitProcessReportData> {
+  const q = `?org_id=${encodeURIComponent(String(orgId))}`;
+  const url = `${API_URL}/api/org-teams/exit-process-report/${encodeURIComponent(String(employeeId))}${q}`;
+  const res = await fetch(url, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  const json = await parseJson(res);
+  if (!res.ok) {
+    const err = new Error(
+      (json.message as string) || "Could not load exit process report",
+    ) as ApiError;
+    err.status = res.status;
+    throw err;
+  }
+  const data = json.data as TeamMemberExitProcessReportData | undefined;
+  if (!data?.exit_process || typeof data.exit_process !== "object") {
+    const err = new Error("Invalid exit report response") as ApiError;
+    err.status = 500;
+    throw err;
+  }
+  return {
+    exit_process: data.exit_process,
+    handover_queries: Array.isArray(data.handover_queries)
+      ? data.handover_queries
+      : [],
   };
 }
 

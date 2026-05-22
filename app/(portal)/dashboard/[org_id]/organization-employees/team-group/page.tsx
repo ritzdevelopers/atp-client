@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import {
   AlertCircle,
   ArrowLeft,
+  ArrowRight,
   Bell,
   CalendarClock,
   CalendarDays,
@@ -41,6 +42,7 @@ import {
   type OrgTeamDetail,
   type OrgTeamRow,
   type TeamActivityNotification,
+  type TeamExitProcessFeedRow,
   type TeamLeaveQueryRow,
 } from "@/services/orgTeams";
 import {
@@ -112,6 +114,14 @@ function attendeeFromQuery(
     email: "",
     phone: null,
   };
+}
+
+function exitFeedActionHeadline(actionType: string | null | undefined): string {
+  const s = String(actionType ?? "").trim().toLowerCase();
+  if (s === "termination") return "Termination — in progress";
+  if (s === "resignation") return "Resignation — in progress";
+  if (!s) return "Employee exit — in progress";
+  return `${s.replace(/_/g, " ")} — in progress`;
 }
 
 function actionLabel(type: string): string {
@@ -222,6 +232,9 @@ export default function TeamGroupPage() {
   const [detail, setDetail] = useState<OrgTeamDetail | null>(null);
   const [noTeam, setNoTeam] = useState(false);
   const [notifications, setNotifications] = useState<TeamActivityNotification[]>([]);
+  const [exitProcessesReports, setExitProcessesReports] = useState<
+    TeamExitProcessFeedRow[]
+  >([]);
   const [leaveQueries, setLeaveQueries] = useState<TeamLeaveQueryRow[]>([]);
   const [activityTab, setActivityTab] = useState<
     "notifications" | "leaves" | "attendance"
@@ -315,6 +328,7 @@ export default function TeamGroupPage() {
         getAllOrgUsers(token),
       ]);
       setNotifications(feed.notifications);
+      setExitProcessesReports(feed.exit_processes_reports);
       setLeaveQueries(feed.leave_queries);
       setOrgUsers(users);
       try {
@@ -361,6 +375,7 @@ export default function TeamGroupPage() {
         setDetail(null);
         setLeaveQueries([]);
         setNotifications([]);
+        setExitProcessesReports([]);
         setAttendanceQueries([]);
         setAttendanceListError(null);
         setMyLeaveRows([]);
@@ -370,6 +385,7 @@ export default function TeamGroupPage() {
         setDetail(null);
         setLeaveQueries([]);
         setNotifications([]);
+        setExitProcessesReports([]);
         setAttendanceQueries([]);
         setAttendanceListError(null);
         setMyLeaveRows([]);
@@ -397,6 +413,7 @@ export default function TeamGroupPage() {
     try {
       const feed = await fetchTeamActivityFeed(t, detail.team_id, orgIdNum);
       setNotifications(feed.notifications);
+      setExitProcessesReports(feed.exit_processes_reports);
       setLeaveQueries(feed.leave_queries);
     } catch {
       // keep existing feed on error
@@ -435,6 +452,11 @@ export default function TeamGroupPage() {
         (q) => String(q.query_status).toLowerCase() === "pending",
       ).length,
     [attendanceQueries],
+  );
+
+  const pendingExitReportsCount = useMemo(
+    () => exitProcessesReports.length,
+    [exitProcessesReports],
   );
 
   const myPendingLeaveCount = useMemo(
@@ -1306,7 +1328,7 @@ export default function TeamGroupPage() {
                   <button
                     type="button"
                     onClick={() => setActivityTab("notifications")}
-                    className={`flex flex-1 items-center justify-center gap-1 rounded-lg px-2 py-2 text-[11px] font-semibold transition ${
+                    className={`relative flex flex-1 items-center justify-center gap-1 rounded-lg px-2 py-2 text-[11px] font-semibold transition ${
                       activityTab === "notifications"
                         ? "bg-white text-[#0C123A] shadow-md"
                         : "text-white/85 hover:bg-white/10 hover:text-white"
@@ -1314,6 +1336,11 @@ export default function TeamGroupPage() {
                   >
                     <Bell className="h-3.5 w-3.5 shrink-0 opacity-90" />
                     <span className="truncate">Alerts</span>
+                    {pendingExitReportsCount > 0 ? (
+                      <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-violet-500 px-1 text-[9px] font-bold text-white ring-2 ring-[#0C123A]">
+                        {pendingExitReportsCount > 9 ? "9+" : pendingExitReportsCount}
+                      </span>
+                    ) : null}
                   </button>
                   <button
                     type="button"
@@ -1358,8 +1385,16 @@ export default function TeamGroupPage() {
                 <div className="flex items-start gap-2 border-b border-slate-100 bg-slate-50/90 px-4 py-3">
                   <HelpCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#C99237]" aria-hidden />
                   <p className="text-[11px] leading-relaxed text-slate-600">
-                    <span className="font-semibold text-[#0C123A]">Roster log.</span>{" "}
-                    Adds, removals, and team updates appear in chronological order.
+                    <span className="font-semibold text-[#0C123A]">Alerts.</span>{" "}
+                    {pendingExitReportsCount > 0 ? (
+                      <>
+                        <span className="font-semibold text-rose-800/90">Open exits</span> for
+                        this team need follow-up (
+                        <span className="font-semibold">{pendingExitReportsCount}</span>).{" "}
+                      </>
+                    ) : null}
+                    <span className="font-semibold text-[#0C123A]">Roster log:</span> adds,
+                    removals, and updates below.
                   </p>
                 </div>
               ) : null}
@@ -1384,33 +1419,93 @@ export default function TeamGroupPage() {
 
               <div className="max-h-[min(70vh,560px)] overflow-y-auto">
                 {activityTab === "notifications" ? (
-                  notifications.length === 0 ? (
-                    <p className="px-4 py-10 text-center text-sm text-slate-500">
-                      No activity yet. Adds, removals, and updates will appear here.
-                    </p>
-                  ) : (
-                    <ul className="divide-y divide-slate-100">
-                      {notifications.map((n) => (
-                        <li
-                          key={n.id}
-                          className="relative border-l-[3px] border-l-[#C99237]/70 pl-4 pr-4 py-3 transition hover:bg-slate-50/90"
-                        >
-                          <p className="text-[10px] font-bold uppercase tracking-wide text-[#C99237]">
-                            {actionLabel(n.action_type)}
-                          </p>
-                          <p className="mt-1 text-sm font-medium text-[#0C123A]">
-                            {n.action_reason}
-                          </p>
-                          <div className="mt-1.5 flex flex-wrap gap-x-2 text-[11px] text-slate-500">
-                            <span>{fmtLong(n.created_at)}</span>
-                            {n.performed_by_name ? (
-                              <span>· {n.performed_by_name}</span>
+                  <>
+                    {exitProcessesReports.length > 0 && detail ? (
+                      <ul className="divide-y divide-slate-100 border-b border-slate-200/90 bg-white">
+                        {exitProcessesReports.map((ep) => (
+                          <li
+                            key={`exit-report-${ep.id}`}
+                            className="relative border-l-[3px] border-l-rose-500/75 px-4 py-3 transition hover:bg-rose-50/40"
+                          >
+                            <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-rose-700">
+                              <ShieldAlert className="h-3 w-3" aria-hidden />
+                              {exitFeedActionHeadline(ep.action_type)}
+                            </p>
+                            <p className="mt-1 text-sm font-semibold text-[#0C123A]">
+                              {ep.employee_name?.trim() || `Employee #${ep.employee_id}`}
+                            </p>
+                            {ep.employee_email ? (
+                              <p className="text-[11px] text-slate-600">{ep.employee_email}</p>
                             ) : null}
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )
+                            <div className="mt-1.5 flex flex-wrap gap-x-2 text-[11px] text-slate-500">
+                              {ep.last_working_day ? (
+                                <span>Last day {fmtDateOnly(ep.last_working_day)}</span>
+                              ) : null}
+                              {ep.exit_date ? (
+                                <span>
+                                  {ep.last_working_day ? " · " : null}
+                                  Exit {fmtDateOnly(ep.exit_date)}
+                                </span>
+                              ) : null}
+                            </div>
+                            {ep.action_performed_by_name ? (
+                              <p className="mt-1 text-[10px] text-slate-500">
+                                Opened by {ep.action_performed_by_name}
+                              </p>
+                            ) : null}
+                            <div className="mt-3">
+                              <Link
+                                href={`/dashboard/${orgId}/organization-employees/team-group/exit-process-report/${ep.employee_id}`}
+                                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#0C123A] px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-[#121a4a]"
+                              >
+                                View more
+                                <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+                              </Link>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+
+                    {notifications.length === 0 && exitProcessesReports.length === 0 ? (
+                      <p className="px-4 py-10 text-center text-sm text-slate-500">
+                        No alerts yet. Roster updates and open exits appear here when present.
+                      </p>
+                    ) : notifications.length > 0 ? (
+                      <>
+                        {exitProcessesReports.length > 0 ? (
+                          <p className="border-b border-slate-100 bg-slate-50/80 px-4 py-2 text-[10px] font-bold uppercase tracking-wide text-slate-600">
+                            Roster log
+                          </p>
+                        ) : null}
+                        <ul className="divide-y divide-slate-100">
+                          {notifications.map((n) => (
+                            <li
+                              key={n.id}
+                              className="relative border-l-[3px] border-l-[#C99237]/70 pl-4 pr-4 py-3 transition hover:bg-slate-50/90"
+                            >
+                              <p className="text-[10px] font-bold uppercase tracking-wide text-[#C99237]">
+                                {actionLabel(n.action_type)}
+                              </p>
+                              <p className="mt-1 text-sm font-medium text-[#0C123A]">
+                                {n.action_reason}
+                              </p>
+                              <div className="mt-1.5 flex flex-wrap gap-x-2 text-[11px] text-slate-500">
+                                <span>{fmtLong(n.created_at)}</span>
+                                {n.performed_by_name ? (
+                                  <span>· {n.performed_by_name}</span>
+                                ) : null}
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    ) : exitProcessesReports.length > 0 ? (
+                      <p className="px-4 py-8 text-center text-[11px] text-slate-500">
+                        No roster log entries yet.
+                      </p>
+                    ) : null}
+                  </>
                 ) : null}
 
                 {activityTab === "leaves" ? (

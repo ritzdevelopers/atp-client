@@ -301,3 +301,302 @@ export async function correctionEmployeeExitProcess(
 
   return json as unknown as CorrectionEmployeeExitResponse;
 }
+
+export type UpdateEmployeeExitProcessStatusPayload = {
+  application_status: "pending" | "approved" | "rejected" | "in_progress";
+  exit_date?: string | null;
+  last_working_day?: string | null;
+  response_message?: string | null;
+  resolved_at?: string | null;
+  assets_handover_to_id?: number | string | null;
+};
+
+export type UpdateEmployeeExitProcessStatusResponse = {
+  success: boolean;
+  message?: string;
+  data?: Record<string, unknown>;
+};
+
+export async function updateEmployeeExitProcessStatus(
+  token: string,
+  orgId: number | string,
+  exitProcessId: number | string,
+  payload: UpdateEmployeeExitProcessStatusPayload,
+): Promise<UpdateEmployeeExitProcessStatusResponse> {
+  const q = new URLSearchParams({ org_id: String(orgId) });
+  const url = `${API_URL}/api/employee-exit/update-employee-exit-process-status/${encodeURIComponent(String(exitProcessId))}?${q.toString()}`;
+  const res = await fetch(url, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  let json: Record<string, unknown> = {};
+  try {
+    json = (await res.json()) as Record<string, unknown>;
+  } catch {
+    json = {};
+  }
+
+  if (!res.ok) {
+    const err = new Error(
+      (json.message as string) || "Failed to update exit process status",
+    ) as ApiError;
+    err.status = res.status;
+    throw err;
+  }
+
+  return json as unknown as UpdateEmployeeExitProcessStatusResponse;
+}
+
+/** Payload item for `/exit-in-process/:exit_process_id` → `exit_process_handler` */
+export type ExitAssetHandoverRow = {
+  asset_id: number | string;
+  handover_to: number | string;
+};
+
+export type EmployeeExitMoveInProgressPayload = {
+  application_status: "in_progress";
+  assets_handover_data: ExitAssetHandoverRow[];
+};
+
+export async function employeeExitMoveInProgress(
+  token: string,
+  orgId: number | string,
+  exitProcessId: number | string,
+  payload: EmployeeExitMoveInProgressPayload,
+): Promise<{ success: boolean; message?: string; data?: unknown }> {
+  const q = new URLSearchParams({ org_id: String(orgId) });
+  const url = `${API_URL}/api/employee-exit/exit-in-process/${encodeURIComponent(String(exitProcessId))}?${q.toString()}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  let json: Record<string, unknown> = {};
+  try {
+    json = (await res.json()) as Record<string, unknown>;
+  } catch {
+    json = {};
+  }
+
+  if (!res.ok) {
+    const err = new Error(
+      (json.message as string) || "Could not move exit process forward",
+    ) as ApiError;
+    err.status = res.status;
+    throw err;
+  }
+
+  return json as { success: boolean; message?: string; data?: unknown };
+}
+
+export type EmployeeExitCancelledPayload = {
+  application_status: string;
+  employee_id: number | string;
+  response_message: string;
+};
+
+export async function employeeExitCancelled(
+  token: string,
+  orgId: number | string,
+  exitProcessId: number | string,
+  payload: EmployeeExitCancelledPayload,
+): Promise<{ success: boolean; message?: string; data?: unknown }> {
+  const q = new URLSearchParams({ org_id: String(orgId) });
+  const url = `${API_URL}/api/employee-exit/exit-cancelled/${encodeURIComponent(String(exitProcessId))}?${q.toString()}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  let json: Record<string, unknown> = {};
+  try {
+    json = (await res.json()) as Record<string, unknown>;
+  } catch {
+    json = {};
+  }
+
+  if (!res.ok) {
+    const err = new Error(
+      (json.message as string) || "Could not reject exit process",
+    ) as ApiError;
+    err.status = res.status;
+    throw err;
+  }
+
+  return json as { success: boolean; message?: string; data?: unknown };
+}
+
+export type EmployeeExitCompletedPayload = {
+  application_status: string;
+  employee_id: number | string;
+  response_message: string;
+};
+
+export async function employeeExitCompleted(
+  token: string,
+  orgId: number | string,
+  exitProcessId: number | string,
+  payload: EmployeeExitCompletedPayload,
+): Promise<{ success: boolean; message?: string; data?: unknown }> {
+  const q = new URLSearchParams({ org_id: String(orgId) });
+  const url = `${API_URL}/api/employee-exit/exit-completed/${encodeURIComponent(String(exitProcessId))}?${q.toString()}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  let json: Record<string, unknown> = {};
+  try {
+    json = (await res.json()) as Record<string, unknown>;
+  } catch {
+    json = {};
+  }
+
+  if (!res.ok) {
+    const err = new Error(
+      (json.message as string) || "Could not approve exit process",
+    ) as ApiError;
+    err.status = res.status;
+    throw err;
+  }
+
+  return json as { success: boolean; message?: string; data?: unknown };
+}
+
+export type CreateEmployeeExitProcessHandoverQueryPayload = {
+  org_id: number | string;
+  employee_exit_process_id: number;
+  employee_id: number;
+  team_id?: number | string | null;
+  /** Ad-hoc handover row; satisfies API when asset_id is not used. */
+  custom_task_name: string;
+  remarks?: string | null;
+  /** MySQL DATETIME friendly, e.g. `YYYY-MM-DD HH:MM:SS`. */
+  handover_date: string;
+};
+
+export async function createEmployeeExitProcessHandoverQuery(
+  token: string,
+  payload: CreateEmployeeExitProcessHandoverQueryPayload,
+): Promise<{ success: boolean; message?: string; data?: unknown }> {
+  const res = await fetch(
+    `${API_URL}/api/employee-exit/create-employee-exit-process-handover-query`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        employee_exit_process_id: payload.employee_exit_process_id,
+        employee_id: payload.employee_id,
+        team_id: payload.team_id ?? null,
+        custom_task_name: payload.custom_task_name.trim(),
+        remarks: payload.remarks?.trim() || null,
+        handover_date: payload.handover_date,
+        org_id: payload.org_id,
+      }),
+    },
+  );
+
+  let json: Record<string, unknown> = {};
+  try {
+    json = (await res.json()) as Record<string, unknown>;
+  } catch {
+    json = {};
+  }
+
+  if (!res.ok) {
+    const err = new Error(
+      (json.message as string) || "Could not create handover query",
+    ) as ApiError;
+    err.status = res.status;
+    throw err;
+  }
+
+  return json as { success: boolean; message?: string; data?: unknown };
+}
+
+/** Matches `handover_query.handover_status` enum in the database. */
+export type EmployeeExitHandoverStatus =
+  | "pending"
+  | "handover_completed"
+  | "damaged"
+  | "missing";
+
+export type UpdateEmployeeExitProcessHandoverQueryBody = Partial<{
+  handover_status: EmployeeExitHandoverStatus;
+  remarks: string | null;
+  /** MySQL-friendly `YYYY-MM-DD HH:MM:SS` (omit to leave unchanged). */
+  handover_date: string | null;
+  custom_task_name: string | null;
+}>;
+
+export async function updateEmployeeExitProcessHandoverQuery(
+  token: string,
+  orgId: number | string,
+  employeeExitProcessId: number | string,
+  employeeId: number | string,
+  handoverQueryId: number | string,
+  body: UpdateEmployeeExitProcessHandoverQueryBody,
+): Promise<{ success: boolean; message?: string; data?: unknown }> {
+  const patch: Record<string, unknown> = { org_id: orgId };
+
+  if (body.handover_status !== undefined) {
+    patch.handover_status = body.handover_status;
+  }
+  if (body.remarks !== undefined) {
+    patch.remarks = body.remarks;
+  }
+  if (body.handover_date !== undefined) {
+    patch.handover_date = body.handover_date;
+  }
+  if (body.custom_task_name !== undefined) {
+    patch.custom_task_name = body.custom_task_name;
+  }
+
+  const path = `/api/employee-exit/employee-exit-process/${encodeURIComponent(String(employeeExitProcessId))}/handover-query/${encodeURIComponent(String(employeeId))}/${encodeURIComponent(String(handoverQueryId))}`;
+
+  const res = await fetch(`${API_URL}${path}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(patch),
+  });
+
+  let json: Record<string, unknown> = {};
+  try {
+    json = (await res.json()) as Record<string, unknown>;
+  } catch {
+    json = {};
+  }
+
+  if (!res.ok) {
+    const err = new Error(
+      (json.message as string) || "Could not update handover query",
+    ) as ApiError;
+    err.status = res.status;
+    throw err;
+  }
+
+  return json as { success: boolean; message?: string; data?: unknown };
+}
