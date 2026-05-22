@@ -246,6 +246,116 @@ export async function fetchEmployeeExitProcessById(
   return json as unknown as FetchEmployeeExitProcessDetailResponse;
 }
 
+/** Rows from GET `/assets-for-handover/:user_id` (`employee_assets` joined to exit process). */
+export type EmployeeHandoverAssetApiRow = {
+  id: number;
+  employee_id: number;
+  org_id: number;
+  asset_name?: string | null;
+  asset_summary?: string | null;
+  asset_type?: string | null;
+  asset_status?: string | null;
+  asset_image_url?: string | null;
+  is_returned?: unknown;
+  returned_to_id?: number | null;
+  handover_date_time?: string | null;
+  asset_given_by_id?: number;
+  employee_exit_process_id?: number | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+export async function fetchAssetsForHandoverOfEmployee(
+  token: string,
+  orgId: number | string,
+  exitingEmployeeUserId: number | string,
+  options?: { exit_process_id?: number | string },
+): Promise<{
+  success: boolean;
+  message?: string;
+  data: EmployeeHandoverAssetApiRow[];
+}> {
+  const q = new URLSearchParams({ org_id: String(orgId) });
+  if (options?.exit_process_id != null && options.exit_process_id !== "") {
+    q.set("exit_process_id", String(options.exit_process_id));
+  }
+  const url = `${API_URL}/api/employee-exit/assets-for-handover/${encodeURIComponent(
+    String(exitingEmployeeUserId),
+  )}?${q.toString()}`;
+  const res = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  let json: Record<string, unknown> = {};
+  try {
+    json = (await res.json()) as Record<string, unknown>;
+  } catch {
+    json = {};
+  }
+
+  if (!res.ok) {
+    const err = new Error(
+      (json.message as string) || "Failed to fetch handover assets",
+    ) as ApiError;
+    err.status = res.status;
+    throw err;
+  }
+
+  return json as unknown as {
+    success: boolean;
+    message?: string;
+    data: EmployeeHandoverAssetApiRow[];
+  };
+}
+
+export async function updateAssetHandoverReturnedStatus(
+  token: string,
+  orgId: number | string,
+  assetId: number | string,
+  isReturned: boolean,
+): Promise<{
+  success: boolean;
+  message?: string;
+  data?: { asset_id: number; is_returned: unknown };
+}> {
+  const url = `${API_URL}/api/employee-exit/asset-handover-status/${encodeURIComponent(String(assetId))}`;
+  const res = await fetch(url, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      org_id: orgId,
+      is_returned: isReturned ? 1 : 0,
+    }),
+  });
+
+  let json: Record<string, unknown> = {};
+  try {
+    json = (await res.json()) as Record<string, unknown>;
+  } catch {
+    json = {};
+  }
+
+  if (!res.ok) {
+    const err = new Error(
+      (json.message as string) ||
+        "Could not update asset return status",
+    ) as ApiError;
+    err.status = res.status;
+    throw err;
+  }
+
+  return json as unknown as {
+    success: boolean;
+    message?: string;
+    data?: { asset_id: number; is_returned: unknown };
+  };
+}
+
 export type CorrectionEmployeeExitPayload = {
   action_reason?: string | null;
   exit_date?: string | null;
@@ -440,7 +550,7 @@ export async function employeeExitCancelled(
 }
 
 export type EmployeeExitCompletedPayload = {
-  application_status: string;
+  application_status: "pending" | "approved" | "rejected" | "in_progress";
   employee_id: number | string;
   response_message: string;
 };

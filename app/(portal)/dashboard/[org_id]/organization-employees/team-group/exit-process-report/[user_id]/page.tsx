@@ -8,6 +8,7 @@ import {
   Building2,
   CalendarDays,
   ClipboardList,
+  Inbox,
   Layers,
   ListChecks,
   Loader2,
@@ -17,6 +18,8 @@ import {
   Plus,
   ShieldAlert,
   UserRound,
+  CircleCheck,
+  CircleX,
 } from "lucide-react";
 import {
   fetchTeamMemberExitProcessReport,
@@ -26,8 +29,11 @@ import {
 } from "@/services/orgTeams";
 import {
   createEmployeeExitProcessHandoverQuery,
+  fetchAssetsForHandoverOfEmployee,
   updateEmployeeExitProcessHandoverQuery,
+  updateAssetHandoverReturnedStatus,
   type EmployeeExitHandoverStatus,
+  type EmployeeHandoverAssetApiRow,
 } from "@/services/employeeExit";
 
 const HANDOVER_STATUS_OPTIONS = [
@@ -54,6 +60,13 @@ function fmtDateOnly(iso: string | null | undefined) {
   const d = new Date(ymd);
   if (Number.isNaN(d.getTime())) return raw;
   return d.toLocaleDateString(undefined, { dateStyle: "medium" });
+}
+
+function truthyReturned(v: unknown): boolean {
+  if (typeof v === "boolean") return v;
+  if (typeof v === "number") return v === 1;
+  if (typeof v === "string") return /^(1|true|yes)$/i.test(v.trim());
+  return false;
 }
 
 function exitApplicationPill(status: string | null | undefined) {
@@ -146,6 +159,21 @@ export default function TeamMemberExitProcessReportPage() {
     null,
   );
 
+  const [custodyHandoverAssets, setCustodyHandoverAssets] = useState<
+    EmployeeHandoverAssetApiRow[]
+  >([]);
+  const [custodyHandoverLoading, setCustodyHandoverLoading] = useState(false);
+  const [custodyHandoverError, setCustodyHandoverError] = useState<
+    string | null
+  >(null);
+
+  const [custodyAssetPatchingId, setCustodyAssetPatchingId] = useState<
+    number | null
+  >(null);
+  const [custodyAssetPatchErrorById, setCustodyAssetPatchErrorById] = useState<
+    Record<number, string>
+  >({});
+
   const teamGroupHref =
     `/dashboard/${orgId}/organization-employees/team-group`;
 
@@ -183,8 +211,117 @@ export default function TeamMemberExitProcessReportPage() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    const exitProcess = data?.exit_process;
+    if (
+      exitProcess?.employee_id == null ||
+      exitProcess.exit_process_id == null ||
+      !orgId.trim()
+    ) {
+      setCustodyHandoverAssets([]);
+      setCustodyHandoverError(null);
+      setCustodyHandoverLoading(false);
+      return;
+    }
+    const orgIdNum = Number(orgId);
+    if (Number.isNaN(orgIdNum)) {
+      setCustodyHandoverAssets([]);
+      setCustodyHandoverLoading(false);
+      return;
+    }
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setCustodyHandoverAssets([]);
+      setCustodyHandoverLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      setCustodyHandoverLoading(true);
+      setCustodyHandoverError(null);
+      try {
+        const res = await fetchAssetsForHandoverOfEmployee(
+          token,
+          orgIdNum,
+          exitProcess.employee_id,
+          { exit_process_id: exitProcess.exit_process_id },
+        );
+        if (!cancelled) {
+          setCustodyHandoverAssets(res.data ?? []);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setCustodyHandoverAssets([]);
+          setCustodyHandoverError(
+            e instanceof Error
+              ? e.message
+              : "Could not load your handover assets.",
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setCustodyHandoverLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [data?.exit_process, orgId]);
+
   const ep: TeamMemberExitReportProcess | null = data?.exit_process ?? null;
   const hq: TeamMemberExitReportHandoverRow[] = data?.handover_queries ?? [];
+
+  async function patchCustodyAssetReturned(
+    assetId: number,
+    nextIsReturned: boolean,
+  ): Promise<void> {
+    const exitProcess = data?.exit_process;
+    if (
+      exitProcess?.employee_id == null ||
+      exitProcess.exit_process_id == null
+    )
+      return;
+    const token = localStorage.getItem("token");
+    const orgIdNum = Number(orgId);
+    if (!token || Number.isNaN(orgIdNum)) return;
+
+    setCustodyAssetPatchErrorById((prev) => {
+      const copy = { ...prev };
+      delete copy[assetId];
+      return copy;
+    });
+
+    setCustodyAssetPatchingId(assetId);
+    try {
+      await updateAssetHandoverReturnedStatus(
+        token,
+        orgIdNum,
+        assetId,
+        nextIsReturned,
+      );
+      const refreshed = await fetchAssetsForHandoverOfEmployee(
+        token,
+        orgIdNum,
+        exitProcess.employee_id,
+        { exit_process_id: exitProcess.exit_process_id },
+      );
+      setCustodyHandoverAssets(refreshed.data ?? []);
+    } catch (e) {
+      setCustodyAssetPatchErrorById((prev) => ({
+        ...prev,
+        [assetId]:
+          e instanceof Error
+            ? e.message
+            : "Could not update return status.",
+      }));
+    } finally {
+      setCustodyAssetPatchingId(null);
+    }
+  }
 
   const submitHandoverQuery = async () => {
     if (!ep) return;
@@ -549,6 +686,142 @@ export default function TeamMemberExitProcessReportPage() {
                       <dd className="mt-1">{fmtLong(ep.resolved_at)}</dd>
                     </div>
                   </dl>
+                </div>
+              </section>
+
+              <section className="overflow-hidden rounded-[22px] border border-slate-200/90 bg-white shadow-[0_12px_40px_-12px_rgba(15,23,42,0.12)] ring-1 ring-slate-950/[0.04]">
+                <header className="border-b border-slate-100 bg-slate-50/90 px-5 py-4 sm:px-6">
+                  <h2 className="flex items-center gap-2 text-base font-semibold text-[#0C123A]">
+                    <Inbox className="h-4 w-4 text-violet-600" aria-hidden />
+                    Assets for your handover
+                    {!custodyHandoverLoading ? (
+                      <span className="font-normal text-slate-500">
+                        ({custodyHandoverAssets.length})
+                      </span>
+                    ) : null}
+                  </h2>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                    Assets from this exit where{" "}
+                    <span className="font-semibold text-slate-700">
+                      {ep.employee_name ?? `Employee #${ep.employee_id}`}
+                    </span>{" "}
+                    is listed as handing items to{" "}
+                    <span className="font-semibold text-slate-700">you</span> for
+                    this exit process. They update when custody is assigned to you from the
+                    team exit workspace for this employee.
+                  </p>
+                </header>
+                <div className="p-4 sm:p-6">
+                  {custodyHandoverLoading ? (
+                    <div className="flex flex-col items-center justify-center gap-2 py-10 text-sm text-slate-600">
+                      <Loader2 className="h-8 w-8 animate-spin text-violet-500" />
+                      Loading assets assigned to you…
+                    </div>
+                  ) : custodyHandoverError ? (
+                    <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
+                      {custodyHandoverError}
+                    </p>
+                  ) : custodyHandoverAssets.length === 0 ? (
+                    <p className="py-6 text-center text-sm text-slate-500">
+                      No assets show you as the handover recipient for this exit yet. When
+                      someone assigns custody to your account from the exit workspace,
+                      revisit this report to see them listed.
+                    </p>
+                  ) : (
+                    <ul className="divide-y divide-slate-100">
+                      {custodyHandoverAssets.map((row) => {
+                        const rowReturned = truthyReturned(row.is_returned);
+                        return (
+                          <li key={row.id} className="py-4 first:pt-0 last:pb-0">
+                            <div className="flex flex-wrap items-start justify-between gap-2">
+                              <p className="font-semibold text-[#0C123A]">
+                                {row.asset_name?.trim()
+                                  ? row.asset_name
+                                  : `#${row.id}`}
+                              </p>
+                              <span
+                                className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${
+                                  rowReturned
+                                    ? "bg-emerald-50 text-emerald-800 ring-emerald-200/80"
+                                    : "bg-violet-50 text-violet-800 ring-violet-200/80"
+                                }`}
+                              >
+                                {rowReturned ? "Returned" : "Outstanding"}
+                              </span>
+                            </div>
+                            {row.asset_summary?.trim() ? (
+                              <p className="mt-1 text-xs text-slate-600">
+                                {row.asset_summary}
+                              </p>
+                            ) : null}
+                            <dl className="mt-3 grid gap-1 text-xs text-slate-600 sm:grid-cols-2">
+                              <div>
+                                Type:{" "}
+                                <span className="font-medium text-slate-800">
+                                  {row.asset_type ?? "—"}
+                                </span>
+                              </div>
+                              <div>
+                                Asset status:{" "}
+                                <span className="font-medium capitalize text-slate-800">
+                                  {row.asset_status ?? "—"}
+                                </span>
+                              </div>
+                              <div className="sm:col-span-2">
+                                Handover logged:{" "}
+                                <span className="font-medium text-slate-800">
+                                  {fmtLong(row.handover_date_time)}
+                                </span>
+                              </div>
+                            </dl>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                disabled={
+                                  custodyAssetPatchingId === row.id ||
+                                  rowReturned === true
+                                }
+                                onClick={() =>
+                                  void patchCustodyAssetReturned(row.id, true)
+                                }
+                                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50/90 px-3 py-2 text-[11px] font-semibold text-emerald-900 shadow-sm transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-initial sm:min-w-[10rem]"
+                              >
+                                {custodyAssetPatchingId === row.id ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <CircleCheck className="h-3.5 w-3.5 shrink-0" />
+                                )}
+                                Returned successfully
+                              </button>
+                              <button
+                                type="button"
+                                disabled={
+                                  custodyAssetPatchingId === row.id ||
+                                  rowReturned === false
+                                }
+                                onClick={() =>
+                                  void patchCustodyAssetReturned(row.id, false)
+                                }
+                                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-initial sm:min-w-[10rem]"
+                              >
+                                {custodyAssetPatchingId === row.id ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <CircleX className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+                                )}
+                                Not returned
+                              </button>
+                            </div>
+                            {custodyAssetPatchErrorById[row.id] ? (
+                              <p className="mt-2 text-xs font-medium text-rose-600">
+                                {custodyAssetPatchErrorById[row.id]}
+                              </p>
+                            ) : null}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
                 </div>
               </section>
 

@@ -438,7 +438,7 @@ export default function EmployeeExitDetailPage() {
     setApproveBusy(true);
     try {
       await employeeExitCompleted(token, orgId, exitProcessId, {
-        application_status: "handover_completed",
+        application_status: "approved",
         employee_id: data.employee_id,
         response_message: approveMessage.trim(),
       });
@@ -1219,9 +1219,8 @@ export default function EmployeeExitDetailPage() {
                 Approve application
               </h2>
               <p className="mt-1 text-sm text-slate-500">
-                Calls exit completion with{" "}
-                <span className="font-mono text-xs">application_status: handover_completed</span> after
-                server checks assets and handover tasks.
+                Sets <span className="font-mono text-xs">application_status: approved</span>{" "}
+                after the server verifies assets and handover tasks.
               </p>
             </div>
             <div className="space-y-4 px-5 py-4">
