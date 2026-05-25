@@ -6,7 +6,7 @@ import {
   getLocalYmdFromDate,
   localYmdFromAttendanceValue,
 } from "@/lib/attendanceDates";
-import { BarChart3, Eye, RefreshCw } from "lucide-react";
+import { BarChart3, Eye, RefreshCw, Loader2, AlertCircle, Info, ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -52,6 +52,98 @@ function getDefaultMonthValue(): string {
   return `${y}-${m}`;
 }
 
+function formatMonthYearLabel(ym: string): string {
+  const [y, m] = ym.split("-");
+  const d = new Date(Number(y), Number(m) - 1, 1);
+  if (Number.isNaN(d.getTime())) return ym;
+  return d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+}
+
+function shiftMonthYear(ym: string, delta: number): string {
+  const [y, m] = ym.split("-").map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function zohoSelectCls() {
+  return "w-full rounded-lg border border-[#E4E7EC] bg-white px-3 py-2.5 text-[15px] text-[#1F2937] outline-none transition focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15 lg:text-sm";
+}
+
+function zohoSecondaryBtnCls(full = false) {
+  return `inline-flex min-h-[40px] items-center justify-center rounded-lg border border-[#E4E7EC] bg-white px-4 py-2 text-[14px] font-medium text-[#1F2937] transition active:scale-[0.98] hover:bg-[#F5F7FA] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full flex-1" : ""}`;
+}
+
+function mobileStatusBadgeCls(status: string | null | undefined): string {
+  const s = String(status || "").toLowerCase();
+  if (s.includes("late")) return "bg-[#FEF3E6] text-[#E8710A]";
+  if (s.includes("absent")) return "bg-[#FCE8E6] text-[#D93025]";
+  if (s.includes("half_day")) return "bg-[#E8F4FB] text-[#008CD3]";
+  if (s.includes("short_leave")) return "bg-[#FFF8E1] text-[#F9A825]";
+  if (s.includes("full_day")) return "bg-[#E6F4EA] text-[#0F9D58]";
+  return "bg-[#F5F7FA] text-[#6B7280]";
+}
+
+function formatStatusLabel(status: string | null | undefined): string {
+  const s = String(status || "").trim();
+  if (!s) return "—";
+  return s.replace(/_/g, " ");
+}
+
+type MobileAttendanceRowProps = {
+  row: AttendanceRow;
+};
+
+function MobileAttendanceRow({ row }: MobileAttendanceRowProps) {
+  const dateLabel = localYmdFromAttendanceValue(row.date) || "—";
+  const [y, m, d] = dateLabel.split("-");
+  const dayNum = d ? String(Number(d)).padStart(2, "0") : "--";
+  const monLabel = m
+    ? new Date(Number(y), Number(m) - 1, 1)
+        .toLocaleDateString(undefined, { month: "short" })
+        .toUpperCase()
+    : "---";
+  const hours = toNumberWorkingHours(row.working_time);
+  const statusCls = mobileStatusBadgeCls(row.status);
+
+  return (
+    <li>
+      <div className="px-4 py-3.5">
+        <div className="flex items-start gap-3">
+          <div
+            className={`flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-lg ${statusCls}`}
+          >
+            <span className="text-[10px] font-semibold leading-none">{monLabel}</span>
+            <span className="text-lg font-bold leading-tight">{dayNum}</span>
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-[15px] font-medium text-[#1F2937]">{dateLabel}</p>
+              <span
+                className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ${statusCls}`}
+              >
+                {formatStatusLabel(row.status)}
+              </span>
+            </div>
+            <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1 text-[13px] text-[#6B7280]">
+              <p>
+                <span className="text-[#9CA3AF]">In </span>
+                {formatAttendanceTimeLocal(row.check_in)}
+              </p>
+              <p>
+                <span className="text-[#9CA3AF]">Out </span>
+                {formatAttendanceTimeLocal(row.check_out)}
+              </p>
+            </div>
+            <p className="mt-1 text-[12px] font-medium tabular-nums text-[#008CD3]">
+              {hours.toFixed(2)}h recorded
+            </p>
+          </div>
+        </div>
+      </div>
+    </li>
+  );
+}
+
 export default function MyAttendanceHistoryPage() {
   const params = useParams();
   const orgId = String(params?.org_id ?? "");
@@ -69,6 +161,7 @@ export default function MyAttendanceHistoryPage() {
   const [error, setError] = useState<string | null>(null);
   const [rows, setRows] = useState<AttendanceRow[]>([]);
   const [meta, setMeta] = useState<{ page: number; limit: number }>({ page: 1, limit });
+  const [mobileMainTab, setMobileMainTab] = useState<"log" | "calendar" | "overview">("log");
 
   const [yStr, mStr] = monthYear.split("-");
   const year = yStr || String(new Date().getFullYear());
@@ -185,8 +278,303 @@ export default function MyAttendanceHistoryPage() {
 
   const hasNextPage = rows.length >= limit;
 
+  const mobileTabs = [
+    { id: "log" as const, label: "Log", count: rows.length },
+    { id: "calendar" as const, label: "Calendar" },
+    { id: "overview" as const, label: "Overview" },
+  ];
+
   return (
-    <section className="mx-auto max-w-[1400px] space-y-6 p-4 sm:p-6 lg:p-8">
+    <div className="min-h-full bg-[#F5F7FA] lg:bg-transparent">
+      {/* Mobile & tablet: Zoho admin portal style */}
+      <div className="lg:hidden">
+        <div className="sticky top-0 z-20 border-b border-[#E4E7EC] bg-white shadow-sm">
+          <div className="flex items-center gap-2 px-4 py-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#E8F4FB] text-[#008CD3]">
+              <BarChart3 className="h-5 w-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h1 className="truncate text-[17px] font-semibold text-[#1F2937]">My attendance</h1>
+              <p className="truncate text-[13px] text-[#6B7280]">
+                {loading
+                  ? "Loading…"
+                  : `${displayName} · ${formatMonthYearLabel(monthYear)}`}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void loadHistory(true)}
+              disabled={loading || refreshing}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#008CD3] active:bg-[#F5F7FA] disabled:opacity-50"
+              aria-label="Refresh attendance"
+            >
+              <RefreshCw className={`h-5 w-5 ${refreshing ? "animate-spin" : ""}`} />
+            </button>
+          </div>
+
+          <div className="px-4 pb-3">
+            <div className="flex rounded-lg bg-[#F5F7FA] p-1">
+              {mobileTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setMobileMainTab(tab.id)}
+                  className={`flex flex-1 items-center justify-center gap-1 rounded-md py-2 text-[12px] font-medium transition sm:text-[13px] ${
+                    mobileMainTab === tab.id
+                      ? "bg-white text-[#008CD3] shadow-sm"
+                      : "text-[#6B7280]"
+                  }`}
+                >
+                  {tab.label}
+                  {"count" in tab && tab.count != null ? (
+                    <span
+                      className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] ${
+                        mobileMainTab === tab.id
+                          ? "bg-[#E8F4FB] text-[#008CD3]"
+                          : "bg-[#E4E7EC] text-[#6B7280]"
+                      }`}
+                    >
+                      {tab.count > 99 ? "99+" : tab.count}
+                    </span>
+                  ) : null}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {mobileMainTab === "log" ? (
+            <div className="space-y-2.5 border-t border-[#E4E7EC] px-4 py-2.5">
+              <input
+                type="month"
+                value={monthYear}
+                onChange={(e) => {
+                  setMonthYear(e.target.value);
+                  setPage(1);
+                }}
+                className={zohoSelectCls()}
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <select
+                  value={status}
+                  onChange={(e) => {
+                    setStatus(e.target.value);
+                    setPage(1);
+                  }}
+                  className={zohoSelectCls()}
+                >
+                  <option value="">All statuses</option>
+                  <option value="full_day">Full day</option>
+                  <option value="late">Late</option>
+                  <option value="absent">Absent</option>
+                  <option value="half_day">Half day</option>
+                  <option value="short_leave">Short leave</option>
+                </select>
+                <select
+                  value={sort}
+                  onChange={(e) => {
+                    setSort(e.target.value as "DESC" | "ASC");
+                    setPage(1);
+                  }}
+                  className={zohoSelectCls()}
+                >
+                  <option value="DESC">Newest first</option>
+                  <option value="ASC">Oldest first</option>
+                </select>
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="mx-4 mt-3 flex items-start gap-2 rounded-lg border border-[#B3E5FC] bg-[#E8F4FB] px-3 py-2.5 text-[13px] text-[#0277BD]">
+          <Eye className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+          <p>
+            <span className="font-semibold">View only.</span> Personal attendance records — filters
+            reload your history from the server.
+          </p>
+        </div>
+
+        {error && !loading ? (
+          <div className="mx-4 mt-3 flex items-start gap-2 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-4 py-3 text-[14px] text-[#D93025]">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{error}</span>
+          </div>
+        ) : null}
+
+        {loading ? (
+          <div className="flex flex-col items-center justify-center gap-3 py-24 text-[#6B7280]">
+            <Loader2 className="h-9 w-9 animate-spin text-[#008CD3]" />
+            <p className="text-[15px]">Loading your attendance…</p>
+          </div>
+        ) : null}
+
+        {!loading && !error && mobileMainTab === "overview" ? (
+          <div className="space-y-3 p-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
+                <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">Full day</p>
+                <p className="mt-1 text-2xl font-semibold text-[#0F9D58]">{stats.fullDay}</p>
+              </div>
+              <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
+                <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">Late</p>
+                <p className="mt-1 text-2xl font-semibold text-[#E8710A]">{stats.late}</p>
+              </div>
+              <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
+                <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">Absent</p>
+                <p className="mt-1 text-2xl font-semibold text-[#D93025]">{stats.absent}</p>
+              </div>
+              <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
+                <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">Half day</p>
+                <p className="mt-1 text-2xl font-semibold text-[#008CD3]">{stats.halfDay}</p>
+              </div>
+            </div>
+            <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
+              <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                Recorded hours (page)
+              </p>
+              <p className="mt-1 text-3xl font-semibold text-[#008CD3]">{stats.totalHours.toFixed(1)}h</p>
+              <p className="mt-1 text-[14px] text-[#6B7280]">
+                Short leave: {stats.shortLeave} · Page {meta.page}
+              </p>
+            </div>
+            <div className="rounded-xl border border-[#E4E7EC] bg-[#E8F4FB] p-4">
+              <div className="flex gap-3">
+                <Info className="h-5 w-5 shrink-0 text-[#008CD3]" />
+                <p className="text-[14px] leading-relaxed text-[#4B5563]">
+                  Stats reflect the currently loaded page (up to {limit} rows). Use the Log tab for
+                  check-in/out details and the Calendar tab for a month heatmap.
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {!loading && !error && mobileMainTab === "calendar" ? (
+          <div className="space-y-3 p-4">
+            <div className="rounded-xl border border-[#E4E7EC] bg-white shadow-sm">
+              <div className="flex items-center justify-between border-b border-[#E4E7EC] px-4 py-3">
+                <div>
+                  <p className="text-[15px] font-semibold text-[#1F2937]">
+                    {formatMonthYearLabel(monthYear)}
+                  </p>
+                  <p className="text-[13px] text-[#6B7280]">Color-coded by status</p>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMonthYear(shiftMonthYear(monthYear, -1));
+                      setPage(1);
+                    }}
+                    className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#6B7280] active:bg-[#F5F7FA]"
+                    aria-label="Previous month"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMonthYear(shiftMonthYear(monthYear, 1));
+                      setPage(1);
+                    }}
+                    className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#6B7280] active:bg-[#F5F7FA]"
+                    aria-label="Next month"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+              <div className="px-4 py-3">
+                <div className="grid grid-cols-7 gap-1.5 text-center text-[11px] font-semibold text-[#6B7280]">
+                  {["S", "M", "T", "W", "T", "F", "S"].map((d, idx) => (
+                    <span key={`${d}-${idx}`}>{d}</span>
+                  ))}
+                </div>
+                <div className="mt-2 grid grid-cols-7 gap-1.5">
+                  {monthCalendar.map((cell, idx) => (
+                    <div
+                      key={idx}
+                      className={`flex aspect-square items-center justify-center rounded-lg text-[13px] font-semibold ${
+                        cell.dateNum == null
+                          ? "bg-transparent text-transparent"
+                          : statusColorClass(cell.row?.status)
+                      }`}
+                      title={cell.row?.status ? String(cell.row.status) : "No record"}
+                    >
+                      {cell.dateNum ?? ""}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2 border-t border-[#E4E7EC] px-4 py-3 text-[12px] text-[#6B7280]">
+                <p>
+                  <span className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full bg-[#0F9D58]" />
+                  Full day
+                </p>
+                <p>
+                  <span className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full bg-[#E8710A]" />
+                  Late
+                </p>
+                <p>
+                  <span className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full bg-[#D93025]" />
+                  Absent
+                </p>
+                <p>
+                  <span className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full bg-[#008CD3]" />
+                  Half day
+                </p>
+                <p className="col-span-2">
+                  <span className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full bg-[#F9A825]" />
+                  Short leave
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {!loading && !error && mobileMainTab === "log" && rows.length === 0 ? (
+          <div className="mx-4 mt-4 rounded-xl border border-dashed border-[#E4E7EC] bg-white px-6 py-16 text-center">
+            <CalendarDays className="mx-auto h-10 w-10 text-[#9CA3AF]" />
+            <p className="mt-4 text-[17px] font-semibold text-[#1F2937]">No records found</p>
+            <p className="mt-2 text-[14px] text-[#6B7280]">
+              Try another month or status filter.
+            </p>
+          </div>
+        ) : null}
+
+        {!loading && !error && mobileMainTab === "log" && rows.length > 0 ? (
+          <>
+            <ul className="mt-1 divide-y divide-[#E4E7EC] border-t border-[#E4E7EC] bg-white">
+              {rows.map((row) => (
+                <MobileAttendanceRow key={String(row.attendance_id)} row={row} />
+              ))}
+            </ul>
+            <div className="flex items-center gap-2 border-t border-[#E4E7EC] bg-white px-4 py-3">
+              <button
+                type="button"
+                disabled={page <= 1 || loading}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className={zohoSecondaryBtnCls(true)}
+              >
+                Previous
+              </button>
+              <span className="flex flex-1 items-center justify-center text-[13px] font-medium text-[#6B7280]">
+                Page {meta.page}
+              </span>
+              <button
+                type="button"
+                disabled={!hasNextPage || loading}
+                onClick={() => setPage((p) => p + 1)}
+                className={zohoSecondaryBtnCls(true)}
+              >
+                Next
+              </button>
+            </div>
+          </>
+        ) : null}
+      </div>
+
+      {/* Desktop layout (unchanged) */}
+      <section className="mx-auto hidden max-w-[1400px] space-y-6 p-4 sm:p-6 lg:block lg:p-8">
       <header className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
         <div className="border-b border-slate-100 bg-gradient-to-r from-slate-900/[0.03] via-white to-indigo-600/[0.06] px-6 py-6 sm:px-8 sm:py-8">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -465,5 +853,6 @@ export default function MyAttendanceHistoryPage() {
         </>
       ) : null}
     </section>
+    </div>
   );
 }

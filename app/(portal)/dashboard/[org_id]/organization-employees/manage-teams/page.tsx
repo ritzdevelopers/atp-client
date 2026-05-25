@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
+  ChevronRight,
   Crown,
   ExternalLink,
   Info,
@@ -16,6 +17,7 @@ import {
   UserMinus,
   UserPlus,
   Users,
+  X,
 } from "lucide-react";
 import { getAllOrgUsers, type OrgUserRow } from "@/services/adminUser";
 import {
@@ -36,6 +38,36 @@ function displayTeamTitle(raw: string) {
     .join(" ");
 }
 
+function teamInitials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+const WA_AVATAR_COLORS = [
+  "bg-[#DFE5E7] text-[#54656F]",
+  "bg-[#FFD279] text-[#7A4F01]",
+  "bg-[#FEAA57] text-[#7A3E00]",
+  "bg-[#A5B337] text-[#3D4A0A]",
+  "bg-[#35CD96] text-[#0B5E44]",
+  "bg-[#53BDEB] text-[#0B4F6E]",
+  "bg-[#E67EAB] text-[#6B2348]",
+  "bg-[#7F66FF] text-[#2E1F7A]",
+];
+
+function avatarColorClass(name: string) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i += 1) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return WA_AVATAR_COLORS[Math.abs(hash) % WA_AVATAR_COLORS.length];
+}
+
+function searchFieldCls() {
+  return "w-full rounded-lg border-0 bg-[#F0F2F5] py-2.5 pl-10 pr-4 text-[15px] text-[#111B21] outline-none transition placeholder:text-[#8696A0] focus:bg-white focus:ring-1 focus:ring-[#25D366]/40 lg:rounded-xl lg:border lg:border-slate-200 lg:py-2 lg:pl-10 lg:pr-3 lg:text-sm lg:focus:border-teal-500 lg:focus:ring-2 lg:focus:ring-teal-500/20";
+}
+
 function modalShell(
   title: string,
   onClose: () => void,
@@ -44,7 +76,7 @@ function modalShell(
 ) {
   return (
     <div
-      className="fixed inset-0 z-[1000] flex items-end justify-center bg-slate-900/45 p-4 backdrop-blur-[2px] sm:items-center"
+      className="fixed inset-0 z-[1000] flex items-end justify-center bg-[#111B21]/40 p-0 backdrop-blur-[1px] sm:items-center sm:bg-slate-900/45 sm:p-4 sm:backdrop-blur-[2px]"
       role="dialog"
       aria-modal="true"
       aria-labelledby="team-modal-title"
@@ -55,23 +87,28 @@ function modalShell(
         aria-label="Close dialog backdrop"
         onClick={onClose}
       />
-      <div className="relative max-h-[90vh] w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-2xl shadow-slate-400/30">
-        <div
-          className="border-b border-slate-100 px-5 py-4"
-          style={{ borderTop: "3px solid #0d9488" }}
-        >
+      <div className="relative flex max-h-[92dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:max-h-[90vh] sm:rounded-2xl sm:border sm:border-slate-200/90 sm:shadow-slate-400/30">
+        <div className="flex shrink-0 items-start justify-between bg-[#128C7E] px-4 py-3.5 sm:border-b sm:border-slate-100 sm:bg-white sm:px-5 sm:py-4 sm:[border-top:3px_solid_#0d9488]">
           <h2
             id="team-modal-title"
-            className="text-lg font-bold tracking-tight text-slate-900"
+            className="pr-8 text-[17px] font-medium leading-snug text-white sm:text-lg sm:font-bold sm:tracking-tight sm:text-slate-900"
           >
             {title}
           </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full text-white/90 active:bg-white/10 sm:hidden"
+            aria-label="Close"
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
-        <div className="max-h-[min(60vh,480px)] overflow-y-auto px-5 py-4">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:max-h-[min(60vh,480px)] sm:px-5">
           {children}
         </div>
         {footer ? (
-          <div className="border-t border-slate-100 bg-slate-50/80 px-5 py-3">
+          <div className="shrink-0 border-t border-[#E9EDEF] bg-white px-4 py-3 sm:border-slate-100 sm:bg-slate-50/80 sm:px-5">
             {footer}
           </div>
         ) : null}
@@ -101,6 +138,10 @@ export default function ManageTeamsPage() {
   const [adminSearch, setAdminSearch] = useState("");
   const [updateName, setUpdateName] = useState("");
   const [updateInfo, setUpdateInfo] = useState("");
+  const [teamSearch, setTeamSearch] = useState("");
+  const [mobileActionsTeam, setMobileActionsTeam] = useState<OrgTeamRow | null>(
+    null,
+  );
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -186,6 +227,27 @@ export default function ManageTeamsPage() {
     });
   }, [focusTeam, adminSearch]);
 
+  const filteredTeams = useMemo(() => {
+    const q = teamSearch.trim().toLowerCase();
+    if (!q) return teams;
+    return teams.filter((team) => {
+      const name = team.team_name.toLowerCase();
+      const info = String(team.team_info ?? "").toLowerCase();
+      const admin = String(team.admin_name ?? "").toLowerCase();
+      return name.includes(q) || info.includes(q) || admin.includes(q);
+    });
+  }, [teams, teamSearch]);
+
+  function openMobileAction(team: OrgTeamRow, kind: ModalKind) {
+    setMobileActionsTeam(null);
+    setFocusTeam(team);
+    if (kind === "update") {
+      setUpdateName(team.team_name);
+      setUpdateInfo(team.team_info ?? "");
+    }
+    setModal(kind);
+  }
+
   async function run(action: () => Promise<void>) {
     setBusy(true);
     setBanner(null);
@@ -205,8 +267,52 @@ export default function ManageTeamsPage() {
   }
 
   return (
-    <div className="min-h-full bg-gradient-to-b from-slate-50 via-white to-slate-50/90">
-      <div className="border-b border-slate-200/80 bg-white/80 backdrop-blur-md">
+    <div className="min-h-full bg-[#F0F2F5] lg:bg-gradient-to-b lg:from-slate-50 lg:via-white lg:to-slate-50/90">
+      {/* Mobile & tablet: WhatsApp-style header */}
+      <div className="sticky top-0 z-20 bg-[#128C7E] text-white shadow-sm lg:hidden">
+        <div className="flex items-center gap-1 px-1 py-2">
+          <div className="min-w-0 flex-1 px-2 py-1">
+            <h1 className="truncate text-[17px] font-medium leading-tight">
+              Teams
+            </h1>
+            <p className="truncate text-[13px] text-white/75">
+              {loading
+                ? "Loading…"
+                : `${teams.length} team${teams.length === 1 ? "" : "s"} in your org`}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void loadAll()}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white transition active:bg-white/10"
+            aria-label="Refresh teams"
+          >
+            <RefreshCw className={`h-5 w-5 ${loading ? "animate-spin" : ""}`} />
+          </button>
+          <Link
+            href={`/dashboard/${orgId}/organization-employees/create-team`}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white transition active:bg-white/10"
+            aria-label="Create new team"
+          >
+            <PlusCircle className="h-5 w-5" />
+          </Link>
+        </div>
+        <div className="bg-white px-3 py-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8696A0]" />
+            <input
+              type="search"
+              className={searchFieldCls()}
+              placeholder="Search teams"
+              value={teamSearch}
+              onChange={(e) => setTeamSearch(e.target.value)}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Desktop header */}
+      <div className="hidden border-b border-slate-200/80 bg-white/80 backdrop-blur-md lg:block">
         <div className="mx-auto max-w-6xl px-6 py-8">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
@@ -245,7 +351,95 @@ export default function ManageTeamsPage() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-6xl px-6 py-8">
+      {/* Mobile content */}
+      <div className="lg:hidden">
+        {banner ? (
+          <div
+            className={`mx-3 mt-3 rounded-lg px-4 py-3 text-[14px] ${
+              banner.type === "ok"
+                ? "bg-[#E7FCE3] text-[#0B5E44]"
+                : "bg-[#FFECEC] text-[#8B1A1A]"
+            }`}
+            role="status"
+          >
+            {banner.text}
+          </div>
+        ) : null}
+
+        {loading && teams.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-3 py-24 text-[#667781]">
+            <Loader2 className="h-9 w-9 animate-spin text-[#128C7E]" />
+            <p className="text-[15px]">Loading teams…</p>
+          </div>
+        ) : teams.length === 0 ? (
+          banner?.type === "err" ? (
+            <div className="mx-3 mt-4 rounded-lg bg-white px-6 py-12 text-center text-[15px] text-[#667781]">
+              Teams could not be loaded. Tap refresh or check your connection.
+            </div>
+          ) : (
+            <div className="mx-3 mt-4 rounded-lg bg-white px-6 py-16 text-center">
+              <Info className="mx-auto h-10 w-10 text-[#8696A0]" />
+              <p className="mt-4 text-[17px] font-medium text-[#111B21]">
+                No teams yet
+              </p>
+              <p className="mt-2 text-[14px] text-[#667781]">
+                Create your first team and assign an admin.
+              </p>
+              <Link
+                href={`/dashboard/${orgId}/organization-employees/create-team`}
+                className="mt-6 inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-[#25D366] px-5 py-2.5 text-[15px] font-medium text-white active:scale-[0.98]"
+              >
+                <PlusCircle className="h-4 w-4" />
+                Create team
+              </Link>
+            </div>
+          )
+        ) : filteredTeams.length === 0 ? (
+          <div className="px-4 py-16 text-center text-[15px] text-[#667781]">
+            No teams match your search.
+          </div>
+        ) : (
+          <ul className="mt-1 divide-y divide-[#E9EDEF] bg-white">
+            {filteredTeams.map((team) => {
+              const title = displayTeamTitle(team.team_name);
+              return (
+                <li key={team.team_id}>
+                  <button
+                    type="button"
+                    onClick={() => setMobileActionsTeam(team)}
+                    className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition active:bg-[#F0F2F5]"
+                  >
+                    <span
+                      className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-medium ${avatarColorClass(title)}`}
+                      aria-hidden
+                    >
+                      {teamInitials(title)}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[17px] text-[#111B21]">
+                        {title}
+                      </p>
+                      <p className="truncate text-[14px] text-[#667781]">
+                        {team.total_number_of_members} members ·{" "}
+                        {team.admin_name ?? `User #${team.admin_id}`}
+                      </p>
+                      {team.team_info ? (
+                        <p className="mt-0.5 truncate text-[13px] text-[#8696A0]">
+                          {team.team_info}
+                        </p>
+                      ) : null}
+                    </div>
+                    <ChevronRight className="h-5 w-5 shrink-0 text-[#8696A0]" />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+
+      {/* Desktop content */}
+      <div className="mx-auto hidden max-w-6xl px-6 py-8 lg:block">
         {banner ? (
           <div
             className={`mb-6 rounded-xl border px-4 py-3 text-sm ${
@@ -382,6 +576,128 @@ export default function ManageTeamsPage() {
         )}
       </div>
 
+      {/* Mobile: team action sheet */}
+      {mobileActionsTeam ? (
+        <div className="fixed inset-0 z-[999] lg:hidden">
+          <button
+            type="button"
+            className="absolute inset-0 bg-[#111B21]/40"
+            aria-label="Close menu"
+            onClick={() => setMobileActionsTeam(null)}
+          />
+          <div className="absolute inset-x-0 bottom-0 max-h-[85dvh] overflow-hidden rounded-t-2xl bg-white pb-[calc(4.5rem+env(safe-area-inset-bottom))] shadow-2xl">
+            <div className="bg-[#128C7E] px-4 py-4">
+              <div className="flex items-center gap-3">
+                <span
+                  className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-medium ${avatarColorClass(displayTeamTitle(mobileActionsTeam.team_name))}`}
+                >
+                  {teamInitials(displayTeamTitle(mobileActionsTeam.team_name))}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[17px] font-medium text-white">
+                    {displayTeamTitle(mobileActionsTeam.team_name)}
+                  </p>
+                  <p className="truncate text-[13px] text-white/75">
+                    {mobileActionsTeam.total_number_of_members} members
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setMobileActionsTeam(null)}
+                  className="flex h-9 w-9 items-center justify-center rounded-full text-white/90 active:bg-white/10"
+                  aria-label="Close"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+            <ul className="divide-y divide-[#E9EDEF]">
+              {(
+                [
+                  {
+                    label: "Add member",
+                    icon: UserPlus,
+                    action: () => openMobileAction(mobileActionsTeam, "add"),
+                  },
+                  {
+                    label: "Change admin",
+                    icon: Crown,
+                    action: () => openMobileAction(mobileActionsTeam, "admin"),
+                  },
+                  {
+                    label: "Update team info",
+                    icon: Settings2,
+                    action: () => openMobileAction(mobileActionsTeam, "update"),
+                  },
+                  {
+                    label: "View full team",
+                    icon: ExternalLink,
+                    href: `/dashboard/${orgId}/organization-employees/teams/${mobileActionsTeam.team_id}`,
+                  },
+                  {
+                    label: "Remove member",
+                    icon: UserMinus,
+                    action: () => openMobileAction(mobileActionsTeam, "remove"),
+                    danger: true,
+                  },
+                ] as const
+              ).map((item) => {
+                const Icon = item.icon;
+                const rowCls =
+                  "flex w-full items-center gap-4 px-4 py-4 text-left transition active:bg-[#F0F2F5]";
+                const isDanger = "danger" in item && item.danger;
+                const content = (
+                  <>
+                    <span
+                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
+                        isDanger
+                          ? "bg-[#FFECEC] text-[#C62828]"
+                          : "bg-[#F0F2F5] text-[#54656F]"
+                      }`}
+                    >
+                      <Icon className="h-5 w-5" />
+                    </span>
+                    <span
+                      className={`text-[16px] ${
+                        isDanger ? "text-[#C62828]" : "text-[#111B21]"
+                      }`}
+                    >
+                      {item.label}
+                    </span>
+                  </>
+                );
+                if ("href" in item && item.href) {
+                  return (
+                    <li key={item.label}>
+                      <Link
+                        href={item.href}
+                        className={rowCls}
+                        onClick={() => setMobileActionsTeam(null)}
+                      >
+                        {content}
+                      </Link>
+                    </li>
+                  );
+                }
+                return (
+                  <li key={item.label}>
+                    <button
+                      type="button"
+                      className={rowCls}
+                      onClick={() => {
+                        if ("action" in item) item.action();
+                      }}
+                    >
+                      {content}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </div>
+      ) : null}
+
       {modal && focusTeam
         ? (() => {
             const team = focusTeam;
@@ -392,58 +708,66 @@ export default function ManageTeamsPage() {
                 "Add member — " + displayTeamTitle(team.team_name),
                 closeModal,
                 <>
-                  <p className="text-sm text-slate-600">
+                  <p className="text-[14px] text-[#667781] lg:text-sm lg:text-slate-600">
                     Only employees who are not already on this team are listed.
                   </p>
                   <div className="relative mt-3">
-                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8696A0]" />
                     <input
                       type="search"
-                      className="w-full rounded-xl border border-slate-200 py-2 pl-10 pr-3 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20"
-                      placeholder="Search name or email…"
+                      className={searchFieldCls()}
+                      placeholder="Search name or email"
                       value={addSearch}
                       onChange={(e) => setAddSearch(e.target.value)}
                     />
                   </div>
-                  <ul className="mt-3 max-h-64 space-y-2 overflow-y-auto">
+                  <ul className="mt-3 max-h-[min(50dvh,320px)] divide-y divide-[#E9EDEF] overflow-y-auto lg:max-h-64 lg:space-y-2 lg:divide-y-0">
                     {addCandidates.length === 0 ? (
-                      <li className="py-8 text-center text-sm text-slate-500">
+                      <li className="py-10 text-center text-[15px] text-[#667781] lg:py-8 lg:text-sm lg:text-slate-500">
                         No matches.
                       </li>
                     ) : (
-                      addCandidates.map((u) => (
-                        <li
-                          key={String(u.id)}
-                          className="flex items-center justify-between gap-2 rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-2"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <div className="truncate text-sm font-medium text-slate-900">
-                              {u.user_name}
-                            </div>
-                            <div className="truncate text-xs text-slate-500">
-                              {u.user_email}
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() =>
-                              run(async () => {
-                                const t = token();
-                                if (!t) throw new Error("Sign in required.");
-                                await addMemberToOrgTeam(
-                                  t,
-                                  team.team_id,
-                                  u.id as number | string,
-                                );
-                              })
-                            }
-                            className="shrink-0 rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
+                      addCandidates.map((u) => {
+                        const name = String(u.user_name ?? "Unknown");
+                        return (
+                          <li
+                            key={String(u.id)}
+                            className="flex items-center gap-3 py-3 lg:justify-between lg:gap-2 lg:rounded-xl lg:border lg:border-slate-100 lg:bg-slate-50/80 lg:px-3 lg:py-2"
                           >
-                            Add
-                          </button>
-                        </li>
-                      ))
+                            <span
+                              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-medium ${avatarColorClass(name)}`}
+                            >
+                              {teamInitials(name)}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate text-[16px] text-[#111B21] lg:text-sm lg:font-medium lg:text-slate-900">
+                                {u.user_name}
+                              </div>
+                              <div className="truncate text-[14px] text-[#667781] lg:text-xs lg:text-slate-500">
+                                {u.user_email}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() =>
+                                run(async () => {
+                                  const t = token();
+                                  if (!t) throw new Error("Sign in required.");
+                                  await addMemberToOrgTeam(
+                                    t,
+                                    team.team_id,
+                                    u.id as number | string,
+                                  );
+                                })
+                              }
+                              className="shrink-0 rounded-lg bg-[#25D366] px-4 py-2 text-[13px] font-medium text-white active:scale-[0.98] disabled:opacity-50 lg:bg-teal-600 lg:px-3 lg:py-1.5 lg:text-xs lg:font-semibold lg:hover:bg-teal-700"
+                            >
+                              Add
+                            </button>
+                          </li>
+                        );
+                      })
                     )}
                   </ul>
                 </>,
@@ -456,31 +780,31 @@ export default function ManageTeamsPage() {
                 "Remove member — " + displayTeamTitle(team.team_name),
                 closeModal,
                 <>
-                  <p className="text-sm text-rose-700/90">
+                  <p className="text-[14px] text-[#C62828] lg:text-sm lg:text-rose-700/90">
                     Removes the member from this team (historical rows stay on
                     the server).
                   </p>
                   <div className="relative mt-3">
-                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8696A0]" />
                     <input
                       type="search"
-                      className="w-full rounded-xl border border-slate-200 py-2 pl-10 pr-3 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20"
-                      placeholder="Search member…"
+                      className={searchFieldCls()}
+                      placeholder="Search member"
                       value={removeSearch}
                       onChange={(e) => setRemoveSearch(e.target.value)}
                     />
                   </div>
-                  <ul className="mt-3 max-h-64 space-y-2 overflow-y-auto">
+                  <ul className="mt-3 max-h-[min(50dvh,320px)] divide-y divide-[#E9EDEF] overflow-y-auto lg:max-h-64 lg:space-y-2 lg:divide-y-0">
                     {removeCandidates.map((m) => (
                       <li
                         key={m.team_member_id}
-                        className="flex items-center justify-between gap-2 rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-2"
+                        className="flex items-center gap-3 py-3 lg:justify-between lg:gap-2 lg:rounded-xl lg:border lg:border-slate-100 lg:bg-slate-50/80 lg:px-3 lg:py-2"
                       >
-                        <div>
-                          <div className="text-sm font-medium text-slate-900">
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-[16px] text-[#111B21] lg:text-sm lg:font-medium lg:text-slate-900">
                             {m.user_name}
                           </div>
-                          <div className="text-xs text-slate-500">
+                          <div className="truncate text-[14px] text-[#667781] lg:text-xs lg:text-slate-500">
                             {m.user_email}
                           </div>
                         </div>
@@ -503,7 +827,7 @@ export default function ManageTeamsPage() {
                               );
                             })
                           }
-                          className="inline-flex items-center gap-1 rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-40"
+                          className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-[#C62828] px-3 py-2 text-[13px] font-medium text-white active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 lg:bg-rose-600 lg:py-1.5 lg:text-xs lg:font-semibold lg:hover:bg-rose-700"
                         >
                           <Trash2 className="h-3 w-3" />
                           Remove
@@ -521,24 +845,24 @@ export default function ManageTeamsPage() {
                 "Change admin — " + displayTeamTitle(team.team_name),
                 closeModal,
                 <>
-                  <p className="text-sm text-slate-600">
+                  <p className="text-[14px] text-[#667781] lg:text-sm lg:text-slate-600">
                     New admin must currently be an active member of the team.
                   </p>
                   <div className="relative mt-3">
-                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8696A0]" />
                     <input
                       type="search"
-                      className="w-full rounded-xl border border-slate-200 py-2 pl-10 pr-3 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20"
-                      placeholder="Search member…"
+                      className={searchFieldCls()}
+                      placeholder="Search member"
                       value={adminSearch}
                       onChange={(e) => setAdminSearch(e.target.value)}
                     />
                   </div>
-                  <ul className="mt-3 max-h-64 space-y-2 overflow-y-auto">
+                  <ul className="mt-3 max-h-[min(50dvh,320px)] divide-y divide-[#E9EDEF] overflow-y-auto lg:max-h-64 lg:space-y-2 lg:divide-y-0">
                     {adminCandidates.filter(
                       (m) => Number(m.user_id) !== Number(team.admin_id),
                     ).length === 0 ? (
-                      <li className="py-8 text-center text-sm text-slate-500">
+                      <li className="py-10 text-center text-[15px] text-[#667781] lg:py-8 lg:text-sm lg:text-slate-500">
                         No other active members to promote. Add a member first.
                       </li>
                     ) : (
@@ -550,9 +874,9 @@ export default function ManageTeamsPage() {
                         .map((m) => (
                         <li
                           key={m.team_member_id}
-                          className="flex items-center justify-between gap-2 rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-2"
+                          className="flex items-center gap-3 py-3 lg:justify-between lg:gap-2 lg:rounded-xl lg:border lg:border-slate-100 lg:bg-slate-50/80 lg:px-3 lg:py-2"
                         >
-                          <span className="text-sm font-medium text-slate-900">
+                          <span className="truncate text-[16px] text-[#111B21] lg:text-sm lg:font-medium lg:text-slate-900">
                             {m.user_name}
                           </span>
                           <button
@@ -568,7 +892,7 @@ export default function ManageTeamsPage() {
                                 });
                               })
                             }
-                            className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-slate-900 hover:bg-amber-400 disabled:opacity-50"
+                            className="shrink-0 rounded-lg bg-[#FFB74D] px-3 py-2 text-[13px] font-medium text-[#111B21] active:scale-[0.98] disabled:opacity-50 lg:bg-amber-500 lg:py-1.5 lg:text-xs lg:font-semibold lg:hover:bg-amber-400"
                           >
                             Make admin
                           </button>
@@ -586,19 +910,19 @@ export default function ManageTeamsPage() {
                 "Update team — " + displayTeamTitle(team.team_name),
                 closeModal,
                 <>
-                  <label className="mb-1 block text-xs font-semibold uppercase text-slate-500">
+                  <label className="mb-1 block text-[13px] font-medium uppercase tracking-wide text-[#667781] lg:text-xs lg:font-semibold lg:text-slate-500">
                     Name
                   </label>
                   <input
-                    className="mb-4 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20"
+                    className="mb-4 w-full rounded-lg border-0 bg-[#F0F2F5] px-3 py-3 text-[15px] text-[#111B21] outline-none focus:bg-white focus:ring-1 focus:ring-[#25D366]/40 lg:rounded-xl lg:border lg:border-slate-200 lg:bg-white lg:py-2 lg:text-sm lg:focus:border-teal-500 lg:focus:ring-2 lg:focus:ring-teal-500/20"
                     value={updateName}
                     onChange={(e) => setUpdateName(e.target.value)}
                   />
-                  <label className="mb-1 block text-xs font-semibold uppercase text-slate-500">
+                  <label className="mb-1 block text-[13px] font-medium uppercase tracking-wide text-[#667781] lg:text-xs lg:font-semibold lg:text-slate-500">
                     Description
                   </label>
                   <textarea
-                    className="min-h-[100px] w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20"
+                    className="min-h-[100px] w-full rounded-lg border-0 bg-[#F0F2F5] px-3 py-3 text-[15px] text-[#111B21] outline-none focus:bg-white focus:ring-1 focus:ring-[#25D366]/40 lg:rounded-xl lg:border lg:border-slate-200 lg:bg-white lg:py-2 lg:text-sm lg:focus:border-teal-500 lg:focus:ring-2 lg:focus:ring-teal-500/20"
                     value={updateInfo}
                     onChange={(e) => setUpdateInfo(e.target.value)}
                   />
@@ -617,7 +941,7 @@ export default function ManageTeamsPage() {
                       });
                     })
                   }
-                  className="w-full rounded-xl bg-teal-600 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
+                  className="w-full rounded-lg bg-[#25D366] py-3 text-[15px] font-medium text-white active:scale-[0.98] disabled:opacity-50 lg:rounded-xl lg:bg-teal-600 lg:py-2.5 lg:text-sm lg:font-semibold lg:hover:bg-teal-700"
                 >
                   Save changes
                 </button>,

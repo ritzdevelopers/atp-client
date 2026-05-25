@@ -2,6 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
+import {
+  Check,
+  ChevronRight,
+  Loader2,
+  Puzzle,
+  RefreshCw,
+  Search,
+  Shield,
+} from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
@@ -41,6 +50,58 @@ function rolesVisibleInUi(rolesList: RoleRow[]): RoleRow[] {
   return rolesList.filter((r) => !isAdminRoleName(r.role_name));
 }
 
+const WA_AVATAR_COLORS = [
+  "bg-[#DFE5E7] text-[#54656F]",
+  "bg-[#FFD279] text-[#7A4F01]",
+  "bg-[#FEAA57] text-[#7A3E00]",
+  "bg-[#A5B337] text-[#3D4A0A]",
+  "bg-[#35CD96] text-[#0B5E44]",
+  "bg-[#53BDEB] text-[#0B4F6E]",
+  "bg-[#E67EAB] text-[#6B2348]",
+  "bg-[#7F66FF] text-[#2E1F7A]",
+];
+
+function avatarColorClass(name: string) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i += 1) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return WA_AVATAR_COLORS[Math.abs(hash) % WA_AVATAR_COLORS.length];
+}
+
+function roleInitials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function featureInitials(name: string) {
+  const cleaned = name.trim();
+  if (!cleaned) return "?";
+  return cleaned.slice(0, 2).toUpperCase();
+}
+
+function searchFieldCls() {
+  return "w-full rounded-lg border-0 bg-[#F0F2F5] py-2.5 pl-10 pr-4 text-[15px] text-[#111B21] outline-none transition placeholder:text-[#8696A0] focus:bg-white focus:ring-1 focus:ring-[#25D366]/40 lg:rounded-lg lg:border lg:border-slate-200 lg:bg-white lg:py-2 lg:pl-3 lg:text-sm lg:focus:ring-2 lg:focus:ring-indigo-200";
+}
+
+function waPrimaryBtnCls() {
+  return "inline-flex min-h-[40px] shrink-0 items-center justify-center rounded-lg bg-[#25D366] px-4 py-2 text-[14px] font-medium text-white transition active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 lg:rounded-lg lg:bg-[#0C123A] lg:px-4 lg:py-2 lg:text-sm lg:font-semibold lg:hover:bg-[#151e59]";
+}
+
+function waDangerBtnCls() {
+  return "inline-flex min-h-[40px] shrink-0 items-center justify-center rounded-lg border border-[#FFCDD2] bg-[#FFECEC] px-4 py-2 text-[14px] font-medium text-[#C62828] transition active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 lg:rounded-lg lg:border-red-200 lg:bg-red-50 lg:text-sm lg:font-semibold lg:text-red-800 lg:hover:bg-red-100";
+}
+
+function displayRoleName(role: RoleRow) {
+  return role.role_name || `Role #${role.id}`;
+}
+
+function displayFeatureTitle(feature: FeatureRow) {
+  return feature.feature_name || feature.feature_key || `Feature #${feature.id}`;
+}
+
 export default function AssignFeaturesRoleWisePage() {
   const params = useParams();
   const orgId = Number(params?.org_id);
@@ -60,6 +121,7 @@ export default function AssignFeaturesRoleWisePage() {
   const [assigningFeatureId, setAssigningFeatureId] = useState<number | string | null>(null);
   const [updatingKey, setUpdatingKey] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [mobileMainTab, setMobileMainTab] = useState<"roles" | "features">("roles");
 
   const mappingByFeatureId = useMemo(() => {
     const m = new Map<number, MappingRow>();
@@ -264,8 +326,320 @@ export default function AssignFeaturesRoleWisePage() {
 
   const initialLoading = rolesLoading || featuresLoading;
 
+  async function refreshAll() {
+    if (!orgId || Number.isNaN(orgId)) return;
+    setPageError(null);
+    setRolesLoading(true);
+    setFeaturesLoading(true);
+    try {
+      const [rolesData, featuresData] = await Promise.all([loadRoles(), loadFeatures()]);
+      const visibleRoles = rolesVisibleInUi(rolesData);
+      setRoles(visibleRoles);
+      setFeatures(featuresData);
+      setSelectedRoleId((prev) => {
+        if (visibleRoles.length === 0) return null;
+        if (prev != null && visibleRoles.some((r) => Number(r.id) === prev)) return prev;
+        return Number(visibleRoles[0].id);
+      });
+    } catch (e) {
+      setPageError(e instanceof Error ? e.message : "Could not load page data.");
+      setRoles([]);
+      setFeatures([]);
+    } finally {
+      setRolesLoading(false);
+      setFeaturesLoading(false);
+    }
+  }
+
+  function selectRole(id: number) {
+    setSelectedRoleId(id);
+    setMobileMainTab("features");
+  }
+
+  const assignedFeatureCount = mappings.length;
+
+  const mobileTabs: Array<{
+    id: "roles" | "features";
+    label: string;
+    badge?: number;
+  }> = [
+    { id: "roles", label: "Roles", badge: roles.length },
+    {
+      id: "features",
+      label: "Features",
+      badge: selectedRole ? assignedFeatureCount : undefined,
+    },
+  ];
+
+  function renderFeatureActions(feature: FeatureRow) {
+    const fid = Number(feature.id);
+    const mapping = !Number.isNaN(fid) ? mappingByFeatureId.get(fid) : undefined;
+    const updating =
+      updatingKey === `${selectedRoleId}:${feature.id}` ||
+      updatingKey === `${selectedRoleId}:${fid}`;
+
+    if (mapping) {
+      return (
+        <button
+          type="button"
+          disabled={updating || assigningFeatureId !== null}
+          onClick={() => void removeFeatureAccessFromRole(feature.id)}
+          className={waDangerBtnCls()}
+        >
+          {updating ? "Removing…" : "Remove"}
+        </button>
+      );
+    }
+
+    return (
+      <button
+        type="button"
+        disabled={assigningFeatureId !== null}
+        onClick={() => void assignFeatureToRole(feature.id)}
+        className={waPrimaryBtnCls()}
+      >
+        {assigningFeatureId !== null && String(assigningFeatureId) === String(feature.id)
+          ? "Assigning…"
+          : "Assign"}
+      </button>
+    );
+  }
+
   return (
-    <section className="space-y-6 p-4 sm:p-6">
+    <section className="min-h-full bg-[#F0F2F5] lg:bg-transparent lg:space-y-6 lg:p-4 lg:sm:p-6">
+      {/* Mobile & tablet: WhatsApp-style shell */}
+      <div className="lg:hidden">
+        <div className="sticky top-0 z-20 bg-[#128C7E] text-white shadow-sm">
+          <div className="flex items-center gap-1 px-1 py-2">
+            <div className="min-w-0 flex-1 px-2 py-1">
+              <h1 className="truncate text-[17px] font-medium leading-tight">
+                Role features
+              </h1>
+              <p className="truncate text-[13px] text-white/75">
+                {initialLoading
+                  ? "Loading…"
+                  : selectedRole
+                    ? `${displayRoleName(selectedRole)} · ${assignedFeatureCount} assigned`
+                    : `${roles.length} roles · ${features.length} features`}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void refreshAll()}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full active:bg-white/10"
+              aria-label="Refresh"
+            >
+              <RefreshCw
+                className={`h-5 w-5 ${initialLoading || mappingsLoading ? "animate-spin" : ""}`}
+              />
+            </button>
+          </div>
+          <div className="flex overflow-x-auto border-t border-white/10 [scrollbar-width:none]">
+            {mobileTabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setMobileMainTab(tab.id)}
+                className={`relative shrink-0 px-4 py-3 text-[13px] font-medium transition ${
+                  mobileMainTab === tab.id
+                    ? "border-b-2 border-white text-white"
+                    : "border-b-2 border-transparent text-white/70"
+                }`}
+              >
+                {tab.label}
+                {tab.badge != null && tab.badge > 0 ? (
+                  <span className="ml-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-white/20 px-1 text-[11px]">
+                    {tab.badge > 9 ? "9+" : tab.badge}
+                  </span>
+                ) : null}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {pageError ? (
+          <div className="mx-3 mt-3 rounded-lg bg-[#FFECEC] px-4 py-3 text-[14px] text-[#8B1A1A]">
+            {pageError}
+          </div>
+        ) : null}
+
+        {actionMessage ? (
+          <div className="mx-3 mt-3 rounded-lg bg-[#E7FCE3] px-4 py-3 text-[14px] text-[#0B5E44]">
+            {actionMessage}
+          </div>
+        ) : null}
+
+        {initialLoading ? (
+          <div className="flex flex-col items-center justify-center gap-3 py-24 text-[#667781]">
+            <Loader2 className="h-9 w-9 animate-spin text-[#128C7E]" />
+            <p className="text-[15px]">Loading roles and features…</p>
+          </div>
+        ) : null}
+
+        {!initialLoading && !pageError && mobileMainTab === "roles" ? (
+          <ul className="mt-1 divide-y divide-[#E9EDEF] bg-white">
+            {roles.length === 0 ? (
+              <li className="px-4 py-16 text-center">
+                <Shield className="mx-auto h-10 w-10 text-[#8696A0]" />
+                <p className="mt-4 text-[17px] font-medium text-[#111B21]">No roles found</p>
+                <p className="mt-2 text-[14px] text-[#667781]">
+                  Create roles for this organization first.
+                </p>
+              </li>
+            ) : (
+              roles.map((role) => {
+                const id = Number(role.id);
+                const active = selectedRoleId !== null && id === selectedRoleId;
+                const name = displayRoleName(role);
+                return (
+                  <li key={String(role.id)}>
+                    <button
+                      type="button"
+                      onClick={() => selectRole(id)}
+                      className="flex w-full items-center gap-3 px-4 py-3.5 text-left active:bg-[#F0F2F5]"
+                    >
+                      <span
+                        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-medium ${avatarColorClass(name)}`}
+                      >
+                        {roleInitials(name)}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[17px] text-[#111B21]">{name}</p>
+                        <p className="text-[14px] text-[#667781]">
+                          {active ? "Currently selected" : "Tap to manage features"}
+                        </p>
+                      </div>
+                      {active ? (
+                        <Check className="h-5 w-5 shrink-0 text-[#25D366]" />
+                      ) : (
+                        <ChevronRight className="h-5 w-5 shrink-0 text-[#8696A0]" />
+                      )}
+                    </button>
+                  </li>
+                );
+              })
+            )}
+          </ul>
+        ) : null}
+
+        {!initialLoading && !pageError && mobileMainTab === "features" ? (
+          <div>
+            {!selectedRole || roles.length === 0 ? (
+              <div className="mx-3 mt-4 rounded-lg bg-white px-6 py-16 text-center">
+                <Shield className="mx-auto h-10 w-10 text-[#8696A0]" />
+                <p className="mt-4 text-[17px] font-medium text-[#111B21]">Select a role first</p>
+                <p className="mt-2 text-[14px] text-[#667781]">
+                  Go to the Roles tab and pick a role to configure features.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setMobileMainTab("roles")}
+                  className={`mt-6 ${waPrimaryBtnCls()}`}
+                >
+                  Choose role
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="bg-[#128C7E]/10 px-4 py-3">
+                  <p className="text-[13px] text-[#667781]">Managing features for</p>
+                  <p className="text-[17px] font-medium text-[#111B21]">
+                    {displayRoleName(selectedRole)}
+                  </p>
+                </div>
+                <div className="bg-white px-3 py-2">
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8696A0]" />
+                    <input
+                      type="search"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Search features"
+                      className={searchFieldCls()}
+                    />
+                  </div>
+                </div>
+
+                {mappingsLoading ? (
+                  <div className="flex flex-col items-center justify-center gap-3 py-16 text-[#667781]">
+                    <Loader2 className="h-8 w-8 animate-spin text-[#128C7E]" />
+                    <p className="text-[15px]">Loading assignments…</p>
+                  </div>
+                ) : null}
+
+                {mappingsError ? (
+                  <div className="mx-3 mt-3 rounded-lg bg-[#FFECEC] px-4 py-3 text-[14px] text-[#8B1A1A]">
+                    {mappingsError}
+                  </div>
+                ) : null}
+
+                {!mappingsLoading && !mappingsError && features.length === 0 ? (
+                  <div className="mx-3 mt-4 rounded-lg bg-white px-6 py-16 text-center">
+                    <Puzzle className="mx-auto h-10 w-10 text-[#8696A0]" />
+                    <p className="mt-4 text-[17px] font-medium text-[#111B21]">No features yet</p>
+                    <p className="mt-2 text-[14px] text-[#667781]">
+                      Add organization features before assigning them to roles.
+                    </p>
+                  </div>
+                ) : null}
+
+                {!mappingsLoading && !mappingsError && features.length > 0 ? (
+                  <ul className="mt-1 divide-y divide-[#E9EDEF] bg-white">
+                    {filteredFeatures.length === 0 ? (
+                      <li className="px-4 py-12 text-center text-[15px] text-[#667781]">
+                        No features match your search.
+                      </li>
+                    ) : (
+                      filteredFeatures.map((feature) => {
+                        const fid = Number(feature.id);
+                        const mapping = !Number.isNaN(fid)
+                          ? mappingByFeatureId.get(fid)
+                          : undefined;
+                        const title = displayFeatureTitle(feature);
+
+                        return (
+                          <li key={String(feature.id)}>
+                            <div className="flex items-center gap-3 px-4 py-3.5">
+                              <span
+                                className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-medium ${
+                                  mapping
+                                    ? "bg-[#E7FCE3] text-[#0B5E44]"
+                                    : avatarColorClass(title)
+                                }`}
+                              >
+                                {mapping ? (
+                                  <Check className="h-5 w-5" />
+                                ) : (
+                                  featureInitials(title)
+                                )}
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-[17px] text-[#111B21]">{title}</p>
+                                <p className="line-clamp-2 text-[14px] text-[#667781]">
+                                  {feature.feature_description || "No description."}
+                                </p>
+                                {mapping ? (
+                                  <p className="mt-0.5 text-[13px] font-medium text-[#25D366]">
+                                    Assigned to role
+                                  </p>
+                                ) : null}
+                              </div>
+                              {renderFeatureActions(feature)}
+                            </div>
+                          </li>
+                        );
+                      })
+                    )}
+                  </ul>
+                ) : null}
+              </>
+            )}
+          </div>
+        ) : null}
+      </div>
+
+      {/* Desktop layout (unchanged) */}
+      <div className="hidden space-y-6 lg:block">
       <header className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
         <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-slate-500">
           Organization Features
@@ -444,6 +818,7 @@ export default function AssignFeaturesRoleWisePage() {
           </div>
         </div>
       ) : null}
+      </div>
     </section>
   );
 }

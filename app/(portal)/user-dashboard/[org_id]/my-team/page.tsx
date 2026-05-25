@@ -97,6 +97,137 @@ const accentBar: Record<"emerald" | "rose" | "amber", string> = {
 const panelClass =
   "overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_12px_36px_-12px_rgba(15,23,42,0.12)]";
 
+function zohoPrimaryBtnCls(full = false) {
+  return `inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-lg bg-[#008CD3] px-4 py-2.5 text-[14px] font-medium text-white transition active:scale-[0.98] hover:bg-[#0070AA] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full flex-1" : ""}`;
+}
+
+function zohoSecondaryBtnCls(full = false) {
+  return `inline-flex min-h-[44px] items-center justify-center rounded-lg border border-[#E4E7EC] bg-white px-4 py-2.5 text-[14px] font-medium text-[#1F2937] transition active:scale-[0.98] hover:bg-[#F5F7FA] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full flex-1" : ""}`;
+}
+
+/** Sits above the layout bottom tab bar (z-[55]) on mobile/tablet. */
+const mobileActionBarCls =
+  "fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] z-[54] border-t border-[#E4E7EC] bg-white p-4 shadow-[0_-4px_16px_rgba(0,0,0,0.06)]";
+const mobileContentBottomPad = "pb-[calc(9rem+env(safe-area-inset-bottom,0px))]";
+
+function zohoInputCls() {
+  return "mt-1.5 w-full rounded-lg border border-[#E4E7EC] bg-white px-3.5 py-2.5 text-[15px] text-[#1F2937] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15 lg:text-sm";
+}
+
+function mobileStatusCls(tone: "emerald" | "rose" | "amber"): string {
+  if (tone === "emerald") return "bg-[#E6F4EA] text-[#0F9D58]";
+  if (tone === "rose") return "bg-[#FCE8E6] text-[#D93025]";
+  return "bg-[#FFF8E1] text-[#F9A825]";
+}
+
+const MOBILE_ICON_COLORS = [
+  "bg-[#E8F4FB] text-[#008CD3]",
+  "bg-[#E6F4EA] text-[#0F9D58]",
+  "bg-[#FEF3E6] text-[#E8710A]",
+  "bg-[#F3E8FD] text-[#7B1FA2]",
+  "bg-[#FCE8E6] text-[#D93025]",
+];
+
+function memberColorClass(name: string) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i += 1) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return MOBILE_ICON_COLORS[Math.abs(hash) % MOBILE_ICON_COLORS.length];
+}
+
+function MobileMemberRow({ member }: { member: OrgTeamMemberRow }) {
+  return (
+    <li>
+      <div className="flex items-center gap-3 px-4 py-3.5">
+        <span
+          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-sm font-semibold ${memberColorClass(member.user_name ?? "?")}`}
+        >
+          {initialsFromName(member.user_name)}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[16px] font-medium text-[#1F2937]">{member.user_name}</p>
+          <p className="truncate text-[13px] text-[#6B7280]">{member.user_email}</p>
+          <p className="mt-0.5 text-[12px] text-[#9CA3AF]">
+            Joined {formatDate(member.joined_date)}
+          </p>
+        </div>
+      </div>
+    </li>
+  );
+}
+
+function MobileLeaveRow({ row }: { row: LeaveQueryRow }) {
+  const tone = leaveStatusTone(row.status);
+  return (
+    <li>
+      <div className="px-4 py-3.5">
+        <div className="flex items-start justify-between gap-2">
+          <span
+            className={`rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase ${mobileStatusCls(tone)}`}
+          >
+            {row.status}
+          </span>
+          <time className="text-[12px] tabular-nums text-[#9CA3AF]" dateTime={row.created_at ?? undefined}>
+            {formatDate(row.created_at)}
+          </time>
+        </div>
+        <p className="mt-2 text-[15px] font-medium capitalize text-[#1F2937]">
+          {row.leave_type.replace(/_/g, " ")}
+        </p>
+        <p className="mt-0.5 text-[13px] text-[#6B7280]">
+          {formatDate(row.start_date)}
+          {row.end_date ? ` → ${formatDate(row.end_date)}` : ""}
+        </p>
+        {row.reason ? (
+          <p className="mt-2 line-clamp-2 text-[13px] text-[#6B7280]">{row.reason}</p>
+        ) : null}
+      </div>
+    </li>
+  );
+}
+
+function MobileAttendanceRow({
+  row,
+  onEdit,
+}: {
+  row: AttendanceQueryRow;
+  onEdit: () => void;
+}) {
+  const tone = attendanceStatusTone(row.query_status);
+  const pending = String(row.query_status).toLowerCase() === "pending";
+  return (
+    <li>
+      <div className="px-4 py-3.5">
+        <div className="flex items-start justify-between gap-2">
+          <span
+            className={`rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase ${mobileStatusCls(tone)}`}
+          >
+            {row.query_status}
+          </span>
+          {pending ? (
+            <button
+              type="button"
+              onClick={onEdit}
+              className="inline-flex items-center gap-1 rounded-lg border border-[#E4E7EC] px-2 py-1 text-[12px] font-medium text-[#008CD3]"
+            >
+              <Pencil className="h-3 w-3" />
+              Edit
+            </button>
+          ) : null}
+        </div>
+        <p className="mt-2 text-[15px] font-medium text-[#1F2937]">
+          {attendanceCategoryLabel(row.category)}
+        </p>
+        <p className="mt-0.5 text-[13px] text-[#6B7280]">
+          {formatDate(row.attendance_date)}
+        </p>
+        <p className="mt-2 line-clamp-2 text-[13px] text-[#6B7280]">{row.query_message}</p>
+      </div>
+    </li>
+  );
+}
+
 export default function UserMyTeamPage() {
   const params = useParams();
   const orgIdParam = params?.org_id;
@@ -138,6 +269,9 @@ export default function UserMyTeamPage() {
   const [attSubmitting, setAttSubmitting] = useState(false);
   const [attFormError, setAttFormError] = useState<string | null>(null);
   const [attFormSuccess, setAttFormSuccess] = useState<string | null>(null);
+  const [mobileMainTab, setMobileMainTab] = useState<
+    "team" | "leave" | "corrections"
+  >("team");
 
   const loadData = useCallback(
     async (isRefresh = false) => {
@@ -365,8 +499,274 @@ export default function UserMyTeamPage() {
     team?.members.filter((m) => Number(m.user_id) !== Number(team.admin_id)) ??
     [];
 
+  const mobileTabs = [
+    { id: "team" as const, label: "Team", count: team?.members.length },
+    { id: "leave" as const, label: "Leave", count: leaveRows.length },
+    { id: "corrections" as const, label: "Corrections", count: attendanceRows.length },
+  ];
+
   return (
-    <div className="relative min-h-screen flex-1 overflow-x-hidden bg-slate-50">
+    <div className="min-h-full bg-[#F5F7FA] lg:bg-transparent">
+      {/* Mobile & tablet: Zoho admin portal style */}
+      <div className="lg:hidden">
+        <div className="sticky top-0 z-20 border-b border-[#E4E7EC] bg-white shadow-sm">
+          <div className="flex items-center gap-2 px-3 py-3">
+            <Link
+              href={`/user-dashboard/${orgIdParam}/home`}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#6B7280] active:bg-[#F5F7FA]"
+              aria-label="Back to dashboard"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Link>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#E8F4FB] text-[#008CD3]">
+              <Users className="h-5 w-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h1 className="truncate text-[17px] font-semibold text-[#1F2937]">My team</h1>
+              <p className="truncate text-[13px] text-[#6B7280]">
+                {loading
+                  ? "Loading…"
+                  : team
+                    ? team.team_name
+                    : noTeam
+                      ? "No team assigned"
+                      : "Team workspace"}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void loadData(true)}
+              disabled={loading || refreshing}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#008CD3] active:bg-[#F5F7FA] disabled:opacity-50"
+              aria-label="Refresh"
+            >
+              <RefreshCw className={`h-5 w-5 ${refreshing ? "animate-spin" : ""}`} />
+            </button>
+          </div>
+
+          <div className="px-4 pb-3">
+            <div className="flex rounded-lg bg-[#F5F7FA] p-1">
+              {mobileTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setMobileMainTab(tab.id)}
+                  className={`flex flex-1 items-center justify-center gap-1 rounded-md py-2 text-[12px] font-medium transition sm:text-[13px] ${
+                    mobileMainTab === tab.id
+                      ? "bg-white text-[#008CD3] shadow-sm"
+                      : "text-[#6B7280]"
+                  }`}
+                >
+                  {tab.label}
+                  {"count" in tab && tab.count != null ? (
+                    <span
+                      className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] ${
+                        mobileMainTab === tab.id
+                          ? "bg-[#E8F4FB] text-[#008CD3]"
+                          : "bg-[#E4E7EC] text-[#6B7280]"
+                      }`}
+                    >
+                      {tab.count > 99 ? "99+" : tab.count}
+                    </span>
+                  ) : null}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {!loading && (pendingLeaveCount > 0 || pendingAttCount > 0) ? (
+          <div className="mx-4 mt-3 flex flex-wrap gap-2">
+            {pendingLeaveCount > 0 ? (
+              <span className="rounded-full bg-[#FFF8E1] px-2.5 py-1 text-[12px] font-medium text-[#F9A825]">
+                {pendingLeaveCount} leave pending
+              </span>
+            ) : null}
+            {pendingAttCount > 0 ? (
+              <span className="rounded-full bg-[#E8F4FB] px-2.5 py-1 text-[12px] font-medium text-[#008CD3]">
+                {pendingAttCount} correction pending
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+
+        {teamError && !loading && !noTeam ? (
+          <div className="mx-4 mt-3 flex items-start gap-2 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-4 py-3 text-[14px] text-[#D93025]">
+            <span>{teamError}</span>
+          </div>
+        ) : null}
+
+        {loading ? (
+          <div className="flex flex-col items-center justify-center gap-3 py-24 text-[#6B7280]">
+            <Loader2 className="h-9 w-9 animate-spin text-[#008CD3]" />
+            <p className="text-[15px]">Loading your team…</p>
+          </div>
+        ) : null}
+
+        {!loading && mobileMainTab === "team" && noTeam ? (
+          <div className="mx-4 mt-4 rounded-xl border border-dashed border-[#E4E7EC] bg-white px-6 py-16 text-center">
+            <Building2 className="mx-auto h-10 w-10 text-[#9CA3AF]" />
+            <p className="mt-4 text-[17px] font-semibold text-[#1F2937]">No team yet</p>
+            <p className="mt-2 text-[14px] text-[#6B7280]">
+              When HR adds you to a roster, it will appear here. You can still submit leave and
+              corrections from other tabs.
+            </p>
+            <Link href={`/user-dashboard/${orgIdParam}/home`} className={`mt-6 ${zohoPrimaryBtnCls()}`}>
+              Back to home
+            </Link>
+          </div>
+        ) : null}
+
+        {!loading && mobileMainTab === "team" && team ? (
+          <div className={`space-y-3 p-4 ${mobileContentBottomPad}`}>
+            <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
+              <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                Team overview
+              </p>
+              <p className="mt-1 text-[18px] font-semibold text-[#1F2937]">{team.team_name}</p>
+              {team.team_info?.trim() ? (
+                <p className="mt-2 text-[14px] text-[#6B7280]">{team.team_info}</p>
+              ) : null}
+              <div className="mt-3 flex flex-wrap gap-2">
+                {team.is_admin ? (
+                  <span className="rounded-full bg-[#E8F4FB] px-2.5 py-0.5 text-[11px] font-semibold text-[#008CD3]">
+                    Team admin
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-[#F5F7FA] px-2.5 py-0.5 text-[11px] font-semibold text-[#6B7280]">
+                    Member
+                  </span>
+                )}
+                <span className="rounded-full bg-[#F5F7FA] px-2.5 py-0.5 text-[11px] font-medium text-[#6B7280]">
+                  {team.members.length} members
+                </span>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
+              <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                Team lead
+              </p>
+              <div className="mt-2 flex items-center gap-3">
+                <span
+                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-sm font-semibold ${memberColorClass(team.admin_name ?? "?")}`}
+                >
+                  {initialsFromName(team.admin_name)}
+                </span>
+                <div>
+                  <p className="text-[15px] font-medium text-[#1F2937]">{team.admin_name ?? "—"}</p>
+                  <p className="text-[13px] text-[#6B7280]">
+                    Joined {formatDate(adminMember?.joined_date ?? null)}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="overflow-hidden rounded-xl border border-[#E4E7EC] bg-white shadow-sm">
+              <div className="border-b border-[#E4E7EC] px-4 py-3">
+                <p className="text-[15px] font-semibold text-[#1F2937]">Roster</p>
+                <p className="text-[13px] text-[#6B7280]">Team members excluding lead</p>
+              </div>
+              {otherMembers.length === 0 ? (
+                <p className="px-4 py-10 text-center text-[14px] text-[#6B7280]">
+                  No other members on this roster yet.
+                </p>
+              ) : (
+                <ul className="divide-y divide-[#E4E7EC]">
+                  {otherMembers.map((m) => (
+                    <MobileMemberRow key={m.team_member_id} member={m} />
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        ) : null}
+
+        {!loading && mobileMainTab === "leave" ? (
+          <div className={mobileContentBottomPad}>
+            {leaveLoadError ? (
+              <div className="mx-4 mt-3 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-4 py-3 text-[14px] text-[#D93025]">
+                {leaveLoadError}
+              </div>
+            ) : null}
+            {leaveRows.length === 0 && !leaveLoadError ? (
+              <div className="mx-4 mt-4 rounded-xl border border-dashed border-[#E4E7EC] bg-white px-6 py-16 text-center">
+                <CalendarDays className="mx-auto h-10 w-10 text-[#9CA3AF]" />
+                <p className="mt-4 text-[17px] font-semibold text-[#1F2937]">No leave requests</p>
+                <p className="mt-2 text-[14px] text-[#6B7280]">
+                  Tap Request time off below to submit a new request.
+                </p>
+              </div>
+            ) : (
+              <ul className="mt-1 divide-y divide-[#E4E7EC] border-t border-[#E4E7EC] bg-white">
+                {leaveRows.map((row) => (
+                  <MobileLeaveRow key={row.id} row={row} />
+                ))}
+              </ul>
+            )}
+          </div>
+        ) : null}
+
+        {!loading && mobileMainTab === "corrections" ? (
+          <div className={mobileContentBottomPad}>
+            {attendanceLoadError ? (
+              <div className="mx-4 mt-3 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-4 py-3 text-[14px] text-[#D93025]">
+                {attendanceLoadError}
+              </div>
+            ) : null}
+            {attendanceRows.length === 0 && !attendanceLoadError ? (
+              <div className="mx-4 mt-4 rounded-xl border border-dashed border-[#E4E7EC] bg-white px-6 py-16 text-center">
+                <ClipboardList className="mx-auto h-10 w-10 text-[#9CA3AF]" />
+                <p className="mt-4 text-[17px] font-semibold text-[#1F2937]">No corrections yet</p>
+                <p className="mt-2 text-[14px] text-[#6B7280]">
+                  Tap Correction below to report a missed punch or timing issue.
+                </p>
+              </div>
+            ) : (
+              <ul className="mt-1 divide-y divide-[#E4E7EC] border-t border-[#E4E7EC] bg-white">
+                {attendanceRows.map((row) => (
+                  <MobileAttendanceRow
+                    key={row.id}
+                    row={row}
+                    onEdit={() => openEditAttendanceModal(row)}
+                  />
+                ))}
+              </ul>
+            )}
+          </div>
+        ) : null}
+
+        {!loading ? (
+          <div className={mobileActionBarCls}>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setLeaveModalOpen(true);
+                  setLeaveFormError(null);
+                  setLeaveFormSuccess(null);
+                }}
+                className={zohoPrimaryBtnCls(true)}
+              >
+                <CalendarDays className="h-4 w-4" />
+                Request time off
+              </button>
+              <button
+                type="button"
+                onClick={openNewAttendanceModal}
+                className={zohoSecondaryBtnCls(true)}
+              >
+                <ClipboardList className="h-4 w-4" />
+                Correction
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      {/* Desktop layout (unchanged) */}
+      <div className="hidden lg:block">
+      <div className="relative min-h-screen flex-1 overflow-x-hidden bg-slate-50">
       <div
         className="pointer-events-none absolute inset-x-0 top-0 h-[420px] bg-[radial-gradient(ellipse_75%_55%_at_50%_-8%,rgba(99,102,241,0.13),transparent_58%)]"
         aria-hidden
@@ -745,12 +1145,14 @@ export default function UserMyTeamPage() {
         ) : null}
       </main>
       </div>
+      </div>
+      </div>
 
       {/* Leave modal */}
       {leaveModalOpen ? (
         <ModalScrim onClose={() => setLeaveModalOpen(false)}>
-          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white shadow-[0_24px_80px_-12px_rgba(15,23,42,0.35)] ring-1 ring-slate-900/10">
-            <div className="sticky top-0 z-[1] flex items-center justify-between border-b border-slate-100 bg-gradient-to-r from-indigo-50/90 to-white px-6 py-4">
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white shadow-[0_24px_80px_-12px_rgba(15,23,42,0.35)] ring-1 ring-slate-900/10 lg:rounded-2xl lg:[border-top:3px_solid_#008CD3]">
+            <div className="sticky top-0 z-[1] flex items-center justify-between border-b border-[#E4E7EC] bg-white px-4 py-4 lg:border-slate-100 lg:bg-gradient-to-r lg:from-indigo-50/90 lg:to-white lg:px-6">
               <div>
                 <h2 className="text-lg font-semibold text-slate-900">
                   Request time off
@@ -768,19 +1170,19 @@ export default function UserMyTeamPage() {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <form onSubmit={onSubmitLeave} className="space-y-4 p-6">
+            <form onSubmit={onSubmitLeave} className="space-y-4 p-4 lg:p-6">
               {leaveFormError ? (
-                <p className="rounded-xl bg-red-50 p-3 text-sm text-red-800 ring-1 ring-red-100">
+                <p className="rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] p-3 text-[14px] text-[#D93025] lg:rounded-xl lg:bg-red-50 lg:text-red-800 lg:ring-1 lg:ring-red-100">
                   {leaveFormError}
                 </p>
               ) : null}
               {leaveFormSuccess ? (
-                <p className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-900 ring-1 ring-emerald-100">
+                <p className="rounded-lg border border-[#C8E6C9] bg-[#E6F4EA] p-3 text-[14px] text-[#0F9D58] lg:rounded-xl lg:bg-emerald-50 lg:text-emerald-900 lg:ring-1 lg:ring-emerald-100">
                   {leaveFormSuccess}
                 </p>
               ) : null}
               <label className="block">
-                <span className="text-xs font-semibold text-slate-600">
+                <span className="text-[13px] font-medium text-[#374151] lg:text-xs lg:font-semibold lg:text-slate-600">
                   Leave type
                 </span>
                 <select
@@ -788,7 +1190,7 @@ export default function UserMyTeamPage() {
                   onChange={(e) =>
                     setLeaveType(e.target.value as typeof leaveType)
                   }
-                  className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm shadow-sm outline-none ring-indigo-500/0 focus:border-indigo-300 focus:ring-2 focus:ring-indigo-500/20"
+                  className={zohoInputCls()}
                 >
                   <option value="full_day">Full day</option>
                   <option value="half_day">Half day</option>
@@ -796,7 +1198,7 @@ export default function UserMyTeamPage() {
                 </select>
               </label>
               <label className="block">
-                <span className="text-xs font-semibold text-slate-600">
+                <span className="text-[13px] font-medium text-[#374151] lg:text-xs lg:font-semibold lg:text-slate-600">
                   Start date
                 </span>
                 <input
@@ -804,44 +1206,44 @@ export default function UserMyTeamPage() {
                   required
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm shadow-sm outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-500/20"
+                  className={zohoInputCls()}
                 />
               </label>
               <label className="block">
-                <span className="text-xs font-semibold text-slate-600">
-                  End date <span className="font-normal text-slate-400">(optional)</span>
+                <span className="text-[13px] font-medium text-[#374151] lg:text-xs lg:font-semibold lg:text-slate-600">
+                  End date <span className="font-normal text-[#9CA3AF] lg:text-slate-400">(optional)</span>
                 </span>
                 <input
                   type="date"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm shadow-sm outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-500/20"
+                  className={zohoInputCls()}
                 />
               </label>
               <label className="block">
-                <span className="text-xs font-semibold text-slate-600">
-                  Reason <span className="font-normal text-slate-400">(optional)</span>
+                <span className="text-[13px] font-medium text-[#374151] lg:text-xs lg:font-semibold lg:text-slate-600">
+                  Reason <span className="font-normal text-[#9CA3AF] lg:text-slate-400">(optional)</span>
                 </span>
                 <textarea
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
                   rows={3}
                   placeholder="Context for your manager…"
-                  className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm shadow-sm outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-500/20"
+                  className={zohoInputCls()}
                 />
               </label>
-              <div className="flex gap-3 pt-2">
+              <div className="flex flex-col-reverse gap-2 border-t border-[#E4E7EC] pt-4 lg:flex-row lg:gap-3 lg:border-0 lg:pt-2">
                 <button
                   type="button"
                   onClick={() => setLeaveModalOpen(false)}
-                  className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  className={zohoSecondaryBtnCls(true)}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={leaveSubmitting}
-                  className="flex-1 rounded-xl bg-indigo-600 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50"
+                  className={zohoPrimaryBtnCls(true)}
                 >
                   {leaveSubmitting ? "Submitting…" : "Submit"}
                 </button>
@@ -859,8 +1261,8 @@ export default function UserMyTeamPage() {
             setAttEditRow(null);
           }}
         >
-          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white shadow-[0_24px_80px_-12px_rgba(15,23,42,0.35)] ring-1 ring-slate-900/10">
-            <div className="sticky top-0 z-[1] flex items-center justify-between border-b border-slate-100 bg-gradient-to-r from-cyan-50/70 to-white px-6 py-4">
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white shadow-[0_24px_80px_-12px_rgba(15,23,42,0.35)] ring-1 ring-slate-900/10 lg:rounded-2xl lg:[border-top:3px_solid_#008CD3]">
+            <div className="sticky top-0 z-[1] flex items-center justify-between border-b border-[#E4E7EC] bg-white px-4 py-4 lg:border-slate-100 lg:bg-gradient-to-r lg:from-cyan-50/70 lg:to-white lg:px-6">
               <div>
                 <h2 className="text-lg font-semibold text-slate-900">
                   {attEditRow
@@ -885,19 +1287,19 @@ export default function UserMyTeamPage() {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <form onSubmit={onSubmitAttendance} className="space-y-4 p-6">
+            <form onSubmit={onSubmitAttendance} className="space-y-4 p-4 lg:p-6">
               {attFormError ? (
-                <p className="rounded-xl bg-red-50 p-3 text-sm text-red-800 ring-1 ring-red-100">
+                <p className="rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] p-3 text-[14px] text-[#D93025] lg:rounded-xl lg:bg-red-50 lg:text-red-800 lg:ring-1 lg:ring-red-100">
                   {attFormError}
                 </p>
               ) : null}
               {attFormSuccess ? (
-                <p className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-900 ring-1 ring-emerald-100">
+                <p className="rounded-lg border border-[#C8E6C9] bg-[#E6F4EA] p-3 text-[14px] text-[#0F9D58] lg:rounded-xl lg:bg-emerald-50 lg:text-emerald-900 lg:ring-1 lg:ring-emerald-100">
                   {attFormSuccess}
                 </p>
               ) : null}
               <label className="block">
-                <span className="text-xs font-semibold text-slate-600">
+                <span className="text-[13px] font-medium text-[#374151] lg:text-xs lg:font-semibold lg:text-slate-600">
                   Issue type
                 </span>
                 <select
@@ -905,7 +1307,7 @@ export default function UserMyTeamPage() {
                   onChange={(e) =>
                     setAttCategory(e.target.value as AttendanceQueryCategory)
                   }
-                  className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm shadow-sm outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/20"
+                  className={zohoInputCls()}
                 >
                   <option value="forget_punch_in">Forgot punch in</option>
                   <option value="forget_punch_out">Forgot punch out</option>
@@ -913,7 +1315,7 @@ export default function UserMyTeamPage() {
                 </select>
               </label>
               <label className="block">
-                <span className="text-xs font-semibold text-slate-600">
+                <span className="text-[13px] font-medium text-[#374151] lg:text-xs lg:font-semibold lg:text-slate-600">
                   Attendance date
                 </span>
                 <input
@@ -921,11 +1323,11 @@ export default function UserMyTeamPage() {
                   required
                   value={attDate}
                   onChange={(e) => setAttDate(e.target.value)}
-                  className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm shadow-sm outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/20"
+                  className={zohoInputCls()}
                 />
               </label>
               <label className="block">
-                <span className="text-xs font-semibold text-slate-600">
+                <span className="text-[13px] font-medium text-[#374151] lg:text-xs lg:font-semibold lg:text-slate-600">
                   Explanation
                 </span>
                 <textarea
@@ -934,24 +1336,24 @@ export default function UserMyTeamPage() {
                   rows={4}
                   required
                   placeholder="What happened? Include times if relevant."
-                  className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm shadow-sm outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/20"
+                  className={zohoInputCls()}
                 />
               </label>
-              <div className="flex gap-3 pt-2">
+              <div className="flex flex-col-reverse gap-2 border-t border-[#E4E7EC] pt-4 lg:flex-row lg:gap-3 lg:border-0 lg:pt-2">
                 <button
                   type="button"
                   onClick={() => {
                     setAttModalOpen(false);
                     setAttEditRow(null);
                   }}
-                  className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  className={zohoSecondaryBtnCls(true)}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={attSubmitting}
-                  className="flex-1 rounded-xl bg-slate-900 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+                  className={zohoPrimaryBtnCls(true)}
                 >
                   {attSubmitting
                     ? "Saving…"
@@ -977,7 +1379,7 @@ function ModalScrim({
 }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/60 p-4 backdrop-blur-sm sm:items-center"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-[#1F2937]/40 p-0 backdrop-blur-[1px] lg:items-center lg:bg-slate-950/60 lg:p-4 lg:backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
     >

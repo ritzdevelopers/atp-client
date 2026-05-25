@@ -907,18 +907,23 @@ export default function ManageEmployeesPage() {
     }
   }
 
+  const tabOptions = [
+    { id: "employees" as const, label: "Employees" },
+    { id: "management" as const, label: "Management" },
+  ] as const;
+
   return (
-    <div className="min-h-full bg-slate-100/90 pb-10 [font-family:var(--font-inter),system-ui,sans-serif]">
-      <div className="mx-auto max-w-6xl px-4 pt-6 md:max-w-7xl md:px-6">
+    <div className="min-h-full bg-[#F5F5F3] pb-4 [font-family:var(--font-inter),system-ui,sans-serif] max-lg:-mx-1 sm:max-lg:-mx-2 lg:bg-slate-100/90 lg:pb-10">
+      <div className="mx-auto max-w-6xl max-lg:max-w-none lg:px-4 lg:pt-6 md:max-w-7xl md:px-6">
         {listError && (
-          <div className="mb-4 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+          <div className="mb-4 flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 max-lg:mx-3 max-lg:mt-3 lg:rounded-lg">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" aria-hidden />
             <div className="flex flex-1 flex-wrap items-center justify-between gap-2">
               <span>{listError}</span>
               <button
                 type="button"
                 onClick={() => void loadUsers()}
-                className="rounded-md border border-red-200 bg-white px-2 py-1 text-xs font-semibold text-red-800 hover:bg-red-100/80"
+                className="rounded-xl border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-800 active:scale-[0.98] hover:bg-red-100/80"
               >
                 Retry
               </button>
@@ -926,13 +931,71 @@ export default function ManageEmployeesPage() {
           </div>
         )}
 
-        <div className="flex gap-8 border-b border-slate-200/80 bg-white/60 px-1">
-          {(
-            [
-              { id: "employees" as const, label: "Employees" },
-              { id: "management" as const, label: "Management" },
-            ] as const
-          ).map((t) => (
+        {/* Mobile & tablet: app-style sticky header */}
+        <div className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/95 px-3 pb-3 pt-3 backdrop-blur-md sm:px-4 lg:hidden">
+          <h1 className="text-lg font-bold tracking-tight text-slate-900">Team members</h1>
+          <p className="mt-0.5 text-xs text-slate-500">
+            {tab === "employees" ? "Employee roster" : "Management roster"}
+          </p>
+          <div className="mt-3 flex rounded-2xl bg-slate-100 p-1 ring-1 ring-slate-200/60">
+            {tabOptions.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => {
+                  setTab(t.id);
+                  setSearch("");
+                }}
+                className={`flex-1 rounded-xl py-2.5 text-sm font-semibold transition active:scale-[0.98] ${
+                  tab === t.id
+                    ? "bg-white text-teal-700 shadow-sm"
+                    : "text-slate-600"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <div className="relative mt-3">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search name, email, role…"
+              disabled={listLoading || !!listError}
+              className="w-full rounded-2xl border-0 bg-slate-100 py-3 pl-10 pr-3 text-sm text-slate-800 outline-none ring-1 ring-slate-200/80 placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-teal-500/25 disabled:opacity-60"
+            />
+          </div>
+          <div className="mt-2.5 flex flex-wrap items-center gap-2">
+            <p className="text-xs text-slate-600">
+              <span className="font-semibold text-slate-900">
+                {listLoading ? "…" : filtered.length}
+              </span>{" "}
+              member{filtered.length === 1 ? "" : "s"}
+            </p>
+            {activeFilterLabel ? (
+              <span
+                className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium text-teal-800"
+                style={{ backgroundColor: ACCENT_SOFT }}
+              >
+                {activeFilterLabel}
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  className="rounded-full p-0.5 hover:bg-teal-200/50"
+                  aria-label="Clear search"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ) : null}
+          </div>
+        </div>
+
+        {/* Desktop: underline tabs */}
+        <div className="hidden gap-8 border-b border-slate-200/80 bg-white/60 px-1 lg:flex">
+          {tabOptions.map((t) => (
             <button
               key={t.id}
               type="button"
@@ -954,7 +1017,7 @@ export default function ManageEmployeesPage() {
           ))}
         </div>
 
-        <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-5 hidden flex-col gap-4 sm:flex-row sm:items-center sm:justify-between lg:flex">
           <div className="flex flex-wrap items-center gap-3">
             <p className="text-sm text-slate-600">
               Found{" "}
@@ -998,22 +1061,209 @@ export default function ManageEmployeesPage() {
         </div>
 
         {listLoading ? (
-          <div className="mt-16 flex flex-col items-center justify-center gap-3 text-slate-500">
+          <div className="mt-16 flex flex-col items-center justify-center gap-3 px-4 text-slate-500 max-lg:mt-10">
             <Loader2 className="h-8 w-8 animate-spin text-teal-600" aria-hidden />
             <p className="text-sm">Loading team members…</p>
           </div>
         ) : (
           <>
-            <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="mt-3 flex flex-col gap-2.5 px-3 max-lg:pb-2 lg:mt-6 lg:grid lg:grid-cols-2 lg:gap-5 lg:px-0 xl:grid-cols-3">
               {filtered.map((emp) => {
                 const fav = favorites.has(emp.id);
                 const row = findRow(userRows, emp.id);
                 const menuOpen = menuUserId === emp.id;
+                const menuPanel = menuOpen && row && (
+                  <div
+                    role="menu"
+                    className="absolute right-0 top-full z-30 mt-1 max-h-[min(70vh,20rem)] min-w-[200px] overflow-y-auto overscroll-contain rounded-2xl border border-slate-200 bg-white py-1 shadow-xl ring-1 ring-slate-200/60"
+                  >
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-700 active:bg-slate-50"
+                      onClick={() => {
+                        openEditModal(row);
+                        setMenuUserId(null);
+                      }}
+                    >
+                      <Pencil className="h-4 w-4 text-teal-600" aria-hidden />
+                      Edit
+                    </button>
+                    {viewerIsAdmin && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-red-700 active:bg-red-50"
+                        onClick={() => {
+                          setDeleteRow(row);
+                          setDeleteError(null);
+                          setMenuUserId(null);
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" aria-hidden />
+                        Delete
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-700 active:bg-slate-50"
+                      onClick={() => {
+                        openRoleModal(row);
+                        setMenuUserId(null);
+                      }}
+                    >
+                      <Shield className="h-4 w-4 text-teal-600" aria-hidden />
+                      Update role
+                    </button>
+                    {viewerCanAssignLeaves && (
+                      <>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-700 active:bg-slate-50"
+                          onClick={() => {
+                            openDocumentsModal(row);
+                            setMenuUserId(null);
+                          }}
+                        >
+                          <FileText className="h-4 w-4 text-teal-600" aria-hidden />
+                          Add documents
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-700 active:bg-slate-50"
+                          onClick={() => {
+                            openPaidLeaveModal(row);
+                            setMenuUserId(null);
+                          }}
+                        >
+                          <BadgeDollarSign className="h-4 w-4 text-teal-600" aria-hidden />
+                          Assign paid leaves
+                        </button>
+                      </>
+                    )}
+                    {viewerCanManageAddresses && (
+                      <>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-700 active:bg-slate-50"
+                          onClick={() => {
+                            void openUpdateAddressesModal(row);
+                            setMenuUserId(null);
+                          }}
+                        >
+                          <MapPin className="h-4 w-4 text-teal-600" aria-hidden />
+                          Update prev address
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-700 active:bg-slate-50"
+                          onClick={() => {
+                            openAddAddressModal(row);
+                            setMenuUserId(null);
+                          }}
+                        >
+                          <PlusCircle className="h-4 w-4 text-teal-600" aria-hidden />
+                          Add one more address
+                        </button>
+                      </>
+                    )}
+                  </div>
+                );
+
                 return (
                   <article
                     key={emp.id}
-                    className="overflow-visible rounded-xl border border-slate-200/90 bg-white shadow-sm transition-shadow hover:shadow-md"
+                    className="overflow-visible rounded-2xl bg-white shadow-md ring-1 ring-slate-200/70 transition-shadow active:scale-[0.995] lg:rounded-xl lg:border lg:border-slate-200/90 lg:shadow-sm lg:ring-0 lg:hover:shadow-md"
                   >
+                    {/* Mobile & tablet: compact list card */}
+                    <div className="relative flex gap-3 p-3 lg:hidden">
+                      <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-2xl border border-slate-100 bg-slate-50">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={avatarUrl(emp.avatarSeed)}
+                          alt=""
+                          width={56}
+                          height={56}
+                          className="h-full w-full object-cover object-top"
+                        />
+                        <span
+                          className={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white ${
+                            emp.status === "in" ? "bg-emerald-500" : "bg-red-500"
+                          }`}
+                          aria-hidden
+                        />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="truncate font-semibold text-slate-900">{emp.name}</p>
+                            <p className="text-[11px] text-slate-500">{emp.empCode}</p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-0.5">
+                            <button
+                              type="button"
+                              onClick={() => toggleFavorite(emp.id)}
+                              className="rounded-xl p-2 text-slate-400 active:bg-slate-100"
+                              aria-label={fav ? "Remove favorite" : "Add favorite"}
+                            >
+                              <Star
+                                className="h-4 w-4"
+                                style={{
+                                  color: fav ? "#ea580c" : undefined,
+                                  fill: fav ? "#ea580c" : "none",
+                                }}
+                              />
+                            </button>
+                            <div className="relative" data-employee-menu>
+                              <button
+                                type="button"
+                                onClick={() => setMenuUserId(menuOpen ? null : emp.id)}
+                                className="rounded-xl p-2 text-slate-500 active:bg-slate-100"
+                                aria-expanded={menuOpen}
+                                aria-haspopup="menu"
+                                aria-label="More options"
+                              >
+                                <MoreHorizontal className="h-5 w-5" />
+                              </button>
+                              {menuPanel}
+                            </div>
+                          </div>
+                        </div>
+                        <span
+                          className="mt-1.5 inline-flex rounded-lg px-2 py-0.5 text-[11px] font-semibold"
+                          style={{ backgroundColor: ACCENT_SOFT, color: ACCENT }}
+                        >
+                          {emp.roleLabel}
+                        </span>
+                        <div className="mt-2 space-y-1">
+                          {emp.email ? (
+                            <a
+                              href={`mailto:${emp.email}`}
+                              className="flex items-center gap-1.5 truncate text-xs text-sky-600"
+                            >
+                              <AtSign className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
+                              {emp.email}
+                            </a>
+                          ) : null}
+                          <p className="flex items-center gap-1.5 text-xs text-slate-600">
+                            <Phone className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
+                            {emp.phone}
+                          </p>
+                          <p className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                            <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                            Since {emp.memberSince}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Desktop: profile card */}
+                    <div className="hidden lg:block">
                     <div className="relative px-4 pb-3 pt-3">
                       <div className="flex items-start justify-between">
                         <div className="flex gap-2">
@@ -1050,108 +1300,7 @@ export default function ManageEmployeesPage() {
                           >
                             <MoreHorizontal className="h-4 w-4" />
                           </button>
-                          {menuOpen && row && (
-                            <div
-                              role="menu"
-                              className="absolute right-0 top-full z-30 mt-1 max-h-[min(70vh,20rem)] min-w-[180px] overflow-y-auto overscroll-contain rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
-                            >
-                              <button
-                                type="button"
-                                role="menuitem"
-                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
-                                onClick={() => {
-                                  openEditModal(row);
-                                  setMenuUserId(null);
-                                }}
-                              >
-                                <Pencil className="h-4 w-4 text-teal-600" aria-hidden />
-                                Edit
-                              </button>
-                              {viewerIsAdmin && (
-                                <button
-                                  type="button"
-                                  role="menuitem"
-                                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-700 hover:bg-red-50"
-                                  onClick={() => {
-                                    setDeleteRow(row);
-                                    setDeleteError(null);
-                                    setMenuUserId(null);
-                                  }}
-                                >
-                                  <Trash2 className="h-4 w-4" aria-hidden />
-                                  Delete
-                                </button>
-                              )}
-                              <button
-                                type="button"
-                                role="menuitem"
-                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
-                                onClick={() => {
-                                  openRoleModal(row);
-                                  setMenuUserId(null);
-                                }}
-                              >
-                                <Shield className="h-4 w-4 text-teal-600" aria-hidden />
-                                Update role
-                              </button>
-                              {viewerCanAssignLeaves && (
-                                <>
-                                  <button
-                                    type="button"
-                                    role="menuitem"
-                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
-                                    onClick={() => {
-                                      openDocumentsModal(row);
-                                      setMenuUserId(null);
-                                    }}
-                                  >
-                                    <FileText className="h-4 w-4 text-teal-600" aria-hidden />
-                                    Add documents
-                                  </button>
-                                  <button
-                                    type="button"
-                                    role="menuitem"
-                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
-                                    onClick={() => {
-                                      openPaidLeaveModal(row);
-                                      setMenuUserId(null);
-                                    }}
-                                  >
-                                    <BadgeDollarSign className="h-4 w-4 text-teal-600" aria-hidden />
-                                    Assign paid leaves
-                                  </button>
-                                </>
-                              )}
-                              {viewerCanManageAddresses && (
-                                <>
-                                  <button
-                                    type="button"
-                                    role="menuitem"
-                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
-                                    onClick={() => {
-                                      void openUpdateAddressesModal(row);
-                                      setMenuUserId(null);
-                                    }}
-                                  >
-                                    <MapPin className="h-4 w-4 text-teal-600" aria-hidden />
-                                    Update prev address
-                                  </button>
-                                  <button
-                                    type="button"
-                                    role="menuitem"
-                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
-                                    onClick={() => {
-                                      openAddAddressModal(row);
-                                      setMenuUserId(null);
-                                    }}
-                                  >
-                                    <PlusCircle className="h-4 w-4 text-teal-600" aria-hidden />
-                                    Add one more address
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          )}
+                          {menuPanel}
                         </div>
                       </div>
 
@@ -1214,13 +1363,14 @@ export default function ManageEmployeesPage() {
                         <span>{emp.phone}</span>
                       </div>
                     </div>
+                    </div>
                   </article>
                 );
               })}
             </div>
 
             {!listError && filtered.length === 0 && (
-              <p className="mt-12 text-center text-sm text-slate-500">
+              <p className="mt-12 px-4 text-center text-sm text-slate-500 max-lg:mt-8">
                 No members in this tab{search.trim() ? " match your search" : ""}.
               </p>
             )}

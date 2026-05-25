@@ -122,6 +122,48 @@ function initialsFromName(name: string | null | undefined): string {
   return `${parts[0]![0] ?? ""}${parts[1]![0] ?? ""}`.toUpperCase() || "?";
 }
 
+const WA_AVATAR_COLORS = [
+  "bg-[#DFE5E7] text-[#54656F]",
+  "bg-[#FFD279] text-[#7A4F01]",
+  "bg-[#FEAA57] text-[#7A3E00]",
+  "bg-[#A5B337] text-[#3D4A0A]",
+  "bg-[#35CD96] text-[#0B5E44]",
+  "bg-[#53BDEB] text-[#0B4F6E]",
+  "bg-[#E67EAB] text-[#6B2348]",
+  "bg-[#7F66FF] text-[#2E1F7A]",
+];
+
+function avatarColorClass(name: string | null | undefined) {
+  const n = String(name ?? "?");
+  let hash = 0;
+  for (let i = 0; i < n.length; i += 1) {
+    hash = n.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return WA_AVATAR_COLORS[Math.abs(hash) % WA_AVATAR_COLORS.length];
+}
+
+function waFieldCls() {
+  return "mt-1.5 w-full rounded-lg border-0 bg-[#F0F2F5] px-3 py-3 text-[15px] text-[#111B21] outline-none focus:bg-white focus:ring-1 focus:ring-[#25D366]/40 lg:rounded-lg lg:border lg:border-slate-200 lg:bg-white lg:py-2 lg:text-sm lg:shadow-sm lg:focus:border-[#C99237]/50 lg:focus:ring-2 lg:focus:ring-[#C99237]/20";
+}
+
+function waPrimaryBtnCls() {
+  return "inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-[#25D366] px-4 py-2.5 text-[15px] font-medium text-white transition active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60 lg:rounded-xl lg:bg-[#0C123A] lg:py-2 lg:text-sm lg:font-semibold lg:hover:bg-[#121a4a]";
+}
+
+function waSecondaryBtnCls() {
+  return "inline-flex min-h-[44px] items-center justify-center rounded-lg border border-[#E9EDEF] bg-white px-4 py-2.5 text-[15px] font-medium text-[#111B21] transition active:scale-[0.98] disabled:opacity-50 lg:rounded-xl lg:border-slate-300 lg:py-2 lg:text-sm lg:font-semibold lg:text-slate-700 lg:hover:bg-slate-50";
+}
+
+function waExitStatusChip(status: string | null | undefined) {
+  const s = String(status ?? "").trim().toLowerCase().replace(/\s+/g, "_");
+  if (s === "in_progress") return "bg-[#E3F2FD] text-[#1565C0]";
+  if (s === "pending") return "bg-[#FFF8E1] text-[#8D6E00]";
+  if (s === "rejected") return "bg-[#FFECEC] text-[#C62828]";
+  if (s === "approved" || s === "handover_completed")
+    return "bg-[#E7FCE3] text-[#0B5E44]";
+  return "bg-[#F0F2F5] text-[#54656F]";
+}
+
 export default function TeamMemberExitProcessReportPage() {
   const params = useParams();
   const orgId = String(params?.org_id ?? "");
@@ -173,6 +215,10 @@ export default function TeamMemberExitProcessReportPage() {
   const [custodyAssetPatchErrorById, setCustodyAssetPatchErrorById] = useState<
     Record<number, string>
   >({});
+
+  const [mobileMainTab, setMobileMainTab] = useState<
+    "employee" | "timeline" | "assets" | "handover"
+  >("employee");
 
   const teamGroupHref =
     `/dashboard/${orgId}/organization-employees/team-group`;
@@ -509,7 +555,73 @@ export default function TeamMemberExitProcessReportPage() {
   };
 
   return (
-    <div className="min-h-full bg-[#f4f6f9] pb-20">
+    <div className="min-h-full bg-[#F0F2F5] lg:bg-[#f4f6f9] lg:pb-20">
+      {/* Mobile: WhatsApp-style header */}
+      <div className="sticky top-0 z-20 bg-[#128C7E] text-white shadow-sm lg:hidden">
+        <div className="flex items-center gap-1 px-1 py-2">
+          <Link
+            href={teamGroupHref}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full active:bg-white/10"
+            aria-label="Back to team group"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Link>
+          <div className="min-w-0 flex-1 py-1">
+            <h1 className="truncate text-[17px] font-medium leading-tight">
+              {loading ? "Loading…" : ep?.employee_name ?? "Exit report"}
+            </h1>
+            <p className="truncate text-[13px] text-white/75">
+              {ep?.team_name ?? "Exit process report"}
+            </p>
+          </div>
+          {ep?.application_status ? (
+            <span
+              className={`mr-2 shrink-0 rounded-full px-2.5 py-1 text-[10px] font-medium uppercase ${waExitStatusChip(ep.application_status)}`}
+            >
+              {String(ep.application_status).replace(/_/g, " ")}
+            </span>
+          ) : null}
+        </div>
+        <div className="flex overflow-x-auto border-t border-white/10 [scrollbar-width:none]">
+          {(
+            [
+              { id: "employee" as const, label: "Employee" },
+              { id: "timeline" as const, label: "Timeline" },
+              {
+                id: "assets" as const,
+                label: "Assets",
+                badge: custodyHandoverAssets.length,
+              },
+              {
+                id: "handover" as const,
+                label: "Tasks",
+                badge: hq.length,
+              },
+            ] as const
+          ).map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setMobileMainTab(tab.id)}
+              className={`relative shrink-0 px-4 py-3 text-[13px] font-medium transition ${
+                mobileMainTab === tab.id
+                  ? "border-b-2 border-white text-white"
+                  : "border-b-2 border-transparent text-white/70"
+              }`}
+            >
+              {tab.label}
+              {"badge" in tab && tab.badge > 0 ? (
+                <span className="ml-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-white/20 px-1 text-[11px]">
+                  {tab.badge > 9 ? "9+" : tab.badge}
+                </span>
+              ) : null}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Desktop header */}
+      <div className="hidden lg:block">
       <div className="relative isolate overflow-hidden bg-[#0C123A] px-4 pb-12 pt-8 sm:px-8">
         <div className="pointer-events-none absolute -right-24 top-0 h-72 w-72 rounded-full bg-[#C99237]/15 blur-[100px]" />
         <div className="relative mx-auto max-w-4xl">
@@ -538,17 +650,18 @@ export default function TeamMemberExitProcessReportPage() {
           </div>
         </div>
       </div>
+      </div>
 
-      <div className="relative z-10 mx-auto max-w-4xl px-4 sm:px-8">
-        <div className="-mt-8 space-y-6">
+      <div className="relative z-10 mx-auto max-w-4xl lg:px-4 lg:sm:px-8">
+        <div className="space-y-0 lg:-mt-8 lg:space-y-6">
           {error ? (
-            <div className="rounded-[22px] border border-rose-200 bg-white px-6 py-10 shadow-lg ring-1 ring-slate-950/[0.04]">
-              <p className="text-center text-rose-800">{error}</p>
+            <div className="mx-3 mt-3 rounded-lg bg-[#FFECEC] px-4 py-8 text-center text-[15px] text-[#8B1A1A] lg:mx-0 lg:rounded-[22px] lg:border lg:border-rose-200 lg:bg-white lg:px-6 lg:py-10 lg:text-rose-800 lg:shadow-lg lg:ring-1 lg:ring-slate-950/[0.04]">
+              <p>{error}</p>
               <div className="mt-6 flex justify-center">
                 <button
                   type="button"
                   onClick={() => void load()}
-                  className="rounded-xl bg-[#0C123A] px-4 py-2 text-sm font-semibold text-white hover:bg-[#121a4a]"
+                  className={waPrimaryBtnCls()}
                 >
                   Retry
                 </button>
@@ -557,14 +670,415 @@ export default function TeamMemberExitProcessReportPage() {
           ) : null}
 
           {loading && !error ? (
-            <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 rounded-[22px] border border-slate-200 bg-white shadow-lg ring-1 ring-slate-950/[0.04]">
-              <Loader2 className="h-9 w-9 animate-spin text-[#C99237]" />
-              <p className="text-sm text-slate-600">Loading exit report…</p>
+            <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 bg-[#F0F2F5] py-16 text-[#667781] lg:min-h-0 lg:rounded-[22px] lg:border lg:border-slate-200 lg:bg-white lg:py-0 lg:shadow-lg lg:ring-1 lg:ring-slate-950/[0.04]">
+              <Loader2 className="h-9 w-9 animate-spin text-[#128C7E] lg:text-[#C99237]" />
+              <p className="text-[15px] lg:text-sm lg:text-slate-600">Loading exit report…</p>
             </div>
           ) : null}
 
           {!loading && ep ? (
             <>
+              {/* Mobile tab panels */}
+              <div className="lg:hidden">
+                {mobileMainTab === "employee" ? (
+                  <div className="bg-white">
+                    <div className="flex items-center gap-4 border-b border-[#E9EDEF] px-4 py-4">
+                      <span
+                        className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-lg font-medium ${avatarColorClass(ep.employee_name)}`}
+                      >
+                        {initialsFromName(ep.employee_name)}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[18px] font-medium text-[#111B21]">
+                          {ep.employee_name ?? "—"}
+                        </p>
+                        <p className="truncate text-[14px] text-[#667781]">
+                          {ep.employee_email ?? "—"}
+                        </p>
+                        <span
+                          className={`mt-2 inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-medium uppercase ${waExitStatusChip(ep.application_status)}`}
+                        >
+                          {String(ep.application_status ?? "—").replace(/_/g, " ")}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="divide-y divide-[#E9EDEF]">
+                      {[
+                        { label: "Team", value: ep.team_name ?? `Team #${ep.team_id ?? "—"}` },
+                        { label: "Phone", value: ep.employee_phone ?? "—" },
+                        { label: "Team joining", value: fmtDateOnly(ep.team_joining_date) },
+                        {
+                          label: "Employee · Exit ID",
+                          value: `${String(ep.employee_id)} · ${String(ep.exit_process_id)}`,
+                        },
+                      ].map((row) => (
+                        <div
+                          key={row.label}
+                          className="flex items-center justify-between gap-4 px-4 py-3.5"
+                        >
+                          <span className="text-[15px] text-[#111B21]">{row.label}</span>
+                          <span className="max-w-[55%] truncate text-right text-[15px] text-[#667781]">
+                            {row.value}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {mobileMainTab === "timeline" ? (
+                  <div className="divide-y divide-[#E9EDEF] bg-white">
+                    <div className="px-4 py-3.5">
+                      <p className="text-[13px] font-medium uppercase text-[#667781]">
+                        Action type
+                      </p>
+                      <p className="mt-1 text-[16px] capitalize text-[#111B21]">
+                        {ep.action_type ?? "—"}
+                      </p>
+                    </div>
+                    <div className="px-4 py-3.5">
+                      <p className="text-[13px] font-medium uppercase text-[#667781]">
+                        Last working day
+                      </p>
+                      <p className="mt-1 text-[16px] text-[#111B21]">
+                        {fmtDateOnly(ep.last_working_day)}
+                      </p>
+                    </div>
+                    <div className="px-4 py-3.5">
+                      <p className="text-[13px] font-medium uppercase text-[#667781]">
+                        Exit date
+                      </p>
+                      <p className="mt-1 text-[16px] text-[#111B21]">
+                        {fmtDateOnly(ep.exit_date)}
+                      </p>
+                    </div>
+                    <div className="px-4 py-3.5">
+                      <p className="text-[13px] font-medium uppercase text-[#667781]">
+                        Reason / context
+                      </p>
+                      <p className="mt-2 whitespace-pre-wrap text-[15px] leading-relaxed text-[#111B21]">
+                        {ep.action_reason?.trim() || "—"}
+                      </p>
+                    </div>
+                    {ep.response_message?.trim() ? (
+                      <div className="bg-[#F0F2F5] px-4 py-3.5">
+                        <p className="text-[13px] font-medium uppercase text-[#667781]">
+                          Response
+                        </p>
+                        <p className="mt-1 whitespace-pre-wrap text-[15px] text-[#111B21]">
+                          {ep.response_message}
+                        </p>
+                      </div>
+                    ) : null}
+                    <div className="flex items-center justify-between px-4 py-3.5">
+                      <span className="text-[15px] text-[#111B21]">Created</span>
+                      <span className="text-[14px] text-[#667781]">{fmtLong(ep.created_at)}</span>
+                    </div>
+                    <div className="flex items-center justify-between px-4 py-3.5">
+                      <span className="text-[15px] text-[#111B21]">Resolved</span>
+                      <span className="text-[14px] text-[#667781]">{fmtLong(ep.resolved_at)}</span>
+                    </div>
+                  </div>
+                ) : null}
+
+                {mobileMainTab === "assets" ? (
+                  <div>
+                    <p className="bg-[#F0F2F5] px-4 py-2 text-[13px] font-medium uppercase tracking-wide text-[#667781]">
+                      Assets for your handover ({custodyHandoverAssets.length})
+                    </p>
+                    {custodyHandoverLoading ? (
+                      <div className="flex flex-col items-center gap-2 bg-white py-12 text-[#667781]">
+                        <Loader2 className="h-8 w-8 animate-spin text-[#128C7E]" />
+                        Loading assets…
+                      </div>
+                    ) : custodyHandoverError ? (
+                      <p className="mx-3 mt-3 rounded-lg bg-[#FFECEC] px-4 py-3 text-[14px] text-[#8B1A1A]">
+                        {custodyHandoverError}
+                      </p>
+                    ) : custodyHandoverAssets.length === 0 ? (
+                      <p className="px-4 py-12 text-center text-[15px] text-[#667781]">
+                        No assets assigned to you for this exit yet.
+                      </p>
+                    ) : (
+                      <ul className="divide-y divide-[#E9EDEF] bg-white">
+                        {custodyHandoverAssets.map((row) => {
+                          const rowReturned = truthyReturned(row.is_returned);
+                          return (
+                            <li key={row.id} className="px-4 py-3.5">
+                              <div className="flex items-start justify-between gap-2">
+                                <p className="font-medium text-[#111B21]">
+                                  {row.asset_name?.trim() ? row.asset_name : `#${row.id}`}
+                                </p>
+                                <span
+                                  className={`rounded-full px-2 py-0.5 text-[11px] font-medium uppercase ${
+                                    rowReturned
+                                      ? "bg-[#E7FCE3] text-[#0B5E44]"
+                                      : "bg-[#E3F2FD] text-[#1565C0]"
+                                  }`}
+                                >
+                                  {rowReturned ? "Returned" : "Outstanding"}
+                                </span>
+                              </div>
+                              {row.asset_summary?.trim() ? (
+                                <p className="mt-1 text-[13px] text-[#667781]">
+                                  {row.asset_summary}
+                                </p>
+                              ) : null}
+                              <div className="mt-3 flex gap-2">
+                                <button
+                                  type="button"
+                                  disabled={
+                                    custodyAssetPatchingId === row.id || rowReturned
+                                  }
+                                  onClick={() => void patchCustodyAssetReturned(row.id, true)}
+                                  className="flex-1 rounded-lg bg-[#25D366] py-2 text-[13px] font-medium text-white disabled:opacity-50"
+                                >
+                                  Returned
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={
+                                    custodyAssetPatchingId === row.id || !rowReturned
+                                  }
+                                  onClick={() => void patchCustodyAssetReturned(row.id, false)}
+                                  className="flex-1 rounded-lg border border-[#E9EDEF] py-2 text-[13px] font-medium text-[#667781] disabled:opacity-50"
+                                >
+                                  Not returned
+                                </button>
+                              </div>
+                              {custodyAssetPatchErrorById[row.id] ? (
+                                <p className="mt-2 text-[12px] text-[#C62828]">
+                                  {custodyAssetPatchErrorById[row.id]}
+                                </p>
+                              ) : null}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                ) : null}
+
+                {mobileMainTab === "handover" ? (
+                  <div>
+                    <div className="flex items-center justify-between bg-white px-4 py-3">
+                      <p className="text-[15px] font-medium text-[#111B21]">
+                        Handover tasks ({hq.length})
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setHandoverFormOpen((o) => !o);
+                          setHandoverFormError(null);
+                          setEditingHandoverId(null);
+                          setStatusPanelHandoverId(null);
+                          setStatusApplyError(null);
+                        }}
+                        className="inline-flex items-center gap-1 rounded-lg bg-[#128C7E] px-3 py-2 text-[13px] font-medium text-white active:scale-[0.98]"
+                      >
+                        <Plus className="h-4 w-4" />
+                        {handoverFormOpen ? "Cancel" : "Add"}
+                      </button>
+                    </div>
+                    {handoverFormOpen ? (
+                      <div className="border-b border-[#E9EDEF] bg-white px-4 py-4">
+                        <label className="block text-[13px] font-medium text-[#667781]">
+                          Task name *
+                        </label>
+                        <input
+                          type="text"
+                          value={handoverTaskName}
+                          maxLength={250}
+                          onChange={(ev) => setHandoverTaskName(ev.target.value)}
+                          placeholder="e.g. Return laptop"
+                          className={waFieldCls()}
+                        />
+                        <label className="mt-3 block text-[13px] font-medium text-[#667781]">
+                          Handover date *
+                        </label>
+                        <input
+                          type="datetime-local"
+                          value={handoverDateLocal}
+                          onChange={(ev) => setHandoverDateLocal(ev.target.value)}
+                          className={waFieldCls()}
+                        />
+                        <label className="mt-3 block text-[13px] font-medium text-[#667781]">
+                          Remarks
+                        </label>
+                        <textarea
+                          value={handoverRemarks}
+                          rows={3}
+                          onChange={(ev) => setHandoverRemarks(ev.target.value)}
+                          className={waFieldCls()}
+                        />
+                        {handoverFormError ? (
+                          <p className="mt-2 text-[13px] text-[#C62828]">{handoverFormError}</p>
+                        ) : null}
+                        <button
+                          type="button"
+                          disabled={handoverSubmitting}
+                          onClick={() => void submitHandoverQuery()}
+                          className={`mt-4 w-full ${waPrimaryBtnCls()}`}
+                        >
+                          {handoverSubmitting ? "Saving…" : "Create handover query"}
+                        </button>
+                      </div>
+                    ) : null}
+                    <ul className="divide-y divide-[#E9EDEF] bg-white">
+                      {hq.length === 0 ? (
+                        <li className="px-4 py-12 text-center text-[15px] text-[#667781]">
+                          No handover tasks yet.
+                        </li>
+                      ) : (
+                        hq.map((h, idx) => {
+                          const key =
+                            h.handover_query_id != null
+                              ? h.handover_query_id
+                              : `hq-${idx}`;
+                          const canAct = h.handover_query_id != null;
+                          const isEditing =
+                            canAct && editingHandoverId === h.handover_query_id;
+                          const statusOpen =
+                            canAct && statusPanelHandoverId === h.handover_query_id;
+                          const title =
+                            h.custom_task_name?.trim() ||
+                            (h.asset_id != null
+                              ? `Asset #${h.asset_id}`
+                              : `Task #${h.handover_query_id ?? idx + 1}`);
+
+                          if (isEditing) {
+                            return (
+                              <li key={key} className="bg-[#F0F2F5] px-4 py-4">
+                                <input
+                                  type="text"
+                                  value={handoverEditTaskName}
+                                  onChange={(ev) =>
+                                    setHandoverEditTaskName(ev.target.value)
+                                  }
+                                  className={waFieldCls()}
+                                />
+                                <input
+                                  type="datetime-local"
+                                  value={handoverEditDateLocal}
+                                  onChange={(ev) =>
+                                    setHandoverEditDateLocal(ev.target.value)
+                                  }
+                                  className={`mt-2 ${waFieldCls()}`}
+                                />
+                                <textarea
+                                  value={handoverEditRemarks}
+                                  rows={2}
+                                  onChange={(ev) =>
+                                    setHandoverEditRemarks(ev.target.value)
+                                  }
+                                  className={`mt-2 ${waFieldCls()}`}
+                                />
+                                {handoverEditError ? (
+                                  <p className="mt-2 text-[13px] text-[#C62828]">
+                                    {handoverEditError}
+                                  </p>
+                                ) : null}
+                                <div className="mt-3 flex gap-2">
+                                  <button
+                                    type="button"
+                                    disabled={handoverEditSaving}
+                                    onClick={() => void submitHandoverEditSave()}
+                                    className={waPrimaryBtnCls()}
+                                  >
+                                    Save
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={handoverEditSaving}
+                                    onClick={cancelHandoverEdit}
+                                    className={waSecondaryBtnCls()}
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </li>
+                            );
+                          }
+
+                          return (
+                            <li key={key} className="px-4 py-3.5">
+                              <div className="flex items-start justify-between gap-2">
+                                <p className="min-w-0 flex-1 font-medium text-[#111B21]">
+                                  {title}
+                                </p>
+                                {h.handover_status ? (
+                                  <span className="rounded-full bg-[#F0F2F5] px-2 py-0.5 text-[11px] font-medium uppercase text-[#54656F]">
+                                    {String(h.handover_status).replace(/_/g, " ")}
+                                  </span>
+                                ) : null}
+                              </div>
+                              <p className="mt-1 text-[13px] text-[#667781]">
+                                Due {fmtDateOnly(h.handover_date)}
+                              </p>
+                              {h.remarks?.trim() ? (
+                                <p className="mt-1 text-[14px] text-[#111B21]">{h.remarks}</p>
+                              ) : null}
+                              {canAct ? (
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => openHandoverEdit(h)}
+                                    className="rounded-lg border border-[#E9EDEF] px-3 py-1.5 text-[13px] font-medium text-[#128C7E]"
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleStatusPanel(h)}
+                                    className="rounded-lg border border-[#E9EDEF] px-3 py-1.5 text-[13px] font-medium text-[#128C7E]"
+                                  >
+                                    Status
+                                  </button>
+                                </div>
+                              ) : null}
+                              {statusOpen && canAct ? (
+                                <div className="mt-3 rounded-lg bg-[#F0F2F5] p-3">
+                                  <select
+                                    value={statusSelectValue}
+                                    onChange={(ev) =>
+                                      setStatusSelectValue(
+                                        ev.target.value as EmployeeExitHandoverStatus,
+                                      )
+                                    }
+                                    className={waFieldCls()}
+                                  >
+                                    {HANDOVER_STATUS_OPTIONS.map((opt) => (
+                                      <option key={opt} value={opt}>
+                                        {opt.replace(/_/g, " ")}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <button
+                                    type="button"
+                                    disabled={statusSaving}
+                                    onClick={() => void submitStatusUpdateForHandover(h)}
+                                    className={`mt-2 w-full ${waPrimaryBtnCls()}`}
+                                  >
+                                    {statusSaving ? "Saving…" : "Apply status"}
+                                  </button>
+                                  {statusApplyError ? (
+                                    <p className="mt-2 text-[12px] text-[#C62828]">
+                                      {statusApplyError}
+                                    </p>
+                                  ) : null}
+                                </div>
+                              ) : null}
+                            </li>
+                          );
+                        })
+                      )}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
+
+              {/* Desktop sections (unchanged) */}
+              <div className="hidden space-y-6 lg:block">
               <section className="overflow-hidden rounded-[22px] border border-slate-200/90 bg-white shadow-[0_12px_40px_-12px_rgba(15,23,42,0.12)] ring-1 ring-slate-950/[0.04]">
                 <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/90 px-5 py-4 sm:px-6">
                   <h2 className="flex items-center gap-2 text-base font-semibold text-[#0C123A]">
@@ -1181,6 +1695,7 @@ export default function TeamMemberExitProcessReportPage() {
                   </div>
                 </div>
               </section>
+              </div>
             </>
           ) : null}
         </div>

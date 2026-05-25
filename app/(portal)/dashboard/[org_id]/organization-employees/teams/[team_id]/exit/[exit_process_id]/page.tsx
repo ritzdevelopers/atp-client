@@ -16,6 +16,8 @@ import {
   ShieldAlert,
   UserRoundCog,
   UserRoundPlus,
+  Search,
+  X,
 } from "lucide-react";
 import { getManagementEmployeesPage, type ManagementEmployeeRow } from "@/services/adminUser";
 import {
@@ -127,6 +129,69 @@ function pendingReturnAssets(assets: EmployeeExitAssetRow[] | undefined): Employ
   return (assets ?? []).filter((a) => !truthyReturned(a.is_returned));
 }
 
+function initialsFromName(name: string | null | undefined): string {
+  const parts = String(name ?? "").split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return (parts[0]![0] ?? "?").toUpperCase();
+  return `${parts[0]![0] ?? ""}${parts[1]![0] ?? ""}`.toUpperCase() || "?";
+}
+
+const WA_AVATAR_COLORS = [
+  "bg-[#DFE5E7] text-[#54656F]",
+  "bg-[#FFD279] text-[#7A4F01]",
+  "bg-[#FEAA57] text-[#7A3E00]",
+  "bg-[#A5B337] text-[#3D4A0A]",
+  "bg-[#35CD96] text-[#0B5E44]",
+  "bg-[#53BDEB] text-[#0B4F6E]",
+  "bg-[#E67EAB] text-[#6B2348]",
+  "bg-[#7F66FF] text-[#2E1F7A]",
+];
+
+function avatarColorClass(name: string | null | undefined) {
+  const n = String(name ?? "?");
+  let hash = 0;
+  for (let i = 0; i < n.length; i += 1) {
+    hash = n.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return WA_AVATAR_COLORS[Math.abs(hash) % WA_AVATAR_COLORS.length];
+}
+
+function searchFieldCls() {
+  return "w-full rounded-lg border-0 bg-[#F0F2F5] py-2.5 pl-10 pr-4 text-[15px] text-[#111B21] outline-none transition placeholder:text-[#8696A0] focus:bg-white focus:ring-1 focus:ring-[#25D366]/40 lg:rounded-xl lg:border lg:border-slate-200 lg:px-3 lg:py-2 lg:text-sm lg:focus:ring-2 lg:focus:ring-indigo-500/25";
+}
+
+function waFieldCls() {
+  return "mt-2 w-full rounded-lg border-0 bg-[#F0F2F5] px-3 py-3 text-[15px] text-[#111B21] outline-none focus:bg-white focus:ring-1 focus:ring-[#25D366]/40 lg:rounded-xl lg:border lg:border-slate-200 lg:py-2 lg:text-sm lg:focus:ring-2 lg:focus:ring-teal-500/25";
+}
+
+function waPrimaryBtnCls() {
+  return "inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-[#25D366] px-4 py-2.5 text-[15px] font-medium text-white transition active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 lg:rounded-xl lg:bg-teal-600 lg:py-2 lg:text-sm lg:font-semibold lg:hover:bg-teal-700";
+}
+
+function waSecondaryBtnCls() {
+  return "inline-flex min-h-[44px] items-center justify-center rounded-lg border border-[#E9EDEF] bg-white px-4 py-2.5 text-[15px] font-medium text-[#111B21] transition active:scale-[0.98] disabled:opacity-50 lg:rounded-xl lg:border-slate-200 lg:py-2 lg:text-sm lg:font-semibold lg:text-slate-700 lg:hover:bg-slate-50";
+}
+
+function waDangerBtnCls() {
+  return "inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg bg-[#C62828] px-4 py-2.5 text-[15px] font-medium text-white transition active:scale-[0.98] disabled:opacity-50 lg:rounded-xl lg:bg-rose-600 lg:py-2 lg:text-sm lg:font-semibold lg:hover:bg-rose-700";
+}
+
+function waExitStatusChip(status: string | null | undefined) {
+  const s = normalizeExitApplicationStatus(status);
+  if (s === "approved") return "bg-[#E7FCE3] text-[#0B5E44]";
+  if (s === "rejected") return "bg-[#FFECEC] text-[#C62828]";
+  if (s === "in_progress") return "bg-[#E3F2FD] text-[#1565C0]";
+  return "bg-[#FFF8E1] text-[#8D6E00]";
+}
+
+function waModalShellClass() {
+  return "fixed inset-0 z-[1100] flex items-end justify-center bg-[#111B21]/40 p-0 backdrop-blur-[1px] sm:items-center sm:bg-slate-950/60 sm:p-4 sm:backdrop-blur-sm";
+}
+
+function waModalPanelClass() {
+  return "relative flex max-h-[92dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:max-h-[92vh] sm:rounded-2xl sm:border sm:border-slate-200";
+}
+
 export default function EmployeeExitDetailPage() {
   const params = useParams();
   const orgId = String(params?.org_id ?? "");
@@ -173,6 +238,10 @@ export default function EmployeeExitDetailPage() {
   );
   const [approveBusy, setApproveBusy] = useState(false);
   const [approveModalError, setApproveModalError] = useState<string | null>(null);
+
+  const [mobileMainTab, setMobileMainTab] = useState<
+    "overview" | "assets" | "tasks" | "actions"
+  >("overview");
 
   const teamHref = `/dashboard/${orgId}/organization-employees/teams/${teamId}`;
 
@@ -485,7 +554,75 @@ export default function EmployeeExitDetailPage() {
   });
 
   return (
-    <div className="min-h-full bg-[#f4f6f9] pb-20">
+    <div className="min-h-full bg-[#F0F2F5] lg:bg-[#f4f6f9] lg:pb-20">
+      {/* Mobile: WhatsApp-style header */}
+      <div className="sticky top-0 z-20 bg-[#128C7E] text-white shadow-sm lg:hidden">
+        <div className="flex items-center gap-1 px-1 py-2">
+          <Link
+            href={teamHref}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full active:bg-white/10"
+            aria-label="Back to team"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Link>
+          <div className="min-w-0 flex-1 py-1">
+            <h1 className="truncate text-[17px] font-medium leading-tight">
+              {!data && loading
+                ? "Loading…"
+                : data?.employee_name ?? `Exit #${exitProcessId}`}
+            </h1>
+            <p className="truncate text-[13px] text-white/75">
+              {data?.employee_email ?? "Exit process detail"}
+            </p>
+          </div>
+          {data ? (
+            <span
+              className={`mr-2 shrink-0 rounded-full px-2.5 py-1 text-[10px] font-medium uppercase ${waExitStatusChip(data.application_status)}`}
+            >
+              {String(data.application_status).replace(/_/g, " ")}
+            </span>
+          ) : null}
+        </div>
+        <div className="flex overflow-x-auto border-t border-white/10 [scrollbar-width:none]">
+          {(
+            [
+              { id: "overview" as const, label: "Overview" },
+              {
+                id: "assets" as const,
+                label: "Assets",
+                badge: data?.employee_assets?.length ?? 0,
+              },
+              {
+                id: "tasks" as const,
+                label: "Tasks",
+                badge: data?.handover_queries?.length ?? 0,
+              },
+              { id: "actions" as const, label: "Actions" },
+            ] as const
+          ).map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setMobileMainTab(tab.id)}
+              className={`relative shrink-0 px-4 py-3 text-[13px] font-medium transition ${
+                mobileMainTab === tab.id
+                  ? "border-b-2 border-white text-white"
+                  : "border-b-2 border-transparent text-white/70"
+              }`}
+            >
+              {tab.label}
+              {"badge" in tab && tab.badge > 0 ? (
+                <span className="ml-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-white/20 px-1 text-[11px]">
+                  {tab.badge > 9 ? "9+" : tab.badge}
+                </span>
+              ) : null}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Desktop header */}
+      <div className="hidden lg:block">
       <div className="relative isolate overflow-hidden bg-slate-950 px-4 pb-12 pt-8 sm:px-8">
         <div className="pointer-events-none absolute -left-20 top-0 h-72 w-72 rounded-full bg-teal-500/20 blur-[90px]" />
 
@@ -593,43 +730,273 @@ export default function EmployeeExitDetailPage() {
           </div>
         </div>
       </div>
+      </div>
 
-      <div className="relative z-10 mx-auto max-w-4xl px-4 sm:px-8">
-        <div className="-mt-6">
+      <div className="relative z-10 mx-auto max-w-4xl lg:px-4 lg:sm:px-8">
+        <div className="lg:-mt-6">
 
           {correctionSavedMsg ? (
-            <div className="mb-6 rounded-2xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-teal-950">
+            <div className="mx-3 mt-3 rounded-lg bg-[#E7FCE3] px-4 py-3 text-[14px] text-[#0B5E44] lg:mx-0 lg:mb-6 lg:rounded-2xl lg:border lg:border-teal-200 lg:bg-teal-50 lg:text-sm lg:text-teal-950">
               {correctionSavedMsg}
             </div>
           ) : null}
 
           {teamMismatch ? (
-            <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+            <div className="mx-3 mt-3 rounded-lg bg-[#FFF8E1] px-4 py-3 text-[14px] text-[#8D6E00] lg:mx-0 lg:mb-6 lg:rounded-2xl lg:border lg:border-amber-200 lg:bg-amber-50 lg:text-sm lg:text-amber-950">
               This record is linked to a different team in the organization than the URL
               you opened. You still have full details below.
             </div>
           ) : null}
 
           {loading ? (
-            <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 rounded-[22px] border border-slate-200 bg-white shadow-lg">
-              <Loader2 className="h-9 w-9 animate-spin text-teal-600" />
-              <p className="text-sm text-slate-600">Loading exit process…</p>
+            <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 bg-[#F0F2F5] py-16 text-[#667781] lg:min-h-0 lg:rounded-[22px] lg:border lg:border-slate-200 lg:bg-white lg:py-0 lg:shadow-lg">
+              <Loader2 className="h-9 w-9 animate-spin text-[#128C7E] lg:text-teal-600" />
+              <p className="text-[15px] lg:text-sm lg:text-slate-600">Loading exit process…</p>
             </div>
           ) : error ? (
-            <div className="rounded-2xl border border-rose-200 bg-white px-6 py-12 text-center shadow-lg">
-              <p className="text-rose-800">{error}</p>
+            <div className="mx-3 mt-3 rounded-lg bg-[#FFECEC] px-4 py-10 text-center lg:mx-0 lg:rounded-2xl lg:border lg:border-rose-200 lg:bg-white lg:px-6 lg:py-12 lg:shadow-lg">
+              <p className="text-[15px] text-[#8B1A1A] lg:text-rose-800">{error}</p>
               <button
                 type="button"
                 onClick={() => void load()}
-                className="mt-4 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700"
+                className={`mt-4 ${waPrimaryBtnCls()}`}
               >
                 Retry
               </button>
             </div>
           ) : !data ? (
-            <p className="text-slate-600">No data.</p>
+            <p className="px-4 text-[#667781] lg:text-slate-600">No data.</p>
           ) : (
-            <div className="space-y-6">
+            <>
+              {/* Mobile tab panels */}
+              <div className="lg:hidden">
+                {mobileMainTab === "overview" ? (
+                  <div className="bg-white">
+                    <div className="flex items-center gap-4 border-b border-[#E9EDEF] px-4 py-4">
+                      <span
+                        className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-lg font-medium ${avatarColorClass(data.employee_name)}`}
+                      >
+                        {initialsFromName(data.employee_name)}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[18px] font-medium text-[#111B21]">
+                          {data.employee_name ?? "—"}
+                        </p>
+                        <p className="truncate text-[14px] text-[#667781]">
+                          {data.employee_email ?? "—"}
+                        </p>
+                        <span
+                          className={`mt-2 inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-medium uppercase ${waExitStatusChip(data.application_status)}`}
+                        >
+                          {String(data.application_status).replace(/_/g, " ")}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="divide-y divide-[#E9EDEF]">
+                      {[
+                        { label: "Action type", value: data.action_type ?? "—", cap: true },
+                        { label: "Team", value: data.team_name ?? `Team #${data.team_id ?? "—"}` },
+                        { label: "Last working day", value: fmtDateOnly(data.last_working_day) },
+                        { label: "Exit date", value: fmtDateOnly(data.exit_date) },
+                        { label: "Opened by", value: data.action_performed_by_name ?? "—" },
+                        { label: "Response by", value: data.response_by_name ?? "—" },
+                        { label: "Resolved", value: fmtLong(data.resolved_at) },
+                      ].map((row) => (
+                        <div
+                          key={row.label}
+                          className="flex items-center justify-between gap-4 px-4 py-3.5"
+                        >
+                          <span className="text-[15px] text-[#111B21]">{row.label}</span>
+                          <span
+                            className={`max-w-[55%] truncate text-right text-[15px] text-[#667781] ${"cap" in row && row.cap ? "capitalize" : ""}`}
+                          >
+                            {row.value}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="border-t border-[#E9EDEF] px-4 py-4">
+                      <p className="text-[13px] font-medium uppercase text-[#667781]">
+                        Reason & response
+                      </p>
+                      <p className="mt-2 whitespace-pre-wrap text-[15px] leading-relaxed text-[#111B21]">
+                        {data.action_reason?.trim() || "—"}
+                      </p>
+                      {data.response_message?.trim() ? (
+                        <p className="mt-3 whitespace-pre-wrap text-[14px] text-[#667781]">
+                          {data.response_message}
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
+
+                {mobileMainTab === "assets" ? (
+                  <ul className="divide-y divide-[#E9EDEF] bg-white">
+                    {data.employee_assets?.length === 0 ? (
+                      <li className="px-4 py-12 text-center text-[15px] text-[#667781]">
+                        No assets on file.
+                      </li>
+                    ) : (
+                      data.employee_assets?.map((a) => {
+                        const assetReturned = truthyReturned(a.is_returned);
+                        const showCustodyButton =
+                          exitAllowsAssetCustodyActions(data.application_status) &&
+                          !assetReturned;
+                        const returnedToIdNumeric = numericId(a.returned_to_id);
+                        const pickedLocallyWhilePending =
+                          activePendingHandover[a.id] !== undefined &&
+                          activePendingHandover[a.id] !== null;
+                        const hasAssignee =
+                          returnedToIdNumeric != null || pickedLocallyWhilePending;
+                        const custodyLabel =
+                          hasAssignee && assigneeDisplayName(a) != null
+                            ? assigneeDisplayName(a)
+                            : hasAssignee
+                              ? `User #${effectiveHandoverToUserId(a, activePendingHandover) ?? "?"}`
+                              : null;
+
+                        return (
+                          <li key={a.id} className="px-4 py-3.5">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="font-medium text-[#111B21]">
+                                {a.asset_name ?? `#${a.id}`}
+                              </p>
+                              <span
+                                className={`rounded-full px-2 py-0.5 text-[11px] font-medium uppercase ${
+                                  assetReturned
+                                    ? "bg-[#E7FCE3] text-[#0B5E44]"
+                                    : "bg-[#F0F2F5] text-[#54656F]"
+                                }`}
+                              >
+                                {assetReturned ? "Returned" : "Outstanding"}
+                              </span>
+                            </div>
+                            {a.asset_summary ? (
+                              <p className="mt-1 text-[13px] text-[#667781]">{a.asset_summary}</p>
+                            ) : null}
+                            <p className="mt-2 text-[13px] text-[#667781]">
+                              Custodian:{" "}
+                              {assetReturned
+                                ? (a.returned_to_name ?? "—")
+                                : (custodyLabel ?? "Not assigned")}
+                            </p>
+                            {showCustodyButton ? (
+                              <button
+                                type="button"
+                                onClick={() => void openEmployeePickerForAsset(a.id)}
+                                className="mt-3 w-full rounded-lg border border-[#E9EDEF] py-2.5 text-[14px] font-medium text-[#128C7E] active:scale-[0.98]"
+                              >
+                                {hasAssignee ? "Change custodian" : "Assign custodian"}
+                              </button>
+                            ) : null}
+                          </li>
+                        );
+                      })
+                    )}
+                  </ul>
+                ) : null}
+
+                {mobileMainTab === "tasks" ? (
+                  <ul className="divide-y divide-[#E9EDEF] bg-white">
+                    {data.handover_queries?.length === 0 ? (
+                      <li className="px-4 py-12 text-center text-[15px] text-[#667781]">
+                        No handover tasks.
+                      </li>
+                    ) : (
+                      data.handover_queries?.map((h) => (
+                        <li key={h.handover_query_id} className="px-4 py-3.5">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="min-w-0 flex-1 font-medium text-[#111B21]">
+                              {h.custom_task_name?.trim()
+                                ? h.custom_task_name
+                                : (h.asset_name ?? `Task #${h.handover_query_id}`)}
+                            </p>
+                            {h.handover_status ? (
+                              <span className="rounded-full bg-[#F0F2F5] px-2 py-0.5 text-[11px] font-medium uppercase text-[#54656F]">
+                                {String(h.handover_status).replace(/_/g, " ")}
+                              </span>
+                            ) : null}
+                          </div>
+                          <p className="mt-1 text-[13px] text-[#667781]">
+                            {h.manager_name ?? "—"} · Due {fmtDateOnly(h.handover_date)}
+                          </p>
+                          {h.remarks?.trim() ? (
+                            <p className="mt-1 text-[14px] text-[#111B21]">{h.remarks}</p>
+                          ) : null}
+                        </li>
+                      ))
+                    )}
+                  </ul>
+                ) : null}
+
+                {mobileMainTab === "actions" ? (
+                  <div className="space-y-3 bg-white p-4">
+                    {isPendingExitStatus(data.application_status) ? (
+                      <>
+                        <button
+                          type="button"
+                          disabled={moveForwardDisabled}
+                          onClick={() => void handleMoveForward()}
+                          className={`w-full ${waPrimaryBtnCls()}`}
+                        >
+                          {forwardBusy ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <ArrowRight className="h-4 w-4" />
+                          )}
+                          Move forward
+                        </button>
+                        <button
+                          type="button"
+                          disabled={rejectBusy}
+                          onClick={openRejectModal}
+                          className={waDangerBtnCls()}
+                        >
+                          <Ban className="h-4 w-4" />
+                          Reject application
+                        </button>
+                      </>
+                    ) : null}
+                    {isInProgressExitStatus(data.application_status) ? (
+                      <button
+                        type="button"
+                        disabled={approveBusy}
+                        onClick={openApproveModal}
+                        className={`w-full ${waPrimaryBtnCls()}`}
+                      >
+                        <CheckCircle2 className="h-4 w-4" />
+                        Approve application
+                      </button>
+                    ) : null}
+                    {isTerminationAction(data.action_type) ? (
+                      <button
+                        type="button"
+                        onClick={openCorrectionModal}
+                        className={`w-full ${waSecondaryBtnCls()}`}
+                      >
+                        <PencilLine className="h-4 w-4 text-[#128C7E]" />
+                        Edit correction
+                      </button>
+                    ) : null}
+                    {forwardError ? (
+                      <p className="rounded-lg bg-[#FFECEC] px-3 py-2 text-[13px] text-[#8B1A1A]">
+                        {forwardError}
+                      </p>
+                    ) : null}
+                    {!isPendingExitStatus(data.application_status) &&
+                    !isInProgressExitStatus(data.application_status) &&
+                    !isTerminationAction(data.action_type) ? (
+                      <p className="text-center text-[14px] text-[#667781]">
+                        No actions available for this status.
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+
+              {/* Desktop sections */}
+              <div className="hidden space-y-6 lg:block">
               <section className="overflow-hidden rounded-[22px] border border-slate-200/90 bg-white shadow-[0_12px_40px_-12px_rgba(15,23,42,0.12)] ring-1 ring-slate-950/[0.04]">
                 <header className="border-b border-slate-100 bg-slate-50/80 px-5 py-4 sm:px-6">
                   <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900">
@@ -859,14 +1226,15 @@ export default function EmployeeExitDetailPage() {
                   )}
                 </div>
               </section>
-            </div>
+              </div>
+            </>
           )}
         </div>
       </div>
 
       {correctionOpen ? (
         <div
-          className="fixed inset-0 z-[1100] flex items-end justify-center bg-slate-950/60 p-4 backdrop-blur-sm sm:items-center"
+          className={waModalShellClass()}
           role="dialog"
           aria-modal="true"
           aria-labelledby="correction-dialog-title"
@@ -878,22 +1246,30 @@ export default function EmployeeExitDetailPage() {
             disabled={corrBusy}
             onClick={() => !corrBusy && setCorrectionOpen(false)}
           />
-          <div className="relative max-h-[92vh] w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
-            <div
-              className="border-b border-slate-100 px-5 py-4"
-              style={{ borderTop: "3px solid #0d9488" }}
-            >
-              <h2
-                id="correction-dialog-title"
-                className="text-lg font-bold tracking-tight text-slate-900"
+          <div className={waModalPanelClass()}>
+            <div className="flex shrink-0 items-start justify-between bg-[#128C7E] px-4 py-3.5 sm:border-b sm:border-slate-100 sm:bg-white sm:px-5 sm:py-4 sm:[border-top:3px_solid_#0d9488]">
+              <div>
+                <h2
+                  id="correction-dialog-title"
+                  className="text-[17px] font-medium text-white sm:text-lg sm:font-bold sm:text-slate-900"
+                >
+                  Correct termination
+                </h2>
+                <p className="mt-1 text-[13px] text-white/75 sm:text-sm sm:text-slate-500">
+                  Adjust termination reason, dates, or response message.
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={corrBusy}
+                onClick={() => setCorrectionOpen(false)}
+                className="absolute right-3 top-3 rounded-full p-2 text-white/90 active:bg-white/10 sm:hidden"
+                aria-label="Close"
               >
-                Correct termination
-              </h2>
-              <p className="mt-1 text-sm text-slate-500">
-                Adjust termination reason, dates, or response message for this record.
-              </p>
+                <X className="h-5 w-5" />
+              </button>
             </div>
-            <div className="max-h-[min(65vh,560px)] space-y-4 overflow-y-auto px-5 py-4">
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:max-h-[min(65vh,560px)] sm:px-5">
               {corrModalError ? (
                 <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900">
                   {corrModalError}
@@ -911,14 +1287,14 @@ export default function EmployeeExitDetailPage() {
                   rows={4}
                   value={corrReason}
                   onChange={(e) => setCorrReason(e.target.value)}
-                  className="mt-2 w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500/25"
+                  className={waFieldCls()}
                 />
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label
                     htmlFor="corr-last-day"
-                    className="text-xs font-semibold uppercase tracking-wide text-slate-500"
+                    className="text-[13px] font-medium text-[#667781] sm:text-xs sm:font-semibold sm:uppercase sm:tracking-wide sm:text-slate-500"
                   >
                     Last working day
                   </label>
@@ -927,13 +1303,13 @@ export default function EmployeeExitDetailPage() {
                     type="date"
                     value={corrLastDay}
                     onChange={(e) => setCorrLastDay(e.target.value)}
-                    className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500/25"
+                    className={waFieldCls()}
                   />
                 </div>
                 <div>
                   <label
                     htmlFor="corr-exit-date"
-                    className="text-xs font-semibold uppercase tracking-wide text-slate-500"
+                    className="text-[13px] font-medium text-[#667781] sm:text-xs sm:font-semibold sm:uppercase sm:tracking-wide sm:text-slate-500"
                   >
                     Exit date
                   </label>
@@ -942,14 +1318,14 @@ export default function EmployeeExitDetailPage() {
                     type="date"
                     value={corrExitDate}
                     onChange={(e) => setCorrExitDate(e.target.value)}
-                    className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500/25"
+                    className={waFieldCls()}
                   />
                 </div>
               </div>
               <div>
                 <label
                   htmlFor="corr-response"
-                  className="text-xs font-semibold uppercase tracking-wide text-slate-500"
+                  className="text-[13px] font-medium text-[#667781] sm:text-xs sm:font-semibold sm:uppercase sm:tracking-wide sm:text-slate-500"
                 >
                   Response message
                 </label>
@@ -959,16 +1335,16 @@ export default function EmployeeExitDetailPage() {
                   value={corrResponseMsg}
                   onChange={(e) => setCorrResponseMsg(e.target.value)}
                   placeholder="Optional notes shown on the record…"
-                  className="mt-2 w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-teal-500/25"
+                  className={waFieldCls()}
                 />
               </div>
             </div>
-            <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 bg-slate-50/90 px-5 py-3">
+            <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-[#E9EDEF] bg-white px-4 py-3 sm:border-slate-100 sm:bg-slate-50/90 sm:px-5">
               <button
                 type="button"
                 disabled={corrBusy}
                 onClick={() => setCorrectionOpen(false)}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                className={waSecondaryBtnCls()}
               >
                 Cancel
               </button>
@@ -976,7 +1352,7 @@ export default function EmployeeExitDetailPage() {
                 type="button"
                 disabled={corrBusy}
                 onClick={() => void handleCorrectionSubmit()}
-                className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
+                className={waPrimaryBtnCls()}
               >
                 {corrBusy ? (
                   <>
@@ -997,7 +1373,7 @@ export default function EmployeeExitDetailPage() {
 
       {assignPickerOpen ? (
         <div
-          className="fixed inset-0 z-[1150] flex items-end justify-center bg-slate-950/60 p-4 backdrop-blur-sm sm:items-center"
+          className={`${waModalShellClass()} z-[1150]`}
           role="dialog"
           aria-modal="true"
           aria-labelledby="assign-picker-title"
@@ -1013,35 +1389,45 @@ export default function EmployeeExitDetailPage() {
               setAssignForAssetId(null);
             }}
           />
-          <div className="relative max-h-[92vh] w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
-            <div
-              className="border-b border-slate-100 px-5 py-4"
-              style={{ borderTop: "3px solid #4f46e5" }}
-            >
-              <h2
-                id="assign-picker-title"
-                className="text-lg font-bold tracking-tight text-slate-900"
+          <div className={waModalPanelClass()}>
+            <div className="flex shrink-0 items-start justify-between bg-[#128C7E] px-4 py-3.5 sm:border-b sm:border-slate-100 sm:bg-white sm:px-5 sm:py-4 sm:[border-top:3px_solid_#4f46e5]">
+              <div className="pr-8">
+                <h2
+                  id="assign-picker-title"
+                  className="text-[17px] font-medium text-white sm:text-lg sm:font-bold sm:text-slate-900"
+                >
+                  Assign custody
+                </h2>
+                <p className="mt-1 text-[13px] text-white/75 sm:text-sm sm:text-slate-500">
+                  Pick an organization member for this asset.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (assignHandoverSaving) return;
+                  setAssignPickerOpen(false);
+                  setAssignForAssetId(null);
+                }}
+                className="absolute right-3 top-3 rounded-full p-2 text-white/90 active:bg-white/10 sm:hidden"
+                aria-label="Close"
               >
-                Assign custody
-              </h2>
-              <p className="mt-1 text-sm text-slate-500">
-                Pick an organization member. When you choose Move forward, the client posts{" "}
-                <code className="rounded bg-slate-100 px-1 font-mono text-[11px] text-indigo-900">
-                  assets_handover_data: [{`{ asset_id, handover_to }`}]
-                </code>
-                .
-              </p>
+                <X className="h-5 w-5" />
+              </button>
             </div>
-            <div className="space-y-3 border-b border-slate-100 px-5 py-3">
-              <input
-                type="search"
-                value={assignSearch}
-                onChange={(e) => setAssignSearch(e.target.value)}
-                placeholder="Search by name or email…"
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500/25"
-              />
+            <div className="shrink-0 border-b border-[#E9EDEF] px-4 py-3 sm:px-5">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8696A0]" />
+                <input
+                  type="search"
+                  value={assignSearch}
+                  onChange={(e) => setAssignSearch(e.target.value)}
+                  placeholder="Search name or email"
+                  className={searchFieldCls()}
+                />
+              </div>
             </div>
-            <div className="max-h-[min(55vh,480px)] space-y-2 overflow-y-auto px-5 py-4">
+            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-4 sm:max-h-[min(55vh,480px)] sm:px-5">
               {assignPersistError ? (
                 <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900">
                   {assignPersistError}
@@ -1073,19 +1459,21 @@ export default function EmployeeExitDetailPage() {
                   return (
                     <div
                       key={String(row.user_id)}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-3"
+                      className="flex items-center gap-3 py-3 lg:justify-between lg:rounded-xl lg:border lg:border-slate-100 lg:bg-slate-50/60 lg:px-3"
                     >
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-slate-900">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[16px] text-[#111B21] lg:text-sm lg:font-semibold lg:text-slate-900">
                           {row.user_name ?? `User #${row.user_id}`}
                         </p>
-                        <p className="truncate text-xs text-slate-600">{row.user_email ?? "—"}</p>
+                        <p className="truncate text-[14px] text-[#667781] lg:text-xs lg:text-slate-600">
+                          {row.user_email ?? "—"}
+                        </p>
                       </div>
                       <button
                         type="button"
                         disabled={assignHandoverSaving}
                         onClick={() => void assignCustodian(uid)}
-                        className="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+                        className="shrink-0 rounded-lg bg-[#25D366] px-4 py-2 text-[13px] font-medium text-white active:scale-[0.98] disabled:opacity-50 lg:bg-indigo-600 lg:px-3 lg:py-1.5 lg:text-xs lg:font-semibold lg:hover:bg-indigo-700"
                       >
                         Assign
                       </button>
@@ -1094,7 +1482,7 @@ export default function EmployeeExitDetailPage() {
                 })
               )}
             </div>
-            <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 bg-slate-50/90 px-5 py-3">
+            <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-[#E9EDEF] bg-white px-4 py-3 sm:border-slate-100 sm:bg-slate-50/90 sm:px-5">
               <button
                 type="button"
                 disabled={assignHandoverSaving}
@@ -1102,7 +1490,7 @@ export default function EmployeeExitDetailPage() {
                   setAssignPickerOpen(false);
                   setAssignForAssetId(null);
                 }}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                className={waSecondaryBtnCls()}
               >
                 Close
               </button>
@@ -1113,7 +1501,7 @@ export default function EmployeeExitDetailPage() {
 
       {rejectModalOpen ? (
         <div
-          className="fixed inset-0 z-[1140] flex items-end justify-center bg-slate-950/60 p-4 backdrop-blur-sm sm:items-center"
+          className={`${waModalShellClass()} z-[1140]`}
           role="dialog"
           aria-modal="true"
           aria-labelledby="reject-exit-title"
@@ -1125,20 +1513,27 @@ export default function EmployeeExitDetailPage() {
             disabled={rejectBusy}
             onClick={() => !rejectBusy && setRejectModalOpen(false)}
           />
-          <div className="relative max-h-[92vh] w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
-            <div
-              className="border-b border-slate-100 px-5 py-4"
-              style={{ borderTop: "3px solid #fb7185" }}
-            >
-              <h2 id="reject-exit-title" className="text-lg font-bold tracking-tight text-slate-900">
-                Reject application
-              </h2>
-              <p className="mt-1 text-sm text-slate-500">
-                Sends <span className="font-mono text-xs">application_status: rejected</span> with your
-                message and exits this flow.
-              </p>
+          <div className={waModalPanelClass()}>
+            <div className="flex shrink-0 items-start justify-between bg-[#128C7E] px-4 py-3.5 sm:border-b sm:border-slate-100 sm:bg-white sm:px-5 sm:py-4 sm:[border-top:3px_solid_#fb7185]">
+              <div>
+                <h2 id="reject-exit-title" className="text-[17px] font-medium text-white sm:text-lg sm:font-bold sm:text-slate-900">
+                  Reject application
+                </h2>
+                <p className="mt-1 text-[13px] text-white/75 sm:text-sm sm:text-slate-500">
+                  Send a rejection message for this exit application.
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={rejectBusy}
+                onClick={() => setRejectModalOpen(false)}
+                className="absolute right-3 top-3 rounded-full p-2 text-white/90 active:bg-white/10 sm:hidden"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
             </div>
-            <div className="space-y-4 px-5 py-4">
+            <div className="space-y-4 px-4 py-4 sm:px-5">
               {rejectModalError ? (
                 <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900">
                   {rejectModalError}
@@ -1157,16 +1552,16 @@ export default function EmployeeExitDetailPage() {
                   value={rejectMessage}
                   onChange={(e) => setRejectMessage(e.target.value)}
                   placeholder="Explain why this exit cannot proceed…"
-                  className="mt-2 w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-rose-500/25"
+                  className={waFieldCls()}
                 />
               </div>
             </div>
-            <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 bg-slate-50/90 px-5 py-3">
+            <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-[#E9EDEF] bg-white px-4 py-3 sm:border-slate-100 sm:bg-slate-50/90 sm:px-5">
               <button
                 type="button"
                 disabled={rejectBusy}
                 onClick={() => setRejectModalOpen(false)}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                className={waSecondaryBtnCls()}
               >
                 Cancel
               </button>
@@ -1174,7 +1569,7 @@ export default function EmployeeExitDetailPage() {
                 type="button"
                 disabled={rejectBusy}
                 onClick={() => void handleRejectSubmit()}
-                className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50"
+                className={waDangerBtnCls()}
               >
                 {rejectBusy ? (
                   <>
@@ -1195,7 +1590,7 @@ export default function EmployeeExitDetailPage() {
 
       {approveModalOpen ? (
         <div
-          className="fixed inset-0 z-[1140] flex items-end justify-center bg-slate-950/60 p-4 backdrop-blur-sm sm:items-center"
+          className={`${waModalShellClass()} z-[1140]`}
           role="dialog"
           aria-modal="true"
           aria-labelledby="approve-exit-title"
@@ -1207,23 +1602,30 @@ export default function EmployeeExitDetailPage() {
             disabled={approveBusy}
             onClick={() => !approveBusy && setApproveModalOpen(false)}
           />
-          <div className="relative max-h-[92vh] w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
-            <div
-              className="border-b border-slate-100 px-5 py-4"
-              style={{ borderTop: "3px solid #10b981" }}
-            >
-              <h2
-                id="approve-exit-title"
-                className="text-lg font-bold tracking-tight text-slate-900"
+          <div className={waModalPanelClass()}>
+            <div className="flex shrink-0 items-start justify-between bg-[#128C7E] px-4 py-3.5 sm:border-b sm:border-slate-100 sm:bg-white sm:px-5 sm:py-4 sm:[border-top:3px_solid_#10b981]">
+              <div>
+                <h2
+                  id="approve-exit-title"
+                  className="text-[17px] font-medium text-white sm:text-lg sm:font-bold sm:text-slate-900"
+                >
+                  Approve application
+                </h2>
+                <p className="mt-1 text-[13px] text-white/75 sm:text-sm sm:text-slate-500">
+                  Complete this exit after assets and handover tasks are done.
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={approveBusy}
+                onClick={() => setApproveModalOpen(false)}
+                className="absolute right-3 top-3 rounded-full p-2 text-white/90 active:bg-white/10 sm:hidden"
+                aria-label="Close"
               >
-                Approve application
-              </h2>
-              <p className="mt-1 text-sm text-slate-500">
-                Sets <span className="font-mono text-xs">application_status: approved</span>{" "}
-                after the server verifies assets and handover tasks.
-              </p>
+                <X className="h-5 w-5" />
+              </button>
             </div>
-            <div className="space-y-4 px-5 py-4">
+            <div className="space-y-4 px-4 py-4 sm:px-5">
               {approveModalError ? (
                 <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900">
                   {approveModalError}
@@ -1241,16 +1643,16 @@ export default function EmployeeExitDetailPage() {
                   rows={4}
                   value={approveMessage}
                   onChange={(e) => setApproveMessage(e.target.value)}
-                  className="mt-2 w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-emerald-500/25"
+                  className={waFieldCls()}
                 />
               </div>
             </div>
-            <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 bg-slate-50/90 px-5 py-3">
+            <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-[#E9EDEF] bg-white px-4 py-3 sm:border-slate-100 sm:bg-slate-50/90 sm:px-5">
               <button
                 type="button"
                 disabled={approveBusy}
                 onClick={() => setApproveModalOpen(false)}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                className={waSecondaryBtnCls()}
               >
                 Cancel
               </button>
@@ -1258,7 +1660,7 @@ export default function EmployeeExitDetailPage() {
                 type="button"
                 disabled={approveBusy}
                 onClick={() => void handleApproveSubmit()}
-                className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                className={waPrimaryBtnCls()}
               >
                 {approveBusy ? (
                   <>

@@ -5,6 +5,15 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { MdGroups, MdNotificationsNone, MdSearch } from "react-icons/md";
 import {
+  RefreshCw,
+  Loader2,
+  AlertCircle,
+  Info,
+  MapPin,
+  CalendarCheck,
+  Users,
+} from "lucide-react";
+import {
   formatAttendanceLogLocal,
   formatAttendanceTimeLocal,
   getAttendanceDayVisual,
@@ -261,6 +270,42 @@ const LEGEND_ITEMS: {
   },
 ];
 
+function zohoPrimaryBtnCls(full = false) {
+  return `inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-lg bg-[#008CD3] px-4 py-2.5 text-[14px] font-medium text-white transition active:scale-[0.98] hover:bg-[#0070AA] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full" : ""}`;
+}
+
+function zohoSecondaryBtnCls(full = false) {
+  return `inline-flex min-h-[44px] items-center justify-center rounded-lg border border-[#E4E7EC] bg-white px-4 py-2.5 text-[14px] font-medium text-[#1F2937] transition active:scale-[0.98] hover:bg-[#F5F7FA] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full flex-1" : ""}`;
+}
+
+function zohoDangerBtnCls(full = false) {
+  return `inline-flex min-h-[44px] items-center justify-center rounded-lg bg-[#D93025] px-4 py-2.5 text-[14px] font-medium text-white transition active:scale-[0.98] hover:bg-[#B71C1C] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full flex-1" : ""}`;
+}
+
+const USER_ICON_COLORS = [
+  "bg-[#E8F4FB] text-[#008CD3]",
+  "bg-[#E6F4EA] text-[#0F9D58]",
+  "bg-[#FEF3E6] text-[#E8710A]",
+  "bg-[#F3E8FD] text-[#7B1FA2]",
+  "bg-[#FCE8E6] text-[#D93025]",
+  "bg-[#E8EAF6] text-[#3F51B5]",
+];
+
+function userColorClass(name: string) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i += 1) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return USER_ICON_COLORS[Math.abs(hash) % USER_ICON_COLORS.length];
+}
+
+function userInitials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 function Home() {
   const params = useParams();
   const orgIdParam = params?.org_id;
@@ -281,6 +326,8 @@ function Home() {
   >(null);
   const [showCheckoutConfirm, setShowCheckoutConfirm] = useState(false);
   const [tick, setTick] = useState(0);
+  const [mobileMainTab, setMobileMainTab] = useState<"today" | "profile" | "overview">("today");
+  const [refreshing, setRefreshing] = useState(false);
 
   const loadDashboardData = useCallback(
     async (forceRefresh = false) => {
@@ -311,7 +358,11 @@ function Home() {
         }
       }
 
-      setLoading(true);
+      if (forceRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
       setError(null);
       try {
         const q = encodeURIComponent(String(orgId));
@@ -387,6 +438,7 @@ function Home() {
         setAddresses([]);
       } finally {
         setLoading(false);
+        setRefreshing(false);
       }
     },
     [orgId],
@@ -680,8 +732,346 @@ function Home() {
     year: "numeric",
   });
 
+  const mobileTabs = [
+    { id: "today" as const, label: "Today" },
+    { id: "profile" as const, label: "Profile" },
+    { id: "overview" as const, label: "Overview" },
+  ];
+
   return (
-    <section className="min-h-screen flex-1 bg-slate-50">
+    <div className="min-h-full bg-[#F5F7FA] lg:bg-transparent">
+      {/* Mobile & tablet: Zoho admin portal style */}
+      <div className="lg:hidden">
+        <div className="sticky top-0 z-20 border-b border-[#E4E7EC] bg-white shadow-sm">
+          <div className="flex items-center gap-2 px-4 py-3">
+            <span
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-sm font-semibold ${userColorClass(employeeName)}`}
+            >
+              {userInitials(employeeName)}
+            </span>
+            <div className="min-w-0 flex-1">
+              <h1 className="truncate text-[17px] font-semibold text-[#1F2937]">
+                {loading ? "Loading…" : employeeName}
+              </h1>
+              <p className="truncate text-[13px] text-[#6B7280]">
+                {org?.org_name || "Employee home"} · {employeeCode}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void loadDashboardData(true)}
+              disabled={loading || refreshing}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#008CD3] active:bg-[#F5F7FA] disabled:opacity-50"
+              aria-label="Refresh dashboard"
+            >
+              <RefreshCw className={`h-5 w-5 ${refreshing ? "animate-spin" : ""}`} />
+            </button>
+          </div>
+
+          <div className="px-4 pb-3">
+            <div className="flex rounded-lg bg-[#F5F7FA] p-1">
+              {mobileTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setMobileMainTab(tab.id)}
+                  className={`flex flex-1 items-center justify-center rounded-md py-2 text-[13px] font-medium transition ${
+                    mobileMainTab === tab.id
+                      ? "bg-white text-[#008CD3] shadow-sm"
+                      : "text-[#6B7280]"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {error && !loading ? (
+          <div className="mx-4 mt-3 flex items-start gap-2 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-4 py-3 text-[14px] text-[#D93025]">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{error}</span>
+          </div>
+        ) : null}
+
+        {loading ? (
+          <div className="flex flex-col items-center justify-center gap-3 py-24 text-[#6B7280]">
+            <Loader2 className="h-9 w-9 animate-spin text-[#008CD3]" />
+            <p className="text-[15px]">Loading your dashboard…</p>
+          </div>
+        ) : null}
+
+        {!loading && !error && mobileMainTab === "today" ? (
+          <div className="space-y-3 p-4 pb-28">
+            <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
+              <div className="flex items-center justify-between">
+                <p className="text-[15px] font-semibold text-[#1F2937]">This week</p>
+                <span className="text-[12px] text-[#6B7280]">{monthYearLabel}</span>
+              </div>
+              <div className="mt-3 grid grid-cols-7 gap-1.5">
+                {attendanceDays.map((day) => (
+                  <div
+                    key={day.ymd}
+                    className={`rounded-lg border p-1.5 text-center text-[10px] font-medium leading-tight ${day.visual.boxClass} ${
+                      day.active ? "ring-2 ring-[#008CD3] ring-offset-1" : ""
+                    }`}
+                    title={day.visual.meaning}
+                  >
+                    <p className="opacity-90">{day.day}</p>
+                    <p className="text-[13px] font-semibold">{day.dateNum}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
+                <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                  {showLiveTimer ? "Working (live)" : "Working hours"}
+                </p>
+                <p className="mt-1 text-2xl font-semibold tabular-nums text-[#008CD3]">
+                  {String(workingHoursDisplay)}
+                </p>
+              </div>
+              <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
+                <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">Status</p>
+                <p className="mt-1 text-[15px] font-semibold capitalize text-[#1F2937]">
+                  {attendanceStatus === "—"
+                    ? "—"
+                    : attendanceStatus.replace(/_/g, " ")}
+                </p>
+              </div>
+              <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
+                <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">Check out</p>
+                <p className="mt-1 text-[15px] font-semibold text-[#1F2937]">{checkOutTime}</p>
+              </div>
+              <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
+                <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">Late after</p>
+                <p className="mt-1 text-[15px] font-semibold text-[#E8710A]">{lateAfter}</p>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
+              <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">Today log</p>
+              <p className="mt-1 text-[14px] leading-relaxed text-[#1F2937]">{todayLog}</p>
+            </div>
+
+            {logSuccessMessage ? (
+              <div className="rounded-lg border border-[#C8E6C9] bg-[#E6F4EA] px-4 py-3 text-[14px] text-[#0F9D58]">
+                {logSuccessMessage}
+              </div>
+            ) : null}
+            {attendanceActionError ? (
+              <div className="flex items-start gap-2 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-4 py-3 text-[14px] text-[#D93025]">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{attendanceActionError}</span>
+              </div>
+            ) : null}
+
+            <div className="rounded-xl border border-[#E4E7EC] bg-[#E8F4FB] p-4">
+              <div className="flex gap-3">
+                <Info className="h-5 w-5 shrink-0 text-[#008CD3]" />
+                <p className="text-[13px] leading-relaxed text-[#4B5563]">
+                  Use the action bar below to check in, check out, or mark a stepping-out log.
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {!loading && !error && mobileMainTab === "profile" ? (
+          <div className="space-y-3 p-4">
+            <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
+              <div className="flex items-start gap-3">
+                <img
+                  src={imgSrc}
+                  alt=""
+                  className="h-14 w-14 shrink-0 rounded-xl object-cover"
+                />
+                <div className="min-w-0">
+                  <p className="text-[17px] font-semibold text-[#1F2937]">{employeeName}</p>
+                  <p className="text-[14px] text-[#6B7280]">{employeeCode}</p>
+                  <p className="mt-1 text-[13px] text-[#9CA3AF]">{roleName}</p>
+                </div>
+              </div>
+            </div>
+
+            <ul className="divide-y divide-[#E4E7EC] rounded-xl border border-[#E4E7EC] bg-white shadow-sm">
+              <li className="px-4 py-3">
+                <p className="text-[12px] font-semibold uppercase tracking-wide text-[#9CA3AF]">Email</p>
+                <p className="mt-0.5 text-[15px] text-[#1F2937]">{emp?.user_email || "—"}</p>
+              </li>
+              <li className="px-4 py-3">
+                <p className="text-[12px] font-semibold uppercase tracking-wide text-[#9CA3AF]">Phone</p>
+                <p className="mt-0.5 text-[15px] text-[#1F2937]">{emp?.user_phone || "—"}</p>
+              </li>
+              <li className="px-4 py-3">
+                <p className="text-[12px] font-semibold uppercase tracking-wide text-[#9CA3AF]">Emergency</p>
+                <p className="mt-0.5 text-[15px] text-[#1F2937]">{emergency}</p>
+              </li>
+              <li className="px-4 py-3">
+                <p className="text-[12px] font-semibold uppercase tracking-wide text-[#9CA3AF]">Organization</p>
+                <p className="mt-0.5 text-[15px] text-[#1F2937]">{org?.org_name || "—"}</p>
+              </li>
+            </ul>
+
+            <div className="rounded-xl border border-[#E4E7EC] bg-white shadow-sm">
+              <div className="flex items-center justify-between border-b border-[#E4E7EC] px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-[#008CD3]" />
+                  <p className="text-[15px] font-semibold text-[#1F2937]">Saved addresses</p>
+                </div>
+                <span className="rounded-full bg-[#F5F7FA] px-2 py-0.5 text-[11px] font-semibold text-[#6B7280]">
+                  {addresses.length}
+                </span>
+              </div>
+              {addressesLoading ? (
+                <p className="px-4 py-6 text-center text-[14px] text-[#6B7280]">Loading addresses…</p>
+              ) : null}
+              {addressesError ? (
+                <p className="px-4 py-4 text-[14px] text-[#D93025]">{addressesError}</p>
+              ) : null}
+              {!addressesLoading && !addressesError && addressCards.length === 0 ? (
+                <p className="px-4 py-6 text-center text-[14px] text-[#6B7280]">
+                  No address added yet.
+                </p>
+              ) : null}
+              {!addressesLoading && !addressesError && addressCards.length > 0 ? (
+                <ul className="divide-y divide-[#E4E7EC]">
+                  {addressCards.map((address) => (
+                    <li key={address.key} className="px-4 py-3.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-[15px] font-medium text-[#1F2937]">{address.label}</p>
+                        <span className="rounded-full bg-[#F5F7FA] px-2 py-0.5 text-[11px] font-medium text-[#6B7280]">
+                          {address.typeLabel}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[14px] text-[#6B7280]">{address.lineOne}</p>
+                      <p className="text-[13px] text-[#9CA3AF]">{address.lineTwo}</p>
+                      <p className="mt-1 text-[12px] text-[#9CA3AF]">ZIP: {address.zipCode}</p>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
+        {!loading && !error && mobileMainTab === "overview" ? (
+          <div className="space-y-3 p-4">
+            <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
+              <div className="flex items-center gap-2">
+                <CalendarCheck className="h-4 w-4 text-[#008CD3]" />
+                <p className="text-[15px] font-semibold text-[#1F2937]">Leave balance</p>
+              </div>
+              <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+                <div>
+                  <p className="text-2xl font-semibold text-[#1F2937]">{totalLeaves}</p>
+                  <p className="text-[11px] font-semibold uppercase text-[#9CA3AF]">Total</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-semibold text-[#E8710A]">{usedLeaves}</p>
+                  <p className="text-[11px] font-semibold uppercase text-[#9CA3AF]">Used</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-semibold text-[#0F9D58]">{leftLeaves}</p>
+                  <p className="text-[11px] font-semibold uppercase text-[#9CA3AF]">Left</p>
+                </div>
+              </div>
+            </div>
+
+            <ul className="divide-y divide-[#E4E7EC] rounded-xl border border-[#E4E7EC] bg-white shadow-sm">
+              <li className="flex items-center justify-between px-4 py-3.5">
+                <span className="text-[14px] text-[#6B7280]">Current shift</span>
+                <span className="rounded-full bg-[#E6F4EA] px-2.5 py-0.5 text-[12px] font-medium text-[#0F9D58]">
+                  {emp?.user_shift_name || "Not assigned"}
+                </span>
+              </li>
+              <li className="flex items-center justify-between px-4 py-3.5">
+                <span className="text-[14px] text-[#6B7280]">Shift timings</span>
+                <span className="text-[14px] font-medium text-[#1F2937]">{shiftRange}</span>
+              </li>
+              <li className="flex items-center justify-between px-4 py-3.5">
+                <span className="text-[14px] text-[#6B7280]">Job type</span>
+                <span className="text-[14px] font-medium text-[#1F2937]">{jobType}</span>
+              </li>
+              <li className="flex items-center justify-between px-4 py-3.5">
+                <span className="text-[14px] text-[#6B7280]">Admin</span>
+                <span className="truncate pl-4 text-[14px] font-medium text-[#1F2937]">{managerName}</span>
+              </li>
+              <li className="flex items-center justify-between px-4 py-3.5">
+                <span className="text-[14px] text-[#6B7280]">Joined</span>
+                <span className="text-[14px] font-medium text-[#1F2937]">
+                  {emp?.created_at
+                    ? new Date(String(emp.created_at)).toLocaleDateString()
+                    : "—"}
+                </span>
+              </li>
+            </ul>
+
+            <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
+              <div className="flex items-start gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#E8F4FB] text-[#008CD3]">
+                  <Users className="h-5 w-5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[15px] font-semibold text-[#1F2937]">My team</p>
+                  <p className="mt-1 text-[13px] text-[#6B7280]">
+                    View roster, leave requests, and approval status.
+                  </p>
+                  <Link
+                    href={`/user-dashboard/${orgId}/my-team`}
+                    className={`mt-3 ${zohoPrimaryBtnCls(true)}`}
+                  >
+                    Go to team
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {!loading && !error && mobileMainTab === "today" ? (
+          <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#E4E7EC] bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-4px_16px_rgba(0,0,0,0.06)]">
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => void markCheckIn()}
+                disabled={hasCheckedInToday || checkInSubmitting}
+                className={zohoPrimaryBtnCls(true)}
+              >
+                {checkInSubmitting ? "Marking…" : "Check in"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowCheckoutConfirm(true)}
+                disabled={hasCheckedOutToday || checkOutSubmitting}
+                className={zohoDangerBtnCls(true)}
+              >
+                {hasCheckedOutToday ? "Done" : "Check out"}
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => void markAttendanceLog()}
+              disabled={
+                !hasCheckedInToday ||
+                hasCheckedOutToday ||
+                logSubmitting ||
+                todayRecord?.id == null ||
+                todayRecord?.id === ""
+              }
+              className={`mt-2 ${zohoSecondaryBtnCls(true)}`}
+            >
+              {logSubmitting ? "Saving…" : "Mark stepping-out log"}
+            </button>
+          </div>
+        ) : null}
+      </div>
+
+      {/* Desktop layout (unchanged) */}
+      <section className="hidden min-h-screen flex-1 bg-slate-50 lg:block">
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 px-6 py-4 backdrop-blur">
         <div className="flex items-center justify-between gap-4">
           <div className="relative max-w-[420px] flex-1">
@@ -1083,30 +1473,31 @@ function Home() {
           </article>
         </section>
       </div>
+      </section>
       {showCheckoutConfirm && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-[#1F2937]/40 p-0 backdrop-blur-[1px] sm:items-center sm:bg-slate-900/50 sm:p-4"
           role="dialog"
           aria-modal="true"
         >
           <button
             type="button"
-            className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
+            className="absolute inset-0 sm:bg-slate-900/50 sm:backdrop-blur-sm"
             onClick={() => !checkOutSubmitting && setShowCheckoutConfirm(false)}
           />
-          <div className="relative w-full max-w-sm rounded-xl border border-slate-200 bg-white p-5 shadow-xl">
-            <h3 className="text-base font-semibold text-slate-800">
-              Confirm Check Out
+          <div className="relative w-full max-w-sm overflow-hidden rounded-t-2xl border border-[#E4E7EC] bg-white p-5 shadow-xl sm:rounded-xl sm:border-slate-200">
+            <h3 className="text-[17px] font-semibold text-[#1F2937] sm:text-base sm:text-slate-800">
+              Confirm check out
             </h3>
-            <p className="mt-2 text-sm text-slate-600">
+            <p className="mt-2 text-[14px] text-[#6B7280] sm:text-sm sm:text-slate-600">
               Are you sure you want to mark your check-out attendance?
             </p>
-            <div className="mt-4 flex justify-end gap-2">
+            <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button
                 type="button"
                 onClick={() => setShowCheckoutConfirm(false)}
                 disabled={checkOutSubmitting}
-                className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700"
+                className={zohoSecondaryBtnCls(true)}
               >
                 Cancel
               </button>
@@ -1114,15 +1505,15 @@ function Home() {
                 type="button"
                 onClick={() => void markCheckOut()}
                 disabled={checkOutSubmitting}
-                className="rounded-md bg-rose-600 px-3 py-1.5 text-sm font-semibold text-white"
+                className={zohoDangerBtnCls(true)}
               >
-                {checkOutSubmitting ? "Confirming..." : "Confirm"}
+                {checkOutSubmitting ? "Confirming…" : "Confirm"}
               </button>
             </div>
           </div>
         </div>
       )}
-    </section>
+    </div>
   );
 }
 

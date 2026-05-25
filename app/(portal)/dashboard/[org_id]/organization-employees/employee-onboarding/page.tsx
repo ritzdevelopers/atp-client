@@ -55,8 +55,41 @@ function labelCls() {
 }
 
 function inputCls() {
-  return "w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-[#0C123A] shadow-sm outline-none transition placeholder:text-slate-400 focus:border-[#C99237] focus:ring-2 focus:ring-[#C99237]/20";
+  return "w-full rounded-2xl border-0 bg-slate-100 px-3.5 py-3 text-sm text-[#0C123A] shadow-sm outline-none ring-1 ring-slate-200/80 transition placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-[#C99237]/25 lg:rounded-lg lg:border lg:border-slate-200 lg:bg-white lg:py-2.5 lg:focus:border-[#C99237] lg:focus:ring-[#C99237]/20";
 }
+
+function stepPanelShell() {
+  return "rounded-3xl bg-white p-4 shadow-md ring-1 ring-slate-200/70 max-lg:overflow-hidden lg:rounded-2xl lg:border lg:border-slate-200/90 lg:p-6 lg:shadow-sm lg:ring-0 sm:lg:p-8";
+}
+
+function stepSectionHeaderShell() {
+  return "mb-5 flex gap-3 max-lg:mb-4 max-lg:rounded-2xl max-lg:bg-slate-50/80 max-lg:p-3 max-lg:ring-1 max-lg:ring-slate-200/60 lg:mb-6 lg:bg-transparent lg:p-0 lg:ring-0";
+}
+
+function stepFooterShell() {
+  return "flex flex-col gap-2 border-t border-slate-100 pt-5 lg:flex-row lg:flex-wrap lg:items-center lg:gap-3 lg:pt-6";
+}
+
+function stepFooterEndShell() {
+  return "flex flex-col gap-2 border-t border-slate-100 pt-5 lg:flex-row lg:justify-end lg:gap-3 lg:pt-6";
+}
+
+function btnPrimaryCls() {
+  return "inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-2xl bg-[#C99237] px-5 py-3 text-sm font-bold text-[#0C123A] shadow-sm transition active:scale-[0.98] hover:bg-[#b87d2e] disabled:cursor-not-allowed disabled:opacity-60 lg:min-h-0 lg:w-auto lg:rounded-lg lg:px-5 lg:py-2.5";
+}
+
+function btnSecondaryCls() {
+  return "inline-flex min-h-[44px] w-full items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-[#0C123A] shadow-sm transition active:scale-[0.98] hover:bg-slate-50 disabled:opacity-60 lg:min-h-0 lg:w-auto lg:rounded-lg";
+}
+
+const ONBOARDING_STEP_NAV = [
+  { key: "basic" as const, n: "1", label: "Basics", short: "Basics" },
+  { key: "external" as const, n: "2", label: "Emergency", short: "Emergency" },
+  { key: "reference" as const, n: "3", label: "Reference", short: "Reference" },
+  { key: "assets" as const, n: "4", label: "Assets", short: "Assets" },
+  { key: "documents" as const, n: "5", label: "Documents", short: "Docs" },
+  { key: "address" as const, n: "6", label: "Address", short: "Address" },
+] as const;
 
 const PASSWORD_MIN = 8;
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
@@ -935,9 +968,77 @@ export default function EmployeOnboardingPage() {
     previewModalField && docFiles[previewModalField] ? docFiles[previewModalField] : undefined;
   const modalUrl = previewModalField ? previewUrls[previewModalField] : undefined;
 
+  const currentStepIndex = ONBOARDING_STEPS_ORDER.indexOf(onboardingStep);
+  const progressPct = ((currentStepIndex + 1) / ONBOARDING_STEPS_ORDER.length) * 100;
+  const currentStepLabel =
+    ONBOARDING_STEP_NAV.find((s) => s.key === onboardingStep)?.label ?? "Onboarding";
+
   return (
-    <div className="space-y-6">
-      <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm sm:p-8">
+    <div className="space-y-4 max-lg:-mx-1 max-lg:space-y-3 max-lg:pb-2 sm:max-lg:-mx-2 lg:mx-0 lg:space-y-6 lg:pb-0">
+      {/* Mobile & tablet: sticky app header + progress */}
+      <div className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/95 px-3 pb-3 pt-3 backdrop-blur-md sm:px-4 lg:hidden">
+        <div className="flex items-center gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#C99237]/15">
+            <UserPlus className="h-5 w-5 text-[#C99237]" aria-hidden />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-lg font-bold text-[#0C123A]">Employee onboarding</h1>
+            <p className="truncate text-xs text-slate-500">{orgName}</p>
+          </div>
+        </div>
+        <div className="mt-3">
+          <div className="mb-2 flex items-center justify-between gap-2 text-xs">
+            <span className="font-semibold text-[#C99237]">
+              Step {currentStepIndex + 1} of {ONBOARDING_STEPS_ORDER.length}
+            </span>
+            <span className="truncate text-slate-500">{currentStepLabel}</span>
+          </div>
+          <div
+            className="h-1.5 overflow-hidden rounded-full bg-slate-200"
+            role="progressbar"
+            aria-valuenow={currentStepIndex + 1}
+            aria-valuemin={1}
+            aria-valuemax={ONBOARDING_STEPS_ORDER.length}
+            aria-label="Onboarding progress"
+          >
+            <div
+              className="h-full rounded-full bg-[#C99237] transition-all duration-300"
+              style={{ width: `${progressPct}%` }}
+            />
+          </div>
+        </div>
+        <div className="mt-3 flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {ONBOARDING_STEP_NAV.map(({ key, short, n }) => {
+            const order = [...ONBOARDING_STEPS_ORDER];
+            const cur = order.indexOf(onboardingStep);
+            const ix = order.indexOf(key);
+            const done = cur > ix;
+            const active = onboardingStep === key;
+            return (
+              <span
+                key={key}
+                className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold ring-1 ${
+                  active
+                    ? "bg-[#C99237]/15 text-[#0C123A] ring-[#C99237]/40"
+                    : done
+                      ? "bg-emerald-50 text-emerald-800 ring-emerald-200"
+                      : "bg-slate-100 text-slate-500 ring-slate-200"
+                }`}
+              >
+                {done ? (
+                  <CheckCircle2 className="h-3 w-3 shrink-0" aria-hidden />
+                ) : (
+                  <span className="tabular-nums">{n}</span>
+                )}
+                {short}
+              </span>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Desktop: page intro */}
+      <div className={`${stepPanelShell()} hidden lg:block`}>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex gap-3">
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#C99237]/12">
@@ -945,7 +1046,7 @@ export default function EmployeOnboardingPage() {
             </span>
             <div>
               <h1 className="text-xl font-bold text-[#0C123A] sm:text-2xl">Employee onboarding</h1>
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 text-xs text-slate-500 max-lg:line-clamp-2 lg:text-sm">
                 Six steps for <span className="font-medium text-slate-700">{orgName}</span>: basics → emergency
                 contact → internal reference → optional assets → documents → optional address.
               </p>
@@ -954,21 +1055,13 @@ export default function EmployeOnboardingPage() {
         </div>
       </div>
 
+      {/* Desktop: step list */}
       <nav
-        className="rounded-2xl border border-slate-200/90 bg-white px-4 py-4 shadow-sm sm:px-8"
+        className={`${stepPanelShell()} hidden lg:block`}
         aria-label="Onboarding steps"
       >
-        <ol className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-center sm:gap-6 sm:text-sm lg:gap-10">
-          {(
-            [
-              { key: "basic" as const, n: "1", label: "Basics" },
-              { key: "external" as const, n: "2", label: "Emergency" },
-              { key: "reference" as const, n: "3", label: "Reference" },
-              { key: "assets" as const, n: "4", label: "Assets" },
-              { key: "documents" as const, n: "5", label: "Documents" },
-              { key: "address" as const, n: "6", label: "Address" },
-            ] as const
-          ).map(({ key, n, label }) => {
+        <ol className="flex flex-wrap items-center gap-6 text-sm lg:gap-10">
+          {ONBOARDING_STEP_NAV.map(({ key, n, label }) => {
             const order = [...ONBOARDING_STEPS_ORDER];
             const cur = order.indexOf(onboardingStep);
             const ix = order.indexOf(key);
@@ -1000,10 +1093,22 @@ export default function EmployeOnboardingPage() {
       </nav>
 
       {onboardingStep === "basic" && (
-        <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm sm:p-8">
+        <div className={stepPanelShell()}>
+          <div className={`${stepSectionHeaderShell()} lg:hidden`}>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#C99237]/15">
+              <UserPlus className="h-5 w-5 text-[#C99237]" aria-hidden />
+            </span>
+            <div>
+              <h2 className="text-base font-bold text-[#0C123A]">Account basics</h2>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Step 1 — name, contact, role, and password for {orgName}.
+              </p>
+            </div>
+          </div>
+
           {addressSuccess && (
             <div
-              className="mb-6 flex flex-col gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 sm:flex-row sm:items-center sm:justify-between"
+              className="mb-5 flex flex-col gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 max-lg:mb-4 sm:flex-row sm:items-center sm:justify-between"
               role="status"
             >
               <div className="flex items-start gap-2">
@@ -1022,7 +1127,7 @@ export default function EmployeOnboardingPage() {
 
           {success && (
             <div
-              className="mb-6 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
+              className="mb-5 flex items-start gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 max-lg:mb-4"
               role="status"
             >
               <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
@@ -1032,7 +1137,7 @@ export default function EmployeOnboardingPage() {
 
           {(formError || rolesError) && (
             <div
-              className="mb-6 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900"
+              className="mb-5 flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 max-lg:mb-4"
               role="alert"
             >
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" aria-hidden />
@@ -1098,7 +1203,7 @@ export default function EmployeOnboardingPage() {
                   Role <span className="text-red-500">*</span>
                 </label>
                 {rolesLoading ? (
-                  <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-500">
+                  <div className="flex items-center gap-2 rounded-2xl bg-slate-100 px-3.5 py-3 text-sm text-slate-500 ring-1 ring-slate-200/80 lg:rounded-lg lg:border lg:border-slate-200 lg:bg-slate-50 lg:py-2.5 lg:ring-0">
                     <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
                     Loading roles…
                   </div>
@@ -1184,11 +1289,11 @@ export default function EmployeOnboardingPage() {
               </div>
             </div>
 
-            <div className="flex flex-col gap-3 border-t border-slate-100 pt-6 sm:flex-row sm:items-center sm:justify-end">
+            <div className={stepFooterEndShell()}>
               <button
                 type="button"
                 onClick={resetFullOnboarding}
-                className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-[#0C123A] shadow-sm transition hover:bg-slate-50"
+                className={btnSecondaryCls()}
               >
                 Clear form
               </button>
@@ -1197,7 +1302,7 @@ export default function EmployeOnboardingPage() {
                 disabled={
                   submitting || rolesLoading || roles.length === 0 || !passwordsValid
                 }
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#C99237] px-5 py-2.5 text-sm font-bold text-[#0C123A] shadow-sm transition hover:bg-[#b87d2e] disabled:cursor-not-allowed disabled:opacity-60"
+                className={btnPrimaryCls()}
               >
                 {submitting ? (
                   <>
@@ -1217,16 +1322,16 @@ export default function EmployeOnboardingPage() {
       )}
 
       {onboardingStep === "external" && createdEmployeeId && (
-        <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm sm:p-8">
-          <div className="mb-6 flex gap-3">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#C99237]/12">
-              <ShieldCheck className="h-6 w-6 text-[#C99237]" aria-hidden />
+        <div className={stepPanelShell()}>
+          <div className={stepSectionHeaderShell()}>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#C99237]/15 lg:h-12 lg:w-12 lg:rounded-xl lg:bg-[#C99237]/12">
+              <ShieldCheck className="h-5 w-5 text-[#C99237] lg:h-6 lg:w-6" aria-hidden />
             </span>
             <div>
-              <h2 className="text-xl font-bold text-[#0C123A] sm:text-2xl">
+              <h2 className="text-base font-bold text-[#0C123A] lg:text-2xl">
                 Emergency contact
               </h2>
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 text-xs text-slate-500 max-lg:line-clamp-2 lg:text-sm">
                 For{" "}
                 <span className="font-medium text-slate-700">{createdEmployeeName}</span>.
                 Saved to organizational records (step&nbsp;2 of&nbsp;6).
@@ -1236,7 +1341,7 @@ export default function EmployeOnboardingPage() {
 
           {externalError && (
             <div
-              className="mb-6 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900"
+              className="mb-5 flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 max-lg:mb-4"
               role="alert"
             >
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" aria-hidden />
@@ -1295,19 +1400,19 @@ export default function EmployeOnboardingPage() {
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-3 border-t border-slate-100 pt-6">
+            <div className={stepFooterShell()}>
               <button
                 type="button"
                 disabled={externalSubmitting}
                 onClick={resetExternalForm}
-                className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-[#0C123A] shadow-sm transition hover:bg-slate-50 disabled:opacity-60"
+                className={btnSecondaryCls()}
               >
                 Clear fields
               </button>
               <button
                 type="submit"
                 disabled={externalSubmitting}
-                className="inline-flex items-center gap-2 rounded-lg bg-[#C99237] px-5 py-2.5 text-sm font-bold text-[#0C123A] shadow-sm transition hover:bg-[#b87d2e] disabled:opacity-60"
+                className={btnPrimaryCls()}
               >
                 {externalSubmitting ? (
                   <>
@@ -1327,14 +1432,14 @@ export default function EmployeOnboardingPage() {
       )}
 
       {onboardingStep === "reference" && createdEmployeeId && (
-        <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm sm:p-8">
-          <div className="mb-6 flex gap-3">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#C99237]/12">
-              <Users className="h-6 w-6 text-[#C99237]" aria-hidden />
+        <div className={stepPanelShell()}>
+          <div className={stepSectionHeaderShell()}>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#C99237]/15 lg:h-12 lg:w-12 lg:rounded-xl lg:bg-[#C99237]/12">
+              <Users className="h-5 w-5 text-[#C99237] lg:h-6 lg:w-6" aria-hidden />
             </span>
             <div>
-              <h2 className="text-xl font-bold text-[#0C123A] sm:text-2xl">Internal reference</h2>
-              <p className="mt-1 text-sm text-slate-500">
+              <h2 className="text-base font-bold text-[#0C123A] lg:text-2xl">Internal reference</h2>
+              <p className="mt-1 text-xs text-slate-500 max-lg:line-clamp-2 lg:text-sm">
                 Who referred{" "}
                 <span className="font-medium text-slate-700">{createdEmployeeName}</span>? Choose an
                 existing org member — their user id is sent to HR records (step&nbsp;3 of&nbsp;6).
@@ -1344,7 +1449,7 @@ export default function EmployeOnboardingPage() {
 
           {referenceError && (
             <div
-              className="mb-6 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900"
+              className="mb-5 flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 max-lg:mb-4"
               role="alert"
             >
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" aria-hidden />
@@ -1426,7 +1531,7 @@ export default function EmployeOnboardingPage() {
               </select>
             </div>
 
-            <div className="flex flex-wrap gap-3 border-t border-slate-100 pt-6">
+            <div className={stepFooterShell()}>
               <button
                 type="button"
                 disabled={referenceSubmitting}
@@ -1436,7 +1541,7 @@ export default function EmployeOnboardingPage() {
                   setReferredByDesignationId("");
                   setReferenceError(null);
                 }}
-                className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-[#0C123A] shadow-sm transition hover:bg-slate-50 disabled:opacity-60"
+                className={btnSecondaryCls()}
               >
                 Reset selection
               </button>
@@ -1448,7 +1553,7 @@ export default function EmployeOnboardingPage() {
                   !referredById ||
                   referrerOptions.length === 0
                 }
-                className="inline-flex items-center gap-2 rounded-lg bg-[#C99237] px-5 py-2.5 text-sm font-bold text-[#0C123A] shadow-sm transition hover:bg-[#b87d2e] disabled:opacity-60"
+                className={btnPrimaryCls()}
               >
                 {referenceSubmitting ? (
                   <>
@@ -1468,14 +1573,14 @@ export default function EmployeOnboardingPage() {
       )}
 
       {onboardingStep === "assets" && createdEmployeeId && (
-        <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm sm:p-8">
-          <div className="mb-6 flex gap-3">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#C99237]/12">
-              <Package className="h-6 w-6 text-[#C99237]" aria-hidden />
+        <div className={stepPanelShell()}>
+          <div className={stepSectionHeaderShell()}>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#C99237]/15 lg:h-12 lg:w-12 lg:rounded-xl lg:bg-[#C99237]/12">
+              <Package className="h-5 w-5 text-[#C99237] lg:h-6 lg:w-6" aria-hidden />
             </span>
             <div>
-              <h2 className="text-xl font-bold text-[#0C123A] sm:text-2xl">Assign assets</h2>
-              <p className="mt-1 text-sm text-slate-500">
+              <h2 className="text-base font-bold text-[#0C123A] lg:text-2xl">Assign assets</h2>
+              <p className="mt-1 text-xs text-slate-500 max-lg:line-clamp-2 lg:text-sm">
                 Optional — allocate laptops, badges, SIMs, etc. for{" "}
                 <span className="font-medium text-slate-700">{createdEmployeeName}</span>. Add rows with
                 <span className="font-semibold text-slate-600"> Add asset</span>, or skip (step&nbsp;4 of&nbsp;6).
@@ -1485,7 +1590,7 @@ export default function EmployeOnboardingPage() {
 
           {assetsError && (
             <div
-              className="mb-6 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900"
+              className="mb-5 flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 max-lg:mb-4"
               role="alert"
             >
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" aria-hidden />
@@ -1645,22 +1750,22 @@ export default function EmployeOnboardingPage() {
               ))}
             </div>
 
-            <div className="flex flex-col gap-3 border-t border-slate-100 pt-6 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
+            <div className={`${stepFooterShell()} lg:justify-between`}>
               <button
                 type="button"
                 disabled={assetsSubmitting}
                 onClick={() => setAssetDraftRows((prev) => [...prev, createEmptyAssetDraft()])}
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-dashed border-[#C99237]/60 bg-[#C99237]/5 px-4 py-2.5 text-sm font-semibold text-[#0C123A] transition hover:bg-[#C99237]/15 disabled:opacity-60"
+                className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-[#C99237]/60 bg-[#C99237]/5 px-4 py-2.5 text-sm font-semibold text-[#0C123A] transition active:scale-[0.98] hover:bg-[#C99237]/15 disabled:opacity-60 lg:w-auto lg:rounded-lg"
               >
                 <PlusCircle className="h-4 w-4" aria-hidden />
                 Add asset
               </button>
-              <div className="flex flex-wrap gap-2 lg:justify-end">
+              <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap lg:justify-end">
                 <button
                   type="button"
                   disabled={assetsSubmitting}
                   onClick={() => handleAssetsSkip()}
-                  className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-white disabled:opacity-60"
+                  className="inline-flex min-h-[44px] w-full items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-5 py-2.5 text-sm font-semibold text-slate-700 transition active:scale-[0.98] hover:border-slate-400 hover:bg-white disabled:opacity-60 lg:w-auto lg:rounded-lg"
                 >
                   Skip assets — documents next
                 </button>
@@ -1671,14 +1776,14 @@ export default function EmployeOnboardingPage() {
                     setAssetDraftRows([]);
                     setAssetsError(null);
                   }}
-                  className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-[#0C123A] shadow-sm transition hover:bg-slate-50 disabled:opacity-60"
+                  className={btnSecondaryCls()}
                 >
                   Clear rows
                 </button>
                 <button
                   type="submit"
                   disabled={assetsSubmitting}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#C99237] px-5 py-2.5 text-sm font-bold text-[#0C123A] shadow-sm transition hover:bg-[#b87d2e] disabled:opacity-60"
+                className={btnPrimaryCls()}
                 >
                   {assetsSubmitting ? (
                     <>
@@ -1699,14 +1804,14 @@ export default function EmployeOnboardingPage() {
       )}
 
       {onboardingStep === "documents" && createdEmployeeId && (
-        <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm sm:p-8">
-          <div className="mb-6 flex gap-3">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#C99237]/12">
-              <FileText className="h-6 w-6 text-[#C99237]" aria-hidden />
+        <div className={stepPanelShell()}>
+          <div className={stepSectionHeaderShell()}>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#C99237]/15 lg:h-12 lg:w-12 lg:rounded-xl lg:bg-[#C99237]/12">
+              <FileText className="h-5 w-5 text-[#C99237] lg:h-6 lg:w-6" aria-hidden />
             </span>
             <div>
-              <h2 className="text-xl font-bold text-[#0C123A] sm:text-2xl">Employee documents</h2>
-              <p className="mt-1 text-sm text-slate-500">
+              <h2 className="text-base font-bold text-[#0C123A] lg:text-2xl">Employee documents</h2>
+              <p className="mt-1 text-xs text-slate-500 max-lg:line-clamp-2 lg:text-sm">
                 Step&nbsp;5 of&nbsp;6 — tap a frame for full screen preview. Wrong file? Use{" "}
                 <span className="font-semibold text-slate-600">Change file</span>. PNG/JPG/WebP/PDF · max{" "}
                 5&nbsp;MB each.
@@ -1716,7 +1821,7 @@ export default function EmployeOnboardingPage() {
 
           {documentsError && (
             <div
-              className="mb-6 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900"
+              className="mb-5 flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 max-lg:mb-4"
               role="alert"
             >
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" aria-hidden />
@@ -1725,7 +1830,7 @@ export default function EmployeOnboardingPage() {
           )}
 
           <form onSubmit={handleDocumentsSubmit} className="space-y-8">
-            <div className="grid gap-8 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6 xl:grid-cols-3">
               {ONBOARDING_DOC_SLOTS.map(
                 ({ field, label, hint, required, skeleton, icon: IconCmp }) => {
                   const file = docFiles[field];
@@ -1840,19 +1945,19 @@ export default function EmployeOnboardingPage() {
               )}
             </div>
 
-            <div className="flex flex-col gap-3 border-t border-slate-100 pt-6 sm:flex-row sm:justify-end">
+            <div className={stepFooterEndShell()}>
               <button
                 type="button"
                 disabled={documentsSubmitting}
                 onClick={() => resetDocumentsForm()}
-                className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-[#0C123A] shadow-sm transition hover:bg-slate-50 disabled:opacity-60"
+                className={btnSecondaryCls()}
               >
                 Clear all
               </button>
               <button
                 type="submit"
                 disabled={documentsSubmitting}
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#C99237] px-5 py-2.5 text-sm font-bold text-[#0C123A] shadow-sm transition hover:bg-[#b87d2e] disabled:cursor-not-allowed disabled:opacity-60"
+                className={btnPrimaryCls()}
               >
                 {documentsSubmitting ? (
                   <>
@@ -1873,14 +1978,14 @@ export default function EmployeOnboardingPage() {
 
       {previewModalField && modalFile && modalUrl && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="doc-preview-title"
           onClick={() => setPreviewModalField(null)}
         >
           <div
-            className="relative max-h-[90vh] max-w-4xl overflow-hidden rounded-2xl border border-white/10 bg-white shadow-2xl"
+            className="relative max-h-[92vh] w-full max-w-4xl overflow-hidden rounded-t-3xl border border-white/10 bg-white shadow-2xl sm:rounded-2xl"
             onClick={(ev) => ev.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-4 py-3 sm:px-5">
@@ -1934,14 +2039,14 @@ export default function EmployeOnboardingPage() {
       )}
 
       {onboardingStep === "address" && createdEmployeeId && (
-        <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm sm:p-8">
-          <div className="mb-6 flex gap-3">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#C99237]/12">
-              <MapPin className="h-6 w-6 text-[#C99237]" aria-hidden />
+        <div className={stepPanelShell()}>
+          <div className={stepSectionHeaderShell()}>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#C99237]/15 lg:h-12 lg:w-12 lg:rounded-xl lg:bg-[#C99237]/12">
+              <MapPin className="h-5 w-5 text-[#C99237] lg:h-6 lg:w-6" aria-hidden />
             </span>
             <div>
-              <h2 className="text-xl font-bold text-[#0C123A] sm:text-2xl">Employee address</h2>
-              <p className="mt-1 text-sm text-slate-500">
+              <h2 className="text-base font-bold text-[#0C123A] lg:text-2xl">Employee address</h2>
+              <p className="mt-1 text-xs text-slate-500 max-lg:line-clamp-2 lg:text-sm">
                 Optional — skip if you&apos;ll capture this later for{" "}
                 <span className="font-medium text-slate-700">{createdEmployeeName}</span>.
               </p>
@@ -1950,7 +2055,7 @@ export default function EmployeOnboardingPage() {
 
           {addressError && (
             <div
-              className="mb-6 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900"
+              className="mb-5 flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 max-lg:mb-4"
               role="alert"
             >
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" aria-hidden />
@@ -2082,28 +2187,28 @@ export default function EmployeOnboardingPage() {
                 </div>
               </div>
 
-              <div className="flex flex-col gap-3 border-t border-slate-100 pt-6 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+              <div className={`${stepFooterShell()} lg:justify-between`}>
                 <button
                   type="button"
                   disabled={addressSubmitting}
                   onClick={() => handleAddressSkip()}
-                  className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-white disabled:opacity-60"
+                  className="inline-flex min-h-[44px] w-full items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-5 py-2.5 text-sm font-semibold text-slate-700 transition active:scale-[0.98] hover:border-slate-400 hover:bg-white disabled:opacity-60 lg:w-auto lg:rounded-lg"
                 >
                   Skip address — finish onboarding
                 </button>
-                <div className="flex flex-wrap gap-2 sm:justify-end">
+                <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap lg:justify-end">
                   <button
                     type="button"
                     disabled={addressSubmitting}
                     onClick={() => resetAddressForm()}
-                    className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-[#0C123A] shadow-sm transition hover:bg-slate-50 disabled:opacity-60"
+                    className={btnSecondaryCls()}
                   >
                     Clear fields
                   </button>
                   <button
                     type="submit"
                     disabled={addressSubmitting}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#C99237] px-5 py-2.5 text-sm font-bold text-[#0C123A] shadow-sm transition hover:bg-[#b87d2e] disabled:cursor-not-allowed disabled:opacity-60"
+                    className={btnPrimaryCls()}
                   >
                     {addressSubmitting ? (
                       <>
