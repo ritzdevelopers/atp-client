@@ -31,8 +31,8 @@ function ManagementDashboardLayout({ children }: { children: React.ReactNode }) 
 
         <div className="relative z-5 flex w-full">
           <LeftSideBar accessableFeatures={accessableFeatures} />
-        <section className="w-full">
-        <Header />
+        <section className="w-full pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-0">
+          <Header />
           <div className="flex-1">
             <RightMainSide>{children}</RightMainSide>
           </div>
