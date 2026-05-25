@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
-import { MdNotificationsNone, MdSearch } from "react-icons/md";
+import { MdGroups, MdNotificationsNone, MdSearch } from "react-icons/md";
 import {
   formatAttendanceLogLocal,
   formatAttendanceTimeLocal,
@@ -700,6 +701,29 @@ function Home() {
           </button>
         </div>
       </header>
+
+      <div className="border-b border-slate-200 bg-white px-6 py-4">
+        <div className="flex flex-col gap-4 rounded-xl border border-indigo-100 bg-gradient-to-r from-indigo-50 to-white p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-white">
+              <MdGroups className="text-xl" aria-hidden />
+            </span>
+            <div>
+              <h2 className="text-sm font-semibold text-slate-800">My team</h2>
+              <p className="mt-0.5 text-xs leading-relaxed text-slate-600">
+                View your team roster, raise leave requests, and track approval
+                status in one place.
+              </p>
+            </div>
+          </div>
+          <Link
+            href={`/user-dashboard/${orgId}/my-team`}
+            className="inline-flex w-full items-center justify-center rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 sm:w-auto"
+          >
+            Go to team
+          </Link>
+        </div>
+      </div>
 
       <div className="space-y-5 p-6">
         {loading ? (

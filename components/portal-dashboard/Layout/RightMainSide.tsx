@@ -26,12 +26,13 @@ export type RightMainSideUser = {
 };
 
 function RightMainSide({ children }: RightMainSideProps) {
+  /** Tighter gutters on phones, scale up through tablet (`md`) to desktop (`lg`). */
   const shell =
-    "min-h-screen bg-slate-50 p-6 [font-family:var(--font-inter),system-ui,sans-serif] md:p-10";
+    "min-h-screen w-full min-w-0 bg-slate-50 px-3 py-4 [font-family:var(--font-inter),system-ui,sans-serif] sm:px-5 sm:py-6 md:px-6 md:py-8 lg:px-10 lg:py-10";
 
   return (
     <div className={shell}>
-      <div className="mx-auto max-w-6xl">{children}</div>
+      <div className="mx-auto w-full min-w-0 max-w-6xl">{children}</div>
     </div>
   );
 }

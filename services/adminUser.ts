@@ -135,26 +135,36 @@ export async function createEmployee(
 /** Field names must match multer `file.fieldname` / server `document_type` in `user_docs`. */
 export type EmployeeOnboardingDocumentField =
   | "user_image"
+  | "user_passbook"
   | "user_pan_card"
   | "user_aadhar_front"
   | "user_aadhar_back"
-  | "user_passbook"
-  | "user_passport_photo";
+  | "user_passport_photo"
+  | "user_resignation_letter"
+  | "user_10th_marksheet"
+  | "user_12th_marksheet"
+  | "user_higher_education_marksheet"
+  | "user_other_certificate"
+  | "user_appointment_letter"
+  | "user_previous_company_leaving_letter"
+  | "user_other_document";
 
 export async function uploadEmployeeDocuments(
   token: string,
   payload: {
     org_id: number | string;
     employee_user_id: number | string;
-    files: Record<EmployeeOnboardingDocumentField, File>;
+    files: Partial<Record<EmployeeOnboardingDocumentField, File>>;
   },
 ): Promise<{ success?: boolean; message?: string; documents?: unknown[] }> {
   const fd = new FormData();
   fd.append("employee_user_id", String(payload.employee_user_id));
   fd.append("org_id", String(payload.org_id));
-  (Object.keys(payload.files) as EmployeeOnboardingDocumentField[]).forEach((key) => {
-    fd.append(key, payload.files[key]);
-  });
+  (Object.entries(payload.files) as [EmployeeOnboardingDocumentField, File | undefined][]).forEach(
+    ([key, file]) => {
+      if (file) fd.append(key, file);
+    },
+  );
 
   const res = await fetch(`${API_URL}/api/employee-documents/upload-document`, {
     method: "POST",
@@ -172,6 +182,296 @@ export async function uploadEmployeeDocuments(
 
   if (!res.ok) {
     const error: ApiError = new Error(result.message || "Could not upload documents");
+    error.status = res.status;
+    throw error;
+  }
+
+  return result;
+}
+
+export async function addUserExternalInformation(
+  token: string,
+  payload: {
+    user_id: number | string;
+    org_id: number | string;
+    emergency_contact_name: string;
+    emergency_number: string;
+    relation_blood_line: string;
+  },
+): Promise<{
+  success?: boolean;
+  message?: string;
+  data?: {
+    id?: number | string;
+    user_id?: number | string;
+    org_id?: number | string;
+    emergency_contact_name?: string;
+    emergency_number?: string;
+    relation_blood_line?: string;
+  };
+}> {
+  const res = await fetch(`${API_URL}/api/user/add-user-external-information`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      user_id: payload.user_id,
+      org_id: payload.org_id,
+      emergency_contact_name: payload.emergency_contact_name,
+      emergency_number: payload.emergency_number,
+      relation_blood_line: payload.relation_blood_line,
+    }),
+  });
+
+  const result = (await res.json()) as {
+    success?: boolean;
+    message?: string;
+    data?: unknown;
+  };
+
+  if (!res.ok) {
+    const error: ApiError = new Error(result.message || "Could not save emergency contact details");
+    error.status = res.status;
+    throw error;
+  }
+
+  return result as {
+    success?: boolean;
+    message?: string;
+    data?: {
+      id?: number | string;
+      user_id?: number | string;
+      org_id?: number | string;
+      emergency_contact_name?: string;
+      emergency_number?: string;
+      relation_blood_line?: string;
+    };
+  };
+}
+
+/** Matches server `employee_assets.asset_type`. */
+export const EMPLOYEE_ASSET_TYPES = [
+  "laptop",
+  "mobile",
+  "software",
+  "email",
+  "sim",
+  "id_card",
+  "monitor",
+  "access_card",
+  "other",
+] as const;
+
+export type EmployeeAssetTypeSlug = (typeof EMPLOYEE_ASSET_TYPES)[number];
+
+export type ManagementEmployeeRoleSlot = {
+  user_role_assignment_id?: number | string;
+  role_id?: number | string;
+  role_name?: string;
+  role_created_at?: string;
+  assignment_updated_at?: string;
+};
+
+export type ManagementEmployeeRow = {
+  user_id: number | string;
+  user_name?: string;
+  user_email?: string;
+  user_phone?: string | null;
+  org_member_id?: number | string;
+  org_member_since?: string;
+  roles: ManagementEmployeeRoleSlot[];
+};
+
+export type ManagementEmployeesPagination = {
+  page: number;
+  limit: number;
+  total: number;
+  total_pages: number;
+  has_next: boolean;
+  has_prev: boolean;
+};
+
+export async function getManagementEmployeesPage(
+  token: string,
+  orgId: number | string,
+  page = 1,
+  limit = 100,
+): Promise<{
+  success?: boolean;
+  message?: string;
+  data: ManagementEmployeeRow[];
+  pagination: ManagementEmployeesPagination;
+}> {
+  const params = new URLSearchParams({
+    org_id: String(orgId),
+    page: String(page),
+    limit: String(limit),
+  });
+  const res = await fetch(
+    `${API_URL}/api/employee-references/management-employees?${params.toString()}`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+
+  const result = (await res.json()) as {
+    success?: boolean;
+    message?: string;
+    data?: ManagementEmployeeRow[];
+    pagination?: ManagementEmployeesPagination;
+  };
+
+  if (!res.ok) {
+    const error: ApiError = new Error(result.message || "Could not load organization members");
+    error.status = res.status;
+    throw error;
+  }
+
+  const data = Array.isArray(result.data) ? result.data : [];
+  const pagination = result.pagination ?? {
+    page: 1,
+    limit,
+    total: data.length,
+    total_pages: 1,
+    has_next: false,
+    has_prev: false,
+  };
+
+  return { ...result, data, pagination };
+}
+
+export async function addEmployeeReference(
+  token: string,
+  payload: {
+    org_id: number | string;
+    employee_id: number | string;
+    referred_by_id: number | string;
+    referred_by_name?: string | null;
+    referred_by_designation_id?: number | string | null;
+  },
+): Promise<{ success?: boolean; message?: string; data?: unknown }> {
+  const body: Record<string, unknown> = {
+    org_id: payload.org_id,
+    employee_id: payload.employee_id,
+    referred_by_id: payload.referred_by_id,
+  };
+  if (payload.referred_by_name !== undefined && payload.referred_by_name !== "") {
+    body.referred_by_name = payload.referred_by_name;
+  }
+  if (
+    payload.referred_by_designation_id !== undefined &&
+    payload.referred_by_designation_id !== null &&
+    String(payload.referred_by_designation_id).trim() !== ""
+  ) {
+    body.referred_by_designation_id = payload.referred_by_designation_id;
+  }
+
+  const res = await fetch(`${API_URL}/api/employee-references/add`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  const result = (await res.json()) as {
+    success?: boolean;
+    message?: string;
+    data?: unknown;
+  };
+
+  if (!res.ok) {
+    const error: ApiError = new Error(result.message || "Could not save employee reference");
+    error.status = res.status;
+    throw error;
+  }
+
+  return result;
+}
+
+export type UploadEmployeeAssetsItemPayload = {
+  employee_id: number | string;
+  asset_name: string;
+  asset_type: string;
+  asset_summary?: string | null;
+  handover_date_time?: string | null;
+  /** Multipart field name for optional image/PDF. */
+  image_field: string;
+  file?: File | null;
+};
+
+export async function uploadEmployeeAssetsBatch(
+  token: string,
+  payload: {
+    org_id: number | string;
+    items: UploadEmployeeAssetsItemPayload[];
+  },
+): Promise<{ success?: boolean; message?: string; data?: unknown[] }> {
+  if (payload.items.length === 0) {
+    const error: ApiError = new Error("No assets to upload");
+    error.status = 400;
+    throw error;
+  }
+
+  const fd = new FormData();
+  fd.append("org_id", String(payload.org_id));
+
+  const meta = payload.items.map((item, index) => {
+    const image_field =
+      item.image_field && item.image_field.trim() !== ""
+        ? item.image_field.trim()
+        : `asset_image_${index}`;
+    return {
+      employee_id: item.employee_id,
+      asset_name: item.asset_name,
+      asset_type: item.asset_type,
+      asset_summary:
+        item.asset_summary != null && String(item.asset_summary).trim() !== ""
+          ? String(item.asset_summary).trim()
+          : null,
+      handover_date_time:
+        item.handover_date_time != null &&
+        String(item.handover_date_time).trim() !== ""
+          ? String(item.handover_date_time).trim()
+          : null,
+      image_field,
+    };
+  });
+
+  fd.append("assets", JSON.stringify(meta));
+
+  payload.items.forEach((item, index) => {
+    const image_field =
+      meta[index]?.image_field && meta[index].image_field.trim() !== ""
+        ? meta[index].image_field
+        : `asset_image_${index}`;
+    if (item.file) {
+      fd.append(image_field, item.file);
+    }
+  });
+
+  const res = await fetch(`${API_URL}/api/employee-assets/add`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: fd,
+  });
+
+  const result = (await res.json()) as {
+    success?: boolean;
+    message?: string;
+    data?: unknown[];
+  };
+
+  if (!res.ok) {
+    const error: ApiError = new Error(result.message || "Could not upload employee assets");
     error.status = res.status;
     throw error;
   }

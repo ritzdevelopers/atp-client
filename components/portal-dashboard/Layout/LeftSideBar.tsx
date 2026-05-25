@@ -10,16 +10,42 @@ import {
   MdFactCheck,
   MdHistory,
   MdHome,
-  MdMoreHoriz,
   MdSchedule,
-  MdSettings,
   MdMenu,
   MdLogout,
+  MdClose,
   MdVpnKey,
   MdWifi,
 } from "react-icons/md";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+
+/** Admin mobile bottom bar: first four primary sections. */
+const ADMIN_BOTTOM_TAB_IDS: string[] = [
+  "home",
+  "employee-management",
+  "employees-roles-management",
+  "employees-features-management",
+];
+
+const MOBILE_BOTTOM_LIGHT =
+  "border-t border-slate-200 bg-[#FAFAF8] text-slate-700 shadow-[0_-1px_0_0_rgba(15,23,42,0.06)]";
+const MOBILE_DRAWER_PANEL =
+  "border-l border-slate-200 bg-[#FAFAF8] text-slate-800";
+
+function shortBottomLabel(item: NavItem): string {
+  const short: Record<string, string> = {
+    home: "Home",
+    "employee-management": "Employees",
+    "employees-roles-management": "Roles",
+    "employees-features-management": "Features",
+    "company-ip-addresses-management": "IP",
+    "company-shift-management": "Shifts",
+    "company-holiday-management": "Holidays",
+    "company-attendance-management": "Attendance",
+  };
+  return short[item.id] ?? (item.name.length > 14 ? `${item.name.slice(0, 12)}…` : item.name);
+}
 
 function readRoleNameFromToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -51,7 +77,10 @@ type NavItem = {
   children: NavSubItem[];
   /** If set, main item navigates here when clicked. Omit to only expand / show sub-menu. */
   path?: string;
+  /** User must have this feature slug (checks accessible features). */
   requiredFeature?: string;
+  /** If set, access is granted when any listed feature matches (e.g. legacy role aliases). */
+  requiredFeatureAny?: string[];
 };
 
 function LeftSideBar({
@@ -164,6 +193,14 @@ function LeftSideBar({
     return false;
   }, [accessibleTokens]);
 
+  const hasAnyFeatureAccess = useCallback(
+    (slugs?: string[]) => {
+      if (!slugs?.length) return true;
+      return slugs.some((s) => hasFeatureAccess(s));
+    },
+    [hasFeatureAccess],
+  );
+
   const navItems: NavItem[] = useMemo(
     () => [
       {
@@ -197,11 +234,21 @@ function LeftSideBar({
             id: "employee-leaves",
             name: "Manage Employee Leaves",
             path: `${base}/organization-employees/manage-employee-leaves`,
-          }
+          },
+          {
+            id: "team-creation",
+            name: "Team creation",
+            path: `${base}/organization-employees/create-team`,
+          },
+          {
+            id: "team-management",
+            name: "Team management",
+            path: `${base}/organization-employees/manage-teams`,
+          },
         ],
         requiredFeature: "employee-management",
       },
-      // employees-roles-management
+      // employees-roles-management (either feature slug may grant access)
       {
         id: "employees-roles-management",
         name: "Organization Roles",
@@ -220,27 +267,10 @@ function LeftSideBar({
           },
         ],
         path: `${base}/organization-roles/create-new-role`,
-        requiredFeature: "employees-roles-management",
-      },
-      {
-        id: "employees-roles-management",
-        name: "Organization Roles",
-        value: "employees-roles-management",
-        icon: <MdAdminPanelSettings />,
-        children: [
-          {
-            id: "create-new-role",
-            name: "Create New Role",
-            path: `${base}/organization-roles/create-new-role`,
-          },
-          {
-            id: "manage-roles",
-            name: "Manage Roles",
-            path: `${base}/organization-roles/manage-roles`,
-          },
+        requiredFeatureAny: [
+          "employees-roles-management",
+          "organization-roles",
         ],
-        path: `${base}/organization-roles/create-new-role`,
-        requiredFeature: "organization-roles",
       },
 
       {
@@ -352,7 +382,10 @@ function LeftSideBar({
   const filteredNavItems = useMemo(() => {
     const result: NavItem[] = [];
     for (const item of navItems) {
-      if (!hasFeatureAccess(item.requiredFeature)) continue;
+      const canSee = item.requiredFeatureAny?.length
+        ? hasAnyFeatureAccess(item.requiredFeatureAny)
+        : hasFeatureAccess(item.requiredFeature);
+      if (!canSee) continue;
       const children = item.children;
       result.push({
         ...item,
@@ -361,10 +394,92 @@ function LeftSideBar({
       });
     }
     return result;
-  }, [navItems, hasFeatureAccess]);
+  }, [navItems, hasFeatureAccess, hasAnyFeatureAccess]);
 
   const [activeMain, setActiveMain] = useState("organization");
   const [activeSub, setActiveSub] = useState("employee");
+  const [mobileFullMenuOpen, setMobileFullMenuOpen] = useState(false);
+  const [mobileSubParent, setMobileSubParent] = useState<NavItem | null>(null);
+
+  type BottomSlot = { kind: "nav"; item: NavItem } | { kind: "my-attendance" };
+
+  const bottomSlots: BottomSlot[] = useMemo(() => {
+    if (isAdmin) {
+      const slots: BottomSlot[] = [];
+      for (const id of ADMIN_BOTTOM_TAB_IDS) {
+        const item = filteredNavItems.find((i) => i.id === id);
+        if (item) slots.push({ kind: "nav", item });
+      }
+      return slots.slice(0, 4);
+    }
+    const slots: BottomSlot[] = [];
+    const home = filteredNavItems.find((i) => i.id === "home");
+    if (home) slots.push({ kind: "nav", item: home });
+    slots.push({ kind: "my-attendance" });
+    for (const item of filteredNavItems) {
+      if (item.id === "home") continue;
+      if (slots.length >= 4) break;
+      slots.push({ kind: "nav", item });
+    }
+    return slots.slice(0, 4);
+  }, [isAdmin, filteredNavItems]);
+
+  const bottomTabNavIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const slot of bottomSlots) {
+      if (slot.kind === "nav") ids.add(slot.item.id);
+    }
+    return ids;
+  }, [bottomSlots]);
+
+  /** Nav items not pinned on the bottom tab (open from the hamburger menu). */
+  const overflowNavItems = useMemo(
+    () => filteredNavItems.filter((i) => !bottomTabNavIds.has(i.id)),
+    [filteredNavItems, bottomTabNavIds],
+  );
+
+  useEffect(() => {
+    if (!pathname || filteredNavItems.length === 0) return;
+    let bestMain: string | null = null;
+    let bestSubId: string | null = null;
+    let bestLen = -1;
+    for (const item of filteredNavItems) {
+      for (const sub of item.children) {
+        if (
+          sub.path &&
+          pathname.startsWith(sub.path) &&
+          sub.path.length > bestLen
+        ) {
+          bestLen = sub.path.length;
+          bestMain = item.id;
+          bestSubId = sub.id;
+        }
+      }
+      if (
+        item.path &&
+        pathname.startsWith(item.path) &&
+        item.path.length > bestLen
+      ) {
+        bestLen = item.path.length;
+        bestMain = item.id;
+        bestSubId = null;
+      }
+    }
+    if (bestMain) {
+      setActiveMain((prev) => (prev === bestMain ? prev : bestMain!));
+      if (bestSubId) setActiveSub((prev) => (prev === bestSubId ? prev : bestSubId));
+    }
+  }, [pathname, filteredNavItems]);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      setMobileFullMenuOpen(false);
+      setMobileSubParent(null);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   useEffect(() => {
     if (filteredNavItems.length === 0) return;
@@ -405,10 +520,42 @@ function LeftSideBar({
     }
   };
 
-  const handleMoreClick = () => {
-    setActiveMain("more");
-    router.push(`${base}/home`);
-  };
+  const selectMobileNavItem = useCallback(
+    (item: NavItem) => {
+      setActiveMain(item.id);
+      if (item.children.length > 0) {
+        setActiveSub(item.children[0]?.id ?? "");
+      }
+      if (item.path) {
+        router.push(item.path);
+      }
+      if (item.children.length > 0) {
+        setMobileSubParent(item);
+      } else {
+        setMobileSubParent(null);
+      }
+      setMobileFullMenuOpen(false);
+    },
+    [router],
+  );
+
+  const closeMobileDrawers = useCallback(() => {
+    setMobileFullMenuOpen(false);
+    setMobileSubParent(null);
+  }, []);
+
+  const isMobileBottomSlotActive = useCallback(
+    (slot: BottomSlot) => {
+      if (slot.kind === "my-attendance") return myHistoryActive;
+      const item = slot.item;
+      if (!pathname) return false;
+      if (item.path && pathname.startsWith(item.path)) return true;
+      return item.children.some(
+        (c) => c.path && pathname.startsWith(c.path),
+      );
+    },
+    [pathname, myHistoryActive],
+  );
 
   function confirmLogout() {
     try {
@@ -458,12 +605,13 @@ function LeftSideBar({
 
   return (
     <>
-    <div className="flex h-screen sticky top-0">
-      {/* ── LEFT RAIL ── */}
-      <div
-        className="flex flex-col items-center w-[72px] py-3 overflow-y-auto overflow-x-hidden flex-shrink-0 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
-        style={{ backgroundColor: "#131C23" }}
-      >
+      {/* Desktop / large screens — existing dark rail + sub column */}
+      <div className="relative hidden h-screen shrink-0 lg:flex lg:sticky lg:top-0">
+        {/* ── LEFT RAIL ── */}
+        <div
+          className="flex w-[72px] flex-shrink-0 flex-col items-center overflow-y-auto overflow-x-hidden py-3 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+          style={{ backgroundColor: "#131C23" }}
+        >
         <div className="flex flex-col items-center w-full flex-1">
           {filteredNavItems.map((item) => {
             const isActive = activeMain === item.id;
@@ -629,7 +777,7 @@ function LeftSideBar({
 
       {subItems.length > 0 && (
         <div
-          className="flex flex-col w-48 py-4 flex-shrink-0 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+          className="flex w-48 flex-shrink-0 flex-col overflow-y-auto py-4 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
           style={{ backgroundColor: "#1E2C39" }}
         >
           {subItems.map((sub) => {
@@ -640,12 +788,11 @@ function LeftSideBar({
                 type="button"
                 onClick={() => handleSubClick(sub)}
                 className={`
-                  w-full text-left px-5 py-[10px] text-[13.5px] font-medium
-                  cursor-pointer transition-all duration-150 border-0 bg-transparent outline-none
+                  w-full cursor-pointer border-0 bg-transparent px-5 py-[10px] text-left text-[13.5px] font-medium outline-none transition-all duration-150
                   ${
                     isSubActive
-                      ? "text-[#C99237] bg-white/[0.05]"
-                      : "text-[#8A9BAD] hover:text-[#CBD5DF] hover:bg-white/[0.04]"
+                      ? "bg-white/[0.05] text-[#C99237]"
+                      : "text-[#8A9BAD] hover:bg-white/[0.04] hover:text-[#CBD5DF]"
                   }
                 `}
               >
@@ -655,8 +802,189 @@ function LeftSideBar({
           })}
         </div>
       )}
-    </div>
-    {logoutDialog ? createPortal(logoutDialog, document.body) : null}
+      </div>
+
+      {/* Mobile & tablet: hamburger (overflow links) */}
+      <button
+        type="button"
+        onClick={() => {
+          setMobileFullMenuOpen(true);
+          setMobileSubParent(null);
+        }}
+        className="fixed left-3 top-[calc(3rem+10px)] z-40 flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-[#FAFAF8] text-slate-800 shadow-sm sm:top-[calc(3.5rem+10px)] md:top-[calc(4rem+12px)] lg:hidden"
+        aria-label="Open navigation menu"
+        aria-expanded={mobileFullMenuOpen}
+      >
+        <MdMenu className="text-[22px]" />
+      </button>
+
+      {/* Bottom tab bar (< lg): light, bordered */}
+      <nav
+        className={`fixed bottom-0 left-0 right-0 z-40 lg:hidden ${MOBILE_BOTTOM_LIGHT}`}
+        style={{
+          paddingBottom: "max(10px, env(safe-area-inset-bottom))",
+        }}
+        aria-label="Primary navigation"
+      >
+        <div className="mx-auto flex max-w-3xl items-stretch justify-around">
+          {bottomSlots.map((slot, index) => {
+            const isActive = isMobileBottomSlotActive(slot);
+            const borderClass =
+              index < bottomSlots.length - 1 ? "border-r border-slate-200" : "";
+            if (slot.kind === "my-attendance") {
+              return (
+                <button
+                  key="my-attendance"
+                  type="button"
+                  onClick={() => {
+                    router.push(`${base}/my-attendance-history`);
+                    closeMobileDrawers();
+                  }}
+                  className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 py-2 ${borderClass} ${
+                    isActive ? "text-amber-800" : "text-slate-600"
+                  }`}
+                >
+                  <span className="text-[22px] leading-none text-slate-700">
+                    <MdHistory />
+                  </span>
+                  <span className="line-clamp-2 w-full text-center text-[10px] font-medium leading-tight">
+                    My attendance
+                  </span>
+                </button>
+              );
+            }
+            const item = slot.item;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => selectMobileNavItem(item)}
+                className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 py-2 ${borderClass} ${
+                  isActive ? "text-amber-800" : "text-slate-600"
+                }`}
+              >
+                <span className="text-[22px] leading-none text-slate-700">
+                  {item.icon}
+                </span>
+                <span className="line-clamp-2 w-full text-center text-[10px] font-medium leading-tight">
+                  {shortBottomLabel(item)}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
+
+      {/* Left sheet: links not shown on the bottom tabs + sign out */}
+      {mobileFullMenuOpen ? (
+        <>
+          <div
+            className="fixed inset-0 z-50 bg-slate-900/25 lg:hidden"
+            onClick={() => setMobileFullMenuOpen(false)}
+            aria-hidden
+          />
+          <div className="fixed left-0 top-0 z-[51] flex h-full w-[min(20rem,88vw)] flex-col border-r border-slate-200 bg-[#FAFAF8] shadow-lg lg:hidden">
+            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+              <span className="text-sm font-semibold text-slate-900">More</span>
+              <button
+                type="button"
+                onClick={() => setMobileFullMenuOpen(false)}
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700"
+                aria-label="Close menu"
+              >
+                <MdClose className="text-xl" />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {overflowNavItems.length === 0 ? (
+                <p className="border-b border-slate-200 px-4 py-3 text-sm text-slate-500">
+                  All sections are on the tab bar.
+                </p>
+              ) : (
+                overflowNavItems.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => selectMobileNavItem(item)}
+                    className="flex w-full items-center gap-3 border-b border-slate-200 px-4 py-3 text-left text-sm font-medium text-slate-800"
+                  >
+                    <span className="text-xl text-slate-600">{item.icon}</span>
+                    <span className="min-w-0 flex-1 leading-snug">{item.name}</span>
+                  </button>
+                ))
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileFullMenuOpen(false);
+                  setShowLogoutConfirm(true);
+                }}
+                className="flex w-full items-center gap-3 border-b border-slate-200 px-4 py-3 text-left text-sm font-medium text-rose-700"
+              >
+                <span className="text-xl">
+                  <MdLogout />
+                </span>
+                Sign out
+              </button>
+            </div>
+          </div>
+        </>
+      ) : null}
+
+      {/* Right sheet: submenu when a tab has children */}
+      {mobileSubParent && mobileSubParent.children.length > 0 ? (
+        <>
+          <div
+            className="fixed inset-0 z-[52] bg-slate-900/25 lg:hidden"
+            onClick={() => setMobileSubParent(null)}
+            aria-hidden
+          />
+          <aside
+            className={`fixed right-0 top-0 z-[53] flex h-full flex-col lg:hidden ${MOBILE_DRAWER_PANEL}`}
+            style={{
+              width: "min(80vw, 22rem)",
+            }}
+            aria-label={`${mobileSubParent.name} links`}
+          >
+            <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-3 py-3">
+              <span className="min-w-0 truncate text-sm font-semibold text-slate-900">
+                {mobileSubParent.name}
+              </span>
+              <button
+                type="button"
+                onClick={() => setMobileSubParent(null)}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700"
+                aria-label="Close submenu"
+              >
+                <MdClose className="text-xl" />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {mobileSubParent.children.map((sub) => {
+                const subActive =
+                  Boolean(sub.path && pathname?.startsWith(sub.path));
+                return (
+                  <button
+                    key={sub.id}
+                    type="button"
+                    onClick={() => {
+                      handleSubClick(sub);
+                      setMobileSubParent(null);
+                    }}
+                    className={`w-full border-b border-slate-200 px-4 py-3 text-left text-sm font-medium ${
+                      subActive ? "bg-slate-100 text-amber-900" : "text-slate-800"
+                    }`}
+                  >
+                    {sub.name}
+                  </button>
+                );
+              })}
+            </div>
+          </aside>
+        </>
+      ) : null}
+
+      {logoutDialog ? createPortal(logoutDialog, document.body) : null}
     </>
   );
 }
