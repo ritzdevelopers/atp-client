@@ -34,7 +34,8 @@ export default function LoginPage() {
     try {
       const result = await loginUser(formData);
       localStorage.setItem("token", result.token);
-      router.push("/");
+      window.location.replace("/");
+      return;
     } catch (error) {
       const apiError = error as ApiError;
       const message = (apiError.message || "").trim().toLowerCase();

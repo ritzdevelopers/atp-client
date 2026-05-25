@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   CalendarDays,
   CheckCircle2,
@@ -12,6 +12,7 @@ import {
   Search,
   X,
   XCircle,
+  ChevronDown,
 } from "lucide-react";
 import { getAllOrgUsers, type OrgUserRow } from "@/services/adminUser";
 import {
@@ -111,6 +112,22 @@ function statusBadgeClass(status: string): string {
   return "bg-amber-50 text-amber-900 ring-amber-600/15";
 }
 
+function filterFieldCls() {
+  return "w-full rounded-2xl border-0 bg-slate-100 px-3 py-3 text-sm text-slate-800 outline-none ring-1 ring-slate-200/80 placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-indigo-500/25 lg:rounded-xl lg:border lg:border-slate-200 lg:bg-slate-50/50 lg:py-2.5 lg:focus:border-indigo-300 lg:focus:ring-indigo-500/20";
+}
+
+function mobilePanelCls() {
+  return "rounded-3xl bg-white p-4 shadow-md ring-1 ring-slate-200/70 lg:rounded-2xl lg:border lg:border-slate-200/80 lg:p-5 lg:shadow-sm lg:ring-0 sm:lg:p-6";
+}
+
+function mobilePrimaryBtnCls() {
+  return "inline-flex min-h-[44px] w-full items-center justify-center rounded-2xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition active:scale-[0.98] hover:bg-indigo-700 lg:min-h-0 lg:w-auto lg:rounded-xl";
+}
+
+function mobileSecondaryBtnCls() {
+  return "inline-flex min-h-[44px] w-full items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition active:scale-[0.98] hover:bg-slate-50 lg:min-h-0 lg:w-auto lg:rounded-xl";
+}
+
 function userDisplayName(
   userId: number,
   users: OrgUserRow[],
@@ -159,6 +176,7 @@ function ManageEmployeeLeavesPage() {
   } | null>(null);
   const [attModalReason, setAttModalReason] = useState("");
   const [attModalSubmitting, setAttModalSubmitting] = useState(false);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   const buildQueryString = useCallback((f: Filters) => {
     const q = new URLSearchParams();
@@ -277,6 +295,7 @@ function ManageEmployeeLeavesPage() {
 
   const applyFilters = () => {
     setAppliedFilters({ ...filters });
+    setMobileFiltersOpen(false);
   };
 
   const resetFilters = () => {
@@ -286,6 +305,7 @@ function ManageEmployeeLeavesPage() {
 
   const applyAttFilters = () => {
     setAppliedAttFilters({ ...attFilters });
+    setMobileFiltersOpen(false);
   };
 
   const resetAttFilters = () => {
@@ -417,9 +437,88 @@ function ManageEmployeeLeavesPage() {
       ? loading || refreshing
       : attLoading || attRefreshing;
 
+  const activeCounts = mainTab === "leaves" ? counts : attCounts;
+  const listTotal = activeCounts.total;
+
   return (
-    <section className="min-h-full space-y-6 bg-gradient-to-b from-slate-50/80 to-white p-4 sm:p-6 lg:p-8">
-      <header className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm shadow-slate-200/40">
+    <section className="min-h-full space-y-4 bg-[#F5F5F3] p-0 max-lg:-mx-1 sm:max-lg:-mx-2 lg:space-y-6 lg:bg-gradient-to-b lg:from-slate-50/80 lg:to-white lg:p-4 lg:sm:p-6 lg:lg:p-8">
+      {/* Mobile & tablet: sticky app header */}
+      <div className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/95 px-3 pb-3 pt-3 backdrop-blur-md sm:px-4 lg:hidden">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-indigo-600/90">
+              Organization · Employees
+            </p>
+            <h1 className="mt-0.5 truncate text-lg font-bold text-[#0C123A]">
+              Leave &amp; attendance
+            </h1>
+          </div>
+          <button
+            type="button"
+            onClick={refresh}
+            disabled={isBusy}
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-700 active:scale-95 disabled:opacity-50"
+            aria-label="Refresh list"
+          >
+            <RefreshCw
+              className={`h-4 w-4 ${
+                (mainTab === "leaves" && refreshing) ||
+                (mainTab === "attendance" && attRefreshing)
+                  ? "animate-spin text-indigo-600"
+                  : ""
+              }`}
+              aria-hidden
+            />
+          </button>
+        </div>
+
+        <div className="mt-3 flex rounded-2xl bg-slate-100 p-1 ring-1 ring-slate-200/60">
+          <button
+            type="button"
+            onClick={() => {
+              setMainTab("leaves");
+              setMobileFiltersOpen(false);
+            }}
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold transition active:scale-[0.98] sm:text-sm ${
+              mainTab === "leaves"
+                ? "bg-white text-indigo-700 shadow-sm"
+                : "text-slate-600"
+            }`}
+          >
+            <CalendarDays className="h-4 w-4 shrink-0" aria-hidden />
+            Leaves
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMainTab("attendance");
+              setMobileFiltersOpen(false);
+            }}
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold transition active:scale-[0.98] sm:text-sm ${
+              mainTab === "attendance"
+                ? "bg-white text-indigo-700 shadow-sm"
+                : "text-slate-600"
+            }`}
+          >
+            <ClipboardList className="h-4 w-4 shrink-0" aria-hidden />
+            Attendance
+          </button>
+        </div>
+
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          <MobileStatTile label="Pending" value={activeCounts.pending} tone="amber" />
+          <MobileStatTile label="Approved" value={activeCounts.approved} tone="emerald" />
+          <MobileStatTile label="Rejected" value={activeCounts.rejected} tone="rose" />
+        </div>
+        <p className="mt-2 text-center text-[11px] text-slate-500">
+          {listTotal} {mainTab === "leaves" ? "leave request" : "attendance quer"}
+          {listTotal === 1 ? (mainTab === "leaves" ? "" : "y") : mainTab === "leaves" ? "s" : "ies"}{" "}
+          in view
+        </p>
+      </div>
+
+      {/* Desktop: page header */}
+      <header className="hidden overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm shadow-slate-200/40 lg:block">
         <div className="border-b border-slate-100 bg-gradient-to-r from-indigo-600/5 via-white to-sky-600/5 px-5 py-6 sm:px-8 sm:py-8">
           <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-indigo-600/90">
             Organization · Employees
@@ -459,7 +558,10 @@ function ManageEmployeeLeavesPage() {
           <div className="mt-6 flex flex-wrap gap-2 border-t border-slate-100/80 pt-5">
             <button
               type="button"
-              onClick={() => setMainTab("leaves")}
+              onClick={() => {
+              setMainTab("leaves");
+              setMobileFiltersOpen(false);
+            }}
               className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
                 mainTab === "leaves"
                   ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/25"
@@ -471,7 +573,10 @@ function ManageEmployeeLeavesPage() {
             </button>
             <button
               type="button"
-              onClick={() => setMainTab("attendance")}
+              onClick={() => {
+              setMainTab("attendance");
+              setMobileFiltersOpen(false);
+            }}
               className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
                 mainTab === "attendance"
                   ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/25"
@@ -511,11 +616,11 @@ function ManageEmployeeLeavesPage() {
       {notice ? (
         <div
           role="status"
-          className={
+          className={`mx-3 sm:mx-4 lg:mx-0 ${
             notice.type === "ok"
-              ? "rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
-              : "rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900"
-          }
+              ? "rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
+              : "rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900"
+          }`}
         >
           {notice.text}
         </div>
@@ -523,8 +628,28 @@ function ManageEmployeeLeavesPage() {
 
       {mainTab === "leaves" ? (
        <>
-      <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
-        <div className="flex items-center gap-2 text-slate-800">
+      <div className={`${mobilePanelCls()} mx-3 sm:mx-4 lg:mx-0`}>
+        <button
+          type="button"
+          onClick={() => setMobileFiltersOpen((v) => !v)}
+          className="flex w-full items-center justify-between gap-2 text-left lg:hidden"
+          aria-expanded={mobileFiltersOpen}
+        >
+          <div className="flex items-center gap-2 text-slate-800">
+            <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-sm">
+              <Filter className="h-4 w-4" aria-hidden />
+            </span>
+            <div>
+              <h2 className="text-sm font-semibold text-[#0C123A]">Filters</h2>
+              <p className="text-[11px] text-slate-500">Tap to {mobileFiltersOpen ? "hide" : "show"}</p>
+            </div>
+          </div>
+          <ChevronDown
+            className={`h-5 w-5 shrink-0 text-slate-400 transition ${mobileFiltersOpen ? "rotate-180" : ""}`}
+            aria-hidden
+          />
+        </button>
+        <div className="hidden items-center gap-2 text-slate-800 lg:flex">
           <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600 text-white shadow-sm">
             <Filter className="h-4 w-4" aria-hidden />
           </span>
@@ -534,7 +659,8 @@ function ManageEmployeeLeavesPage() {
           </div>
         </div>
 
-        <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-12 lg:items-end">
+        <div className={`${mobileFiltersOpen ? "mt-4 block" : "hidden"} lg:mt-5 lg:block`}>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-12 lg:items-end">
           <label className="lg:col-span-2 block">
             <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
               Leave type
@@ -547,7 +673,7 @@ function ManageEmployeeLeavesPage() {
                   leave_type: e.target.value as Filters["leave_type"],
                 }))
               }
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2.5 text-sm text-slate-800 outline-none ring-indigo-500/20 focus:border-indigo-300 focus:bg-white focus:ring-2"
+              className={filterFieldCls()}
             >
               <option value="">All types</option>
               <option value="full_day">Full day</option>
@@ -564,7 +690,7 @@ function ManageEmployeeLeavesPage() {
               onChange={(e) =>
                 setFilters((p) => ({ ...p, status: e.target.value as Filters["status"] }))
               }
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2.5 text-sm text-slate-800 outline-none ring-indigo-500/20 focus:border-indigo-300 focus:bg-white focus:ring-2"
+              className={filterFieldCls()}
             >
               <option value="">All statuses</option>
               <option value="pending">Pending</option>
@@ -582,7 +708,7 @@ function ManageEmployeeLeavesPage() {
               value={filters.user_name}
               onChange={(e) => setFilters((p) => ({ ...p, user_name: e.target.value }))}
               placeholder="Exact match on record"
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2.5 text-sm text-slate-800 outline-none placeholder:text-slate-400 ring-indigo-500/20 focus:border-indigo-300 focus:bg-white focus:ring-2"
+              className={filterFieldCls()}
             />
           </label>
           <label className="lg:col-span-2 block">
@@ -594,7 +720,7 @@ function ManageEmployeeLeavesPage() {
               type="date"
               value={filters.created_at}
               onChange={(e) => setFilters((p) => ({ ...p, created_at: e.target.value }))}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2.5 text-sm text-slate-800 outline-none ring-indigo-500/20 focus:border-indigo-300 focus:bg-white focus:ring-2"
+              className={filterFieldCls()}
             />
           </label>
           <label className="lg:col-span-2 block">
@@ -609,45 +735,72 @@ function ManageEmployeeLeavesPage() {
                   is_ascending: e.target.value as "ASC" | "DESC",
                 }))
               }
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2.5 text-sm text-slate-800 outline-none ring-indigo-500/20 focus:border-indigo-300 focus:bg-white focus:ring-2"
+              className={filterFieldCls()}
             >
               <option value="DESC">Newest first</option>
               <option value="ASC">Oldest first</option>
             </select>
           </label>
-          <div className="flex flex-wrap gap-2 lg:col-span-1 lg:justify-end">
+          <div className="flex flex-col gap-2 sm:col-span-2 lg:col-span-1 lg:flex-row lg:flex-wrap lg:justify-end">
             <button
               type="button"
               onClick={applyFilters}
-              className="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700"
+              className={mobilePrimaryBtnCls()}
             >
               Apply
             </button>
             <button
               type="button"
               onClick={resetFilters}
-              className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              className={mobileSecondaryBtnCls()}
             >
               Reset
             </button>
           </div>
         </div>
+        </div>
       </div>
 
       {loading ? (
-        <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center text-sm text-slate-500">
+        <div className={`${mobilePanelCls()} mx-3 p-10 text-center text-sm text-slate-500 sm:mx-4 lg:mx-0 lg:p-12`}>
           <RefreshCw className="mx-auto mb-3 h-8 w-8 animate-spin text-indigo-500" aria-hidden />
           Loading leave requests…
         </div>
       ) : null}
 
       {error && !loading ? (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</div>
+        <div className="mx-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 sm:mx-4 lg:mx-0">
+          {error}
+        </div>
       ) : null}
 
       {!loading && !error ? (
-        <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
-          <div className="overflow-x-auto">
+        <div className={`${mobilePanelCls()} mx-3 overflow-hidden sm:mx-4 lg:mx-0 lg:p-0`}>
+          {/* Mobile & tablet: card list */}
+          <div className="space-y-2.5 lg:hidden lg:p-0">
+            {rows.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-12 text-center text-slate-500">
+                <p className="font-medium text-slate-700">No leave requests match your filters.</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Adjust filters or refresh to see new submissions.
+                </p>
+              </div>
+            ) : (
+              rows.map((row) => (
+                <LeaveRowCard
+                  key={row.id}
+                  row={row}
+                  disabled={updatingId === row.id}
+                  onApprove={() => void updateStatus(row.id, "approved")}
+                  onReject={() => void updateStatus(row.id, "rejected")}
+                  onPending={() => void updateStatus(row.id, "pending")}
+                />
+              ))
+            )}
+          </div>
+
+          {/* Desktop: table */}
+          <div className="hidden overflow-x-auto lg:block">
             <table className="min-w-[900px] w-full border-collapse text-left text-sm">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50/90 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
@@ -724,8 +877,28 @@ function ManageEmployeeLeavesPage() {
       </>
       ) : (
         <>
-          <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
-            <div className="flex items-center gap-2 text-slate-800">
+          <div className={`${mobilePanelCls()} mx-3 sm:mx-4 lg:mx-0`}>
+            <button
+              type="button"
+              onClick={() => setMobileFiltersOpen((v) => !v)}
+              className="flex w-full items-center justify-between gap-2 text-left lg:hidden"
+              aria-expanded={mobileFiltersOpen}
+            >
+              <div className="flex items-center gap-2 text-slate-800">
+                <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-sm">
+                  <Filter className="h-4 w-4" aria-hidden />
+                </span>
+                <div>
+                  <h2 className="text-sm font-semibold text-[#0C123A]">Filters</h2>
+                  <p className="text-[11px] text-slate-500">Tap to {mobileFiltersOpen ? "hide" : "show"}</p>
+                </div>
+              </div>
+              <ChevronDown
+                className={`h-5 w-5 shrink-0 text-slate-400 transition ${mobileFiltersOpen ? "rotate-180" : ""}`}
+                aria-hidden
+              />
+            </button>
+            <div className="hidden items-center gap-2 text-slate-800 lg:flex">
               <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600 text-white shadow-sm">
                 <Filter className="h-4 w-4" aria-hidden />
               </span>
@@ -737,7 +910,8 @@ function ManageEmployeeLeavesPage() {
               </div>
             </div>
 
-            <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-12 lg:items-end">
+            <div className={`${mobileFiltersOpen ? "mt-4 block" : "hidden"} lg:mt-5 lg:block`}>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-12 lg:items-end">
               <label className="lg:col-span-2 block">
                 <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Status
@@ -750,7 +924,7 @@ function ManageEmployeeLeavesPage() {
                       query_status: e.target.value as AttFilters["query_status"],
                     }))
                   }
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2.5 text-sm text-slate-800 outline-none ring-indigo-500/20 focus:border-indigo-300 focus:bg-white focus:ring-2"
+                  className={filterFieldCls()}
                 >
                   <option value="">All statuses</option>
                   <option value="pending">Pending</option>
@@ -770,7 +944,7 @@ function ManageEmployeeLeavesPage() {
                       category: e.target.value as AttFilters["category"],
                     }))
                   }
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2.5 text-sm text-slate-800 outline-none ring-indigo-500/20 focus:border-indigo-300 focus:bg-white focus:ring-2"
+                  className={filterFieldCls()}
                 >
                   <option value="">All types</option>
                   <option value="forget_punch_in">Forgot punch in</option>
@@ -790,7 +964,7 @@ function ManageEmployeeLeavesPage() {
                     setAttFilters((p) => ({ ...p, query_message: e.target.value }))
                   }
                   placeholder="Search in employee explanation"
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2.5 text-sm text-slate-800 outline-none placeholder:text-slate-400 ring-indigo-500/20 focus:border-indigo-300 focus:bg-white focus:ring-2"
+                  className={filterFieldCls()}
                 />
               </label>
               <label className="lg:col-span-2 block">
@@ -804,44 +978,78 @@ function ManageEmployeeLeavesPage() {
                   onChange={(e) =>
                     setAttFilters((p) => ({ ...p, attendance_date: e.target.value }))
                   }
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2.5 text-sm text-slate-800 outline-none ring-indigo-500/20 focus:border-indigo-300 focus:bg-white focus:ring-2"
+                  className={filterFieldCls()}
                 />
               </label>
-              <div className="flex flex-wrap gap-2 lg:col-span-2 lg:justify-end">
+              <div className="flex flex-col gap-2 sm:col-span-2 lg:col-span-2 lg:flex-row lg:flex-wrap lg:justify-end">
                 <button
                   type="button"
                   onClick={applyAttFilters}
-                  className="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700"
+                  className={mobilePrimaryBtnCls()}
                 >
                   Apply
                 </button>
                 <button
                   type="button"
                   onClick={resetAttFilters}
-                  className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                  className={mobileSecondaryBtnCls()}
                 >
                   Reset
                 </button>
               </div>
             </div>
+            </div>
           </div>
 
           {attLoading ? (
-            <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center text-sm text-slate-500">
+            <div className={`${mobilePanelCls()} mx-3 p-10 text-center text-sm text-slate-500 sm:mx-4 lg:mx-0 lg:p-12`}>
               <RefreshCw className="mx-auto mb-3 h-8 w-8 animate-spin text-indigo-500" aria-hidden />
               Loading attendance queries…
             </div>
           ) : null}
 
           {attError && !attLoading ? (
-            <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+            <div className="mx-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 sm:mx-4 lg:mx-0">
               {attError}
             </div>
           ) : null}
 
           {!attLoading && !attError ? (
-            <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
-              <div className="overflow-x-auto">
+            <div className={`${mobilePanelCls()} mx-3 overflow-hidden sm:mx-4 lg:mx-0 lg:p-0`}>
+              {/* Mobile & tablet: card list */}
+              <div className="space-y-2.5 lg:hidden lg:p-0">
+                {attRows.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-12 text-center text-slate-500">
+                    <p className="font-medium text-slate-700">
+                      No attendance queries match your filters.
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Adjust filters or refresh. New employee submissions appear here.
+                    </p>
+                  </div>
+                ) : (
+                  attRows.map((row) => {
+                    const emp = userDisplayName(row.user_id, orgUsers);
+                    const pending =
+                      String(row.query_status).toLowerCase() === "pending";
+                    return (
+                      <AttendanceQueryCard
+                        key={row.id}
+                        row={row}
+                        employeeName={emp.name}
+                        employeeEmail={emp.email}
+                        pending={pending}
+                        modalBusy={attModalSubmitting && attModal?.id === row.id}
+                        onApprove={() => openAttModal(row.id, "approved")}
+                        onReject={() => openAttModal(row.id, "rejected")}
+                      />
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Desktop: table */}
+              <div className="hidden overflow-x-auto lg:block">
                 <table className="min-w-[960px] w-full border-collapse text-left text-sm">
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50/90 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
@@ -963,7 +1171,7 @@ function ManageEmployeeLeavesPage() {
 
       {attModal ? (
         <div
-          className="fixed inset-0 z-[1000] flex items-end justify-center bg-slate-950/50 p-4 backdrop-blur-sm sm:items-center"
+          className="fixed inset-0 z-[1000] flex items-end justify-center bg-slate-950/50 p-0 backdrop-blur-sm sm:items-center sm:p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="att-modal-title"
@@ -974,7 +1182,7 @@ function ManageEmployeeLeavesPage() {
             aria-label="Close"
             onClick={() => !attModalSubmitting && setAttModal(null)}
           />
-          <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+          <div className="relative w-full max-w-md overflow-hidden rounded-t-3xl border border-slate-200 bg-white shadow-2xl sm:rounded-2xl">
             <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4">
               <div>
                 <h2 id="att-modal-title" className="text-lg font-semibold text-[#0C123A]">
@@ -1004,16 +1212,16 @@ function ManageEmployeeLeavesPage() {
                   onChange={(e) => setAttModalReason(e.target.value)}
                   rows={4}
                   placeholder="Explain the decision (required)…"
-                  className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm text-slate-800 outline-none ring-indigo-500/20 focus:border-indigo-300 focus:ring-2"
+                  className="mt-2 w-full rounded-2xl border-0 bg-slate-100 px-3 py-3 text-sm text-slate-800 outline-none ring-1 ring-slate-200/80 focus:bg-white focus:ring-2 focus:ring-indigo-500/25 sm:rounded-xl sm:border sm:border-slate-200 sm:py-2.5"
                 />
               </label>
             </div>
-            <div className="flex gap-2 border-t border-slate-100 bg-slate-50/90 px-5 py-3">
+            <div className="flex flex-col gap-2 border-t border-slate-100 bg-slate-50/90 px-4 py-3 sm:flex-row sm:px-5">
               <button
                 type="button"
                 disabled={attModalSubmitting}
                 onClick={() => setAttModal(null)}
-                className="flex-1 rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                className={`${mobileSecondaryBtnCls()} sm:flex-1`}
               >
                 Cancel
               </button>
@@ -1021,7 +1229,7 @@ function ManageEmployeeLeavesPage() {
                 type="button"
                 disabled={attModalSubmitting}
                 onClick={() => void submitAttModal()}
-                className={`flex-1 rounded-xl py-2.5 text-sm font-semibold text-white shadow-sm disabled:opacity-50 ${
+                className={`min-h-[44px] w-full flex-1 rounded-2xl py-3 text-sm font-semibold text-white shadow-sm transition active:scale-[0.98] disabled:opacity-50 sm:rounded-xl sm:py-2.5 ${
                   attModal.action === "approved"
                     ? "bg-emerald-600 hover:bg-emerald-700"
                     : "bg-rose-600 hover:bg-rose-700"
@@ -1038,6 +1246,28 @@ function ManageEmployeeLeavesPage() {
         </div>
       ) : null}
     </section>
+  );
+}
+
+function MobileStatTile({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: "amber" | "emerald" | "rose";
+}) {
+  const tones = {
+    amber: "bg-amber-50 text-amber-950 ring-amber-200/80",
+    emerald: "bg-emerald-50 text-emerald-950 ring-emerald-200/80",
+    rose: "bg-rose-50 text-rose-950 ring-rose-200/80",
+  };
+  return (
+    <div className={`rounded-2xl px-2 py-2.5 text-center ring-1 ${tones[tone]}`}>
+      <p className="text-[10px] font-semibold uppercase tracking-wide opacity-80">{label}</p>
+      <p className="mt-0.5 text-lg font-bold tabular-nums">{value}</p>
+    </div>
   );
 }
 
@@ -1067,31 +1297,209 @@ function StatPill({
   );
 }
 
+function CardField({
+  label,
+  children,
+  className = "",
+}: {
+  label: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={className}>
+      <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+        {label}
+      </dt>
+      <dd className="mt-0.5 text-sm text-slate-800">{children}</dd>
+    </div>
+  );
+}
+
+function LeaveRowCard({
+  row,
+  disabled,
+  onApprove,
+  onReject,
+  onPending,
+}: {
+  row: LeaveRow;
+  disabled: boolean;
+  onApprove: () => void;
+  onReject: () => void;
+  onPending: () => void;
+}) {
+  return (
+    <article className="rounded-2xl bg-white p-4 shadow-md ring-1 ring-slate-200/70 transition active:scale-[0.995]">
+      <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate font-semibold text-slate-900">{row.user_name}</h3>
+          {row.user_email ? (
+            <p className="mt-0.5 truncate text-xs text-slate-500">{row.user_email}</p>
+          ) : null}
+        </div>
+        <span
+          className={`shrink-0 inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${statusBadgeClass(String(row.status))}`}
+        >
+          {String(row.status)}
+        </span>
+      </div>
+      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
+        <CardField label="Type">{leaveTypeLabel(String(row.leave_type))}</CardField>
+        <CardField label="Dates">
+          <span className="block">{formatDate(row.start_date)}</span>
+          {row.end_date ? (
+            <span className="text-xs text-slate-500">to {formatDate(row.end_date)}</span>
+          ) : null}
+        </CardField>
+        <CardField label="Submitted" className="col-span-2 sm:col-span-1">
+          {formatDateTime(row.created_at)}
+        </CardField>
+        <CardField label="Reason" className="col-span-2 sm:col-span-3">
+          <p className="text-sm text-slate-600">
+            {row.reason?.trim() ? row.reason : "—"}
+          </p>
+        </CardField>
+      </dl>
+      <div className="mt-4 border-t border-slate-100 pt-3">
+        <LeaveActions
+          layout="stacked"
+          current={String(row.status).toLowerCase() as LeaveStatus}
+          disabled={disabled}
+          onApprove={onApprove}
+          onReject={onReject}
+          onPending={onPending}
+        />
+      </div>
+    </article>
+  );
+}
+
+function AttendanceQueryCard({
+  row,
+  employeeName,
+  employeeEmail,
+  pending,
+  modalBusy,
+  onApprove,
+  onReject,
+}: {
+  row: AttendanceQueryRow;
+  employeeName: string;
+  employeeEmail: string;
+  pending: boolean;
+  modalBusy: boolean;
+  onApprove: () => void;
+  onReject: () => void;
+}) {
+  return (
+    <article className="rounded-2xl bg-white p-4 shadow-md ring-1 ring-slate-200/70 transition active:scale-[0.995]">
+      <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate font-semibold text-slate-900">{employeeName}</h3>
+          {employeeEmail ? (
+            <p className="mt-0.5 truncate text-xs text-slate-500">{employeeEmail}</p>
+          ) : null}
+        </div>
+        <span
+          className={`shrink-0 inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${statusBadgeClass(row.query_status)}`}
+        >
+          {row.query_status}
+        </span>
+      </div>
+      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3">
+        <CardField label="Issue">{attendanceCategoryLabel(row.category)}</CardField>
+        <CardField label="Attendance date">{formatDate(row.attendance_date)}</CardField>
+        <CardField label="Submitted" className="col-span-2">
+          {formatDateTime(row.created_at)}
+        </CardField>
+        <CardField label="Explanation" className="col-span-2">
+          <p className="text-sm leading-relaxed text-slate-600">{row.query_message}</p>
+        </CardField>
+      </dl>
+      <div className="mt-4 border-t border-slate-100 pt-3">
+        {pending ? (
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button
+              type="button"
+              disabled={modalBusy}
+              onClick={onApprove}
+              className="inline-flex w-full min-h-[44px] items-center justify-center gap-1.5 rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm font-semibold text-emerald-900 transition active:scale-[0.98] hover:bg-emerald-100 disabled:opacity-40 lg:min-h-0 lg:rounded-lg"
+            >
+              <CheckCircle2 className="h-4 w-4" aria-hidden />
+              Approve
+            </button>
+            <button
+              type="button"
+              disabled={modalBusy}
+              onClick={onReject}
+              className="inline-flex w-full min-h-[44px] items-center justify-center gap-1.5 rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm font-semibold text-rose-900 transition active:scale-[0.98] hover:bg-rose-100 disabled:opacity-40 lg:min-h-0 lg:rounded-lg"
+            >
+              <XCircle className="h-4 w-4" aria-hidden />
+              Reject
+            </button>
+          </div>
+        ) : (
+          <div className="text-sm text-slate-600">
+            {row.approved_by_name ? (
+              <p className="font-semibold text-slate-800">By {row.approved_by_name}</p>
+            ) : null}
+            {row.admin_response ? (
+              <p className="mt-1">
+                <span className="font-medium text-slate-700">Note:</span> {row.admin_response}
+              </p>
+            ) : (
+              <p className="mt-1 text-slate-400">No admin note on file.</p>
+            )}
+            {row.resolved_at ? (
+              <p className="mt-2 text-xs text-slate-400">
+                Resolved {formatDateTime(row.resolved_at)}
+              </p>
+            ) : null}
+          </div>
+        )}
+      </div>
+    </article>
+  );
+}
+
 function LeaveActions({
   current,
   disabled,
   onApprove,
   onReject,
   onPending,
+  layout = "inline",
 }: {
   current: LeaveStatus;
   disabled: boolean;
   onApprove: () => void;
   onReject: () => void;
   onPending: () => void;
+  layout?: "inline" | "stacked";
 }) {
   const isPending = current === "pending";
+  const stacked = layout === "stacked";
+  const btnBase = stacked
+    ? "inline-flex w-full min-h-[44px] items-center justify-center gap-1.5 rounded-2xl px-3 py-2.5 text-sm font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 lg:min-h-0 lg:rounded-lg lg:py-1.5 lg:text-xs"
+    : "inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-40";
 
   return (
-    <div className="inline-flex flex-wrap justify-end gap-1.5">
+    <div
+      className={
+        stacked
+          ? "flex flex-col gap-2"
+          : "inline-flex flex-wrap justify-end gap-1.5"
+      }
+    >
       <button
         type="button"
         disabled={disabled || !isPending}
         onClick={onApprove}
         title={isPending ? "Approve" : "Only pending requests can be approved"}
-        className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-xs font-semibold text-emerald-900 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-40"
+        className={`${btnBase} border border-emerald-200 bg-emerald-50 text-emerald-900 hover:bg-emerald-100`}
       >
-        <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
+        <CheckCircle2 className={stacked ? "h-4 w-4" : "h-3.5 w-3.5"} aria-hidden />
         Approve
       </button>
       <button
@@ -1099,9 +1507,9 @@ function LeaveActions({
         disabled={disabled || !isPending}
         onClick={onReject}
         title={isPending ? "Reject" : "Only pending requests can be rejected"}
-        className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2 py-1.5 text-xs font-semibold text-rose-900 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-40"
+        className={`${btnBase} border border-rose-200 bg-rose-50 text-rose-900 hover:bg-rose-100`}
       >
-        <XCircle className="h-3.5 w-3.5" aria-hidden />
+        <XCircle className={stacked ? "h-4 w-4" : "h-3.5 w-3.5"} aria-hidden />
         Reject
       </button>
       <button
@@ -1109,9 +1517,9 @@ function LeaveActions({
         disabled={disabled || isPending}
         onClick={onPending}
         title="Set back to pending"
-        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+        className={`${btnBase} border border-slate-200 bg-white text-slate-700 hover:bg-slate-50`}
       >
-        <Clock className="h-3.5 w-3.5" aria-hidden />
+        <Clock className={stacked ? "h-4 w-4" : "h-3.5 w-3.5"} aria-hidden />
         Pending
       </button>
     </div>

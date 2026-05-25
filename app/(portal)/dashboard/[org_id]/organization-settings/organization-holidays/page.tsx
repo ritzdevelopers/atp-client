@@ -19,6 +19,7 @@ import {
   CalendarOff,
   TrendingUp,
   Filter,
+  Info,
 } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useManagementDashboardContext } from "@/components/portal-dashboard/Layout/ManagementDashboardContext";
@@ -81,6 +82,101 @@ function dateBlock(ymd: string) {
   };
 }
 
+function zohoSearchCls() {
+  return "w-full rounded-lg border border-[#E4E7EC] bg-white py-2.5 pl-10 pr-4 text-[15px] text-[#1F2937] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15 lg:text-sm";
+}
+
+function zohoInputCls() {
+  return "w-full rounded-lg border border-[#E4E7EC] bg-white px-3.5 py-2.5 text-[15px] text-[#1F2937] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15 lg:text-sm";
+}
+
+function zohoPrimaryBtnCls(full = false) {
+  return `inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg bg-[#008CD3] px-4 py-2 text-[14px] font-medium text-white transition active:scale-[0.98] hover:bg-[#0070AA] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full" : ""}`;
+}
+
+function zohoSecondaryBtnCls(full = false) {
+  return `inline-flex min-h-[40px] items-center justify-center rounded-lg border border-[#E4E7EC] bg-white px-4 py-2 text-[14px] font-medium text-[#1F2937] transition active:scale-[0.98] hover:bg-[#F5F7FA] disabled:pointer-events-none disabled:opacity-50 lg:border-slate-200 lg:text-sm lg:font-semibold lg:text-[#0C123A] lg:shadow-sm lg:hover:bg-slate-50 ${full ? "w-full" : ""}`;
+}
+
+function zohoEditIconBtnCls() {
+  return "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#008CD3] active:bg-[#E8F4FB]";
+}
+
+function zohoDangerIconBtnCls() {
+  return "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#FFCDD2] text-[#C62828] active:bg-[#FFECEC]";
+}
+
+type MobileHolidayRowProps = {
+  holiday: CompanyHolidayRow;
+  today: string;
+  onEdit: () => void;
+  onDelete: () => void;
+};
+
+function MobileHolidayRow({ holiday, today, onEdit, onDelete }: MobileHolidayRowProps) {
+  const normalizedDate = normalizeDateOnly(holiday.holiday_date);
+  const block = dateBlock(normalizedDate);
+  const isPast = normalizedDate < today;
+  const isToday = normalizedDate === today;
+
+  return (
+    <li>
+      <div className="px-4 py-3.5">
+        <div className="flex items-start gap-3">
+          <div
+            className={`flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-lg ${
+              isToday
+                ? "bg-[#0F9D58] text-white"
+                : isPast
+                  ? "bg-[#F5F7FA] text-[#6B7280]"
+                  : "bg-[#E8F4FB] text-[#008CD3]"
+            }`}
+          >
+            <span className="text-[10px] font-semibold uppercase leading-none">{block.mon}</span>
+            <span className="text-lg font-bold leading-tight">{block.day}</span>
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start justify-between gap-2">
+              <p className="truncate text-[16px] font-medium text-[#1F2937]">
+                {holiday.holiday_name}
+              </p>
+              {isToday ? (
+                <span className="shrink-0 rounded-full bg-[#E6F4EA] px-2 py-0.5 text-[11px] font-semibold text-[#0F9D58]">
+                  Today
+                </span>
+              ) : isPast ? (
+                <span className="shrink-0 rounded-full bg-[#F5F7FA] px-2 py-0.5 text-[11px] font-medium text-[#6B7280]">
+                  Past
+                </span>
+              ) : null}
+            </div>
+            <p className="mt-0.5 truncate text-[13px] text-[#6B7280]">
+              {formatYmdPretty(normalizedDate)}
+            </p>
+            <p className="mt-1 text-[12px] text-[#9CA3AF]">
+              By {holiday.holiday_created_by_name?.trim() || "System"}
+            </p>
+          </div>
+        </div>
+        <div className="mt-3 flex gap-2">
+          <button type="button" onClick={onEdit} className={`flex-1 ${zohoSecondaryBtnCls()}`}>
+            <Pencil className="h-4 w-4" />
+            Edit
+          </button>
+          <button
+            type="button"
+            onClick={onDelete}
+            className={zohoDangerIconBtnCls()}
+            aria-label="Delete holiday"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+    </li>
+  );
+}
+
 function OrganizationHolidaysPage() {
   const params = useParams();
   const orgIdParam = params?.org_id;
@@ -117,6 +213,9 @@ function OrganizationHolidaysPage() {
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
 
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+  const [mobileMainTab, setMobileMainTab] = useState<
+    "holidays" | "calendar" | "overview"
+  >("holidays");
 
   const holidayDateSet = useMemo(
     () =>
@@ -129,8 +228,12 @@ function OrganizationHolidaysPage() {
 
   const filteredHolidays = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return holidays;
-    return holidays.filter((h) => h.holiday_name?.toLowerCase().includes(q));
+    const list = q
+      ? holidays.filter((h) => h.holiday_name?.toLowerCase().includes(q))
+      : holidays;
+    return [...list].sort((a, b) =>
+      normalizeDateOnly(a.holiday_date).localeCompare(normalizeDateOnly(b.holiday_date))
+    );
   }, [holidays, search]);
 
   const totalHolidays = holidays.length;
@@ -287,8 +390,266 @@ function OrganizationHolidaysPage() {
     }
   }
 
+  const mobileTabs = [
+    { id: "holidays" as const, label: "Holidays", count: holidays.length },
+    { id: "calendar" as const, label: "Calendar" },
+    { id: "overview" as const, label: "Overview" },
+  ];
+
   return (
-    <div className="space-y-6 p-1">
+    <div className="min-h-full bg-[#F5F7FA] lg:bg-transparent lg:space-y-6 lg:p-1 lg:pb-0">
+      {/* Mobile & tablet: Zoho admin portal style */}
+      <div className="lg:hidden">
+        <div className="sticky top-0 z-20 border-b border-[#E4E7EC] bg-white shadow-sm">
+          <div className="flex items-center gap-2 px-4 py-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#E8F4FB] text-[#008CD3]">
+              <CalendarDays className="h-5 w-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h1 className="truncate text-[17px] font-semibold text-[#1F2937]">Holidays</h1>
+              <p className="truncate text-[13px] text-[#6B7280]">
+                {loading
+                  ? "Loading…"
+                  : `${holidays.length} holiday${holidays.length === 1 ? "" : "s"} · ${orgName}`}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void loadHolidays()}
+              disabled={loading || orgMissing}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#008CD3] active:bg-[#F5F7FA] disabled:opacity-50"
+              aria-label="Refresh holidays"
+            >
+              <RefreshCw className={`h-5 w-5 ${loading ? "animate-spin" : ""}`} />
+            </button>
+            <button
+              type="button"
+              onClick={openAdd}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#008CD3] text-white active:scale-[0.98]"
+              aria-label="Add holiday"
+            >
+              <Plus className="h-5 w-5" />
+            </button>
+          </div>
+
+          <div className="px-4 pb-3">
+            <div className="flex rounded-lg bg-[#F5F7FA] p-1">
+              {mobileTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setMobileMainTab(tab.id)}
+                  className={`flex flex-1 items-center justify-center gap-1 rounded-md py-2 text-[12px] font-medium transition sm:text-[13px] ${
+                    mobileMainTab === tab.id
+                      ? "bg-white text-[#008CD3] shadow-sm"
+                      : "text-[#6B7280]"
+                  }`}
+                >
+                  {tab.label}
+                  {"count" in tab && tab.count != null ? (
+                    <span
+                      className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] ${
+                        mobileMainTab === tab.id
+                          ? "bg-[#E8F4FB] text-[#008CD3]"
+                          : "bg-[#E4E7EC] text-[#6B7280]"
+                      }`}
+                    >
+                      {tab.count > 99 ? "99+" : tab.count}
+                    </span>
+                  ) : null}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {mobileMainTab === "holidays" ? (
+            <div className="border-t border-[#E4E7EC] px-4 py-2.5">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF]" />
+                <input
+                  type="search"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search holidays"
+                  className={zohoSearchCls()}
+                />
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        {error ? (
+          <div className="mx-4 mt-3 flex items-start gap-2 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-4 py-3 text-[14px] text-[#D93025]">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{error}</span>
+          </div>
+        ) : null}
+
+        {orgMissing ? (
+          <div className="mx-4 mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-[14px] text-amber-950">
+            Invalid organization context.
+          </div>
+        ) : null}
+
+        {loading && !error ? (
+          <div className="flex flex-col items-center justify-center gap-3 py-24 text-[#6B7280]">
+            <Loader2 className="h-9 w-9 animate-spin text-[#008CD3]" />
+            <p className="text-[15px]">Loading holidays…</p>
+          </div>
+        ) : null}
+
+        {!loading && !error && mobileMainTab === "overview" ? (
+          <div className="space-y-3 p-4">
+            <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
+              <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                Total holidays
+              </p>
+              <p className="mt-1 text-3xl font-semibold text-[#1F2937]">{totalHolidays}</p>
+            </div>
+            <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
+              <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                Upcoming
+              </p>
+              <p className="mt-1 text-3xl font-semibold text-[#0F9D58]">{leftHolidays}</p>
+              <p className="mt-1 text-[14px] text-[#6B7280]">Remaining this year</p>
+            </div>
+            <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
+              <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                Next holiday
+              </p>
+              <p className="mt-1 text-[17px] font-semibold text-[#1F2937]">
+                {upcomingHoliday ? upcomingHoliday.holiday_name : "None scheduled"}
+              </p>
+              {upcomingHoliday ? (
+                <p className="mt-1 text-[14px] text-[#6B7280]">
+                  {formatYmdPretty(normalizeDateOnly(upcomingHoliday.holiday_date))}
+                </p>
+              ) : null}
+            </div>
+            <div className="rounded-xl border border-[#E4E7EC] bg-[#E8F4FB] p-4">
+              <div className="flex gap-3">
+                <Info className="h-5 w-5 shrink-0 text-[#008CD3]" />
+                <p className="text-[14px] leading-relaxed text-[#4B5563]">
+                  Company holidays appear on attendance calendars. Add dates for public holidays,
+                  office closures, and optional days off.
+                </p>
+              </div>
+            </div>
+            <button type="button" onClick={openAdd} className={zohoPrimaryBtnCls(true)}>
+              <Plus className="h-4 w-4" />
+              Add holiday
+            </button>
+          </div>
+        ) : null}
+
+        {!loading && !error && mobileMainTab === "calendar" ? (
+          <div className="space-y-3 p-4">
+            <div className="rounded-xl border border-[#E4E7EC] bg-white shadow-sm">
+              <div className="flex items-center justify-between border-b border-[#E4E7EC] px-4 py-3">
+                <div>
+                  <p className="text-[15px] font-semibold text-[#1F2937]">
+                    {formatMonthLabel(selectedMonth)} {new Date().getFullYear()}
+                  </p>
+                  <p className="text-[13px] text-[#6B7280]">Tap arrows to change month</p>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSelectedMonth((prev) => (prev === 0 ? 11 : prev - 1))
+                    }
+                    className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#6B7280] active:bg-[#F5F7FA]"
+                    aria-label="Previous month"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSelectedMonth((prev) => (prev === 11 ? 0 : prev + 1))
+                    }
+                    className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#6B7280] active:bg-[#F5F7FA]"
+                    aria-label="Next month"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-3 border-b border-[#E4E7EC] px-4 py-3">
+                <div className="flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#0F9D58]" />
+                  <span className="text-[12px] text-[#6B7280]">Today</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#008CD3]" />
+                  <span className="text-[12px] text-[#6B7280]">Sunday</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#D93025]" />
+                  <span className="text-[12px] text-[#6B7280]">Holiday</span>
+                </div>
+              </div>
+              <div className="p-3">
+                <Calendar
+                  value={new Date(new Date().getFullYear(), selectedMonth, 1) as Value}
+                  view="month"
+                  activeStartDate={new Date(new Date().getFullYear(), selectedMonth, 1)}
+                  showNavigation={false}
+                  showNeighboringMonth={false}
+                  tileClassName={({ date, view }) => {
+                    if (view !== "month") return "";
+                    const ymd = toYmdFromDate(date);
+                    if (ymd === todayYmd()) return "holiday-today";
+                    if (holidayDateSet.has(ymd)) return "holiday-day";
+                    if (date.getDay() === 0) return "holiday-sunday";
+                    return "";
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {!loading && !error && mobileMainTab === "holidays" && holidays.length === 0 ? (
+          <div className="mx-4 mt-4 rounded-xl border border-dashed border-[#E4E7EC] bg-white px-6 py-16 text-center">
+            <CalendarOff className="mx-auto h-10 w-10 text-[#9CA3AF]" />
+            <p className="mt-4 text-[17px] font-semibold text-[#1F2937]">No holidays yet</p>
+            <p className="mt-2 text-[14px] text-[#6B7280]">
+              Add your first company holiday to mark non-working days.
+            </p>
+            <button type="button" onClick={openAdd} className={`mt-6 ${zohoPrimaryBtnCls()}`}>
+              <Plus className="h-4 w-4" />
+              Add holiday
+            </button>
+          </div>
+        ) : null}
+
+        {!loading && !error && mobileMainTab === "holidays" && holidays.length > 0 ? (
+          <ul className="mt-1 divide-y divide-[#E4E7EC] border-t border-[#E4E7EC] bg-white">
+            {filteredHolidays.length === 0 ? (
+              <li className="px-4 py-12 text-center text-[15px] text-[#6B7280]">
+                No holidays match your search.
+              </li>
+            ) : (
+              filteredHolidays.map((holiday) => (
+                <MobileHolidayRow
+                  key={String(holiday.id)}
+                  holiday={holiday}
+                  today={today}
+                  onEdit={() => openEdit(holiday)}
+                  onDelete={() => {
+                    setDeleteError(null);
+                    setDeleteTarget(holiday);
+                  }}
+                />
+              ))
+            )}
+          </ul>
+        ) : null}
+      </div>
+
+      {/* Desktop layout (unchanged) */}
+      <div className="hidden space-y-6 lg:block">
       {/* Header Section */}
       <div className="flex items-center justify-between">
         <div>
@@ -658,76 +1019,74 @@ function OrganizationHolidaysPage() {
           </div>
         </section>
       </div>
+      </div>
 
       {/* Edit Modal */}
       {editTarget && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-[#1F2937]/40 p-0 backdrop-blur-[1px] sm:items-center sm:bg-gray-900/60 sm:p-4"
           role="dialog"
           aria-modal="true"
         >
           <div
-            className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm"
+            className="absolute inset-0 sm:bg-gray-900/60 sm:backdrop-blur-sm"
             onClick={closeEdit}
           />
-          <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl">
-            <div className="border-b border-gray-100 bg-gradient-to-r from-indigo-50 to-white px-6 py-4">
+          <div className="relative w-full max-w-md overflow-hidden rounded-t-2xl border border-[#E4E7EC] bg-white shadow-2xl sm:rounded-2xl sm:border-gray-200 sm:[border-top:3px_solid_#008CD3]">
+            <div className="border-b border-[#E4E7EC] bg-white px-4 py-4 sm:border-gray-100 sm:bg-gradient-to-r sm:from-indigo-50 sm:to-white sm:px-6">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900">
+                <h3 className="text-[17px] font-semibold text-[#1F2937] sm:text-lg sm:text-gray-900">
                   Edit Holiday
                 </h3>
                 <button
                   type="button"
                   onClick={closeEdit}
-                  className="rounded-lg p-1.5 text-gray-400 transition-all hover:bg-gray-100 hover:text-gray-600"
+                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#6B7280] active:bg-[#F5F7FA] sm:border-0 sm:p-1.5 sm:hover:bg-gray-100"
+                  aria-label="Close"
                 >
                   <X className="h-5 w-5" />
                 </button>
               </div>
             </div>
-            <form onSubmit={submitEdit} className="space-y-5 p-6">
+            <form onSubmit={submitEdit} className="space-y-4 p-4 sm:space-y-5 sm:p-6">
               {editError && (
-                <div className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+                <div className="flex items-start gap-3 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] p-3 text-[14px] text-[#D93025] sm:border-red-200 sm:bg-red-50 sm:text-red-800">
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>{editError}</span>
                 </div>
               )}
               <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700">
+                <label className="mb-2 block text-[14px] font-medium text-[#374151] sm:text-sm sm:text-gray-700">
                   Holiday Name
                 </label>
                 <input
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-900 outline-none transition-all focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
+                  className={zohoInputCls()}
                   placeholder="Enter holiday name"
                   required
                 />
               </div>
               <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700">
+                <label className="mb-2 block text-[14px] font-medium text-[#374151] sm:text-sm sm:text-gray-700">
                   Holiday Date
                 </label>
                 <input
                   type="date"
                   value={editDate}
                   onChange={(e) => setEditDate(e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-900 outline-none transition-all focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
+                  className={zohoInputCls()}
                   required
                 />
               </div>
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={closeEdit}
-                  className="rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-all hover:bg-gray-50"
-                >
+              <div className="flex flex-col-reverse gap-2 border-t border-[#E4E7EC] pt-4 sm:flex-row sm:justify-end sm:border-gray-100 sm:gap-3">
+                <button type="button" onClick={closeEdit} className={zohoSecondaryBtnCls(true)}>
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={editSubmitting}
-                  className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-indigo-600 to-indigo-700 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-200 transition-all hover:from-indigo-700 hover:to-indigo-800 disabled:opacity-60"
+                  className={zohoPrimaryBtnCls(true)}
                 >
                   {editSubmitting && (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -743,72 +1102,69 @@ function OrganizationHolidaysPage() {
       {/* Add Modal */}
       {addOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-[#1F2937]/40 p-0 backdrop-blur-[1px] sm:items-center sm:bg-gray-900/60 sm:p-4"
           role="dialog"
           aria-modal="true"
         >
           <div
-            className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm"
+            className="absolute inset-0 sm:bg-gray-900/60 sm:backdrop-blur-sm"
             onClick={closeAdd}
           />
-          <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl">
-            <div className="border-b border-gray-100 bg-gradient-to-r from-indigo-50 to-white px-6 py-4">
+          <div className="relative w-full max-w-md overflow-hidden rounded-t-2xl border border-[#E4E7EC] bg-white shadow-2xl sm:rounded-2xl sm:border-gray-200 sm:[border-top:3px_solid_#008CD3]">
+            <div className="border-b border-[#E4E7EC] bg-white px-4 py-4 sm:border-gray-100 sm:bg-gradient-to-r sm:from-indigo-50 sm:to-white sm:px-6">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900">
+                <h3 className="text-[17px] font-semibold text-[#1F2937] sm:text-lg sm:text-gray-900">
                   Add New Holiday
                 </h3>
                 <button
                   type="button"
                   onClick={closeAdd}
-                  className="rounded-lg p-1.5 text-gray-400 transition-all hover:bg-gray-100 hover:text-gray-600"
+                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#6B7280] active:bg-[#F5F7FA] sm:border-0 sm:p-1.5 sm:hover:bg-gray-100"
+                  aria-label="Close"
                 >
                   <X className="h-5 w-5" />
                 </button>
               </div>
             </div>
-            <form onSubmit={submitAdd} className="space-y-5 p-6">
+            <form onSubmit={submitAdd} className="space-y-4 p-4 sm:space-y-5 sm:p-6">
               {addError && (
-                <div className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+                <div className="flex items-start gap-3 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] p-3 text-[14px] text-[#D93025] sm:border-red-200 sm:bg-red-50 sm:text-red-800">
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>{addError}</span>
                 </div>
               )}
               <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700">
+                <label className="mb-2 block text-[14px] font-medium text-[#374151] sm:text-sm sm:text-gray-700">
                   Holiday Name
                 </label>
                 <input
                   value={addName}
                   onChange={(e) => setAddName(e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-900 outline-none transition-all focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
+                  className={zohoInputCls()}
                   placeholder="Enter holiday name"
                   required
                 />
               </div>
               <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700">
+                <label className="mb-2 block text-[14px] font-medium text-[#374151] sm:text-sm sm:text-gray-700">
                   Holiday Date
                 </label>
                 <input
                   type="date"
                   value={addDate}
                   onChange={(e) => setAddDate(e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-900 outline-none transition-all focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
+                  className={zohoInputCls()}
                   required
                 />
               </div>
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={closeAdd}
-                  className="rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-all hover:bg-gray-50"
-                >
+              <div className="flex flex-col-reverse gap-2 border-t border-[#E4E7EC] pt-4 sm:flex-row sm:justify-end sm:border-gray-100 sm:gap-3">
+                <button type="button" onClick={closeAdd} className={zohoSecondaryBtnCls(true)}>
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={addSubmitting}
-                  className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-indigo-600 to-indigo-700 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-200 transition-all hover:from-indigo-700 hover:to-indigo-800 disabled:opacity-60"
+                  className={zohoPrimaryBtnCls(true)}
                 >
                   {addSubmitting && (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -824,27 +1180,27 @@ function OrganizationHolidaysPage() {
       {/* Delete Confirmation Modal */}
       {deleteTarget && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-[#1F2937]/40 p-0 backdrop-blur-[1px] sm:items-center sm:bg-gray-900/60 sm:p-4"
           role="dialog"
           aria-modal="true"
         >
           <div
-            className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm"
+            className="absolute inset-0 sm:bg-gray-900/60 sm:backdrop-blur-sm"
             onClick={() => !deleteSubmitting && setDeleteTarget(null)}
           />
-          <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl">
-            <div className="border-b border-red-100 bg-gradient-to-r from-red-50 to-white px-6 py-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
-                  <Trash2 className="h-6 w-6 text-red-600" />
+          <div className="relative w-full max-w-md overflow-hidden rounded-t-2xl border border-[#E4E7EC] bg-white shadow-2xl sm:rounded-2xl sm:border-gray-200">
+            <div className="border-b border-[#FFCDD2] bg-[#FCE8E6] px-4 py-4 sm:border-red-100 sm:bg-gradient-to-r sm:from-red-50 sm:to-white sm:px-6">
+              <div className="flex items-start gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#FFCDD2] sm:h-12 sm:w-12 sm:bg-red-100">
+                  <Trash2 className="h-5 w-5 text-[#C62828] sm:h-6 sm:w-6 sm:text-red-600" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900">
+                  <h3 className="text-[17px] font-semibold text-[#1F2937] sm:text-lg sm:text-gray-900">
                     Delete Holiday
                   </h3>
-                  <p className="mt-1 text-sm text-gray-600">
+                  <p className="mt-1 text-[14px] text-[#6B7280] sm:text-sm sm:text-gray-600">
                     Are you sure you want to delete{" "}
-                    <span className="font-semibold text-gray-900">
+                    <span className="font-semibold text-[#1F2937] sm:text-gray-900">
                       {deleteTarget.holiday_name}
                     </span>
                     ? This action cannot be undone.
@@ -853,17 +1209,17 @@ function OrganizationHolidaysPage() {
               </div>
             </div>
             {deleteError && (
-              <div className="mx-6 mt-4 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              <div className="mx-4 mt-4 flex items-start gap-3 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] p-3 text-[14px] text-[#D93025] sm:mx-6 sm:border-red-200 sm:bg-red-50 sm:text-red-800">
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                 <span>{deleteError}</span>
               </div>
             )}
-            <div className="flex justify-end gap-3 p-6">
+            <div className="flex flex-col-reverse gap-2 p-4 sm:flex-row sm:justify-end sm:gap-3 sm:p-6">
               <button
                 type="button"
                 disabled={deleteSubmitting}
                 onClick={() => setDeleteTarget(null)}
-                className="rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-all hover:bg-gray-50"
+                className={zohoSecondaryBtnCls(true)}
               >
                 Cancel
               </button>
@@ -871,7 +1227,7 @@ function OrganizationHolidaysPage() {
                 type="button"
                 disabled={deleteSubmitting}
                 onClick={() => void confirmDelete()}
-                className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-red-600 to-red-700 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-red-200 transition-all hover:from-red-700 hover:to-red-800 disabled:opacity-60"
+                className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg bg-[#D93025] px-4 py-2.5 text-[15px] font-medium text-white transition active:scale-[0.98] hover:bg-[#B71C1C] disabled:opacity-60 sm:w-auto sm:bg-gradient-to-r sm:from-red-600 sm:to-red-700 sm:text-sm sm:font-semibold sm:shadow-lg sm:shadow-red-200 sm:hover:from-red-700 sm:hover:to-red-800"
               >
                 {deleteSubmitting && (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -937,6 +1293,18 @@ function OrganizationHolidaysPage() {
         }
         .react-calendar__navigation {
           display: none;
+        }
+        @media (max-width: 1023px) {
+          .react-calendar {
+            font-size: 14px;
+          }
+          .react-calendar__month-view__weekdays__weekday {
+            font-size: 11px;
+          }
+          .react-calendar__tile {
+            padding: 10px 4px;
+            border-radius: 10px;
+          }
         }
       `}</style>
     </div>

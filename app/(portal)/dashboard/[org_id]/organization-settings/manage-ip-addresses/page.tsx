@@ -18,6 +18,9 @@ import {
   UserMinus,
   RefreshCw,
   Users,
+  Plus,
+  X,
+  Info,
 } from "lucide-react";
 import { useManagementDashboardContext } from "@/components/portal-dashboard/Layout/ManagementDashboardContext";
 import {
@@ -68,6 +71,107 @@ function userHasThisOrgIp(user: OrgUserRow, ipId: number): boolean {
   return parseAssignedIpEntries(user.assigned_ips).some((e) => Number(e.ip_id) === Number(ipId));
 }
 
+const IP_ICON_COLORS = [
+  "bg-[#E8F4FB] text-[#008CD3]",
+  "bg-[#E6F4EA] text-[#0F9D58]",
+  "bg-[#FEF3E6] text-[#E8710A]",
+  "bg-[#F3E8FD] text-[#7B1FA2]",
+  "bg-[#FCE8E6] text-[#D93025]",
+  "bg-[#E8EAF6] text-[#3F51B5]",
+];
+
+function ipColorClass(label: string) {
+  let hash = 0;
+  for (let i = 0; i < label.length; i += 1) {
+    hash = label.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return IP_ICON_COLORS[Math.abs(hash) % IP_ICON_COLORS.length];
+}
+
+function ipInitials(label: string) {
+  const cleaned = label.trim();
+  if (!cleaned) return "IP";
+  if (cleaned.includes(".")) return "v4";
+  if (cleaned.includes(":")) return "v6";
+  return cleaned.slice(0, 2).toUpperCase();
+}
+
+function userInitials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function zohoSearchCls() {
+  return "w-full rounded-lg border border-[#E4E7EC] bg-white py-2.5 pl-10 pr-4 text-[15px] text-[#1F2937] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15 lg:text-sm";
+}
+
+function zohoPrimaryBtnCls(full = false) {
+  return `inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg bg-[#008CD3] px-4 py-2 text-[14px] font-medium text-white transition active:scale-[0.98] hover:bg-[#0070AA] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full" : ""}`;
+}
+
+function zohoSecondaryBtnCls(full = false) {
+  return `inline-flex min-h-[40px] items-center justify-center rounded-lg border border-[#E4E7EC] bg-white px-4 py-2 text-[14px] font-medium text-[#1F2937] transition active:scale-[0.98] hover:bg-[#F5F7FA] disabled:pointer-events-none disabled:opacity-50 lg:border-slate-200 lg:text-sm lg:font-semibold lg:text-[#0C123A] lg:shadow-sm lg:hover:bg-slate-50 ${full ? "w-full" : ""}`;
+}
+
+function zohoEditIconBtnCls() {
+  return "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#008CD3] active:bg-[#E8F4FB]";
+}
+
+function zohoDangerIconBtnCls() {
+  return "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#FFCDD2] text-[#C62828] active:bg-[#FFECEC]";
+}
+
+type MobileIpRowProps = {
+  row: CompanyIpRow;
+  onEdit: () => void;
+  onDelete: () => void;
+  onAssign: () => void;
+};
+
+function MobileIpRow({ row, onEdit, onDelete, onAssign }: MobileIpRowProps) {
+  const label = row.label?.trim() || row.ip_address || "IP";
+  const assigned = Math.max(0, Math.floor(Number(row.total_assigned_users ?? 0)) || 0);
+
+  return (
+    <li>
+      <div className="px-4 py-3.5">
+        <div className="flex items-start gap-3">
+          <span
+            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-sm font-semibold ${ipColorClass(label)}`}
+          >
+            {ipInitials(row.ip_address ?? label)}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate font-mono text-[16px] font-medium text-[#1F2937]">
+              {row.ip_address}
+            </p>
+            <p className="truncate text-[14px] text-[#6B7280]">
+              {row.label?.trim() ? row.label : "No label"}
+            </p>
+            <p className="mt-1 text-[12px] text-[#9CA3AF]">
+              {assigned} assigned · ID {String(row.id)}
+            </p>
+          </div>
+        </div>
+        <div className="mt-3 flex gap-2">
+          <button type="button" onClick={onAssign} className={`flex-1 ${zohoPrimaryBtnCls()}`}>
+            <UserPlus className="h-4 w-4" />
+            Assign
+          </button>
+          <button type="button" onClick={onEdit} className={zohoEditIconBtnCls()} aria-label="Edit label">
+            <Pencil className="h-4 w-4" />
+          </button>
+          <button type="button" onClick={onDelete} className={zohoDangerIconBtnCls()} aria-label="Delete IP">
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+    </li>
+  );
+}
+
 export default function ManageIPAddressesPage() {
   const params = useParams();
   const orgIdParam = params?.org_id;
@@ -97,6 +201,9 @@ export default function ManageIPAddressesPage() {
     userId: number | string;
     op: "assign" | "unassign";
   } | null>(null);
+
+  const [mobileMainTab, setMobileMainTab] = useState<"addresses" | "overview">("addresses");
+  const [ipSearchQuery, setIpSearchQuery] = useState("");
 
   const organizationIdNum =
     ctx?.organization?.id != null ? Number(ctx.organization.id) : Number(orgIdParam);
@@ -231,6 +338,26 @@ export default function ManageIPAddressesPage() {
     });
   }, [assignUsers, assignSearch]);
 
+  const filteredRows = useMemo(() => {
+    const q = ipSearchQuery.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter((row) => {
+      const ip = String(row.ip_address ?? "").toLowerCase();
+      const label = String(row.label ?? "").toLowerCase();
+      const id = String(row.id).toLowerCase();
+      return ip.includes(q) || label.includes(q) || id.includes(q);
+    });
+  }, [rows, ipSearchQuery]);
+
+  const totalAssignedEmployees = useMemo(
+    () =>
+      rows.reduce(
+        (acc, row) => acc + Math.max(0, Math.floor(Number(row.total_assigned_users ?? 0)) || 0),
+        0,
+      ),
+    [rows],
+  );
+
   function closeAssignToEmployeeModal() {
     if (assignBusy) return;
     setAssignIpRow(null);
@@ -312,8 +439,180 @@ export default function ManageIPAddressesPage() {
     }
   }
 
+  const mobileTabs = [
+    { id: "addresses" as const, label: "Addresses", count: rows.length },
+    { id: "overview" as const, label: "Overview" },
+  ];
+
   return (
-    <div className="space-y-6">
+    <div className="min-h-full bg-[#F5F7FA] lg:bg-transparent lg:space-y-6 lg:pb-0">
+      {/* Mobile & tablet: Zoho admin portal style */}
+      <div className="lg:hidden">
+        <div className="sticky top-0 z-20 border-b border-[#E4E7EC] bg-white shadow-sm">
+          <div className="flex items-center gap-2 px-4 py-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#E8F4FB] text-[#008CD3]">
+              <GlobeLock className="h-5 w-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h1 className="truncate text-[17px] font-semibold text-[#1F2937]">IP addresses</h1>
+              <p className="truncate text-[13px] text-[#6B7280]">
+                {listLoading
+                  ? "Loading…"
+                  : `${rows.length} address${rows.length === 1 ? "" : "es"} · ${orgName}`}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void loadList({ silent: true })}
+              disabled={orgMissing || listLoading || listRefreshing}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#008CD3] active:bg-[#F5F7FA] disabled:opacity-50"
+              aria-label="Refresh"
+            >
+              <RefreshCw className={`h-5 w-5 ${listRefreshing ? "animate-spin" : ""}`} />
+            </button>
+            <Link
+              href={`${basePath}/create-new-ip-address`}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#008CD3] text-white active:scale-[0.98]"
+              aria-label="Add IP address"
+            >
+              <Plus className="h-5 w-5" />
+            </Link>
+          </div>
+
+          <div className="px-4 pb-3">
+            <div className="flex rounded-lg bg-[#F5F7FA] p-1">
+              {mobileTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setMobileMainTab(tab.id)}
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-md py-2 text-[13px] font-medium transition ${
+                    mobileMainTab === tab.id
+                      ? "bg-white text-[#008CD3] shadow-sm"
+                      : "text-[#6B7280]"
+                  }`}
+                >
+                  {tab.label}
+                  {"count" in tab && tab.count != null ? (
+                    <span
+                      className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] ${
+                        mobileMainTab === tab.id
+                          ? "bg-[#E8F4FB] text-[#008CD3]"
+                          : "bg-[#E4E7EC] text-[#6B7280]"
+                      }`}
+                    >
+                      {tab.count > 99 ? "99+" : tab.count}
+                    </span>
+                  ) : null}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {mobileMainTab === "addresses" ? (
+            <div className="border-t border-[#E4E7EC] px-4 py-2.5">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF]" />
+                <input
+                  type="search"
+                  value={ipSearchQuery}
+                  onChange={(e) => setIpSearchQuery(e.target.value)}
+                  placeholder="Search IP or label"
+                  className={zohoSearchCls()}
+                />
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        {listError ? (
+          <div className="mx-4 mt-3 flex items-start gap-2 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-4 py-3 text-[14px] text-[#D93025]">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{listError}</span>
+          </div>
+        ) : null}
+
+        {orgMissing ? (
+          <div className="mx-4 mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-[14px] text-amber-950">
+            Invalid organization context.
+          </div>
+        ) : null}
+
+        {listLoading && !listError ? (
+          <div className="flex flex-col items-center justify-center gap-3 py-24 text-[#6B7280]">
+            <Loader2 className="h-9 w-9 animate-spin text-[#008CD3]" />
+            <p className="text-[15px]">Loading IP addresses…</p>
+          </div>
+        ) : null}
+
+        {!listLoading && !listError && mobileMainTab === "overview" ? (
+          <div className="space-y-3 p-4">
+            <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
+              <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                Allowed addresses
+              </p>
+              <p className="mt-1 text-3xl font-semibold text-[#1F2937]">{rows.length}</p>
+            </div>
+            <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
+              <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                Employee assignments
+              </p>
+              <p className="mt-1 text-3xl font-semibold text-[#008CD3]">{totalAssignedEmployees}</p>
+              <p className="mt-1 text-[14px] text-[#6B7280]">Total IP-to-employee mappings</p>
+            </div>
+            <div className="rounded-xl border border-[#E4E7EC] bg-[#E8F4FB] p-4">
+              <div className="flex gap-3">
+                <Info className="h-5 w-5 shrink-0 text-[#008CD3]" />
+                <p className="text-[14px] leading-relaxed text-[#4B5563]">
+                  Register office or VPN exit IPs so attendance checks can match trusted networks.
+                  Assign IPs to individual employees from the Addresses tab.
+                </p>
+              </div>
+            </div>
+            <Link href={`${basePath}/create-new-ip-address`} className={zohoPrimaryBtnCls(true)}>
+              <Plus className="h-4 w-4" />
+              Add IP address
+            </Link>
+          </div>
+        ) : null}
+
+        {!listLoading && !listError && mobileMainTab === "addresses" && rows.length === 0 ? (
+          <div className="mx-4 mt-4 rounded-xl border border-dashed border-[#E4E7EC] bg-white px-6 py-16 text-center">
+            <Network className="mx-auto h-10 w-10 text-[#9CA3AF]" />
+            <p className="mt-4 text-[17px] font-semibold text-[#1F2937]">No IP addresses yet</p>
+            <p className="mt-2 text-[14px] text-[#6B7280]">
+              Add your first office or VPN exit address.
+            </p>
+            <Link href={`${basePath}/create-new-ip-address`} className={`mt-6 ${zohoPrimaryBtnCls()}`}>
+              <GlobeLock className="h-4 w-4" />
+              Add IP address
+            </Link>
+          </div>
+        ) : null}
+
+        {!listLoading && !listError && mobileMainTab === "addresses" && rows.length > 0 ? (
+          <ul className="mt-1 divide-y divide-[#E4E7EC] border-t border-[#E4E7EC] bg-white">
+            {filteredRows.length === 0 ? (
+              <li className="px-4 py-12 text-center text-[15px] text-[#6B7280]">
+                No addresses match your search.
+              </li>
+            ) : (
+              filteredRows.map((row) => (
+                <MobileIpRow
+                  key={String(row.id)}
+                  row={row}
+                  onEdit={() => openEdit(row)}
+                  onAssign={() => openAssignToEmployeeModal(row)}
+                  onDelete={() => openDelete(row)}
+                />
+              ))
+            )}
+          </ul>
+        ) : null}
+      </div>
+
+      {/* Desktop layout (unchanged) */}
+      <div className="hidden space-y-6 lg:block">
       <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm sm:p-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex gap-3">
@@ -481,43 +780,57 @@ export default function ManageIPAddressesPage() {
           </ul>
         )}
       </div>
+      </div>
 
       {/* Assign IP to employee modal */}
       {assignIpRow && (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-[#1F2937]/40 p-0 backdrop-blur-[1px] sm:items-center sm:bg-black/40 sm:p-4"
           role="presentation"
           onClick={(e) => {
             if (e.target === e.currentTarget) closeAssignToEmployeeModal();
           }}
         >
           <div
-            className="flex max-h-[min(85vh,640px)] w-full max-w-lg flex-col rounded-2xl border border-slate-200 bg-white shadow-xl"
+            className="flex max-h-[min(92dvh,640px)] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl border border-[#E4E7EC] bg-white shadow-xl sm:max-h-[min(85vh,640px)] sm:rounded-2xl sm:border-slate-200"
             role="dialog"
             aria-modal="true"
             aria-labelledby="assign-ip-employee-title"
           >
-            <div className="shrink-0 border-b border-slate-100 p-6 pb-4">
-              <h2 id="assign-ip-employee-title" className="text-lg font-bold text-[#0C123A]">
-                Assign IP to employee
-              </h2>
-              <p className="mt-1 text-sm text-slate-600">
-                <span className="font-mono font-semibold text-[#0C123A]">
-                  {assignIpRow.ip_address}
-                </span>
-                {assignIpRow.label?.trim() ? (
-                  <span className="text-slate-600"> · {assignIpRow.label.trim()}</span>
-                ) : null}
-              </p>
+            <div className="shrink-0 border-b border-[#E4E7EC] bg-white p-4 sm:p-6 sm:pb-4 sm:[border-top:3px_solid_#008CD3]">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 id="assign-ip-employee-title" className="text-[17px] font-semibold text-[#1F2937] sm:text-lg sm:font-bold sm:text-[#0C123A]">
+                    Assign IP to employee
+                  </h2>
+                  <p className="mt-1 text-[14px] text-[#6B7280] sm:text-sm sm:text-slate-600">
+                    <span className="font-mono font-semibold text-[#1F2937] sm:text-[#0C123A]">
+                      {assignIpRow.ip_address}
+                    </span>
+                    {assignIpRow.label?.trim() ? (
+                      <span> · {assignIpRow.label.trim()}</span>
+                    ) : null}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeAssignToEmployeeModal}
+                  disabled={!!assignBusy}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#6B7280] active:bg-[#F5F7FA] sm:border-0"
+                  aria-label="Close"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
               <div className="relative mt-4">
                 <Search
-                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF]"
                   aria-hidden
                 />
                 <input
                   type="search"
-                  className={`${inputCls()} pl-9`}
-                  placeholder="Search by name or email…"
+                  className={zohoSearchCls()}
+                  placeholder="Search employees"
                   value={assignSearch}
                   onChange={(e) => setAssignSearch(e.target.value)}
                   disabled={assignUsersLoading || !!assignBusy}
@@ -526,7 +839,7 @@ export default function ManageIPAddressesPage() {
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-2">
+            <div className="min-h-0 flex-1 overflow-y-auto bg-[#F5F7FA] px-4 py-4 sm:bg-white sm:px-6 sm:pb-2">
               {assignModalError && (
                 <div className="mb-3 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900">
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
@@ -554,77 +867,136 @@ export default function ManageIPAddressesPage() {
               )}
 
               {!assignUsersLoading && filteredAssignUsers.length > 0 && (
-                <ul className="space-y-2 pb-4">
-                  {filteredAssignUsers.map((u) => {
-                    const uid = u.id;
-                    if (uid == null) return null;
-                    const numericIpId = Number(assignIpRow.id);
-                    const hasIp = Number.isFinite(numericIpId) && userHasThisOrgIp(u, numericIpId);
-                    const rowBusyOp =
-                      assignBusy != null && Number(assignBusy.userId) === Number(uid)
-                        ? assignBusy.op
-                        : null;
-                    return (
-                      <li
-                        key={String(uid)}
-                        className="rounded-xl border border-slate-100 bg-slate-50/60 p-4"
-                      >
-                        <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-                          <div className="min-w-0">
-                            <p className="font-semibold text-[#0C123A]">{u.user_name ?? "—"}</p>
-                            <p className="truncate text-sm text-sky-700">{u.user_email ?? "—"}</p>
-                            {u.user_phone != null &&
-                            typeof u.user_phone === "string" &&
-                            u.user_phone.trim() !== "" ? (
-                              <p className="mt-1 text-xs text-slate-500">{u.user_phone}</p>
-                            ) : null}
+                <>
+                  <ul className="divide-y divide-[#E4E7EC] rounded-xl border border-[#E4E7EC] bg-white lg:hidden">
+                    {filteredAssignUsers.map((u) => {
+                      const uid = u.id;
+                      if (uid == null) return null;
+                      const numericIpId = Number(assignIpRow.id);
+                      const hasIp = Number.isFinite(numericIpId) && userHasThisOrgIp(u, numericIpId);
+                      const rowBusyOp =
+                        assignBusy != null && Number(assignBusy.userId) === Number(uid)
+                          ? assignBusy.op
+                          : null;
+                      const name = u.user_name ?? "—";
+                      return (
+                        <li key={String(uid)} className="px-4 py-3">
+                          <div className="flex items-center gap-3">
+                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#E8F4FB] text-sm font-semibold text-[#008CD3]">
+                              {userInitials(name)}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-[15px] font-medium text-[#1F2937]">{name}</p>
+                              <p className="truncate text-[13px] text-[#6B7280]">{u.user_email ?? "—"}</p>
+                              <p className="mt-0.5 text-[12px] text-[#9CA3AF]">
+                                {hasIp ? "Assigned" : "Not assigned"}
+                              </p>
+                            </div>
                           </div>
-                          <div className="flex shrink-0 flex-wrap gap-2 pt-2 sm:pt-0">
+                          <div className="mt-2 flex gap-2">
                             <button
                               type="button"
-                              disabled={
-                                !!assignBusy || hasIp || !Number.isFinite(numericIpId)
-                              }
+                              disabled={!!assignBusy || hasIp || !Number.isFinite(numericIpId)}
                               onClick={() => void submitAssignIp(u)}
-                              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#C99237] px-3 py-2 text-xs font-bold text-[#0C123A] shadow-sm hover:bg-[#b87d2e] disabled:cursor-not-allowed disabled:opacity-40"
+                              className={`flex-1 ${zohoPrimaryBtnCls()}`}
                             >
                               {rowBusyOp === "assign" ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
                               ) : (
-                                <UserPlus className="h-3.5 w-3.5" aria-hidden />
+                                <UserPlus className="h-3.5 w-3.5" />
                               )}
                               Assign
                             </button>
                             <button
                               type="button"
-                              disabled={
-                                !!assignBusy || !hasIp || !Number.isFinite(numericIpId)
-                              }
+                              disabled={!!assignBusy || !hasIp || !Number.isFinite(numericIpId)}
                               onClick={() => void submitUnassignIp(u)}
-                              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                              className={`flex-1 ${zohoSecondaryBtnCls()}`}
                             >
                               {rowBusyOp === "unassign" ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
                               ) : (
-                                <UserMinus className="h-3.5 w-3.5" aria-hidden />
+                                <UserMinus className="h-3.5 w-3.5" />
                               )}
                               Unassign
                             </button>
                           </div>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  <ul className="hidden space-y-2 pb-4 lg:block">
+                    {filteredAssignUsers.map((u) => {
+                      const uid = u.id;
+                      if (uid == null) return null;
+                      const numericIpId = Number(assignIpRow.id);
+                      const hasIp = Number.isFinite(numericIpId) && userHasThisOrgIp(u, numericIpId);
+                      const rowBusyOp =
+                        assignBusy != null && Number(assignBusy.userId) === Number(uid)
+                          ? assignBusy.op
+                          : null;
+                      return (
+                        <li
+                          key={String(uid)}
+                          className="rounded-xl border border-slate-100 bg-slate-50/60 p-4"
+                        >
+                          <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                            <div className="min-w-0">
+                              <p className="font-semibold text-[#0C123A]">{u.user_name ?? "—"}</p>
+                              <p className="truncate text-sm text-sky-700">{u.user_email ?? "—"}</p>
+                              {u.user_phone != null &&
+                              typeof u.user_phone === "string" &&
+                              u.user_phone.trim() !== "" ? (
+                                <p className="mt-1 text-xs text-slate-500">{u.user_phone}</p>
+                              ) : null}
+                            </div>
+                            <div className="flex shrink-0 flex-wrap gap-2 pt-2 sm:pt-0">
+                              <button
+                                type="button"
+                                disabled={
+                                  !!assignBusy || hasIp || !Number.isFinite(numericIpId)
+                                }
+                                onClick={() => void submitAssignIp(u)}
+                                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#C99237] px-3 py-2 text-xs font-bold text-[#0C123A] shadow-sm hover:bg-[#b87d2e] disabled:cursor-not-allowed disabled:opacity-40"
+                              >
+                                {rowBusyOp === "assign" ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                                ) : (
+                                  <UserPlus className="h-3.5 w-3.5" aria-hidden />
+                                )}
+                                Assign
+                              </button>
+                              <button
+                                type="button"
+                                disabled={
+                                  !!assignBusy || !hasIp || !Number.isFinite(numericIpId)
+                                }
+                                onClick={() => void submitUnassignIp(u)}
+                                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                              >
+                                {rowBusyOp === "unassign" ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                                ) : (
+                                  <UserMinus className="h-3.5 w-3.5" aria-hidden />
+                                )}
+                                Unassign
+                              </button>
+                            </div>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </>
               )}
             </div>
 
-            <div className="shrink-0 border-t border-slate-100 p-6 pt-4">
+            <div className="shrink-0 border-t border-[#E4E7EC] bg-white p-4 sm:p-6 sm:pt-4">
               <button
                 type="button"
                 onClick={closeAssignToEmployeeModal}
                 disabled={!!assignBusy}
-                className="w-full rounded-lg border border-slate-200 bg-white py-2.5 text-sm font-semibold text-[#0C123A] hover:bg-slate-50 disabled:opacity-50 sm:w-auto sm:px-6"
+                className={`${zohoSecondaryBtnCls(true)} sm:w-auto sm:px-6`}
               >
                 Close
               </button>
@@ -636,19 +1008,19 @@ export default function ManageIPAddressesPage() {
       {/* Edit label modal */}
       {editRow && (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-[#1F2937]/40 p-0 backdrop-blur-[1px] sm:items-center sm:bg-black/40 sm:p-4"
           role="presentation"
           onClick={(e) => {
             if (e.target === e.currentTarget) closeEdit();
           }}
         >
           <div
-            className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl"
+            className="w-full max-w-md overflow-hidden rounded-t-2xl border border-[#E4E7EC] bg-white p-4 shadow-xl sm:rounded-2xl sm:border-slate-200 sm:p-6 sm:[border-top:3px_solid_#008CD3]"
             role="dialog"
             aria-modal="true"
             aria-labelledby="edit-ip-title"
           >
-            <h2 id="edit-ip-title" className="text-lg font-bold text-[#0C123A]">
+            <h2 id="edit-ip-title" className="text-[17px] font-semibold text-[#1F2937] sm:text-lg sm:font-bold sm:text-[#0C123A]">
               Update IP label
             </h2>
             <p className="mt-1 text-sm text-slate-500">
@@ -680,19 +1052,19 @@ export default function ManageIPAddressesPage() {
                 />
                 <p className="mt-1 text-xs text-slate-500">The server requires a non-empty label.</p>
               </div>
-              <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+              <div className="flex flex-col-reverse gap-2 border-t border-[#E4E7EC] pt-4 sm:flex-row sm:justify-end sm:border-slate-100">
                 <button
                   type="button"
                   onClick={closeEdit}
                   disabled={editSubmitting}
-                  className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-[#0C123A] hover:bg-slate-50 disabled:opacity-50"
+                  className={zohoSecondaryBtnCls(true)}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={editSubmitting}
-                  className="inline-flex items-center gap-2 rounded-lg bg-[#C99237] px-4 py-2 text-sm font-bold text-[#0C123A] hover:bg-[#b87d2e] disabled:opacity-60"
+                  className={zohoPrimaryBtnCls(true)}
                 >
                   {editSubmitting ? (
                     <>
@@ -712,19 +1084,19 @@ export default function ManageIPAddressesPage() {
       {/* Delete confirm modal */}
       {deleteRow && (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-[#1F2937]/40 p-0 backdrop-blur-[1px] sm:items-center sm:bg-black/40 sm:p-4"
           role="presentation"
           onClick={(e) => {
             if (e.target === e.currentTarget) closeDelete();
           }}
         >
           <div
-            className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl"
+            className="w-full max-w-md overflow-hidden rounded-t-2xl border border-[#E4E7EC] bg-white p-4 shadow-xl sm:rounded-2xl sm:border-slate-200 sm:p-6"
             role="dialog"
             aria-modal="true"
             aria-labelledby="delete-ip-title"
           >
-            <h2 id="delete-ip-title" className="text-lg font-bold text-red-900">
+            <h2 id="delete-ip-title" className="text-[17px] font-semibold text-[#D93025] sm:text-lg sm:font-bold sm:text-red-900">
               Delete IP address?
             </h2>
             <p className="mt-2 text-sm text-slate-600">
@@ -747,12 +1119,12 @@ export default function ManageIPAddressesPage() {
               </div>
             )}
 
-            <div className="mt-6 flex flex-col-reverse gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end">
+            <div className="mt-6 flex flex-col-reverse gap-2 border-t border-[#E4E7EC] pt-4 sm:flex-row sm:justify-end sm:border-slate-100">
               <button
                 type="button"
                 onClick={closeDelete}
                 disabled={deleteSubmitting}
-                className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-[#0C123A] hover:bg-slate-50 disabled:opacity-50"
+                className={zohoSecondaryBtnCls(true)}
               >
                 Cancel
               </button>
@@ -760,7 +1132,7 @@ export default function ManageIPAddressesPage() {
                 type="button"
                 onClick={() => void confirmDelete()}
                 disabled={deleteSubmitting}
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-60"
+                className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg bg-[#D93025] px-4 py-2.5 text-[15px] font-medium text-white transition active:scale-[0.98] hover:bg-[#B71C1C] disabled:opacity-60 sm:w-auto sm:bg-red-600 sm:text-sm sm:font-bold sm:hover:bg-red-700"
               >
                 {deleteSubmitting ? (
                   <>

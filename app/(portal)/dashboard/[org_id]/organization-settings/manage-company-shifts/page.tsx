@@ -19,6 +19,7 @@ import {
   Timer,
   UserPlus,
   Search,
+  Info,
 } from "lucide-react";
 import { useManagementDashboardContext } from "@/components/portal-dashboard/Layout/ManagementDashboardContext";
 import { type OrgUserRow, getAllOrgUsers } from "@/services/adminUser";
@@ -96,6 +97,46 @@ function workingDayAbbrevList(raw: unknown): string[] {
 function demoAvatarUrl(userId: number | string | undefined): string {
   const id = userId != null ? String(userId) : "0";
   return `https://i.pravatar.cc/128?u=${encodeURIComponent(id)}`;
+}
+
+const SHIFT_ICON_COLORS = [
+  "bg-[#E8F4FB] text-[#008CD3]",
+  "bg-[#E6F4EA] text-[#0F9D58]",
+  "bg-[#FEF3E6] text-[#E8710A]",
+  "bg-[#F3E8FD] text-[#7B1FA2]",
+  "bg-[#FCE8E6] text-[#D93025]",
+  "bg-[#E8EAF6] text-[#3F51B5]",
+];
+
+function shiftColorClass(name: string) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i += 1) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return SHIFT_ICON_COLORS[Math.abs(hash) % SHIFT_ICON_COLORS.length];
+}
+
+function shiftInitials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function zohoSearchCls() {
+  return "w-full rounded-lg border border-[#E4E7EC] bg-white py-2.5 pl-10 pr-4 text-[15px] text-[#1F2937] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15 lg:text-sm";
+}
+
+function zohoPrimaryBtnCls(full = false) {
+  return `inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg bg-[#008CD3] px-4 py-2 text-[14px] font-medium text-white transition active:scale-[0.98] hover:bg-[#0070AA] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full" : ""}`;
+}
+
+function zohoDangerIconBtnCls() {
+  return "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#FFCDD2] text-[#C62828] active:bg-[#FFECEC]";
+}
+
+function zohoEditIconBtnCls() {
+  return "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#008CD3] active:bg-[#E8F4FB]";
 }
 
 function userRoleLower(u: OrgUserRow): string {
@@ -246,6 +287,67 @@ function ShiftCard({ row, onEdit, onDelete, onAssignStaff }: ShiftCardProps) {
   );
 }
 
+type MobileShiftRowProps = {
+  row: CompanyShiftRow;
+  onEdit: () => void;
+  onDelete: () => void;
+  onAssignStaff: () => void;
+};
+
+function MobileShiftRow({ row, onEdit, onDelete, onAssignStaff }: MobileShiftRowProps) {
+  const name = row.shift_name?.trim() || "Unnamed shift";
+  const night = isNight(row.is_night_shift);
+  const dayTags = workingDayAbbrevList(row.working_days);
+
+  return (
+    <li>
+      <div className="px-4 py-3.5">
+        <div className="flex items-start gap-3">
+          <span
+            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-sm font-semibold ${shiftColorClass(name)}`}
+          >
+            {shiftInitials(name)}
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <p className="truncate text-[16px] font-medium text-[#1F2937]">{name}</p>
+              {night ? (
+                <span className="inline-flex shrink-0 items-center gap-0.5 rounded-md bg-[#F3E8FD] px-1.5 py-0.5 text-[10px] font-semibold uppercase text-[#7B1FA2]">
+                  <Moon className="h-3 w-3" />
+                  Night
+                </span>
+              ) : (
+                <span className="inline-flex shrink-0 items-center gap-0.5 rounded-md bg-[#FEF3E6] px-1.5 py-0.5 text-[10px] font-semibold uppercase text-[#E8710A]">
+                  <Sun className="h-3 w-3" />
+                  Day
+                </span>
+              )}
+            </div>
+            <p className="mt-0.5 font-mono text-[13px] text-[#6B7280]">
+              {formatTimeDisplay(row.start_time)} – {formatTimeDisplay(row.end_time)}
+            </p>
+            <p className="mt-1 text-[12px] text-[#9CA3AF]">
+              {dayTags.length > 0 ? dayTags.join(", ") : "No days set"} · ID {String(row.id)}
+            </p>
+          </div>
+        </div>
+        <div className="mt-3 flex gap-2">
+          <button type="button" onClick={onAssignStaff} className={`flex-1 ${zohoPrimaryBtnCls()}`}>
+            <UserPlus className="h-4 w-4" />
+            Assign
+          </button>
+          <button type="button" onClick={onEdit} className={zohoEditIconBtnCls()} aria-label={`Edit ${name}`}>
+            <Pencil className="h-4 w-4" />
+          </button>
+          <button type="button" onClick={onDelete} className={zohoDangerIconBtnCls()} aria-label={`Delete ${name}`}>
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+    </li>
+  );
+}
+
 export default function ManageCompanyShiftsPage() {
   const params = useParams();
   const orgIdParam = params?.org_id;
@@ -291,6 +393,9 @@ export default function ManageCompanyShiftsPage() {
   const [assignSubmitting, setAssignSubmitting] = useState(false);
   const [assignActionError, setAssignActionError] = useState<string | null>(null);
 
+  const [mobileMainTab, setMobileMainTab] = useState<"shifts" | "overview">("shifts");
+  const [shiftSearchQuery, setShiftSearchQuery] = useState("");
+
   const assignablePool = useMemo(() => {
     return [...assignUsers]
       .filter(isAssignableEmployee)
@@ -314,6 +419,17 @@ export default function ManageCompanyShiftsPage() {
     () => shifts.filter((s) => isNight(s.is_night_shift)).length,
     [shifts],
   );
+
+  const filteredShifts = useMemo(() => {
+    const q = shiftSearchQuery.trim().toLowerCase();
+    if (!q) return shifts;
+    return shifts.filter((s) => {
+      const name = String(s.shift_name ?? "").toLowerCase();
+      const id = String(s.id).toLowerCase();
+      const days = workingDaysString(s.working_days).toLowerCase();
+      return name.includes(q) || id.includes(q) || days.includes(q);
+    });
+  }, [shifts, shiftSearchQuery]);
 
   const loadShifts = useCallback(async () => {
     if (orgMissing) {
@@ -508,8 +624,183 @@ export default function ManageCompanyShiftsPage() {
     }
   }
 
+  const mobileTabs = [
+    { id: "shifts" as const, label: "Shifts", count: shifts.length },
+    { id: "overview" as const, label: "Overview" },
+  ];
+
   return (
-    <div className="min-h-[70vh] bg-slate-50 pb-16">
+    <div className="min-h-full bg-[#F5F7FA] lg:min-h-[70vh] lg:bg-slate-50 lg:pb-16">
+      {/* Mobile & tablet: Zoho admin portal style */}
+      <div className="lg:hidden">
+        <div className="sticky top-0 z-20 border-b border-[#E4E7EC] bg-white shadow-sm">
+          <div className="flex items-center gap-2 px-4 py-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#E8F4FB] text-[#008CD3]">
+              <Clock3 className="h-5 w-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h1 className="truncate text-[17px] font-semibold text-[#1F2937]">Shift directory</h1>
+              <p className="truncate text-[13px] text-[#6B7280]">
+                {listLoading
+                  ? "Loading…"
+                  : `${shifts.length} shift${shifts.length === 1 ? "" : "s"} · ${orgName}`}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void loadShifts()}
+              disabled={listLoading || orgMissing}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#008CD3] active:bg-[#F5F7FA] disabled:opacity-50"
+              aria-label="Refresh shifts"
+            >
+              <RefreshCw className={`h-5 w-5 ${listLoading ? "animate-spin" : ""}`} />
+            </button>
+            <Link
+              href={`${basePath}/create-company-shifts`}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#008CD3] text-white active:scale-[0.98]"
+              aria-label="Create shift"
+            >
+              <Plus className="h-5 w-5" />
+            </Link>
+          </div>
+
+          <div className="px-4 pb-3">
+            <div className="flex rounded-lg bg-[#F5F7FA] p-1">
+              {mobileTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setMobileMainTab(tab.id)}
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-md py-2 text-[13px] font-medium transition ${
+                    mobileMainTab === tab.id
+                      ? "bg-white text-[#008CD3] shadow-sm"
+                      : "text-[#6B7280]"
+                  }`}
+                >
+                  {tab.label}
+                  {"count" in tab && tab.count != null ? (
+                    <span
+                      className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] ${
+                        mobileMainTab === tab.id
+                          ? "bg-[#E8F4FB] text-[#008CD3]"
+                          : "bg-[#E4E7EC] text-[#6B7280]"
+                      }`}
+                    >
+                      {tab.count > 99 ? "99+" : tab.count}
+                    </span>
+                  ) : null}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {mobileMainTab === "shifts" ? (
+            <div className="border-t border-[#E4E7EC] px-4 py-2.5">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF]" />
+                <input
+                  type="search"
+                  value={shiftSearchQuery}
+                  onChange={(e) => setShiftSearchQuery(e.target.value)}
+                  placeholder="Search shifts"
+                  className={zohoSearchCls()}
+                />
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        {listError ? (
+          <div className="mx-4 mt-3 flex items-start gap-2 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-4 py-3 text-[14px] text-[#D93025]">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{listError}</span>
+          </div>
+        ) : null}
+
+        {orgMissing ? (
+          <div className="mx-4 mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-[14px] text-amber-950">
+            Invalid organization context. Open this page from your dashboard.
+          </div>
+        ) : null}
+
+        {listLoading && !listError ? (
+          <div className="flex flex-col items-center justify-center gap-3 py-24 text-[#6B7280]">
+            <Loader2 className="h-9 w-9 animate-spin text-[#008CD3]" />
+            <p className="text-[15px]">Loading shifts…</p>
+          </div>
+        ) : null}
+
+        {!listLoading && !listError && mobileMainTab === "overview" ? (
+          <div className="space-y-3 p-4">
+            <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
+              <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                Total shifts
+              </p>
+              <p className="mt-1 text-3xl font-semibold text-[#1F2937]">{shifts.length}</p>
+            </div>
+            <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
+              <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                Night shifts
+              </p>
+              <p className="mt-1 text-3xl font-semibold text-[#7B1FA2]">{nightShiftCount}</p>
+              <p className="mt-1 text-[14px] text-[#6B7280]">Shifts marked as night coverage</p>
+            </div>
+            <div className="rounded-xl border border-[#E4E7EC] bg-[#E8F4FB] p-4">
+              <div className="flex gap-3">
+                <Info className="h-5 w-5 shrink-0 text-[#008CD3]" />
+                <p className="text-[14px] leading-relaxed text-[#4B5563]">
+                  Tap a shift to assign staff, edit timings, or remove it. Sync refreshes data after
+                  changes elsewhere.
+                </p>
+              </div>
+            </div>
+            <Link href={`${basePath}/create-company-shifts`} className={`${zohoPrimaryBtnCls(true)}`}>
+              <Plus className="h-4 w-4" />
+              Create new shift
+            </Link>
+          </div>
+        ) : null}
+
+        {!listLoading && !listError && mobileMainTab === "shifts" && shifts.length === 0 ? (
+          <div className="mx-4 mt-4 rounded-xl border border-dashed border-[#E4E7EC] bg-white px-6 py-16 text-center">
+            <Clock3 className="mx-auto h-10 w-10 text-[#9CA3AF]" />
+            <p className="mt-4 text-[17px] font-semibold text-[#1F2937]">No shifts yet</p>
+            <p className="mt-2 text-[14px] text-[#6B7280]">
+              Create your first shift to set core hours and working days.
+            </p>
+            <Link href={`${basePath}/create-company-shifts`} className={`mt-6 ${zohoPrimaryBtnCls()}`}>
+              <Plus className="h-4 w-4" />
+              Create shift
+            </Link>
+          </div>
+        ) : null}
+
+        {!listLoading && !listError && mobileMainTab === "shifts" && shifts.length > 0 ? (
+          <ul className="mt-1 divide-y divide-[#E4E7EC] border-t border-[#E4E7EC] bg-white">
+            {filteredShifts.length === 0 ? (
+              <li className="px-4 py-12 text-center text-[15px] text-[#6B7280]">
+                No shifts match your search.
+              </li>
+            ) : (
+              filteredShifts.map((row) => (
+                <MobileShiftRow
+                  key={row.id}
+                  row={row}
+                  onEdit={() => openEdit(row)}
+                  onAssignStaff={() => openAssignModal(row)}
+                  onDelete={() => {
+                    setDeleteError(null);
+                    setDeleteTarget(row);
+                  }}
+                />
+              ))
+            )}
+          </ul>
+        ) : null}
+      </div>
+
+      {/* Desktop layout (unchanged) */}
+      <div className="hidden lg:block">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:px-6 sm:py-3.5 lg:px-8">
           <div className="flex min-w-0 items-start gap-3.5 sm:items-center sm:gap-4">
@@ -662,6 +953,7 @@ export default function ManageCompanyShiftsPage() {
           </div>
         </section>
       </div>
+      </div>
 
       {/* Assign staff — pick employee */}
       {assignForShift && (
@@ -673,27 +965,28 @@ export default function ManageCompanyShiftsPage() {
         >
           <button
             type="button"
-            className="absolute inset-0 bg-[#0C123A]/55 backdrop-blur-sm"
+            className="absolute inset-0 bg-[#1F2937]/40 backdrop-blur-[1px] sm:bg-[#0C123A]/55 sm:backdrop-blur-sm"
             aria-label="Close dialog"
             onClick={closeAssignModal}
           />
-          <div className="relative flex max-h-[min(90vh,640px)] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border border-slate-200/90 bg-white shadow-2xl sm:max-h-[min(85vh,720px)] sm:rounded-3xl">
-            <div className="relative shrink-0 border-b border-amber-100/80 bg-gradient-to-r from-[#C99237]/20 via-amber-50/90 to-white px-5 py-5 sm:px-6">
-              <div className="absolute -right-10 -top-10 h-36 w-36 rounded-full bg-[#C99237]/15 blur-2xl" aria-hidden />
+          <div className="relative flex max-h-[min(92dvh,640px)] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl border border-[#E4E7EC] bg-white shadow-2xl sm:max-h-[min(85vh,720px)] sm:rounded-3xl sm:border-slate-200/90">
+            <div className="relative shrink-0 border-b border-[#E4E7EC] bg-white px-4 py-4 sm:border-amber-100/80 sm:bg-gradient-to-r sm:from-[#C99237]/20 sm:via-amber-50/90 sm:to-white sm:px-6 sm:py-5 sm:[border-top:3px_solid_#008CD3]">
               <div className="relative flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-[11px] font-bold uppercase tracking-widest text-[#0C123A]/50">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-[#008CD3] sm:font-bold sm:text-[#0C123A]/50">
                     Assign shift
                   </p>
-                  <h3 id="assign-shift-title" className="mt-1 truncate text-xl font-extrabold text-[#0C123A]">
+                  <h3 id="assign-shift-title" className="mt-1 truncate text-[17px] font-semibold text-[#1F2937] sm:text-xl sm:font-extrabold sm:text-[#0C123A]">
                     {assignForShift.shift_name || "Shift"}
                   </h3>
-                  <p className="mt-1 font-mono text-xs text-slate-500">Shift ID · {assignForShift.id}</p>
+                  <p className="mt-0.5 text-[13px] text-[#6B7280] sm:font-mono sm:text-xs sm:text-slate-500">
+                    Shift ID · {assignForShift.id}
+                  </p>
                 </div>
                 <button
                   type="button"
                   onClick={closeAssignModal}
-                  className="rounded-xl bg-white/90 p-2 text-slate-500 shadow-sm ring-1 ring-slate-200/80 transition hover:bg-white hover:text-[#0C123A]"
+                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#6B7280] active:bg-[#F5F7FA] sm:rounded-xl sm:border-0 sm:bg-white/90 sm:shadow-sm sm:ring-1 sm:ring-slate-200/80 sm:hover:text-[#0C123A]"
                   aria-label="Close"
                 >
                   <X className="h-5 w-5" />
@@ -701,27 +994,27 @@ export default function ManageCompanyShiftsPage() {
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:px-6">
+            <div className="min-h-0 flex-1 overflow-y-auto bg-[#F5F7FA] px-4 py-4 sm:bg-white sm:px-6">
               <label htmlFor="assign-user-search" className="sr-only">
                 Search employees
               </label>
               <div className="relative">
                 <Search
-                  className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF]"
                   aria-hidden
                 />
                 <input
                   id="assign-user-search"
                   type="search"
                   autoComplete="off"
-                  placeholder="Search by name or email…"
+                  placeholder="Search employees"
                   value={assignSearch}
                   onChange={(e) => setAssignSearch(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200/90 bg-slate-50/80 py-3 pl-10 pr-4 text-sm font-medium text-[#0C123A] outline-none transition focus:border-[#C99237] focus:bg-white focus:ring-4 focus:ring-[#C99237]/12"
+                  className={zohoSearchCls()}
                 />
               </div>
-              <p className="mt-2 text-xs text-slate-500">
-                All team members except organization admins. Use search to narrow the list.
+              <p className="mt-2 text-[13px] text-[#6B7280] sm:text-xs sm:text-slate-500">
+                All team members except organization admins.
               </p>
 
               {assignUsersError && (
@@ -745,48 +1038,83 @@ export default function ManageCompanyShiftsPage() {
               )}
 
               {!assignUsersLoading && filteredAssignList.length > 0 && (
-                <ul className="mt-4 space-y-3">
-                  {filteredAssignList.map((u) => {
-                    const shiftLabel = currentShiftLabel(u);
-                    const uid = u.id;
-                    return (
-                      <li
-                        key={uid != null ? String(uid) : u.user_email}
-                        className="rounded-2xl border border-slate-200/90 bg-gradient-to-br from-white to-slate-50/50 p-4 shadow-sm ring-1 ring-slate-900/[0.02]"
-                      >
-                        <div className="flex gap-3">
-                          <img
-                            src={demoAvatarUrl(uid)}
-                            alt=""
-                            width={48}
-                            height={48}
-                            className="h-12 w-12 shrink-0 rounded-2xl object-cover ring-2 ring-white shadow-md"
-                          />
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate font-bold text-[#0C123A]">{u.user_name ?? "—"}</p>
-                            <p className="truncate text-xs text-slate-500">{u.user_email ?? "—"}</p>
-                            <p className="mt-2 text-xs">
-                              <span className="font-semibold text-slate-600">Current shift: </span>
-                              <span className={shiftLabel ? "text-[#0C123A]" : "italic text-slate-400"}>
-                                {shiftLabel ?? "None assigned"}
-                              </span>
-                            </p>
+                <>
+                  <ul className="mt-4 divide-y divide-[#E4E7EC] rounded-xl border border-[#E4E7EC] bg-white lg:hidden">
+                    {filteredAssignList.map((u) => {
+                      const shiftLabel = currentShiftLabel(u);
+                      const uid = u.id;
+                      const name = u.user_name ?? "—";
+                      return (
+                        <li key={uid != null ? String(uid) : u.user_email} className="px-4 py-3">
+                          <div className="flex items-center gap-3">
+                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#E8F4FB] text-sm font-semibold text-[#008CD3]">
+                              {shiftInitials(name)}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-[15px] font-medium text-[#1F2937]">{name}</p>
+                              <p className="truncate text-[13px] text-[#6B7280]">{u.user_email ?? "—"}</p>
+                              <p className="mt-0.5 text-[12px] text-[#9CA3AF]">
+                                Current: {shiftLabel ?? "None"}
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAssignActionError(null);
+                                setAssignConfirmUser(u);
+                              }}
+                              className={zohoPrimaryBtnCls()}
+                            >
+                              Add
+                            </button>
                           </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAssignActionError(null);
-                            setAssignConfirmUser(u);
-                          }}
-                          className="mt-3 w-full rounded-xl bg-gradient-to-r from-[#C99237] to-amber-500 py-2.5 text-sm font-extrabold text-[#0C123A] shadow-md shadow-amber-900/10 ring-1 ring-white/30 transition hover:brightness-105 active:scale-[0.99]"
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  <ul className="mt-4 hidden space-y-3 lg:block">
+                    {filteredAssignList.map((u) => {
+                      const shiftLabel = currentShiftLabel(u);
+                      const uid = u.id;
+                      return (
+                        <li
+                          key={uid != null ? String(uid) : u.user_email}
+                          className="rounded-2xl border border-slate-200/90 bg-gradient-to-br from-white to-slate-50/50 p-4 shadow-sm ring-1 ring-slate-900/[0.02]"
                         >
-                          Add user to this shift
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
+                          <div className="flex gap-3">
+                            <img
+                              src={demoAvatarUrl(uid)}
+                              alt=""
+                              width={48}
+                              height={48}
+                              className="h-12 w-12 shrink-0 rounded-2xl object-cover ring-2 ring-white shadow-md"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate font-bold text-[#0C123A]">{u.user_name ?? "—"}</p>
+                              <p className="truncate text-xs text-slate-500">{u.user_email ?? "—"}</p>
+                              <p className="mt-2 text-xs">
+                                <span className="font-semibold text-slate-600">Current shift: </span>
+                                <span className={shiftLabel ? "text-[#0C123A]" : "italic text-slate-400"}>
+                                  {shiftLabel ?? "None assigned"}
+                                </span>
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAssignActionError(null);
+                              setAssignConfirmUser(u);
+                            }}
+                            className="mt-3 w-full rounded-xl bg-gradient-to-r from-[#C99237] to-amber-500 py-2.5 text-sm font-extrabold text-[#0C123A] shadow-md shadow-amber-900/10 ring-1 ring-white/30 transition hover:brightness-105 active:scale-[0.99]"
+                          >
+                            Add user to this shift
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </>
               )}
             </div>
           </div>
@@ -865,18 +1193,18 @@ export default function ManageCompanyShiftsPage() {
       {/* Delete confirmation */}
       {deleteTarget && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="delete-shift-title"
         >
           <button
             type="button"
-            className="absolute inset-0 bg-[#0C123A]/60 backdrop-blur-sm"
+            className="absolute inset-0 bg-[#1F2937]/40 backdrop-blur-[1px] sm:bg-[#0C123A]/60 sm:backdrop-blur-sm"
             aria-label="Close dialog"
             onClick={() => !deleteSubmitting && setDeleteTarget(null)}
           />
-          <div className="relative w-full max-w-md overflow-hidden rounded-3xl border border-red-100/80 bg-white shadow-2xl shadow-red-900/10 ring-1 ring-red-900/5">
+          <div className="relative w-full max-w-md overflow-hidden rounded-t-2xl border border-[#E4E7EC] bg-white p-4 shadow-2xl sm:rounded-3xl sm:border-red-100/80 sm:p-0 sm:shadow-red-900/10 sm:ring-1 sm:ring-red-900/5">
             <div className="bg-gradient-to-br from-red-50 via-white to-white px-6 pb-2 pt-6">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex gap-4">
@@ -947,19 +1275,19 @@ export default function ManageCompanyShiftsPage() {
       {/* Edit modal */}
       {editTarget && (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4"
+          className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="edit-shift-title"
         >
           <button
             type="button"
-            className="absolute inset-0 bg-[#0C123A]/55 backdrop-blur-sm"
+            className="absolute inset-0 bg-[#1F2937]/40 backdrop-blur-[1px] sm:bg-[#0C123A]/55 sm:backdrop-blur-sm"
             aria-label="Close dialog"
             onClick={() => !editSubmitting && closeEdit()}
           />
-          <div className="relative flex max-h-[min(92vh,760px)] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border border-slate-200/90 bg-white shadow-2xl sm:rounded-3xl">
-            <div className="relative shrink-0 overflow-hidden border-b border-amber-100/80 bg-gradient-to-r from-[#C99237]/25 via-amber-50 to-white px-6 py-5">
+          <div className="relative flex max-h-[min(92dvh,760px)] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl border border-[#E4E7EC] bg-white shadow-2xl sm:max-h-[min(92vh,760px)] sm:rounded-3xl sm:border-slate-200/90">
+            <div className="relative shrink-0 overflow-hidden border-b border-[#E4E7EC] bg-white px-4 py-4 sm:border-amber-100/80 sm:bg-gradient-to-r sm:from-[#C99237]/25 sm:via-amber-50 sm:to-white sm:px-6 sm:py-5 sm:[border-top:3px_solid_#008CD3]">
               <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-[#C99237]/20 blur-2xl" aria-hidden />
               <div className="relative flex items-start justify-between gap-3">
                 <div>
