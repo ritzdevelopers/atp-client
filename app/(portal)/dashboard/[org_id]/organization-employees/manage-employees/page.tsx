@@ -1,9 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import {
   Star,
+  Eye,
   MessageCircle,
   MoreHorizontal,
   Users,
@@ -1077,6 +1079,15 @@ export default function ManageEmployeesPage() {
                     role="menu"
                     className="absolute right-0 top-full z-30 mt-1 max-h-[min(70vh,20rem)] min-w-[200px] overflow-y-auto overscroll-contain rounded-2xl border border-slate-200 bg-white py-1 shadow-xl ring-1 ring-slate-200/60"
                   >
+                    <Link
+                      href={`/dashboard/${orgIdParam}/organization-employees/manage-employees/get-employee?user_id=${encodeURIComponent(emp.id)}`}
+                      role="menuitem"
+                      className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-700 active:bg-slate-50"
+                      onClick={() => setMenuUserId(null)}
+                    >
+                      <Users className="h-4 w-4 text-teal-600" aria-hidden />
+                      View profile
+                    </Link>
                     <button
                       type="button"
                       role="menuitem"
@@ -1205,6 +1216,13 @@ export default function ManageEmployeesPage() {
                             <p className="text-[11px] text-slate-500">{emp.empCode}</p>
                           </div>
                           <div className="flex shrink-0 items-center gap-0.5">
+                            <Link
+                              href={`/dashboard/${orgIdParam}/organization-employees/manage-employees/get-employee?user_id=${encodeURIComponent(emp.id)}`}
+                              className="rounded-xl p-2 text-[#008CD3] active:bg-slate-100"
+                              aria-label="View employee profile"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Link>
                             <button
                               type="button"
                               onClick={() => toggleFavorite(emp.id)}
@@ -1267,6 +1285,13 @@ export default function ManageEmployeesPage() {
                     <div className="relative px-4 pb-3 pt-3">
                       <div className="flex items-start justify-between">
                         <div className="flex gap-2">
+                          <Link
+                            href={`/dashboard/${orgIdParam}/organization-employees/manage-employees/get-employee?user_id=${encodeURIComponent(emp.id)}`}
+                            className="rounded-md p-1 text-teal-600 transition hover:bg-teal-50"
+                            aria-label="View employee profile"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Link>
                           <button
                             type="button"
                             onClick={() => toggleFavorite(emp.id)}

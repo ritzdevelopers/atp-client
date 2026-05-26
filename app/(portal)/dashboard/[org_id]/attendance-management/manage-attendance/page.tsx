@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useParams, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import ManageAttendanceDetail from "./ManageAttendanceDetail";
 import {
   Users,
   RefreshCw,
@@ -115,7 +116,7 @@ type MobileUserRowProps = {
 };
 
 function MobileUserAttendanceRow({ user, orgId }: MobileUserRowProps) {
-  const href = `/dashboard/${orgId}/attendance-management/manage-attendance/${encodeURIComponent(user.userId)}`;
+  const href = `/dashboard/${orgId}/attendance-management/manage-attendance/0?employee_id=${encodeURIComponent(user.userId)}`;
 
   return (
     <li>
@@ -152,7 +153,7 @@ function MobileUserAttendanceRow({ user, orgId }: MobileUserRowProps) {
   );
 }
 
-function ManageAttendancePage() {
+function ManageAttendanceListPage() {
   const params = useParams();
   const orgId = String(params?.org_id ?? "");
 
@@ -530,7 +531,7 @@ function ManageAttendancePage() {
               </div>
 
               <Link
-                href={`/dashboard/${orgId}/attendance-management/manage-attendance/${encodeURIComponent(user.userId)}`}
+                href={`/dashboard/${orgId}/attendance-management/manage-attendance/0?employee_id=${encodeURIComponent(user.userId)}`}
                 className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#0C123A] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#151e59]"
               >
                 <MdOpenInNew className="text-base" />
@@ -545,4 +546,28 @@ function ManageAttendancePage() {
   );
 }
 
-export default ManageAttendancePage;
+function ManageAttendancePageContent() {
+  const searchParams = useSearchParams();
+  const employeeId = searchParams.get("employee_id");
+
+  if (employeeId) {
+    return <ManageAttendanceDetail employeeId={employeeId} />;
+  }
+
+  return <ManageAttendanceListPage />;
+}
+
+export default function ManageAttendancePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex flex-col items-center justify-center gap-3 py-24 text-[#6B7280]">
+          <Loader2 className="h-9 w-9 animate-spin text-[#008CD3]" />
+          <p className="text-[15px]">Loading attendance…</p>
+        </div>
+      }
+    >
+      <ManageAttendancePageContent />
+    </Suspense>
+  );
+}
