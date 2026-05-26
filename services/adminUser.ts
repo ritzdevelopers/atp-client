@@ -729,6 +729,87 @@ export async function getAllOrgUsers(token: string): Promise<OrgUserRow[]> {
   return Array.isArray(users) ? users : [];
 }
 
+export type EmployeeUserInfo = {
+  id?: number | string;
+  user_name?: string;
+  user_email?: string;
+  user_phone?: string;
+  created_at?: string;
+  role_id?: number | string;
+  role_name?: string;
+  country?: string | null;
+  state?: string | null;
+  district?: string | null;
+  city?: string | null;
+  is_from_village?: boolean | number | null;
+  village_name?: string | null;
+  street?: string | null;
+  house_number?: string | null;
+  zip_code?: string | null;
+  emergency_contact_name?: string | null;
+  emergency_number?: string | null;
+  relation_blood_line?: string | null;
+  account_holder_name?: string | null;
+  bank_name?: string | null;
+  bank_branch?: string | null;
+  account_number?: string | null;
+  ifsc_code?: string | null;
+  uan_number?: string | null;
+  shift_id?: number | string | null;
+  shift_name?: string | null;
+  start_time?: string | null;
+  end_time?: string | null;
+  working_days?: string | null;
+  is_night_shift?: boolean | number | null;
+  [key: string]: unknown;
+};
+
+export type SingleEmployeeData = {
+  user_info: EmployeeUserInfo;
+  documents: Record<string, unknown>[];
+  assets: Record<string, unknown>[];
+  leave_balance: Record<string, unknown>[];
+  leave_queries: Record<string, unknown>[];
+  attendance_logs: Record<string, unknown>[];
+  attendance_related_queries: Record<string, unknown>[];
+  ip_assignments: Record<string, unknown>[];
+  feature_overrides: Record<string, unknown>[];
+  references: Record<string, unknown>[];
+};
+
+export type GetSingleEmployeeResponse = {
+  success?: boolean;
+  message?: string;
+  data?: SingleEmployeeData;
+};
+
+export async function getSingleEmployee(
+  token: string,
+  orgId: number | string,
+  userId: number | string,
+): Promise<SingleEmployeeData> {
+  const params = new URLSearchParams({
+    org_id: String(orgId),
+    user_id: String(userId),
+  });
+  const res = await fetch(`${API_URL}/api/user/get-single-employee?${params.toString()}`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const result = (await res.json()) as GetSingleEmployeeResponse;
+  if (!res.ok || result.success === false || !result.data) {
+    const error: ApiError = new Error(result.message || "Failed to load employee details");
+    error.status = res.status;
+    throw error;
+  }
+
+  return result.data;
+}
+
 export type UpdateUserDetailsPayload = {
   user_id: number | string;
   /** Optional override; defaults to `getOrganizationIdFromSession()`. */

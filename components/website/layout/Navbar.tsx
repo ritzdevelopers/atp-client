@@ -104,17 +104,14 @@ export default function Navbar() {
         if (orgId) {
           localStorage.setItem("org_id", orgId);
         }
-
         const nextAuth: CachedNavbarAuth = {
           isAuthenticated: Boolean(result?.success) && Boolean(role),
           role,
           orgId,
         };
-
         setAuth(nextAuth);
         sessionStorage.setItem(NAVBAR_AUTH_CACHE_KEY, JSON.stringify(nextAuth));
         setIsAuthLoading(false);
-
         if (role === "admin" && Array.isArray(result?.org_details) && result.org_details.length > 0) {
           sessionStorage.setItem(
             ADMIN_ORGS_SESSION_KEY,
@@ -153,7 +150,6 @@ export default function Navbar() {
     if (isAuthLoading) {
       return [...baseNavLinks, { label: "Checking...", href: "#" }];
     }
-
     if (!auth.isAuthenticated) {
       return [
         ...baseNavLinks,
@@ -161,22 +157,18 @@ export default function Navbar() {
         { label: "Register", href: "/register" },
       ];
     }
-
     if (auth.role === "admin") {
       return [...baseNavLinks, { label: "Admin Panel", href: "/portal" }];
     }
-
     if (auth.role === "hr" || auth.role === "manager" || auth.role === "employee") {
       return [...baseNavLinks, { label: "Dashboard", href: "/dashboard" }];
     }
-
     return [
       ...baseNavLinks,
       { label: "Login", href: "/login" },
       { label: "Register", href: "/register" },
     ];
   }, [auth, isAuthLoading]);
-
   return (
     <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur">
       <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
