@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, Suspense } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   ArrowRight,
@@ -193,10 +193,27 @@ function waModalPanelClass() {
 }
 
 export default function EmployeeExitDetailPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-slate-500">
+          <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
+          <p className="text-sm">Loading exit process…</p>
+        </div>
+      }
+    >
+      <EmployeeExitDetailPageContent />
+    </Suspense>
+  );
+}
+
+function EmployeeExitDetailPageContent() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const orgId = String(params?.org_id ?? "");
-  const teamId = String(params?.team_id ?? "");
-  const exitProcessId = String(params?.exit_process_id ?? "");
+  const teamId = searchParams.get("team_id") || String(params?.team_id ?? "");
+  const exitProcessId =
+    searchParams.get("exit_process_id") || String(params?.exit_process_id ?? "");
 
   const [data, setData] = useState<EmployeeExitProcessDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -243,7 +260,7 @@ export default function EmployeeExitDetailPage() {
     "overview" | "assets" | "tasks" | "actions"
   >("overview");
 
-  const teamHref = `/dashboard/${orgId}/organization-employees/teams/${teamId}`;
+  const teamHref = `/dashboard/${orgId}/organization-employees/teams/0?team_id=${encodeURIComponent(teamId)}`;
 
   const reloadDetail = useCallback(async () => {
     if (!orgId || !exitProcessId) return;

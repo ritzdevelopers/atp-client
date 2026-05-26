@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, Suspense } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   Building2,
@@ -165,9 +165,26 @@ function waExitStatusChip(status: string | null | undefined) {
 }
 
 export default function TeamMemberExitProcessReportPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-slate-500">
+          <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
+          <p className="text-sm">Loading exit process report…</p>
+        </div>
+      }
+    >
+      <TeamMemberExitProcessReportPageContent />
+    </Suspense>
+  );
+}
+
+function TeamMemberExitProcessReportPageContent() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const orgId = String(params?.org_id ?? "");
-  const userIdParam = String(params?.user_id ?? "");
+  const userIdParam =
+    searchParams.get("user_id") || String(params?.user_id ?? "");
 
   const [data, setData] = useState<TeamMemberExitProcessReportData | null>(null);
   const [loading, setLoading] = useState(true);

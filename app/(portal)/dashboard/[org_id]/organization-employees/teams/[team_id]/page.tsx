@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, Suspense, type ReactNode } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -131,6 +131,45 @@ function exitStatusPillClass(status: string) {
   return "bg-amber-50 text-amber-800 ring-amber-200/80";
 }
 
+function memberHasExitProcess(m: OrgTeamMemberRow): boolean {
+  return (
+    m.exit_process_application_status != null &&
+    String(m.exit_process_application_status).trim() !== ""
+  );
+}
+
+function exitStatusLabel(status: string | null | undefined): string {
+  return String(status ?? "unknown")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function MemberExitStatusBadge({
+  status,
+  mobile = false,
+}: {
+  status: string;
+  mobile?: boolean;
+}) {
+  if (mobile) {
+    return (
+      <span
+        className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${waExitStatusChip(status)}`}
+      >
+        {exitStatusLabel(status)}
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ring-1 ${exitStatusPillClass(status)}`}
+    >
+      {exitStatusLabel(status)}
+    </span>
+  );
+}
+
 function detailToRow(d: OrgTeamDetail): OrgTeamRow {
   return {
     team_id: d.team_id,
@@ -151,6 +190,8 @@ function detailToRow(d: OrgTeamDetail): OrgTeamRow {
       added_by_name: m.added_by_name,
       removed_by_id: m.removed_by_id,
       removed_by_name: m.removed_by_name,
+      exit_process_action_type: m.exit_process_action_type ?? null,
+      exit_process_application_status: m.exit_process_application_status ?? null,
     })),
   };
 }
@@ -205,10 +246,26 @@ function modalShell(
 }
 
 export default function TeamDetailPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-slate-500">
+          <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
+          <p className="text-sm">Loading team…</p>
+        </div>
+      }
+    >
+      <TeamDetailPageContent />
+    </Suspense>
+  );
+}
+
+function TeamDetailPageContent() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const router = useRouter();
   const orgId = String(params?.org_id ?? "");
-  const teamId = String(params?.team_id ?? "");
+  const teamId = searchParams.get("team_id") || String(params?.team_id ?? "");
 
   const [detail, setDetail] = useState<OrgTeamDetail | null>(null);
   const [orgUsers, setOrgUsers] = useState<OrgUserRow[]>([]);
@@ -586,14 +643,21 @@ export default function TeamDetailPage() {
                           </p>
                         </div>
                         {!hideTerminate ? (
-                          <button
-                            type="button"
-                            onClick={() => openTerminateForMember(m)}
-                            className={waDangerBtnCls()}
-                          >
-                            <ShieldAlert className="h-3.5 w-3.5" />
-                            Exit
-                          </button>
+                          memberHasExitProcess(m) ? (
+                            <MemberExitStatusBadge
+                              mobile
+                              status={String(m.exit_process_application_status)}
+                            />
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => openTerminateForMember(m)}
+                              className={waDangerBtnCls()}
+                            >
+                              <ShieldAlert className="h-3.5 w-3.5" />
+                              Exit
+                            </button>
+                          )
                         ) : null}
                       </div>
                     </li>
@@ -669,7 +733,7 @@ export default function TeamDetailPage() {
                 {exitProcesses.map((row) => (
                   <li key={row.id}>
                     <Link
-                      href={`/dashboard/${orgId}/organization-employees/teams/${teamId}/exit/${row.id}`}
+                      href={`/dashboard/${orgId}/organization-employees/teams/0/exit/0?team_id=${encodeURIComponent(teamId)}&exit_process_id=${encodeURIComponent(String(row.id))}`}
                       className="flex items-center gap-3 px-4 py-3.5 active:bg-[#F0F2F5]"
                     >
                       <span
@@ -1076,6 +1140,10 @@ export default function TeamDetailPage() {
                       <div className="relative mt-4 flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-4">
                         {hideTerminate ? (
                           <span className="text-[11px] text-slate-400">Your account</span>
+                        ) : memberHasExitProcess(m) ? (
+                          <MemberExitStatusBadge
+                            status={String(m.exit_process_application_status)}
+                          />
                         ) : (
                           <button
                             type="button"
@@ -1218,7 +1286,7 @@ export default function TeamDetailPage() {
                         </td>
                         <td className="px-4 py-3 text-right">
                           <Link
-                            href={`/dashboard/${orgId}/organization-employees/teams/${teamId}/exit/${row.id}`}
+                            href={`/dashboard/${orgId}/organization-employees/teams/0/exit/0?team_id=${encodeURIComponent(teamId)}&exit_process_id=${encodeURIComponent(String(row.id))}`}
                             className="inline-flex items-center gap-1.5 rounded-lg border border-teal-200 bg-teal-50 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-teal-800 transition hover:border-teal-300 hover:bg-teal-100/80"
                           >
                             <Eye className="h-3.5 w-3.5" aria-hidden />
