@@ -246,6 +246,36 @@ export async function fetchEmployeeExitProcessById(
   return json as unknown as FetchEmployeeExitProcessDetailResponse;
 }
 
+export async function fetchMyExitProcess(
+  token: string,
+  orgId: number | string,
+): Promise<FetchEmployeeExitProcessDetailResponse> {
+  const q = new URLSearchParams({ org_id: String(orgId) });
+  const url = `${API_URL}/api/employee-exit/get-my-exit-process?${q.toString()}`;
+  const res = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  let json: Record<string, unknown> = {};
+  try {
+    json = (await res.json()) as Record<string, unknown>;
+  } catch {
+    json = {};
+  }
+
+  if (!res.ok) {
+    const err = new Error(
+      (json.message as string) || "Failed to fetch your exit process",
+    ) as ApiError;
+    err.status = res.status;
+    throw err;
+  }
+
+  return json as unknown as FetchEmployeeExitProcessDetailResponse;
+}
+
 /** Rows from GET `/assets-for-handover/:user_id` (`employee_assets` joined to exit process). */
 export type EmployeeHandoverAssetApiRow = {
   id: number;

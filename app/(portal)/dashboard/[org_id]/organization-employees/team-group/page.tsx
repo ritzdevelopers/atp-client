@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, Suspense, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   AlertCircle,
   ArrowLeft,
@@ -54,6 +54,7 @@ import {
   type AttendanceQueryCategory,
   type AttendanceQueryRow,
 } from "@/services/attendanceQueries";
+import TeamMemberExitProcessReportPage from "./exit-process-report/[user_id]/page";
 
 function displayTeamTitle(raw: string) {
   return raw
@@ -283,6 +284,30 @@ function modalShell(
 }
 
 export default function TeamGroupPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-slate-500">
+          <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
+          <p className="text-sm">Loading team group…</p>
+        </div>
+      }
+    >
+      <TeamGroupPageRouter />
+    </Suspense>
+  );
+}
+
+function TeamGroupPageRouter() {
+  const searchParams = useSearchParams();
+  const userId = searchParams.get("user_id");
+  if (userId) {
+    return <TeamMemberExitProcessReportPage />;
+  }
+  return <TeamGroupPageContent />;
+}
+
+function TeamGroupPageContent() {
   const params = useParams();
   const router = useRouter();
   const orgId = String(params?.org_id ?? "");
@@ -1161,7 +1186,7 @@ export default function TeamGroupPage() {
                       {ep.employee_name?.trim() || `Employee #${ep.employee_id}`}
                     </p>
                     <Link
-                      href={`/dashboard/${orgId}/organization-employees/team-group/exit-process-report/${ep.employee_id}`}
+                      href={`/dashboard/${orgId}/organization-employees/team-group?user_id=${encodeURIComponent(String(ep.employee_id))}`}
                       className="mt-2 inline-flex items-center gap-1 text-[14px] font-medium text-[#128C7E]"
                     >
                       View details
@@ -1996,7 +2021,7 @@ export default function TeamGroupPage() {
                             ) : null}
                             <div className="mt-3">
                               <Link
-                                href={`/dashboard/${orgId}/organization-employees/team-group/exit-process-report/${ep.employee_id}`}
+                                href={`/dashboard/${orgId}/organization-employees/team-group?user_id=${encodeURIComponent(String(ep.employee_id))}`}
                                 className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#0C123A] px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-[#121a4a]"
                               >
                                 View more

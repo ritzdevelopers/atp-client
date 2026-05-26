@@ -14,6 +14,8 @@ export type OrgTeamMemberRow = {
   added_by_name: string | null;
   removed_by_id: number | null;
   removed_by_name: string | null;
+  exit_process_action_type?: string | null;
+  exit_process_application_status?: string | null;
 };
 
 export type OrgTeamRow = {
