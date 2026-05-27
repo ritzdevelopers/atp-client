@@ -339,14 +339,18 @@ export default function ManageEmployeesPage() {
   }, [loadUsers]);
 
   useEffect(() => {
-    function onDoc(e: MouseEvent) {
+    function onDoc(e: MouseEvent | TouchEvent) {
       if (!menuUserId) return;
       const t = e.target as HTMLElement;
       if (t.closest("[data-employee-menu]")) return;
       setMenuUserId(null);
     }
     document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
+    document.addEventListener("touchstart", onDoc, { passive: true });
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("touchstart", onDoc);
+    };
   }, [menuUserId]);
 
   useEffect(() => {
@@ -932,7 +936,7 @@ export default function ManageEmployeesPage() {
             </div>
           </div>
         )}
-
+        
         {/* Mobile & tablet: app-style sticky header */}
         <div className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/95 px-3 pb-3 pt-3 backdrop-blur-md sm:px-4 lg:hidden">
           <h1 className="text-lg font-bold tracking-tight text-slate-900">Team members</h1>
@@ -1077,12 +1081,12 @@ export default function ManageEmployeesPage() {
                 const menuPanel = menuOpen && row && (
                   <div
                     role="menu"
-                    className="absolute right-0 top-full z-30 mt-1 max-h-[min(70vh,20rem)] min-w-[200px] overflow-y-auto overscroll-contain rounded-2xl border border-slate-200 bg-white py-1 shadow-xl ring-1 ring-slate-200/60"
+                    className="absolute right-0 bottom-full z-50 mb-1 max-h-[min(70vh,20rem)] min-w-[200px] overflow-y-auto overscroll-contain rounded-2xl border border-slate-200 bg-white py-1 shadow-xl ring-1 ring-slate-200/60 lg:bottom-auto lg:top-full lg:mb-0 lg:mt-1"
                   >
                     <Link
                       href={`/dashboard/${orgIdParam}/organization-employees/manage-employees/get-employee?user_id=${encodeURIComponent(emp.id)}`}
                       role="menuitem"
-                      className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-700 active:bg-slate-50"
+                      className="flex w-full touch-manipulation items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-700 active:bg-slate-50"
                       onClick={() => setMenuUserId(null)}
                     >
                       <Users className="h-4 w-4 text-teal-600" aria-hidden />
@@ -1091,7 +1095,7 @@ export default function ManageEmployeesPage() {
                     <button
                       type="button"
                       role="menuitem"
-                      className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-700 active:bg-slate-50"
+                      className="flex w-full touch-manipulation items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-700 active:bg-slate-50"
                       onClick={() => {
                         openEditModal(row);
                         setMenuUserId(null);
@@ -1118,7 +1122,7 @@ export default function ManageEmployeesPage() {
                     <button
                       type="button"
                       role="menuitem"
-                      className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-700 active:bg-slate-50"
+                      className="flex w-full touch-manipulation items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-700 active:bg-slate-50"
                       onClick={() => {
                         openRoleModal(row);
                         setMenuUserId(null);
@@ -1132,7 +1136,7 @@ export default function ManageEmployeesPage() {
                         <button
                           type="button"
                           role="menuitem"
-                          className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-700 active:bg-slate-50"
+                          className="flex w-full touch-manipulation items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-700 active:bg-slate-50"
                           onClick={() => {
                             openDocumentsModal(row);
                             setMenuUserId(null);
@@ -1144,7 +1148,7 @@ export default function ManageEmployeesPage() {
                         <button
                           type="button"
                           role="menuitem"
-                          className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-700 active:bg-slate-50"
+                          className="flex w-full touch-manipulation items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-700 active:bg-slate-50"
                           onClick={() => {
                             openPaidLeaveModal(row);
                             setMenuUserId(null);
@@ -1160,7 +1164,7 @@ export default function ManageEmployeesPage() {
                         <button
                           type="button"
                           role="menuitem"
-                          className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-700 active:bg-slate-50"
+                          className="flex w-full touch-manipulation items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-700 active:bg-slate-50"
                           onClick={() => {
                             void openUpdateAddressesModal(row);
                             setMenuUserId(null);
@@ -1172,7 +1176,7 @@ export default function ManageEmployeesPage() {
                         <button
                           type="button"
                           role="menuitem"
-                          className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-700 active:bg-slate-50"
+                          className="flex w-full touch-manipulation items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-700 active:bg-slate-50"
                           onClick={() => {
                             openAddAddressModal(row);
                             setMenuUserId(null);
@@ -1189,7 +1193,7 @@ export default function ManageEmployeesPage() {
                 return (
                   <article
                     key={emp.id}
-                    className="overflow-visible rounded-2xl bg-white shadow-md ring-1 ring-slate-200/70 transition-shadow active:scale-[0.995] lg:rounded-xl lg:border lg:border-slate-200/90 lg:shadow-sm lg:ring-0 lg:hover:shadow-md"
+                    className={`overflow-visible rounded-2xl bg-white shadow-md ring-1 ring-slate-200/70 transition-shadow active:scale-[0.995] lg:rounded-xl lg:border lg:border-slate-200/90 lg:shadow-sm lg:ring-0 lg:hover:shadow-md${menuOpen ? " relative z-50" : ""}`}
                   >
                     {/* Mobile & tablet: compact list card */}
                     <div className="relative flex gap-3 p-3 lg:hidden">
