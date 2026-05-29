@@ -4,7 +4,6 @@
 
 ### ⚡ Modern Workforce • Attendance • Employee Management Platform
 
-# <p align="center"><img src="https://readme-typing-svg.demolab.com/?font=Orbitron&size=32&duration=3500&pause=1000&color=00F2FE&vCenter=true&center=true&width=800&lines=❖+RMWSYNC+:++THE+FUTURE+OF+WORKFORCE;❖+HYPER-SCALE+ATTENDANCE+ORCHESTRATION;❖+NEXT-GEN+ENTERPRISE+HRMS" alt="RMWSync Typing Banner" /></p>
 
 <p align="center">
   <samp><b>[ SYSTEMS STATUS: OPERATIONAL ]</b> &nbsp;&nbsp;•&nbsp;&nbsp; <b>[ SECURE NODE: TRUE ]</b> &nbsp;&nbsp;•&nbsp;&nbsp; <b>[ VERSION: 2.1.0-HYPERION ]</b></samp>
