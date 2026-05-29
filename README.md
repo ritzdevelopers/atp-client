@@ -6,7 +6,7 @@
 
 <br/>
 
-<img src="https://readme-typing-svg.herokuapp.com?font=Poppins&weight=600&size=28&duration=2500&pause=1000&color=C99237&center=true&vCenter=true&width=1000&lines=Enterprise+Attendance+Management;Smart+Workforce+Automation;Role+Based+Access+Control;Biometric+Integration+Ready;Built+With+Next.js+15+%2B+Node.js" />
+<img src="https://atp-client.vercel.app/portal/layout/logo.png" />
 
 <br/>
 
