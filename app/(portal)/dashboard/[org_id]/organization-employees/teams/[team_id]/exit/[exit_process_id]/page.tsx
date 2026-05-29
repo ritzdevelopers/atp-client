@@ -214,6 +214,7 @@ function EmployeeExitDetailPageContent() {
   const teamId = searchParams.get("team_id") || String(params?.team_id ?? "");
   const exitProcessId =
     searchParams.get("exit_process_id") || String(params?.exit_process_id ?? "");
+  const tabFromUrl = searchParams.get("tab");
 
   const [data, setData] = useState<EmployeeExitProcessDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -298,6 +299,17 @@ function EmployeeExitDetailPageContent() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (
+      tabFromUrl === "overview" ||
+      tabFromUrl === "assets" ||
+      tabFromUrl === "tasks" ||
+      tabFromUrl === "actions"
+    ) {
+      setMobileMainTab(tabFromUrl);
+    }
+  }, [tabFromUrl]);
 
   const teamMismatch =
     data != null &&

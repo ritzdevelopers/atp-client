@@ -5,9 +5,11 @@ import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   AlertCircle,
+  ArrowRight,
   Briefcase,
   Building2,
   CalendarDays,
+  CheckCircle2,
   ChevronLeft,
   Clock,
   FileText,
@@ -21,10 +23,24 @@ import {
   Shield,
   User,
   Users,
+  UserX,
   Wallet,
+  X,
 } from "lucide-react";
 
 import { getSingleEmployee, type SingleEmployeeData } from "@/services/adminUser";
+import {
+  buildEmployeeExitDetailHref,
+  employeeExitCompleted,
+  fetchEmployeeExitProcesses,
+  isInProgressExitStatus,
+  isOpenExitStatus,
+  isPendingExitStatus,
+  pickRelevantEmployeeExitRow,
+  type EmployeeExitProcessRow,
+} from "@/services/employeeExit";
+import { useManagementDashboardContext } from "@/components/portal-dashboard/Layout/ManagementDashboardContext";
+import TerminateEmployeeModal from "@/components/portal-dashboard/employees/TerminateEmployeeModal";
 
 type GetEmployeeClientProps = {
   userId: string;
@@ -257,11 +273,25 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
   const params = useParams();
   const router = useRouter();
   const orgId = String(params?.org_id ?? "");
+  const ctx = useManagementDashboardContext();
+  const viewerRole = (ctx?.user?.user_role_name ?? "").trim().toLowerCase();
+  const viewerCanTerminate = viewerRole === "admin" || viewerRole === "hr";
+  const viewerCanManageExit = viewerCanTerminate;
 
   const [data, setData] = useState<SingleEmployeeData | null>(null);
+  const [exitRow, setExitRow] = useState<EmployeeExitProcessRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [terminateOpen, setTerminateOpen] = useState(false);
+  const [terminateSuccess, setTerminateSuccess] = useState<string | null>(null);
+  const [completeOpen, setCompleteOpen] = useState(false);
+  const [completeMessage, setCompleteMessage] = useState(
+    "Exit approved. Asset handovers are complete.",
+  );
+  const [completeBusy, setCompleteBusy] = useState(false);
+  const [completeError, setCompleteError] = useState<string | null>(null);
+  const [exitActionSuccess, setExitActionSuccess] = useState<string | null>(null);
   const [mobileTab, setMobileTab] = useState<MobileTab>("overview");
 
   const loadEmployee = useCallback(
@@ -284,10 +314,21 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
       setError(null);
 
       try {
-        const result = await getSingleEmployee(token, orgId, userId);
+        const [result, exitRes] = await Promise.all([
+          getSingleEmployee(token, orgId, userId),
+          fetchEmployeeExitProcesses(token, {
+            org_id: orgId,
+            employee_id: userId,
+            limit: 10,
+            sort: "desc",
+            sort_by: "updated_at",
+          }).catch(() => ({ data: [] as EmployeeExitProcessRow[] })),
+        ]);
         setData(result);
+        setExitRow(pickRelevantEmployeeExitRow(exitRes.data ?? []));
       } catch (e) {
         setData(null);
+        setExitRow(null);
         setError(e instanceof Error ? e.message : "Could not load employee details.");
       } finally {
         setLoading(false);
@@ -303,6 +344,106 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
 
   const info = data?.user_info;
   const employeeName = asText(info?.user_name, "Employee");
+
+  const hasOpenExit = exitRow != null && isOpenExitStatus(exitRow.application_status);
+  const exitPending = exitRow != null && isPendingExitStatus(exitRow.application_status);
+  const exitInProgress = exitRow != null && isInProgressExitStatus(exitRow.application_status);
+  const showTerminate = viewerCanTerminate && !loading && data && !hasOpenExit;
+
+  const exitDetailHref =
+    exitRow != null
+      ? buildEmployeeExitDetailHref(orgId, {
+          exitProcessId: exitRow.id,
+          teamId: exitRow.team_id,
+        })
+      : null;
+  const exitActionsHref =
+    exitRow != null
+      ? buildEmployeeExitDetailHref(orgId, {
+          exitProcessId: exitRow.id,
+          teamId: exitRow.team_id,
+          tab: "actions",
+        })
+      : null;
+
+  async function handleCompleteExitSubmit() {
+    if (!exitRow) return;
+    const trimmed = completeMessage.trim();
+    if (!trimmed) {
+      setCompleteError("A completion message is required.");
+      return;
+    }
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setCompleteError("Not signed in.");
+      return;
+    }
+    setCompleteBusy(true);
+    setCompleteError(null);
+    try {
+      await employeeExitCompleted(token, orgId, exitRow.id, {
+        application_status: "approved",
+        employee_id: exitRow.employee_id,
+        response_message: trimmed,
+      });
+      setCompleteOpen(false);
+      setExitActionSuccess("Exit process completed.");
+      void loadEmployee(true);
+    } catch (e) {
+      setCompleteError(e instanceof Error ? e.message : "Could not complete exit process.");
+    } finally {
+      setCompleteBusy(false);
+    }
+  }
+
+  function openCompleteExitModal() {
+    setCompleteError(null);
+    if (!completeMessage.trim()) {
+      setCompleteMessage("Exit approved. Asset handovers are complete.");
+    }
+    setCompleteOpen(true);
+  }
+
+  const exitPrimaryBtnCls =
+    "inline-flex min-h-[40px] shrink-0 items-center justify-center gap-1.5 rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-[13px] font-semibold text-teal-900 shadow-sm transition hover:bg-teal-100 active:scale-[0.98] disabled:opacity-50 sm:px-4 sm:text-sm";
+  const exitSecondaryBtnCls =
+    "inline-flex min-h-[40px] shrink-0 items-center justify-center gap-1.5 rounded-xl border border-[#E4E7EC] bg-white px-3 py-2 text-[13px] font-semibold text-[#1F2937] shadow-sm transition hover:bg-[#F8FBFF] active:scale-[0.98] disabled:opacity-50 sm:px-4 sm:text-sm";
+
+  const exitActionButtons =
+    viewerCanManageExit && exitRow && !loading ? (
+      <>
+        {exitDetailHref ? (
+          <button
+            type="button"
+            onClick={() => router.push(exitDetailHref)}
+            className={exitSecondaryBtnCls}
+          >
+            <FileText className="h-4 w-4 shrink-0" aria-hidden />
+            Full exit info
+          </button>
+        ) : null}
+        {hasOpenExit && exitPending && exitActionsHref ? (
+          <button
+            type="button"
+            onClick={() => router.push(exitActionsHref)}
+            className={exitPrimaryBtnCls}
+          >
+            <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
+            Move forward
+          </button>
+        ) : null}
+        {hasOpenExit && exitInProgress ? (
+          <button
+            type="button"
+            onClick={openCompleteExitModal}
+            className={exitPrimaryBtnCls}
+          >
+            <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />
+            Complete exit process
+          </button>
+        ) : null}
+      </>
+    ) : null;
 
   const stats = useMemo(
     () => ({
@@ -649,6 +790,9 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
           ? leavesSection
           : moreSection;
 
+  const terminateButtonCls =
+    "inline-flex min-h-[40px] shrink-0 items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[13px] font-semibold text-rose-800 shadow-sm transition hover:bg-rose-100 active:scale-[0.98] disabled:opacity-50 sm:px-4 sm:text-sm";
+
   return (
     <div className="min-h-full bg-[#F5F7FA] lg:bg-[#F8FAFC]">
       {/* Mobile / tablet */}
@@ -670,15 +814,30 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
                 </p>
                 <h1 className="truncate text-[18px] font-bold">{employeeName}</h1>
               </div>
-              <button
-                type="button"
-                onClick={() => void loadEmployee(true)}
-                disabled={loading || refreshing}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/15 text-white active:bg-white/25 disabled:opacity-50"
-                aria-label="Refresh"
-              >
-                <RefreshCw className={`h-5 w-5 ${refreshing ? "animate-spin" : ""}`} />
-              </button>
+              <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+                {showTerminate ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTerminateOpen(true);
+                      setTerminateSuccess(null);
+                    }}
+                    className="inline-flex h-10 items-center gap-1 rounded-lg bg-white/15 px-2.5 text-[12px] font-semibold text-white active:bg-white/25 sm:px-3 sm:text-[13px]"
+                  >
+                    <UserX className="h-4 w-4 shrink-0" aria-hidden />
+                    Terminate
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => void loadEmployee(true)}
+                  disabled={loading || refreshing}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/15 text-white active:bg-white/25 disabled:opacity-50"
+                  aria-label="Refresh"
+                >
+                  <RefreshCw className={`h-5 w-5 ${refreshing ? "animate-spin" : ""}`} />
+                </button>
+              </div>
             </div>
 
             {!loading && data ? (
@@ -728,6 +887,30 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
           </div>
         </div>
 
+        {exitRow && viewerCanManageExit && !loading ? (
+          <div className="mx-4 mt-3 flex flex-wrap gap-2">
+            {exitActionButtons}
+          </div>
+        ) : null}
+
+        {terminateSuccess || exitActionSuccess ? (
+          <div className="mx-4 mt-3 flex items-start gap-2 rounded-xl border border-[#C8E6C9] bg-[#E6F4EA] px-4 py-3 text-[14px] text-[#0F9D58]">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span className="flex-1">{terminateSuccess ?? exitActionSuccess}</span>
+            <button
+              type="button"
+              onClick={() => {
+                setTerminateSuccess(null);
+                setExitActionSuccess(null);
+              }}
+              className="shrink-0 rounded p-1"
+              aria-label="Dismiss"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        ) : null}
+
         {error ? (
           <div className="mx-4 mt-3 flex items-start gap-2 rounded-xl border border-[#F5C6C2] bg-[#FCE8E6] px-4 py-3 text-[14px] text-[#D93025]">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -756,16 +939,50 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
             <ChevronLeft className="h-4 w-4" />
             Back to employees
           </button>
-          <button
-            type="button"
-            onClick={() => void loadEmployee(true)}
-            disabled={loading || refreshing}
-            className="inline-flex items-center gap-2 rounded-xl border border-[#E4E7EC] bg-white px-4 py-2.5 text-sm font-semibold text-[#1F2937] shadow-sm transition hover:bg-[#F8FBFF] disabled:opacity-60"
-          >
-            <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-            Refresh
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {exitActionButtons}
+            {showTerminate ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setTerminateOpen(true);
+                  setTerminateSuccess(null);
+                }}
+                className={terminateButtonCls}
+              >
+                <UserX className="h-4 w-4 shrink-0" aria-hidden />
+                Employee termination
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => void loadEmployee(true)}
+              disabled={loading || refreshing}
+              className="inline-flex items-center gap-2 rounded-xl border border-[#E4E7EC] bg-white px-4 py-2.5 text-sm font-semibold text-[#1F2937] shadow-sm transition hover:bg-[#F8FBFF] disabled:opacity-60"
+            >
+              <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+              Refresh
+            </button>
+          </div>
         </div>
+
+        {terminateSuccess || exitActionSuccess ? (
+          <div className="flex items-start gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span className="flex-1">{terminateSuccess ?? exitActionSuccess}</span>
+            <button
+              type="button"
+              onClick={() => {
+                setTerminateSuccess(null);
+                setExitActionSuccess(null);
+              }}
+              className="shrink-0 rounded p-1 hover:bg-emerald-100"
+              aria-label="Dismiss"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        ) : null}
 
         <header className="overflow-hidden rounded-2xl border border-[#E4E7EC] bg-white shadow-[0_8px_30px_rgba(15,23,42,0.06)]">
           <div className="bg-gradient-to-r from-[#008CD3] to-[#0070AA] px-6 py-5 text-white">
@@ -837,6 +1054,114 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
           </div>
         ) : null}
       </section>
+
+      <TerminateEmployeeModal
+        open={terminateOpen}
+        orgId={orgId}
+        employee={
+          data
+            ? {
+                userId,
+                userName: employeeName,
+                userEmail: info?.user_email,
+                subtitle: formatLabel(info?.role_name),
+              }
+            : null
+        }
+        onClose={() => setTerminateOpen(false)}
+        onSuccess={(message) => {
+          setTerminateSuccess(message);
+          void loadEmployee(true);
+        }}
+      />
+
+      {completeOpen && exitRow ? (
+        <div
+          className="fixed inset-0 z-[1100] flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="complete-exit-title"
+        >
+          <button
+            type="button"
+            className="absolute inset-0 cursor-default"
+            aria-label="Close"
+            disabled={completeBusy}
+            onClick={() => !completeBusy && setCompleteOpen(false)}
+          />
+          <div className="relative flex max-h-[92dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl border border-[#E4E7EC] bg-white shadow-2xl sm:max-h-[92vh] sm:rounded-2xl">
+            <div className="flex shrink-0 items-start justify-between border-b border-[#EEF2F6] px-5 py-4">
+              <div>
+                <h2 id="complete-exit-title" className="text-lg font-bold text-[#1F2937]">
+                  Complete exit process
+                </h2>
+                <p className="mt-1 text-sm text-[#6B7280]">
+                  Confirm completion after assets and handover tasks are done.
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={completeBusy}
+                onClick={() => setCompleteOpen(false)}
+                className="rounded-lg p-2 text-[#6B7280] hover:bg-[#F5F7FA]"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="space-y-4 px-5 py-4">
+              {completeError ? (
+                <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+                  {completeError}
+                </div>
+              ) : null}
+              <div>
+                <label
+                  htmlFor="complete-exit-msg"
+                  className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]"
+                >
+                  Response message
+                </label>
+                <textarea
+                  id="complete-exit-msg"
+                  rows={4}
+                  value={completeMessage}
+                  onChange={(e) => setCompleteMessage(e.target.value)}
+                  className="mt-2 w-full rounded-xl border border-[#E4E7EC] px-3 py-2.5 text-sm text-[#1F2937] outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-500/20"
+                />
+              </div>
+            </div>
+            <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-[#EEF2F6] bg-[#F8FAFC] px-5 py-3">
+              <button
+                type="button"
+                disabled={completeBusy}
+                onClick={() => setCompleteOpen(false)}
+                className="inline-flex items-center justify-center rounded-xl border border-[#E4E7EC] bg-white px-4 py-2.5 text-sm font-semibold text-[#1F2937] hover:bg-[#F8FBFF] disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={completeBusy}
+                onClick={() => void handleCompleteExitSubmit()}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
+              >
+                {completeBusy ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    Completing…
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="h-4 w-4" aria-hidden />
+                    Confirm completion
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
