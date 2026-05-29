@@ -2,8 +2,6 @@
 
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/github/explore/main/topics/nextjs/nextjs.png" width="90" />
-
 ### ⚡ Modern Workforce • Attendance • Employee Management Platform
 
 # <p align="center"><img src="https://readme-typing-svg.demolab.com/?font=Orbitron&size=32&duration=3500&pause=1000&color=00F2FE&vCenter=true&center=true&width=800&lines=❖+RMWSYNC+:++THE+FUTURE+OF+WORKFORCE;❖+HYPER-SCALE+ATTENDANCE+ORCHESTRATION;❖+NEXT-GEN+ENTERPRISE+HRMS" alt="RMWSync Typing Banner" /></p>
