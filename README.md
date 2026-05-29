@@ -1,36 +1,241 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# <div align="center">⚡ RMWSync ⚡</div>
 
-## Getting Started
+<div align="center">
 
-First, run the development server:
+<img src="https://capsule-render.vercel.app/api?type=waving&height=240&text=RMWSync&fontAlign=50&fontAlignY=40&color=0:0F172A,50:1E293B,100:C99237&fontColor=ffffff&fontSize=70&desc=Modern%20Attendance%20%26%20Workforce%20Management%20SaaS&descAlignY=62&animation=fadeIn" />
+
+<br/>
+
+<img src="https://readme-typing-svg.herokuapp.com?font=Poppins&weight=600&size=28&duration=2500&pause=1000&color=C99237&center=true&vCenter=true&width=1000&lines=Enterprise+Attendance+Management;Smart+Workforce+Automation;Role+Based+Access+Control;Biometric+Integration+Ready;Built+With+Next.js+15+%2B+Node.js" />
+
+<br/>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Next.js-15-000000?style=for-the-badge&logo=next.js" />
+  <img src="https://img.shields.io/badge/Node.js-Express-3C873A?style=for-the-badge&logo=node.js" />
+  <img src="https://img.shields.io/badge/MySQL-00758F?style=for-the-badge&logo=mysql" />
+  <img src="https://img.shields.io/badge/SaaS-Platform-C99237?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/License-MIT-white?style=for-the-badge" />
+</p>
+
+<br/>
+
+<img src="https://skillicons.dev/icons?i=nextjs,react,ts,nodejs,express,mysql,git,github,vercel" />
+
+</div>
+
+---
+
+# 🚀 What is RMWSync?
+
+> **RMWSync** is a next-generation workforce management SaaS platform designed to modernize attendance systems, employee operations, role-based access management, and enterprise workforce automation.
+
+Built with scalable architecture using:
+
+* ⚡ Next.js 15
+* 🔥 Node.js + Express
+* 🛡️ JWT Authentication
+* 🗄️ MySQL Database
+* 🧠 Advanced Feature Access System
+
+---
+
+# 🌌 3D Inspired Platform Experience
+
+<div align="center">
+
+```txt
+╔══════════════════════════════════════════════════════╗
+║                                                      ║
+║              ⚡ RMWSync Core Engine ⚡               ║
+║                                                      ║
+║      👨‍💼 Employees       🔐 Roles & Access           ║
+║                                                      ║
+║      🕒 Attendance      🌐 Organization Control      ║
+║                                                      ║
+║      📊 Analytics       🤖 Automation Engine         ║
+║                                                      ║
+╚══════════════════════════════════════════════════════╝
+```
+
+</div>
+
+---
+
+# ✨ Core Features
+
+## 👨‍💼 Employee Management
+
+* Employee onboarding
+* Team management
+* Leave management
+* Employee activity control
+* Active / inactive employee handling
+
+---
+
+## 🔐 Role & Feature Access Control
+
+* Dynamic role creation
+* Role-wise permissions
+* Feature override system
+* Organization-level access control
+* Enterprise-grade authorization middleware
+
+---
+
+## 🕒 Smart Attendance System
+
+* Real-time attendance tracking
+* Shift-based attendance
+* Attendance history
+* Late check-in detection
+* Attendance analytics
+* Attendance machine integration ready
+
+---
+
+## 🌐 Organization Management
+
+* Company IP restrictions
+* Holiday management
+* Shift management
+* Attendance policies
+* Secure workforce access system
+
+---
+
+# 🧠 Tech Stack
+
+<div align="center">
+
+| Frontend   | Backend    | Database | Security   |
+| ---------- | ---------- | -------- | ---------- |
+| Next.js 15 | Node.js    | MySQL    | JWT        |
+| React.js   | Express.js | MySQL2   | RBAC       |
+| TypeScript | REST APIs  | SQL      | Middleware |
+
+</div>
+
+---
+
+# ⚙️ System Architecture
+
+<div align="center">
+
+```txt
+                   ┌─────────────────────┐
+                   │     RMWSync SaaS    │
+                   └──────────┬──────────┘
+                              │
+          ┌───────────────────┼───────────────────┐
+          │                   │                   │
+          ▼                   ▼                   ▼
+
+   ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+   │  Frontend   │     │   Backend   │     │  Database   │
+   │  Next.js15  │     │ Node+Express│     │    MySQL    │
+   └──────┬──────┘     └──────┬──────┘     └──────┬──────┘
+          │                   │                   │
+          └───────────────────┼───────────────────┘
+                              │
+                    ┌─────────▼─────────┐
+                    │ Attendance Engine │
+                    └─────────┬─────────┘
+                              │
+                    ┌─────────▼─────────┐
+                    │ Biometric Devices │
+                    └───────────────────┘
+```
+
+</div>
+
+---
+
+# 🔥 Advanced Capabilities
+
+* ✅ Role Based Access Control (RBAC)
+* ✅ Feature Override Engine
+* ✅ Secure JWT Authentication
+* ✅ Organization Multi-Tenant Architecture
+* ✅ Attendance Device Ready APIs
+* ✅ Scalable SaaS Infrastructure
+* ✅ Enterprise Middleware System
+
+---
+
+# 📦 Installation
+
+## Clone Repository
+
+```bash
+git clone https://github.com/yourusername/RMWSync.git
+```
+
+---
+
+## Install Dependencies
+
+```bash
+npm install
+```
+
+---
+
+## Start Frontend
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Start Backend
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm start
+```
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+# 🌍 Future Roadmap
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+* 🤖 AI Attendance Insights
+* 📱 Mobile Application
+* 🌐 WebSocket Real-Time Updates
+* 🧾 Payroll Management
+* 📈 Advanced Analytics
+* 🔔 Smart Notifications
+* 🧠 AI Workforce Assistant
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
+# 👨‍💻 Developer
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+<div align="center">
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Arhan Rizvi
+
+### Full Stack MERN Developer
+
+Building scalable SaaS platforms & enterprise workforce systems.
+
+</div>
+
+---
+
+# ⭐ Support RMWSync
+
+If you like this project:
+
+🌟 Star the repository
+🚀 Contribute to the project
+🔥 Build the future of workforce management
+
+---
+
+<div align="center">
+
+# ⚡ RMWSync — Smart Workforce. Smarter Future. ⚡
+
+</div>
