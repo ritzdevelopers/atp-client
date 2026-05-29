@@ -21,15 +21,16 @@ import {
   MapPin,
   PlusCircle,
   Pencil,
-  Trash2,
   Shield,
   FileText,
   Upload,
+  UserX,
 } from "lucide-react";
 import { useManagementDashboardContext } from "@/components/portal-dashboard/Layout/ManagementDashboardContext";
+import TerminateEmployeeModal from "@/components/portal-dashboard/employees/TerminateEmployeeModal";
 import {
-  deleteOrgUser,
   addUserAddress,
+  dedupeOrgUserRows,
   getAllOrgUsers,
   getOrganizationRoles,
   getUserAddresses,
@@ -44,7 +45,8 @@ import {
   type UserAddressRow,
 } from "@/services/adminUser";
 
-type EmployeeTier = "employees" | "management";
+type EmployeeTier = "employees" | "management" | "inactive" | "exit_process";
+type RosterTier = "employees" | "management";
 
 type EmployeeCard = {
   id: string;
@@ -56,8 +58,20 @@ type EmployeeCard = {
   phone: string;
   status: "in" | "out";
   tier: EmployeeTier;
+  rosterTier: RosterTier;
+  isActive: boolean;
+  hasExitProcess: boolean;
+  exitActionLabel: string | null;
+  exitStatusLabel: string | null;
   avatarSeed: string;
 };
+
+function hasExitProcessRecord(row: OrgUserRow): boolean {
+  return (
+    String(row.exit_process_action_type ?? "").trim() !== "" &&
+    String(row.exit_process_application_status ?? "").trim() !== ""
+  );
+}
 
 type AddressDraft = {
   country: string;
@@ -118,11 +132,43 @@ function isManagementRole(role: string | undefined): boolean {
   return false;
 }
 
+function isOrgMemberActive(value: unknown): boolean {
+  if (value === false || value === 0 || value === "0") return false;
+  if (value === true || value === 1 || value === "1") return true;
+  if (value == null || value === "") return true;
+  return normalizeBool(value);
+}
+
+function formatExitActionLabel(action: string | undefined | null): string | null {
+  const a = String(action ?? "").trim().toLowerCase();
+  if (!a) return null;
+  if (a === "resignation") return "Resignation";
+  if (a === "termination") return "Termination";
+  return a.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function formatExitStatusLabel(status: string | undefined | null): string | null {
+  const s = String(status ?? "").trim().toLowerCase();
+  if (!s) return null;
+  return s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 function mapApiUserToCard(row: OrgUserRow): EmployeeCard {
   const id = row.id != null ? String(row.id) : "";
   const email = String(row.user_email ?? "");
   const roleRaw = row.role_name ?? row.user_role_name;
   const roleLabel = formatRoleLabel(roleRaw);
+  const isActive = isOrgMemberActive(row.is_active);
+  const exitActionLabel = formatExitActionLabel(row.exit_process_action_type);
+  const exitStatusLabel = formatExitStatusLabel(row.exit_process_application_status);
+  const rosterTier: RosterTier = isManagementRole(roleRaw) ? "management" : "employees";
+  const hasExitProcess = hasExitProcessRecord(row);
+
+  let tier: EmployeeTier;
+  if (!isActive) tier = "inactive";
+  else if (hasExitProcess) tier = "exit_process";
+  else tier = rosterTier;
+
   return {
     id,
     empCode: id ? `U-${id}` : "—",
@@ -131,8 +177,13 @@ function mapApiUserToCard(row: OrgUserRow): EmployeeCard {
     memberSince: formatMemberSince(row.created_at),
     email,
     phone: row.user_phone != null && String(row.user_phone).trim() !== "" ? String(row.user_phone) : "—",
-    status: "in",
-    tier: isManagementRole(roleRaw) ? "management" : "employees",
+    status: isActive ? "in" : "out",
+    tier,
+    rosterTier,
+    isActive,
+    hasExitProcess,
+    exitActionLabel,
+    exitStatusLabel,
     avatarSeed: email || id || "user",
   };
 }
@@ -244,9 +295,9 @@ export default function ManageEmployeesPage() {
       : Number(orgIdParam ?? NaN);
 
   const viewerRole = (ctx?.user?.user_role_name ?? "").trim().toLowerCase();
-  const viewerIsAdmin = viewerRole === "admin";
   const viewerCanAssignLeaves = viewerRole === "admin" || viewerRole === "hr";
   const viewerCanManageAddresses = viewerRole === "admin" || viewerRole === "hr";
+  const viewerCanTerminate = viewerRole === "admin" || viewerRole === "hr";
 
   const [userRows, setUserRows] = useState<OrgUserRow[]>([]);
   const [tab, setTab] = useState<EmployeeTier>("employees");
@@ -274,10 +325,6 @@ export default function ManageEmployeesPage() {
   const [roleSaving, setRoleSaving] = useState(false);
   const [roleError, setRoleError] = useState<string | null>(null);
 
-  const [deleteRow, setDeleteRow] = useState<OrgUserRow | null>(null);
-  const [deleteSaving, setDeleteSaving] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-
   const now = new Date();
   const [paidLeaveRow, setPaidLeaveRow] = useState<OrgUserRow | null>(null);
   const [paidLeaveYear, setPaidLeaveYear] = useState(String(now.getFullYear()));
@@ -302,6 +349,9 @@ export default function ManageEmployeesPage() {
   const [documentsError, setDocumentsError] = useState<string | null>(null);
   const [documentsSuccess, setDocumentsSuccess] = useState<string | null>(null);
 
+  const [terminateRow, setTerminateRow] = useState<OrgUserRow | null>(null);
+  const [terminateSuccess, setTerminateSuccess] = useState<string | null>(null);
+
   const allCards = useMemo(() => userRows.map(mapApiUserToCard), [userRows]);
 
   const loadUsers = useCallback(async () => {
@@ -316,7 +366,7 @@ export default function ManageEmployeesPage() {
     setListLoading(true);
     try {
       const rows = await getAllOrgUsers(token);
-      setUserRows(rows);
+      setUserRows(dedupeOrgUserRows(rows));
     } catch (e) {
       setListError(e instanceof Error ? e.message : "Failed to load users");
       setUserRows([]);
@@ -384,7 +434,17 @@ export default function ManageEmployeesPage() {
     };
   }, [roleRow, organizationIdNum]);
 
-  const baseList = useMemo(() => allCards.filter((e) => e.tier === tab), [allCards, tab]);
+  const baseList = useMemo(() => {
+    if (tab === "exit_process") {
+      return allCards.filter((e) => e.isActive && e.hasExitProcess);
+    }
+    if (tab === "inactive") {
+      return allCards.filter((e) => !e.isActive);
+    }
+    return allCards.filter(
+      (e) => e.isActive && !e.hasExitProcess && e.rosterTier === tab,
+    );
+  }, [allCards, tab]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -835,31 +895,6 @@ export default function ManageEmployeesPage() {
     }
   }
 
-  async function confirmDeleteUser() {
-    if (!deleteRow?.id) return;
-    const token = localStorage.getItem("token");
-    if (!token) {
-      setDeleteError("Not signed in.");
-      return;
-    }
-    if (Number.isNaN(organizationIdNum)) {
-      setDeleteError("Invalid organization.");
-      return;
-    }
-    setDeleteSaving(true);
-    setDeleteError(null);
-    try {
-      await deleteOrgUser(token, deleteRow.id, organizationIdNum);
-      setDeleteRow(null);
-      setMenuUserId(null);
-      await loadUsers();
-    } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : "Delete failed.");
-    } finally {
-      setDeleteSaving(false);
-    }
-  }
-
   async function submitPaidLeaves(e: React.FormEvent) {
     e.preventDefault();
     if (!paidLeaveRow?.id) return;
@@ -916,11 +951,37 @@ export default function ManageEmployeesPage() {
   const tabOptions = [
     { id: "employees" as const, label: "Employees" },
     { id: "management" as const, label: "Management" },
+    { id: "exit_process" as const, label: "Exit process" },
+    { id: "inactive" as const, label: "Inactive" },
   ] as const;
+
+  const tabSubtitle =
+    tab === "employees"
+      ? "Employee roster"
+      : tab === "management"
+        ? "Management roster"
+        : tab === "exit_process"
+          ? "Members with an active exit workflow"
+          : "Former members (left or terminated)";
 
   return (
     <div className="min-h-full bg-[#F5F5F3] pb-4 [font-family:var(--font-inter),system-ui,sans-serif] max-lg:-mx-1 sm:max-lg:-mx-2 lg:bg-slate-100/90 lg:pb-10">
       <div className="mx-auto max-w-6xl max-lg:max-w-none lg:px-4 lg:pt-6 md:max-w-7xl md:px-6">
+        {terminateSuccess ? (
+          <div className="mb-4 flex items-start gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 max-lg:mx-3 max-lg:mt-3 lg:rounded-lg">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
+            <span className="flex-1">{terminateSuccess}</span>
+            <button
+              type="button"
+              onClick={() => setTerminateSuccess(null)}
+              className="shrink-0 rounded-lg p-1 text-emerald-800 hover:bg-emerald-100"
+              aria-label="Dismiss"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        ) : null}
+
         {listError && (
           <div className="mb-4 flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 max-lg:mx-3 max-lg:mt-3 lg:rounded-lg">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" aria-hidden />
@@ -940,10 +1001,8 @@ export default function ManageEmployeesPage() {
         {/* Mobile & tablet: app-style sticky header */}
         <div className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/95 px-3 pb-3 pt-3 backdrop-blur-md sm:px-4 lg:hidden">
           <h1 className="text-lg font-bold tracking-tight text-slate-900">Team members</h1>
-          <p className="mt-0.5 text-xs text-slate-500">
-            {tab === "employees" ? "Employee roster" : "Management roster"}
-          </p>
-          <div className="mt-3 flex rounded-2xl bg-slate-100 p-1 ring-1 ring-slate-200/60">
+          <p className="mt-0.5 text-xs text-slate-500">{tabSubtitle}</p>
+          <div className="mt-3 flex gap-1 overflow-x-auto rounded-2xl bg-slate-100 p-1 ring-1 ring-slate-200/60 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {tabOptions.map((t) => (
               <button
                 key={t.id}
@@ -952,7 +1011,7 @@ export default function ManageEmployeesPage() {
                   setTab(t.id);
                   setSearch("");
                 }}
-                className={`flex-1 rounded-xl py-2.5 text-sm font-semibold transition active:scale-[0.98] ${
+                className={`min-w-[5.5rem] shrink-0 rounded-xl px-3 py-2.5 text-sm font-semibold transition active:scale-[0.98] ${
                   tab === t.id
                     ? "bg-white text-teal-700 shadow-sm"
                     : "text-slate-600"
@@ -1078,6 +1137,9 @@ export default function ManageEmployeesPage() {
                 const fav = favorites.has(emp.id);
                 const row = findRow(userRows, emp.id);
                 const menuOpen = menuUserId === emp.id;
+                const isInactiveTab = tab === "inactive";
+                const isExitProcessTab = tab === "exit_process";
+                const isReadOnlyRosterTab = isInactiveTab || isExitProcessTab;
                 const menuPanel = menuOpen && row && (
                   <div
                     role="menu"
@@ -1092,6 +1154,7 @@ export default function ManageEmployeesPage() {
                       <Users className="h-4 w-4 text-teal-600" aria-hidden />
                       View profile
                     </Link>
+                    {!isReadOnlyRosterTab ? (
                     <button
                       type="button"
                       role="menuitem"
@@ -1104,21 +1167,8 @@ export default function ManageEmployeesPage() {
                       <Pencil className="h-4 w-4 text-teal-600" aria-hidden />
                       Edit
                     </button>
-                    {viewerIsAdmin && (
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-red-700 active:bg-red-50"
-                        onClick={() => {
-                          setDeleteRow(row);
-                          setDeleteError(null);
-                          setMenuUserId(null);
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4" aria-hidden />
-                        Delete
-                      </button>
-                    )}
+                    ) : null}
+                    {!isReadOnlyRosterTab ? (
                     <button
                       type="button"
                       role="menuitem"
@@ -1131,7 +1181,23 @@ export default function ManageEmployeesPage() {
                       <Shield className="h-4 w-4 text-teal-600" aria-hidden />
                       Update role
                     </button>
-                    {viewerCanAssignLeaves && (
+                    ) : null}
+                    {!isReadOnlyRosterTab && viewerCanTerminate && emp.isActive && !emp.hasExitProcess ? (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="flex w-full touch-manipulation items-center gap-2 px-3 py-2.5 text-left text-sm text-red-700 active:bg-red-50"
+                        onClick={() => {
+                          setTerminateRow(row);
+                          setTerminateSuccess(null);
+                          setMenuUserId(null);
+                        }}
+                      >
+                        <UserX className="h-4 w-4" aria-hidden />
+                        Employee termination
+                      </button>
+                    ) : null}
+                    {!isReadOnlyRosterTab && viewerCanAssignLeaves && (
                       <>
                         <button
                           type="button"
@@ -1159,7 +1225,7 @@ export default function ManageEmployeesPage() {
                         </button>
                       </>
                     )}
-                    {viewerCanManageAddresses && (
+                    {!isReadOnlyRosterTab && viewerCanManageAddresses && (
                       <>
                         <button
                           type="button"
@@ -1190,9 +1256,19 @@ export default function ManageEmployeesPage() {
                   </div>
                 );
 
+                const exitDetailLine =
+                  emp.exitActionLabel || emp.exitStatusLabel
+                    ? [emp.exitActionLabel, emp.exitStatusLabel].filter(Boolean).join(" · ")
+                    : null;
+
+                const listKey =
+                  row?.org_member_id != null
+                    ? `member-${String(row.org_member_id)}`
+                    : `user-${emp.id}`;
+
                 return (
                   <article
-                    key={emp.id}
+                    key={listKey}
                     className={`overflow-visible rounded-2xl bg-white shadow-md ring-1 ring-slate-200/70 transition-shadow active:scale-[0.995] lg:rounded-xl lg:border lg:border-slate-200/90 lg:shadow-sm lg:ring-0 lg:hover:shadow-md${menuOpen ? " relative z-50" : ""}`}
                   >
                     {/* Mobile & tablet: compact list card */}
@@ -1256,12 +1332,27 @@ export default function ManageEmployeesPage() {
                             </div>
                           </div>
                         </div>
-                        <span
-                          className="mt-1.5 inline-flex rounded-lg px-2 py-0.5 text-[11px] font-semibold"
-                          style={{ backgroundColor: ACCENT_SOFT, color: ACCENT }}
-                        >
-                          {emp.roleLabel}
-                        </span>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                          <span
+                            className="inline-flex rounded-lg px-2 py-0.5 text-[11px] font-semibold"
+                            style={{ backgroundColor: ACCENT_SOFT, color: ACCENT }}
+                          >
+                            {emp.roleLabel}
+                          </span>
+                          {isInactiveTab ? (
+                            <span className="inline-flex rounded-lg bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700 ring-1 ring-red-200/80">
+                              Inactive
+                            </span>
+                          ) : null}
+                          {isExitProcessTab ? (
+                            <span className="inline-flex rounded-lg bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800 ring-1 ring-amber-200/80">
+                              Exit process
+                            </span>
+                          ) : null}
+                        </div>
+                        {(isInactiveTab || isExitProcessTab) && exitDetailLine ? (
+                          <p className="mt-1.5 text-[11px] font-medium text-slate-600">{exitDetailLine}</p>
+                        ) : null}
                         <div className="mt-2 space-y-1">
                           {emp.email ? (
                             <a
@@ -1361,12 +1452,28 @@ export default function ManageEmployeesPage() {
                     </div>
 
                     <div className="space-y-2.5 rounded-b-xl border-t border-slate-100 bg-slate-50/50 px-4 py-3">
-                      <div className="flex items-center gap-2 text-sm">
+                      <div className="flex flex-wrap items-center gap-2 text-sm">
                         <Users className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
                         <span className="min-w-0 font-medium" style={{ color: ACCENT }}>
                           {emp.roleLabel}
                         </span>
+                        {isInactiveTab ? (
+                          <span className="rounded-md bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-700 ring-1 ring-red-200/80">
+                            Inactive
+                          </span>
+                        ) : null}
+                        {isExitProcessTab ? (
+                          <span className="rounded-md bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800 ring-1 ring-amber-200/80">
+                            Exit process
+                          </span>
+                        ) : null}
                       </div>
+                      {(isInactiveTab || isExitProcessTab) && exitDetailLine ? (
+                        <p className="text-sm text-slate-600">
+                          <span className="font-medium text-slate-800">Exit: </span>
+                          {exitDetailLine}
+                        </p>
+                      ) : null}
                       <div className="flex items-center gap-2 text-sm text-slate-600">
                         <CalendarDays className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
                         <span>
@@ -1400,7 +1507,11 @@ export default function ManageEmployeesPage() {
 
             {!listError && filtered.length === 0 && (
               <p className="mt-12 px-4 text-center text-sm text-slate-500 max-lg:mt-8">
-                No members in this tab{search.trim() ? " match your search" : ""}.
+                {tab === "inactive"
+                  ? `No inactive members${search.trim() ? " match your search" : ""}.`
+                  : tab === "exit_process"
+                    ? `No members in exit process${search.trim() ? " match your search" : ""}.`
+                    : `No members in this tab${search.trim() ? " match your search" : ""}.`}
               </p>
             )}
           </>
@@ -1982,56 +2093,28 @@ export default function ManageEmployeesPage() {
         </div>
       )}
 
-      {/* Delete confirm */}
-      {deleteRow && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="delete-user-title"
-        >
-          <button
-            type="button"
-            className="absolute inset-0 bg-slate-900/40 backdrop-blur-[1px]"
-            aria-label="Close"
-            onClick={() => !deleteSaving && setDeleteRow(null)}
-          />
-          <div className="relative z-10 w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
-            <h2 id="delete-user-title" className="text-lg font-bold text-red-800">
-              Delete user?
-            </h2>
-            <p className="mt-3 text-sm text-slate-600">
-              This will permanently remove{" "}
-              <strong className="text-slate-900">{deleteRow.user_name}</strong> (
-              {deleteRow.user_email}). This cannot be undone.
-            </p>
-            {deleteError && (
-              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-                {deleteError}
-              </div>
-            )}
-            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                disabled={deleteSaving}
-                onClick={() => setDeleteRow(null)}
-                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={deleteSaving}
-                onClick={() => void confirmDeleteUser()}
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-60"
-              >
-                {deleteSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                Delete user
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <TerminateEmployeeModal
+        open={terminateRow != null}
+        orgId={organizationIdNum}
+        employee={
+          terminateRow
+            ? {
+                userId: terminateRow.id ?? "",
+                userName: String(terminateRow.user_name ?? "Employee"),
+                userEmail: terminateRow.user_email,
+                subtitle: formatRoleLabel(
+                  terminateRow.role_name ?? terminateRow.user_role_name,
+                ),
+              }
+            : null
+        }
+        onClose={() => setTerminateRow(null)}
+        onSuccess={(message) => {
+          setTerminateSuccess(message);
+          setTab("exit_process");
+          void loadUsers();
+        }}
+      />
     </div>
   );
 }

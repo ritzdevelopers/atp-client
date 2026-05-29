@@ -696,6 +696,10 @@ export type OrgUserRow = {
   role_name?: string;
   role_id?: number | string;
   created_at?: string;
+  /** `apt_org_members.is_active` — 0 when employee has left the organization */
+  is_active?: number | boolean | string | null;
+  exit_process_action_type?: string | null;
+  exit_process_application_status?: string | null;
   orgID?: number | string;
   /** From `get_all_users` join with `user_shifts` / `shifts` */
   user_shift_id?: number | string | null;
@@ -708,6 +712,53 @@ export type OrgUserRow = {
   assigned_ips?: OrgUserAssignedIp[] | string | null;
   [key: string]: unknown;
 };
+
+function isOrgMemberActiveForDedupe(value: unknown): boolean {
+  if (value === false || value === 0 || value === "0") return false;
+  if (value === true || value === 1 || value === "1") return true;
+  if (value == null || value === "") return true;
+  return String(value).toLowerCase() === "true" || String(value) === "1";
+}
+
+/** API joins (e.g. exit process) can return multiple rows per user — keep one row per user id. */
+export function dedupeOrgUserRows(rows: OrgUserRow[]): OrgUserRow[] {
+  const byUserId = new Map<string, OrgUserRow>();
+  for (const row of rows) {
+    const userId = row.id != null ? String(row.id) : "";
+    if (!userId) continue;
+    const existing = byUserId.get(userId);
+    if (!existing) {
+      byUserId.set(userId, row);
+      continue;
+    }
+    const score = (r: OrgUserRow) => {
+      let s = 0;
+      if (!isOrgMemberActiveForDedupe(r.is_active)) s += 4;
+      if (r.exit_process_action_type) s += 2;
+      if (r.exit_process_application_status) s += 1;
+      return s;
+    };
+    if (score(row) >= score(existing)) {
+      byUserId.set(userId, row);
+    }
+  }
+  return [...byUserId.values()];
+}
+
+/** Stable unique key for rendering user picker lists. */
+export function orgUserListKey(row: OrgUserRow, prefix = "user"): string {
+  const userId = row.id != null ? String(row.id) : "";
+  if (userId) return `${prefix}-${userId}`;
+  const memberId = row.org_member_id != null ? String(row.org_member_id) : "";
+  if (memberId) return `${prefix}-member-${memberId}`;
+  const email = String(row.user_email ?? "").trim();
+  if (email) return `${prefix}-email-${email}`;
+  const roleAssignment = row.user_role_assignment_id;
+  if (roleAssignment != null && String(roleAssignment).trim() !== "") {
+    return `${prefix}-role-${String(roleAssignment)}`;
+  }
+  return `${prefix}-unknown`;
+}
 
 export async function getAllOrgUsers(token: string): Promise<OrgUserRow[]> {
   const res = await fetch(`${API_URL}/api/user/get-all-users`, {
@@ -726,7 +777,39 @@ export async function getAllOrgUsers(token: string): Promise<OrgUserRow[]> {
   }
 
   const users = result.users;
-  return Array.isArray(users) ? users : [];
+  return dedupeOrgUserRows(Array.isArray(users) ? users : []);
+}
+
+export async function updateMyProfileImage(
+  token: string,
+  file: File,
+): Promise<{ success?: boolean; message?: string; user_image?: string }> {
+  const fd = new FormData();
+  fd.append("file", file);
+
+  const res = await fetch(`${API_URL}/api/user/update-my-profile-image`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: fd,
+  });
+
+  const result = (await res.json()) as {
+    success?: boolean;
+    message?: string;
+    user_image?: string;
+  };
+
+  if (!res.ok) {
+    const error: ApiError = new Error(
+      result.message || "Could not update profile image",
+    );
+    error.status = res.status;
+    throw error;
+  }
+
+  return result;
 }
 
 export type EmployeeUserInfo = {

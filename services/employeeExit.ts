@@ -2,6 +2,53 @@ import type { ApiError } from "./auth";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
+export function normalizeExitApplicationStatus(status: string | null | undefined): string {
+  return String(status ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_")
+    .replace(/-/g, "_");
+}
+
+export function isPendingExitStatus(status: string | null | undefined): boolean {
+  return normalizeExitApplicationStatus(status) === "pending";
+}
+
+export function isInProgressExitStatus(status: string | null | undefined): boolean {
+  return normalizeExitApplicationStatus(status) === "in_progress";
+}
+
+export function isOpenExitStatus(status: string | null | undefined): boolean {
+  const n = normalizeExitApplicationStatus(status);
+  return n === "pending" || n === "in_progress";
+}
+
+/** Prefer an open exit (pending / in progress); otherwise the newest row. */
+export function pickRelevantEmployeeExitRow(
+  rows: EmployeeExitProcessRow[],
+): EmployeeExitProcessRow | null {
+  if (!rows.length) return null;
+  const open = rows.find((r) => isOpenExitStatus(r.application_status));
+  return open ?? rows[0] ?? null;
+}
+
+export function buildEmployeeExitDetailHref(
+  orgId: string,
+  opts: {
+    exitProcessId: number | string;
+    teamId?: number | string | null;
+    tab?: "overview" | "assets" | "tasks" | "actions";
+  },
+): string {
+  const q = new URLSearchParams();
+  if (opts.teamId != null && opts.teamId !== "") {
+    q.set("team_id", String(opts.teamId));
+  }
+  q.set("exit_process_id", String(opts.exitProcessId));
+  if (opts.tab) q.set("tab", opts.tab);
+  return `/dashboard/${encodeURIComponent(orgId)}/organization-employees/teams/0/exit/0?${q.toString()}`;
+}
+
 export type CreateEmployeeExitProcessPayload = {
   org_id: number | string;
   /** Employee user id */

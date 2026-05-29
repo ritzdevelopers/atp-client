@@ -16,7 +16,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { getAllOrgUsers, type OrgUserRow } from "@/services/adminUser";
+import { getAllOrgUsers, orgUserListKey, type OrgUserRow } from "@/services/adminUser";
 import { createOrgTeam } from "@/services/orgTeams";
 
 function formatPickerName(row: OrgUserRow) {
@@ -486,7 +486,7 @@ export default function CreateTeamPage() {
                         const picked = adminId === id;
                         const name = formatPickerName(u);
                         return (
-                          <li key={id || `adm-${String(u.user_email)}`}>
+                          <li key={orgUserListKey(u, "adm")}>
                             <button
                               type="button"
                               onClick={() => {
@@ -566,7 +566,7 @@ export default function CreateTeamPage() {
                         const on = selectedMemberIds.has(id);
                         const name = formatPickerName(u);
                         return (
-                          <li key={`m-${id}`}>
+                          <li key={orgUserListKey(u, "m")}>
                             <label
                               className={`flex cursor-pointer items-center gap-3 px-4 py-3 transition active:bg-[#F0F2F5] ${
                                 on ? "bg-[#E7FCE3]" : "bg-white"
@@ -741,7 +741,7 @@ export default function CreateTeamPage() {
                         const picked = adminId === id;
                         const name = formatPickerName(u);
                         return (
-                          <li key={id || `adm-${String(u.user_email)}`}>
+                          <li key={orgUserListKey(u, "adm")}>
                             <button
                               type="button"
                               onClick={() => {
@@ -826,7 +826,7 @@ export default function CreateTeamPage() {
                         const on = selectedMemberIds.has(id);
                         const name = formatPickerName(u);
                         return (
-                          <li key={`m-${id}`}>
+                          <li key={orgUserListKey(u, "m")}>
                             <label
                               className={`flex cursor-pointer items-center gap-3 rounded-2xl border px-3 py-3.5 transition active:scale-[0.995] ${
                                 on

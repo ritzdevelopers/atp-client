@@ -94,9 +94,15 @@ function LeftSideBar({
   const orgId = String(params?.org_id ?? "1");
   const base = `/dashboard/${orgId}`;
   const dashboardCtx = useManagementDashboardContext();
+  const [roleHydrated, setRoleHydrated] = useState(false);
+  useEffect(() => {
+    setRoleHydrated(true);
+  }, []);
   const effectiveRoleName =
     dashboardCtx?.user?.user_role_name ?? readRoleNameFromToken();
-  const isAdmin = String(effectiveRoleName || "").trim().toLowerCase() === "admin";
+  const isAdmin =
+    roleHydrated &&
+    String(effectiveRoleName || "").trim().toLowerCase() === "admin";
   const myHistoryActive = Boolean(pathname?.includes("/my-attendance-history"));
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [resolvedFeatures, setResolvedFeatures] = useState<PortalFeature[]>(

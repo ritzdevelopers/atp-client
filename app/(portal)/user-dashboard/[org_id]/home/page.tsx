@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { MdGroups, MdNotificationsNone, MdSearch } from "react-icons/md";
@@ -12,7 +12,9 @@ import {
   MapPin,
   CalendarCheck,
   Users,
+  Pencil,
 } from "lucide-react";
+import { updateMyProfileImage } from "@/services/adminUser";
 import {
   formatAttendanceLogLocal,
   formatAttendanceTimeLocal,
@@ -26,6 +28,8 @@ import {
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 const HOME_CACHE_TTL_MS = 5 * 60 * 1000;
 const HOME_CACHE_VERSION = "v3";
+const DEFAULT_PROFILE_IMAGE = "https://i.pravatar.cc/120?img=12";
+const MAX_PROFILE_IMAGE_BYTES = 5 * 1024 * 1024;
 
 type AttendanceHistoryRow = {
   id?: number | string;
@@ -306,6 +310,65 @@ function userInitials(name: string) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
+function patchEmployeeUserImage(
+  prev: EmployeeDashboardResponse | null,
+  user_image: string,
+): EmployeeDashboardResponse | null {
+  if (!prev) return prev;
+  const merge = (
+    emp: EmployeeDashboardResponse["employee"] | undefined,
+  ) => (emp ? { ...emp, user_image } : emp);
+  return {
+    ...prev,
+    employee: merge(prev.employee),
+    employees: merge(prev.employees),
+  };
+}
+
+function ProfilePhotoWithEdit({
+  imageUrl,
+  alt,
+  size = "md",
+  uploading,
+  onEditClick,
+}: {
+  imageUrl: string;
+  alt: string;
+  size?: "md" | "lg";
+  uploading?: boolean;
+  onEditClick: () => void;
+}) {
+  const box = size === "lg" ? "h-20 w-20" : "h-14 w-14";
+  const editBtn =
+    size === "lg"
+      ? "h-8 w-8 -bottom-0.5 -right-0.5"
+      : "h-7 w-7 -bottom-1 -right-1";
+
+  return (
+    <div className={`relative shrink-0 ${box}`}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={imageUrl}
+        alt={alt}
+        className={`${box} rounded-xl object-cover ring-1 ring-[#E4E7EC]`}
+      />
+      <button
+        type="button"
+        onClick={onEditClick}
+        disabled={uploading}
+        className={`absolute ${editBtn} flex items-center justify-center rounded-full border-2 border-white bg-[#008CD3] text-white shadow-md transition hover:bg-[#0070AA] disabled:opacity-60`}
+        aria-label="Update profile photo"
+      >
+        {uploading ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+        ) : (
+          <Pencil className="h-3.5 w-3.5" aria-hidden />
+        )}
+      </button>
+    </div>
+  );
+}
+
 function Home() {
   const params = useParams();
   const orgIdParam = params?.org_id;
@@ -328,6 +391,15 @@ function Home() {
   const [tick, setTick] = useState(0);
   const [mobileMainTab, setMobileMainTab] = useState<"today" | "profile" | "overview">("today");
   const [refreshing, setRefreshing] = useState(false);
+  const profileFileInputRef = useRef<HTMLInputElement>(null);
+  const [profilePhotoPreview, setProfilePhotoPreview] = useState<string | null>(
+    null,
+  );
+  const [profileImageUploading, setProfileImageUploading] = useState(false);
+  const [profileImageError, setProfileImageError] = useState<string | null>(null);
+  const [profileImageSuccess, setProfileImageSuccess] = useState<string | null>(
+    null,
+  );
 
   const loadDashboardData = useCallback(
     async (forceRefresh = false) => {
@@ -519,7 +591,101 @@ function Home() {
     return { day, dateNum, ymd, active, visual };
   });
 
-  const imgSrc = emp?.user_image || "https://i.pravatar.cc/120?img=12";
+  const storedProfileImage =
+    emp?.user_image != null && String(emp.user_image).trim() !== ""
+      ? String(emp.user_image).trim()
+      : null;
+  const imgSrc =
+    profilePhotoPreview ?? storedProfileImage ?? DEFAULT_PROFILE_IMAGE;
+
+  useEffect(() => {
+    return () => {
+      if (profilePhotoPreview?.startsWith("blob:")) {
+        URL.revokeObjectURL(profilePhotoPreview);
+      }
+    };
+  }, [profilePhotoPreview]);
+
+  const openProfileImagePicker = useCallback(() => {
+    profileFileInputRef.current?.click();
+  }, []);
+
+  const handleProfileImagePick = useCallback(
+    async (file: File | null) => {
+      if (!file) return;
+
+      setProfileImageError(null);
+      setProfileImageSuccess(null);
+
+      if (!file.type.startsWith("image/")) {
+        setProfileImageError("Please choose an image file (JPG, PNG, or WebP).");
+        return;
+      }
+      if (file.size > MAX_PROFILE_IMAGE_BYTES) {
+        setProfileImageError("Image must be 5 MB or smaller.");
+        return;
+      }
+
+      const token = localStorage.getItem("token");
+      if (!token) {
+        setProfileImageError("Not signed in.");
+        return;
+      }
+
+      const localPreview = URL.createObjectURL(file);
+      setProfilePhotoPreview((prev) => {
+        if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
+        return localPreview;
+      });
+
+      setProfileImageUploading(true);
+      try {
+        const result = await updateMyProfileImage(token, file);
+        const newUrl =
+          result.user_image != null && String(result.user_image).trim() !== ""
+            ? String(result.user_image).trim()
+            : null;
+
+        if (!newUrl) {
+          throw new Error("Server did not return an image URL.");
+        }
+
+        setData((prev) => patchEmployeeUserImage(prev, newUrl));
+        setProfilePhotoPreview((prev) => {
+          if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
+          return newUrl;
+        });
+
+        if (!Number.isNaN(orgId)) {
+          const cacheKey = getHomeCacheKey(orgId, token);
+          const cached = readHomeCache(cacheKey);
+          if (cached?.data) {
+            writeHomeCache(
+              cacheKey,
+              patchEmployeeUserImage(cached.data, newUrl) ?? cached.data,
+              cached.addresses,
+            );
+          }
+        }
+
+        setProfileImageSuccess(
+          result.message || "Profile photo updated successfully.",
+        );
+      } catch (e) {
+        setProfilePhotoPreview((prev) => {
+          if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
+          return storedProfileImage;
+        });
+        setProfileImageError(
+          e instanceof Error ? e.message : "Could not update profile photo.",
+        );
+      } finally {
+        setProfileImageUploading(false);
+      }
+    },
+    [orgId, storedProfileImage],
+  );
+
   const employeeName = emp?.user_name || "Employee";
   const employeeCode =
     emp?.id != null ? `#E-${String(emp.id).padStart(4, "0")}` : "—";
@@ -740,6 +906,20 @@ function Home() {
 
   return (
     <div className="min-h-full bg-[#F5F7FA] lg:bg-transparent">
+      <input
+        ref={profileFileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/gif"
+        className="sr-only"
+        tabIndex={-1}
+        aria-hidden
+        onChange={(e) => {
+          const picked = e.target.files?.[0] ?? null;
+          void handleProfileImagePick(picked);
+          e.target.value = "";
+        }}
+      />
+
       {/* Mobile & tablet: Zoho admin portal style */}
       <div className="lg:hidden">
         <div className="sticky top-0 z-20 border-b border-[#E4E7EC] bg-white shadow-sm">
@@ -855,6 +1035,43 @@ function Home() {
             <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
               <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">Today log</p>
               <p className="mt-1 text-[14px] leading-relaxed text-[#1F2937]">{todayLog}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void markCheckIn()}
+                  disabled={hasCheckedInToday || checkInSubmitting}
+                  className={`${zohoPrimaryBtnCls()} min-h-[40px] flex-1 px-3 py-2 text-[13px] sm:flex-none`}
+                >
+                  {checkInSubmitting ? "Marking…" : "Check in"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowCheckoutConfirm(true)}
+                  disabled={hasCheckedOutToday || checkOutSubmitting}
+                  className={`${zohoDangerBtnCls()} min-h-[40px] flex-1 px-3 py-2 text-[13px] sm:flex-none`}
+                >
+                  {hasCheckedOutToday
+                    ? "Checked out"
+                    : checkOutSubmitting
+                      ? "Processing…"
+                      : "Check out"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void markAttendanceLog()}
+                  disabled={
+                    !hasCheckedInToday ||
+                    hasCheckedOutToday ||
+                    logSubmitting ||
+                    todayRecord?.id == null ||
+                    todayRecord?.id === ""
+                  }
+                  className={`${zohoSecondaryBtnCls()} min-h-[40px] flex-1 px-3 py-2 text-[13px] sm:flex-none`}
+                  title="Log stepping out / back in (washroom, errand, etc.)"
+                >
+                  {logSubmitting ? "Saving…" : "Mark log"}
+                </button>
+              </div>
             </div>
 
             {logSuccessMessage ? (
@@ -873,7 +1090,7 @@ function Home() {
               <div className="flex gap-3">
                 <Info className="h-5 w-5 shrink-0 text-[#008CD3]" />
                 <p className="text-[13px] leading-relaxed text-[#4B5563]">
-                  Use the action bar below to check in, check out, or mark a stepping-out log.
+                  Check in, check out, or mark a log from the buttons above or the action bar below.
                 </p>
               </div>
             </div>
@@ -884,10 +1101,12 @@ function Home() {
           <div className="space-y-3 p-4">
             <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
               <div className="flex items-start gap-3">
-                <img
-                  src={imgSrc}
-                  alt=""
-                  className="h-14 w-14 shrink-0 rounded-xl object-cover"
+                <ProfilePhotoWithEdit
+                  imageUrl={imgSrc}
+                  alt={employeeName}
+                  size="md"
+                  uploading={profileImageUploading}
+                  onEditClick={openProfileImagePicker}
                 />
                 <div className="min-w-0">
                   <p className="text-[17px] font-semibold text-[#1F2937]">{employeeName}</p>
@@ -895,6 +1114,12 @@ function Home() {
                   <p className="mt-1 text-[13px] text-[#9CA3AF]">{roleName}</p>
                 </div>
               </div>
+              {profileImageSuccess ? (
+                <p className="mt-3 text-[13px] text-[#0F9D58]">{profileImageSuccess}</p>
+              ) : null}
+              {profileImageError ? (
+                <p className="mt-3 text-[13px] text-[#D93025]">{profileImageError}</p>
+              ) : null}
             </div>
 
             <ul className="divide-y divide-[#E4E7EC] rounded-xl border border-[#E4E7EC] bg-white shadow-sm">
@@ -1033,13 +1258,13 @@ function Home() {
         ) : null}
 
         {!loading && !error && mobileMainTab === "today" ? (
-          <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#E4E7EC] bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-4px_16px_rgba(0,0,0,0.06)]">
+          <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#E4E7EC] bg-white p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-4px_16px_rgba(0,0,0,0.06)]">
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => void markCheckIn()}
                 disabled={hasCheckedInToday || checkInSubmitting}
-                className={zohoPrimaryBtnCls(true)}
+                className={`${zohoPrimaryBtnCls(true)} flex-1 px-2 text-[13px]`}
               >
                 {checkInSubmitting ? "Marking…" : "Check in"}
               </button>
@@ -1047,25 +1272,30 @@ function Home() {
                 type="button"
                 onClick={() => setShowCheckoutConfirm(true)}
                 disabled={hasCheckedOutToday || checkOutSubmitting}
-                className={zohoDangerBtnCls(true)}
+                className={`${zohoDangerBtnCls(true)} flex-1 px-2 text-[13px]`}
               >
-                {hasCheckedOutToday ? "Done" : "Check out"}
+                {hasCheckedOutToday
+                  ? "Done"
+                  : checkOutSubmitting
+                    ? "…"
+                    : "Check out"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void markAttendanceLog()}
+                disabled={
+                  !hasCheckedInToday ||
+                  hasCheckedOutToday ||
+                  logSubmitting ||
+                  todayRecord?.id == null ||
+                  todayRecord?.id === ""
+                }
+                className={`${zohoSecondaryBtnCls(true)} flex-1 px-2 text-[13px]`}
+                title="Log stepping out / back in (washroom, errand, etc.)"
+              >
+                {logSubmitting ? "Saving…" : "Mark log"}
               </button>
             </div>
-            <button
-              type="button"
-              onClick={() => void markAttendanceLog()}
-              disabled={
-                !hasCheckedInToday ||
-                hasCheckedOutToday ||
-                logSubmitting ||
-                todayRecord?.id == null ||
-                todayRecord?.id === ""
-              }
-              className={`mt-2 ${zohoSecondaryBtnCls(true)}`}
-            >
-              {logSubmitting ? "Saving…" : "Mark stepping-out log"}
-            </button>
           </div>
         ) : null}
       </div>
@@ -1131,10 +1361,12 @@ function Home() {
         <section className="grid gap-5 xl:grid-cols-[2fr_1fr]">
           <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex flex-wrap items-start gap-4">
-              <img
-                src={imgSrc}
-                alt="Employee avatar"
-                className="h-20 w-20 rounded-xl object-cover"
+              <ProfilePhotoWithEdit
+                imageUrl={imgSrc}
+                alt={employeeName}
+                size="lg"
+                uploading={profileImageUploading}
+                onEditClick={openProfileImagePicker}
               />
               <div className="min-w-[240px] flex-1">
                 <h2 className="text-lg font-semibold text-slate-800">
@@ -1143,6 +1375,12 @@ function Home() {
                 <p className="text-sm text-slate-500">
                   Employee ID: {employeeCode}
                 </p>
+                {profileImageSuccess ? (
+                  <p className="mt-2 text-sm text-emerald-600">{profileImageSuccess}</p>
+                ) : null}
+                {profileImageError ? (
+                  <p className="mt-2 text-sm text-red-600">{profileImageError}</p>
+                ) : null}
                 <div className="mt-4 grid gap-4 text-sm text-slate-600 sm:grid-cols-2">
                   <div>
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
