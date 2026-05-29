@@ -1,4 +1,97 @@
 
+<div align="center">
+
+<!-- 3D Logo SVG -->
+<svg width="420" height="140" viewBox="0 0 420 140" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- 3D shadow gradient for letters -->
+    <linearGradient id="grad_r" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#a78bfa"/>
+      <stop offset="50%" style="stop-color:#7c3aed"/>
+      <stop offset="100%" style="stop-color:#4c1d95"/>
+    </linearGradient>
+    <linearGradient id="grad_m" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#60a5fa"/>
+      <stop offset="50%" style="stop-color:#2563eb"/>
+      <stop offset="100%" style="stop-color:#1e3a8a"/>
+    </linearGradient>
+    <linearGradient id="grad_w" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#34d399"/>
+      <stop offset="50%" style="stop-color:#059669"/>
+      <stop offset="100%" style="stop-color:#064e3b"/>
+    </linearGradient>
+    <linearGradient id="grad_sync" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f9a8d4"/>
+      <stop offset="50%" style="stop-color:#ec4899"/>
+      <stop offset="100%" style="stop-color:#831843"/>
+    </linearGradient>
+    <filter id="shadow3d">
+      <feDropShadow dx="4" dy="6" stdDeviation="3" flood-color="#00000055"/>
+    </filter>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background glow blobs -->
+  <ellipse cx="90" cy="70" rx="80" ry="50" fill="#7c3aed" opacity="0.08"/>
+  <ellipse cx="210" cy="70" rx="80" ry="50" fill="#2563eb" opacity="0.08"/>
+  <ellipse cx="310" cy="70" rx="70" ry="40" fill="#059669" opacity="0.08"/>
+
+  <!-- 3D SHADOW LAYERS (offset copies for depth) -->
+  <!-- R shadow -->
+  <text x="12" y="102" font-family="'Georgia', serif" font-size="88" font-weight="900" fill="#2d1564" opacity="0.5" filter="url(#shadow3d)">R</text>
+  <!-- M shadow -->
+  <text x="83" y="102" font-family="'Georgia', serif" font-size="88" font-weight="900" fill="#0c1e5c" opacity="0.5" filter="url(#shadow3d)">M</text>
+  <!-- W shadow -->
+  <text x="174" y="102" font-family="'Georgia', serif" font-size="88" font-weight="900" fill="#022b1c" opacity="0.5" filter="url(#shadow3d)">W</text>
+
+  <!-- MAIN 3D LETTERS -->
+  <!-- R -->
+  <text x="8" y="98" font-family="'Georgia', serif" font-size="88" font-weight="900" fill="url(#grad_r)" filter="url(#glow)">R</text>
+  <!-- M -->
+  <text x="79" y="98" font-family="'Georgia', serif" font-size="88" font-weight="900" fill="url(#grad_m)" filter="url(#glow)">M</text>
+  <!-- W -->
+  <text x="170" y="98" font-family="'Georgia', serif" font-size="88" font-weight="900" fill="url(#grad_w)" filter="url(#glow)">W</text>
+
+  <!-- Divider bar -->
+  <rect x="275" y="15" width="5" height="100" rx="2.5" fill="#6b7280" opacity="0.35"/>
+
+  <!-- Sync text (smaller, stylized) -->
+  <text x="288" y="62" font-family="'Georgia', serif" font-size="42" font-weight="900" fill="url(#grad_sync)" filter="url(#glow)">Sync</text>
+
+  <!-- Tagline under Sync -->
+  <text x="289" y="90" font-family="'Arial', sans-serif" font-size="11.5" font-weight="700" fill="#ec4899" letter-spacing="3" opacity="0.85">ATTENDANCE · REDEFINED</text>
+
+  <!-- Subtle underline accent bars -->
+  <rect x="8" y="106" width="62" height="4" rx="2" fill="url(#grad_r)" opacity="0.7"/>
+  <rect x="79" y="106" width="90" height="4" rx="2" fill="url(#grad_m)" opacity="0.7"/>
+  <rect x="170" y="106" width="100" height="4" rx="2" fill="url(#grad_w)" opacity="0.7"/>
+</svg>
+
+<br/>
+
+**Enterprise-grade Attendance Management, beautifully simple.**
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-7c3aed?style=flat-square&labelColor=1e1b4b)](LICENSE)
+[![Version](https://img.shields.io/badge/Version-2.4.1-059669?style=flat-square&labelColor=064e3b)](CHANGELOG.md)
+[![Build](https://img.shields.io/badge/Build-Passing-16a34a?style=flat-square&labelColor=14532d)](https://github.com/rmwsync/rmwsync/actions)
+[![Coverage](https://img.shields.io/badge/Coverage-94%25-2563eb?style=flat-square&labelColor=1e3a8a)](https://codecov.io/gh/rmwsync/rmwsync)
+[![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-ec4899?style=flat-square&labelColor=831843)](CONTRIBUTING.md)
+[![Stars](https://img.shields.io/github/stars/rmwsync/rmwsync?style=flat-square&color=f59e0b&labelColor=451a03)](https://github.com/rmwsync/rmwsync/stargazers)
+
+<br/>
+
+[🚀 Live Demo](https://rmwsync.app) · [📖 Docs](https://docs.rmwsync.app) · [💬 Discord](https://discord.gg/rmwsync) · [🐛 Report Bug](https://github.com/rmwsync/rmwsync/issues) · [✨ Request Feature](https://github.com/rmwsync/rmwsync/discussions)
+
+</div>
+
+
+////////////////////////////////////////
 # <p align="center"><img src="https://readme-typing-svg.demolab.com/?font=Orbitron&size=32&duration=3500&pause=1000&color=00F2FE&vCenter=true&center=true&width=800&lines=❖+RMWSYNC+:++THE+FUTURE+OF+WORKFORCE;❖+HYPER-SCALE+ATTENDANCE+ORCHESTRATION;❖+NEXT-GEN+ENTERPRISE+HRMS" alt="RMWSync Typing Banner" /></p>
 
 <p align="center">
