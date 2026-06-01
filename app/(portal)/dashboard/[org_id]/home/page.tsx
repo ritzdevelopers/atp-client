@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { BarChart3, Building2, UserCircle, UsersRound } from "lucide-react";
+import { BarChart3, Building2, MapPin, Plus, UserCircle, UsersRound } from "lucide-react";
+import type { OrganizationAddress } from "@/services/organization";
 import { MdWorkspacePremium } from "react-icons/md";
 import { useManagementDashboardContext } from "@/components/portal-dashboard/Layout/ManagementDashboardContext";
 import type {
@@ -81,6 +82,20 @@ function displayNameFromEmail(email: string | null | undefined): string {
     .join(" ");
 }
 
+function formatOrganizationAddress(addr: OrganizationAddress): string {
+  const parts = [
+    addr.address_line?.trim(),
+    [addr.city, addr.district, addr.state].filter(Boolean).join(", "),
+    [addr.country, addr.zip_code?.trim()].filter(Boolean).join(" "),
+  ].filter((p): p is string => !!p && p.length > 0);
+  return parts.join("\n");
+}
+
+function addressLocationLabel(addr: OrganizationAddress, index: number): string {
+  const cityState = [addr.city, addr.state].filter(Boolean).join(", ");
+  return cityState.trim() || `Location ${index + 1}`;
+}
+
 function formatRoleLabel(role: string | null | undefined): string {
   const r = (role ?? "").trim().toLowerCase();
   if (r === "admin") return "Admin";
@@ -142,14 +157,111 @@ function DashboardCard({
   );
 }
 
+function OrganizationAddressesSection({
+  addresses,
+  orgId,
+  delayMs,
+}: {
+  addresses: OrganizationAddress[];
+  orgId: number;
+  delayMs: number;
+}) {
+  const manageHref = `/dashboard/${orgId}/organization-settings/manage-organization-information`;
+  const hasAddresses = addresses.length > 0;
+
+  return (
+    <section
+      id="dash-addresses"
+      aria-labelledby="dash-addresses-title"
+      className="dashboard-enter overflow-hidden rounded-3xl bg-white shadow-md ring-1 ring-slate-200/70 lg:rounded-2xl lg:border lg:border-slate-200/90 lg:p-6 lg:shadow-sm lg:ring-0"
+      style={{ animationDelay: `${delayMs}ms` }}
+    >
+      <div className="flex items-center justify-between gap-3 border-b border-slate-100/80 px-4 py-3.5 max-lg:bg-slate-50/50 lg:border-0 lg:px-0 lg:py-0 lg:pb-4">
+        <div className="flex items-center gap-3">
+          <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[#C99237]/15 lg:h-10 lg:w-10 lg:rounded-xl">
+            <MapPin className="h-[18px] w-[18px] shrink-0 text-[#C99237] lg:h-5 lg:w-5" aria-hidden />
+          </span>
+          <div>
+            <h2
+              id="dash-addresses-title"
+              className="text-[15px] font-semibold text-[#0C123A] lg:text-base"
+            >
+              Organization addresses
+            </h2>
+            <p className="text-xs text-slate-500 lg:text-sm">
+              {hasAddresses
+                ? `${addresses.length} registered location${addresses.length === 1 ? "" : "s"}`
+                : "No locations on file yet"}
+            </p>
+          </div>
+        </div>
+        {hasAddresses ? (
+          <Link
+            href={manageHref}
+            className="shrink-0 text-xs font-semibold text-[#C99237] underline-offset-2 hover:underline lg:text-sm"
+          >
+            Manage
+          </Link>
+        ) : null}
+      </div>
+
+      <div className="px-3 py-3 max-lg:pb-4 lg:px-0 lg:py-0">
+        {!hasAddresses ? (
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-8 text-center max-lg:mx-0 lg:py-10">
+            <MapPin className="mx-auto h-9 w-9 text-slate-300" aria-hidden />
+            <p className="mt-3 text-sm font-semibold text-[#0C123A]">No address added yet</p>
+            <p className="mt-1 text-sm text-slate-500">
+              Add your office or branch locations for this organization.
+            </p>
+            <Link
+              href={manageHref}
+              className="mt-5 inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-[#C99237] px-5 py-2.5 text-sm font-bold text-[#0C123A] shadow-sm transition hover:bg-[#b87d2e] active:scale-[0.98]"
+            >
+              <Plus className="h-4 w-4" aria-hidden />
+              Add organization address
+            </Link>
+          </div>
+        ) : (
+          <ul className="grid gap-3 sm:grid-cols-2">
+            {addresses.map((addr, index) => (
+              <li
+                key={String(addr.id ?? index)}
+                className="rounded-2xl border border-slate-200/90 bg-slate-50/60 p-4 lg:rounded-xl"
+              >
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  {addressLocationLabel(addr, index)}
+                </p>
+                <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-[#0C123A]">
+                  {formatOrganizationAddress(addr)}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+        {hasAddresses ? (
+          <Link
+            href={manageHref}
+            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-[#C99237]/40 bg-[#C99237]/5 px-4 py-3 text-sm font-semibold text-[#0C123A] transition hover:bg-[#C99237]/10 max-lg:min-h-[44px] sm:w-auto"
+          >
+            <Plus className="h-4 w-4 text-[#C99237]" aria-hidden />
+            Add another address
+          </Link>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
 function HomeOverview({
   organization,
   user,
   orgId,
+  organizationAddresses,
 }: {
   organization: RightMainSideOrganization;
   user: RightMainSideUser;
   orgId: number;
+  organizationAddresses: OrganizationAddress[];
 }) {
   const roleKey = user.user_role_name?.trim().toLowerCase() ?? "";
   const roleBadgeLabel = formatRoleLabel(user.user_role_name);
@@ -486,6 +598,12 @@ function HomeOverview({
         </DashboardCard>
       </div>
 
+      <OrganizationAddressesSection
+        addresses={organizationAddresses}
+        orgId={orgId}
+        delayMs={125}
+      />
+
       {showAttendance ? (
         <section
           className="dashboard-enter overflow-hidden rounded-3xl bg-white shadow-md ring-1 ring-slate-200/70 lg:rounded-2xl lg:border lg:border-slate-200/90 lg:p-6 lg:shadow-sm lg:ring-0"
@@ -731,7 +849,7 @@ export default function HomePage() {
     );
   }
 
-  const { organization, user, loading } = ctx;
+  const { organization, user, organizationAddresses, loading } = ctx;
 
   if (loading || !organization || !user) {
     return (
@@ -746,5 +864,12 @@ export default function HomePage() {
     );
   }
 
-  return <HomeOverview organization={organization} user={user} orgId={orgId} />;
+  return (
+    <HomeOverview
+      organization={organization}
+      user={user}
+      orgId={orgId}
+      organizationAddresses={organizationAddresses}
+    />
+  );
 }

@@ -1,11 +1,13 @@
 "use client";
 
 import { createContext, useContext, type ReactNode } from "react";
+import type { OrganizationAddress } from "@/services/organization";
 import type { RightMainSideOrganization, RightMainSideUser } from "./RightMainSide";
 
 export type ManagementDashboardContextValue = {
   organization: RightMainSideOrganization | null;
   user: RightMainSideUser | null;
+  organizationAddresses: OrganizationAddress[];
   loading: boolean;
 };
 

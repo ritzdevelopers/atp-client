@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   getOrganization,
   normalizeOrganization,
+  type OrganizationAddress,
   type PortalFeature,
 } from "@/services/organization";
 import type { RightMainSideOrganization, RightMainSideUser } from "./RightMainSide";
@@ -53,6 +54,13 @@ function mapOrganizationPayload(
   };
 }
 
+function mapOrganizationAddresses(raw: unknown): OrganizationAddress[] {
+  if (raw == null) return [];
+  if (Array.isArray(raw)) return raw as OrganizationAddress[];
+  if (typeof raw === "object") return [raw as OrganizationAddress];
+  return [];
+}
+
 function mapUserPayload(raw: Record<string, unknown> | null): RightMainSideUser | null {
   if (!raw) return null;
   const id = raw.user_id ?? raw.id;
@@ -87,6 +95,7 @@ export function useManagementDashboardData() {
   const router = useRouter();
   const [organization, setOrganization] = useState<RightMainSideOrganization | null>(null);
   const [user, setUser] = useState<RightMainSideUser | null>(null);
+  const [organizationAddresses, setOrganizationAddresses] = useState<OrganizationAddress[]>([]);
   const [loading, setLoading] = useState(true);
   const [accessableFeatures, setAccessableFeatures] = useState<PortalFeature[]>([]);
 
@@ -109,6 +118,7 @@ export function useManagementDashboardData() {
         if (!result?.success || !result?.data) {
           setOrganization(null);
           setUser(null);
+          setOrganizationAddresses([]);
           setAccessableFeatures([]);
           return;
         }
@@ -141,6 +151,7 @@ export function useManagementDashboardData() {
           mapOrganizationPayload((normalized ?? null) as Record<string, unknown> | null),
         );
         setUser(mapUserPayload((userRaw ?? null) as Record<string, unknown> | null));
+        setOrganizationAddresses(mapOrganizationAddresses(payload.organization_address));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -152,5 +163,5 @@ export function useManagementDashboardData() {
     };
   }, [router]);
 
-  return { organization, user, loading, accessableFeatures };
+  return { organization, user, organizationAddresses, loading, accessableFeatures };
 }

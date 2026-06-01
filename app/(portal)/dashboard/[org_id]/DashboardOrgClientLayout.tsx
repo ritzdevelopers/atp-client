@@ -10,7 +10,8 @@ import UserDashboard from "@/components/portal-dashboard/user-layout/Dashboard";
 import { useManagementDashboardData } from "@/components/portal-dashboard/Layout/useManagementDashboardData";
 
 function ManagementDashboardLayout({ children }: { children: React.ReactNode }) {
-  const { organization, user, loading, accessableFeatures } = useManagementDashboardData();
+  const { organization, user, organizationAddresses, loading, accessableFeatures } =
+    useManagementDashboardData();
 
   useEffect(() => {
     if (organization?.id == null) return;
@@ -25,7 +26,7 @@ function ManagementDashboardLayout({ children }: { children: React.ReactNode }) 
   }, [organization?.id]);
 
   return (
-    <ManagementDashboardProvider value={{ organization, user, loading }}>
+    <ManagementDashboardProvider value={{ organization, user, organizationAddresses, loading }}>
       <main className="relative w-full">
         <div className="relative z-5 flex w-full">
           <LeftSideBar accessableFeatures={accessableFeatures} />

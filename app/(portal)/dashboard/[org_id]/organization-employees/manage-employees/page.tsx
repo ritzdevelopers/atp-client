@@ -34,7 +34,6 @@ import {
   getAllOrgUsers,
   getOrganizationRoles,
   getUserAddresses,
-  assignPaidLeaves,
   updateUserAddress,
   updateUserDetails,
   updateUserRoleAssignment,
@@ -44,6 +43,11 @@ import {
   type OrgRoleRow,
   type UserAddressRow,
 } from "@/services/adminUser";
+import {
+  createEmployeeLeaveBalance,
+  getLeaveTypesForEmployee,
+  type LeaveTypeRow,
+} from "@/services/leaveManagement";
 
 type EmployeeTier = "employees" | "management" | "inactive" | "exit_process";
 type RosterTier = "employees" | "management";
@@ -325,10 +329,10 @@ export default function ManageEmployeesPage() {
   const [roleSaving, setRoleSaving] = useState(false);
   const [roleError, setRoleError] = useState<string | null>(null);
 
-  const now = new Date();
   const [paidLeaveRow, setPaidLeaveRow] = useState<OrgUserRow | null>(null);
-  const [paidLeaveYear, setPaidLeaveYear] = useState(String(now.getFullYear()));
-  const [paidLeaveMonth, setPaidLeaveMonth] = useState(String(now.getMonth() + 1));
+  const [paidLeaveTypes, setPaidLeaveTypes] = useState<LeaveTypeRow[]>([]);
+  const [paidLeaveTypesLoading, setPaidLeaveTypesLoading] = useState(false);
+  const [paidLeaveTypeId, setPaidLeaveTypeId] = useState("");
   const [paidLeaveTotal, setPaidLeaveTotal] = useState("");
   const [paidLeaveSaving, setPaidLeaveSaving] = useState(false);
   const [paidLeaveError, setPaidLeaveError] = useState<string | null>(null);
@@ -490,14 +494,39 @@ export default function ManageEmployeesPage() {
     setRoleSelectId("");
   }
 
-  function openPaidLeaveModal(row: OrgUserRow) {
-    const d = new Date();
+  async function openPaidLeaveModal(row: OrgUserRow) {
     setPaidLeaveRow(row);
-    setPaidLeaveYear(String(d.getFullYear()));
-    setPaidLeaveMonth(String(d.getMonth() + 1));
+    setPaidLeaveTypeId("");
     setPaidLeaveTotal("");
     setPaidLeaveError(null);
     setPaidLeaveSuccess(null);
+    setPaidLeaveTypes([]);
+
+    if (Number.isNaN(organizationIdNum)) {
+      setPaidLeaveError("Invalid organization.");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setPaidLeaveError("Not signed in.");
+      return;
+    }
+
+    setPaidLeaveTypesLoading(true);
+    try {
+      const types = await getLeaveTypesForEmployee(token, organizationIdNum);
+      setPaidLeaveTypes(types);
+      if (types.length === 1 && types[0].id != null) {
+        setPaidLeaveTypeId(String(types[0].id));
+      }
+    } catch (err) {
+      setPaidLeaveError(
+        err instanceof Error ? err.message : "Could not load leave types.",
+      );
+    } finally {
+      setPaidLeaveTypesLoading(false);
+    }
   }
 
   function openDocumentsModal(row: OrgUserRow) {
@@ -907,18 +936,14 @@ export default function ManageEmployeesPage() {
       return;
     }
 
-    const y = parseInt(paidLeaveYear, 10);
-    const mo = parseInt(paidLeaveMonth, 10);
-    const total = parseInt(paidLeaveTotal, 10);
-    if (
-      Number.isNaN(y) ||
-      Number.isNaN(mo) ||
-      mo < 1 ||
-      mo > 12 ||
-      Number.isNaN(total) ||
-      total < 0
-    ) {
-      setPaidLeaveError("Enter a valid year, month (1-12), and non-negative leaves.");
+    if (!paidLeaveTypeId) {
+      setPaidLeaveError("Select a leave type.");
+      return;
+    }
+
+    const total = Number(paidLeaveTotal);
+    if (!Number.isFinite(total) || total < 0 || !Number.isInteger(total)) {
+      setPaidLeaveError("Enter a valid whole number of leave days (0 or more).");
       return;
     }
 
@@ -932,17 +957,20 @@ export default function ManageEmployeesPage() {
     setPaidLeaveError(null);
     setPaidLeaveSuccess(null);
     try {
-      const result = await assignPaidLeaves(token, {
+      const result = await createEmployeeLeaveBalance(token, {
         org_id: organizationIdNum,
-        user_id: paidLeaveRow.id,
-        year: y,
-        month: mo,
+        employee_id: paidLeaveRow.id,
+        leave_type_id: paidLeaveTypeId,
         total_leaves: total,
       });
-      setPaidLeaveSuccess(result.message || "Paid leaves assigned successfully.");
+      setPaidLeaveSuccess(
+        result.message || "Employee leave balance assigned successfully.",
+      );
       await loadUsers();
     } catch (err) {
-      setPaidLeaveError(err instanceof Error ? err.message : "Could not assign paid leaves.");
+      setPaidLeaveError(
+        err instanceof Error ? err.message : "Could not assign leave balance.",
+      );
     } finally {
       setPaidLeaveSaving(false);
     }
@@ -1216,7 +1244,7 @@ export default function ManageEmployeesPage() {
                           role="menuitem"
                           className="flex w-full touch-manipulation items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-700 active:bg-slate-50"
                           onClick={() => {
-                            openPaidLeaveModal(row);
+                            void openPaidLeaveModal(row);
                             setMenuUserId(null);
                           }}
                         >
@@ -1740,7 +1768,7 @@ export default function ManageEmployeesPage() {
                   Assign paid leaves
                 </h2>
                 <p className="mt-1 text-sm text-slate-600">
-                  Assign monthly paid leaves to{" "}
+                  Assign a leave balance to{" "}
                   <span className="font-semibold text-slate-900">{paidLeaveRow.user_name}</span>.
                 </p>
               </div>
@@ -1755,9 +1783,10 @@ export default function ManageEmployeesPage() {
               </button>
             </div>
 
-            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900">
-              This updates the selected month&apos;s balance and the employee&apos;s default monthly
-              leave value used for future auto-assignment.
+            <div className="mb-4 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs leading-relaxed text-sky-900">
+              Choose a leave type created under Company Leave Management, then set how many
+              days this employee can use for that type. Each type can only be assigned once per
+              employee.
             </div>
 
             {paidLeaveError && (
@@ -1771,55 +1800,72 @@ export default function ManageEmployeesPage() {
               </div>
             )}
 
+            {paidLeaveTypesLoading ? (
+              <div className="mb-4 flex items-center gap-2 text-sm text-slate-600">
+                <Loader2 className="h-4 w-4 animate-spin text-teal-600" />
+                Loading leave types…
+              </div>
+            ) : null}
+
+            {!paidLeaveTypesLoading && paidLeaveTypes.length === 0 && !paidLeaveError ? (
+              <div className="mb-4 rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-center text-sm text-slate-600">
+                <CalendarDays className="mx-auto mb-2 h-8 w-8 text-slate-300" aria-hidden />
+                <p>No leave types defined yet.</p>
+                <Link
+                  href={`/dashboard/${orgIdParam ?? ""}/organization-leave/manage-leave-types`}
+                  className="mt-2 inline-block font-semibold text-teal-700 underline-offset-2 hover:underline"
+                  onClick={() => setPaidLeaveRow(null)}
+                >
+                  Manage leave types
+                </Link>
+              </div>
+            ) : null}
+
             <form onSubmit={submitPaidLeaves} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600">Year</label>
-                  <input
-                    type="number"
-                    min="2000"
-                    max="2100"
-                    className={inputCls()}
-                    value={paidLeaveYear}
-                    onChange={(e) => setPaidLeaveYear(e.target.value)}
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600">Month</label>
-                  <select
-                    className={inputCls()}
-                    value={paidLeaveMonth}
-                    onChange={(e) => setPaidLeaveMonth(e.target.value)}
-                    required
-                  >
-                    {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                      <option key={m} value={String(m)}>
-                        {new Date(2024, m - 1, 1).toLocaleString("en-US", {
-                          month: "long",
-                        })}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              <div>
+                <label htmlFor="paid-leave-type" className="mb-1 block text-xs font-medium text-slate-600">
+                  Leave type <span className="text-red-500">*</span>
+                </label>
+                <select
+                  id="paid-leave-type"
+                  className={inputCls()}
+                  value={paidLeaveTypeId}
+                  onChange={(e) => setPaidLeaveTypeId(e.target.value)}
+                  required
+                  disabled={
+                    paidLeaveSaving || paidLeaveTypesLoading || paidLeaveTypes.length === 0
+                  }
+                >
+                  <option value="">Select leave type</option>
+                  {paidLeaveTypes.map((lt) => (
+                    <option key={String(lt.id)} value={String(lt.id)}>
+                      {lt.leave_type_name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">
-                  Total paid leaves
+                <label htmlFor="paid-leave-total" className="mb-1 block text-xs font-medium text-slate-600">
+                  Total leave days <span className="text-red-500">*</span>
                 </label>
                 <input
+                  id="paid-leave-total"
                   type="number"
                   min="0"
                   step="1"
                   className={inputCls()}
                   value={paidLeaveTotal}
                   onChange={(e) => setPaidLeaveTotal(e.target.value)}
-                  placeholder="Example: 2"
+                  placeholder="Example: 12"
                   required
+                  disabled={
+                    paidLeaveSaving || paidLeaveTypesLoading || paidLeaveTypes.length === 0
+                  }
                 />
                 <p className="mt-1 text-xs text-slate-500">
-                  If this month already has used leaves, total cannot be less than used.
+                  Number of days allocated for the selected leave type (remaining starts equal to
+                  total).
                 </p>
               </div>
 
@@ -1834,11 +1880,15 @@ export default function ManageEmployeesPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={paidLeaveSaving}
+                  disabled={
+                    paidLeaveSaving ||
+                    paidLeaveTypesLoading ||
+                    paidLeaveTypes.length === 0
+                  }
                   className="inline-flex items-center justify-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-bold text-white hover:bg-teal-700 disabled:opacity-60"
                 >
                   {paidLeaveSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                  Assign leaves
+                  Assign leave balance
                 </button>
               </div>
             </form>
