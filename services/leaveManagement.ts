@@ -106,6 +106,34 @@ export async function updateLeaveType(
   return result;
 }
 
+/** For user dashboard / any org member (`req_sender_auth` only). */
+export async function getOrgLeaveTypes(
+  token: string,
+  orgId: number | string,
+): Promise<LeaveTypeRow[]> {
+  const q = encodeURIComponent(String(orgId));
+  const res = await fetch(
+    `${API_URL}/api/leave-management/org-leave-types?org_id=${q}`,
+    {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+    },
+  );
+
+  const result = (await res.json()) as {
+    message?: string;
+    data?: LeaveTypeRow[];
+  };
+
+  if (!res.ok) {
+    const error = leaveApiError(result, "Could not load leave types");
+    error.status = res.status;
+    throw error;
+  }
+
+  return Array.isArray(result.data) ? result.data : [];
+}
+
 /** For manage-employees assign flow (`employee-management` feature). */
 export async function getLeaveTypesForEmployee(
   token: string,
