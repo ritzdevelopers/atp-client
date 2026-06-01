@@ -6,7 +6,7 @@ export type LeaveQueryRow = {
   user_name: string;
   user_email: string;
   org_id: number;
-  leave_type: "full_day" | "half_day" | "short_leave";
+  leave_type: string;
   start_date: string;
   end_date: string | null;
   reason: string | null;
@@ -18,14 +18,51 @@ export type LeaveQueryRow = {
   updated_at?: string | null;
 };
 
+export type AssignedLeaveBalanceRow = {
+  id?: number | string;
+  user_id?: number | string;
+  org_id?: number | string;
+  leave_type_id: number | string;
+  leave_type_name?: string;
+  total_leaves?: number | string;
+  used_leaves?: number | string;
+  remaining_leaves?: number | string;
+};
+
 export type ApplyLeavePayload = {
   org_id: number;
-  leave_type: "full_day" | "half_day" | "short_leave";
+  leave_type_id: number | string;
   start_date: string;
   end_date?: string | null;
   reason?: string | null;
   team_id?: number | string | null;
 };
+
+export async function fetchMyAssignedLeaveBalances(
+  token: string,
+  orgId: number | string,
+): Promise<AssignedLeaveBalanceRow[]> {
+  const q = encodeURIComponent(String(orgId));
+  const res = await fetch(
+    `${API_URL}/api/employees/my-assigned-leave-balances?org_id=${q}`,
+    {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+  const json = await parseJson(res);
+  if (!res.ok) {
+    throw new Error(
+      (json.message as string) || "Could not load assigned leave types",
+    );
+  }
+  const data = json.data;
+  if (!Array.isArray(data)) return [];
+  return data as AssignedLeaveBalanceRow[];
+}
 
 async function parseJson(res: Response): Promise<Record<string, unknown>> {
   try {
@@ -66,7 +103,7 @@ export async function applyForLeave(
 ): Promise<{ message?: string; id?: number }> {
   const body: Record<string, unknown> = {
     org_id: payload.org_id,
-    leave_type: payload.leave_type,
+    leave_type_id: payload.leave_type_id,
     start_date: payload.start_date,
     end_date: payload.end_date ?? null,
     reason: payload.reason ?? null,

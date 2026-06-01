@@ -24,6 +24,8 @@ import {
   fetchMyLeaveQueries,
   type LeaveQueryRow,
 } from "@/services/employeeLeaves";
+import AssignedLeaveTypeSelect from "@/components/portal-dashboard/user-layout/AssignedLeaveTypeSelect";
+import { useAssignedLeaveTypes } from "@/hooks/useAssignedLeaveTypes";
 import {
   attendanceCategoryLabel,
   correctAttendanceQuery,
@@ -250,9 +252,13 @@ export default function UserMyTeamPage() {
   );
 
   const [leaveModalOpen, setLeaveModalOpen] = useState(false);
-  const [leaveType, setLeaveType] = useState<
-    "full_day" | "half_day" | "short_leave"
-  >("full_day");
+  const {
+    options: assignedLeaveOptions,
+    selectedLeaveTypeId,
+    setSelectedLeaveTypeId,
+    loading: assignedLeavesLoading,
+    error: assignedLeavesError,
+  } = useAssignedLeaveTypes(orgId, leaveModalOpen);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [reason, setReason] = useState("");
@@ -465,11 +471,15 @@ export default function UserMyTeamPage() {
       setLeaveFormError("Start date is required.");
       return;
     }
+    if (!selectedLeaveTypeId) {
+      setLeaveFormError("Select an assigned leave type.");
+      return;
+    }
     setLeaveSubmitting(true);
     try {
       await applyForLeave(t, {
         org_id: orgId,
-        leave_type: leaveType,
+        leave_type_id: selectedLeaveTypeId,
         start_date: startDate,
         end_date: endDate || null,
         reason: reason.trim() || null,
@@ -479,7 +489,6 @@ export default function UserMyTeamPage() {
       setStartDate("");
       setEndDate("");
       setReason("");
-      setLeaveType("full_day");
       const rows = await fetchMyLeaveQueries(t, orgId);
       setLeaveRows(rows);
     } catch (err) {
@@ -1181,22 +1190,15 @@ export default function UserMyTeamPage() {
                   {leaveFormSuccess}
                 </p>
               ) : null}
-              <label className="block">
-                <span className="text-[13px] font-medium text-[#374151] lg:text-xs lg:font-semibold lg:text-slate-600">
-                  Leave type
-                </span>
-                <select
-                  value={leaveType}
-                  onChange={(e) =>
-                    setLeaveType(e.target.value as typeof leaveType)
-                  }
-                  className={zohoInputCls()}
-                >
-                  <option value="full_day">Full day</option>
-                  <option value="half_day">Half day</option>
-                  <option value="short_leave">Short leave</option>
-                </select>
-              </label>
+              <AssignedLeaveTypeSelect
+                options={assignedLeaveOptions}
+                loading={assignedLeavesLoading}
+                error={assignedLeavesError}
+                selectedLeaveTypeId={selectedLeaveTypeId}
+                onSelectLeaveTypeId={setSelectedLeaveTypeId}
+                className={zohoInputCls()}
+                labelClassName="text-[13px] font-medium text-[#374151] lg:text-xs lg:font-semibold lg:text-slate-600"
+              />
               <label className="block">
                 <span className="text-[13px] font-medium text-[#374151] lg:text-xs lg:font-semibold lg:text-slate-600">
                   Start date
@@ -1242,7 +1244,12 @@ export default function UserMyTeamPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={leaveSubmitting}
+                  disabled={
+                    leaveSubmitting ||
+                    assignedLeavesLoading ||
+                    assignedLeaveOptions.length === 0 ||
+                    !selectedLeaveTypeId
+                  }
                   className={zohoPrimaryBtnCls(true)}
                 >
                   {leaveSubmitting ? "Submitting…" : "Submit"}
