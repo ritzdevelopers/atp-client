@@ -67,6 +67,7 @@ type EmployeeCard = {
   hasExitProcess: boolean;
   exitActionLabel: string | null;
   exitStatusLabel: string | null;
+  avatarSrc: string;
   avatarSeed: string;
 };
 
@@ -106,6 +107,12 @@ const emptyAddressDraft: AddressDraft = {
 
 function avatarUrl(seed: string) {
   return `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(seed)}`;
+}
+
+function resolveAvatarSrc(userImage: unknown, seed: string) {
+  const image = String(userImage ?? "").trim();
+  if (image) return image;
+  return avatarUrl(seed);
 }
 
 function formatRoleLabel(role: string | undefined) {
@@ -160,6 +167,7 @@ function formatExitStatusLabel(status: string | undefined | null): string | null
 function mapApiUserToCard(row: OrgUserRow): EmployeeCard {
   const id = row.id != null ? String(row.id) : "";
   const email = String(row.user_email ?? "");
+  const avatarSeed = email || id || "user";
   const roleRaw = row.role_name ?? row.user_role_name;
   const roleLabel = formatRoleLabel(roleRaw);
   const isActive = isOrgMemberActive(row.is_active);
@@ -188,7 +196,8 @@ function mapApiUserToCard(row: OrgUserRow): EmployeeCard {
     hasExitProcess,
     exitActionLabel,
     exitStatusLabel,
-    avatarSeed: email || id || "user",
+    avatarSrc: resolveAvatarSrc((row as { user_image?: unknown }).user_image, avatarSeed),
+    avatarSeed,
   };
 }
 
@@ -479,6 +488,7 @@ export default function ManageEmployeesPage() {
     setEditRow(row);
     setEditName(String(row.user_name ?? ""));
     setEditEmail(String(row.user_email ?? ""));
+
     setEditPhone(
       row.user_phone != null && String(row.user_phone).trim() !== ""
         ? String(row.user_phone)
@@ -1304,11 +1314,14 @@ export default function ManageEmployeesPage() {
                       <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-2xl border border-slate-100 bg-slate-50">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
-                          src={avatarUrl(emp.avatarSeed)}
+                          src={emp.avatarSrc}
                           alt=""
                           width={56}
                           height={56}
                           className="h-full w-full object-cover object-top"
+                          onError={(e) => {
+                            e.currentTarget.src = avatarUrl(emp.avatarSeed);
+                          }}
                         />
                         <span
                           className={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white ${
@@ -1456,11 +1469,14 @@ export default function ManageEmployeesPage() {
                         <div className="relative h-24 w-24 overflow-hidden rounded-full border-2 border-slate-100 bg-slate-50">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
-                            src={avatarUrl(emp.avatarSeed)}
+                            src={emp.avatarSrc}
                             alt=""
                             width={96}
                             height={96}
                             className="h-full w-full object-cover object-top"
+                            onError={(e) => {
+                              e.currentTarget.src = avatarUrl(emp.avatarSeed);
+                            }}
                           />
                         </div>
                         <div className="mt-3 flex w-full items-start justify-center gap-2 px-1">

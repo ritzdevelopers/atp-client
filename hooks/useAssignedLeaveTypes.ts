@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   fetchMyAssignedLeaveBalances,
+  UNPAID_LEAVE_OPTION,
+  isUnpaidLeaveTypeId,
   type AssignedLeaveBalanceRow,
 } from "@/services/employeeLeaves";
 
@@ -32,13 +34,25 @@ export function useAssignedLeaveTypes(
     setError(null);
     try {
       const rows = await fetchMyAssignedLeaveBalances(token, orgId);
-      setOptions(rows);
+      const withUnpaid = [...rows, UNPAID_LEAVE_OPTION];
+      setOptions(withUnpaid);
       setSelectedLeaveTypeId((prev) => {
-        if (prev && rows.some((r) => String(r.leave_type_id) === prev)) {
+        if (
+          prev &&
+          (isUnpaidLeaveTypeId(prev) ||
+            rows.some((r) => String(r.leave_type_id) === prev))
+        ) {
           return prev;
         }
-        const first = rows[0];
-        return first?.leave_type_id != null ? String(first.leave_type_id) : "";
+        const firstWithBalance = rows.find(
+          (r) => Number(r.remaining_leaves ?? 0) > 0,
+        );
+        if (firstWithBalance?.leave_type_id != null) {
+          return String(firstWithBalance.leave_type_id);
+        }
+        return UNPAID_LEAVE_OPTION.leave_type_id != null
+          ? String(UNPAID_LEAVE_OPTION.leave_type_id)
+          : "";
       });
     } catch (e) {
       setOptions([]);
@@ -71,6 +85,9 @@ export function formatAssignedLeaveOptionLabel(
   row: AssignedLeaveBalanceRow,
 ): string {
   const name = row.leave_type_name?.trim() || `Leave #${row.leave_type_id}`;
+  if (isUnpaidLeaveTypeId(row.leave_type_id)) {
+    return name;
+  }
   const remaining = Number(row.remaining_leaves ?? 0);
   return `${name} (${remaining} remaining)`;
 }

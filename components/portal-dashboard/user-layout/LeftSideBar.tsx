@@ -15,6 +15,11 @@ import {
 import { LuFileSpreadsheet } from "react-icons/lu";
 import AssignedLeaveTypeSelect from "./AssignedLeaveTypeSelect";
 import { useAssignedLeaveTypes } from "@/hooks/useAssignedLeaveTypes";
+import {
+  countInclusiveLeaveDays,
+  isUnpaidLeaveTypeId,
+  validateLeaveApplication,
+} from "@/services/employeeLeaves";
 
 type NavIcon = ComponentType<{ className?: string }>;
 
@@ -107,6 +112,27 @@ function LeftSideBar() {
   const [leaveSuccess, setLeaveSuccess] = useState<string | null>(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
+  const leaveDaysRequested = useMemo(
+    () => countInclusiveLeaveDays(startDate, endDate),
+    [startDate, endDate],
+  );
+
+  const leaveValidationError = useMemo(() => {
+    if (!showLeaveModal || !selectedLeaveTypeId || !startDate) return null;
+    return validateLeaveApplication({
+      startDate,
+      endDate,
+      selectedLeaveTypeId,
+      assignedOptions: assignedLeaveOptions,
+    });
+  }, [
+    showLeaveModal,
+    startDate,
+    endDate,
+    selectedLeaveTypeId,
+    assignedLeaveOptions,
+  ]);
+
   const bottomNavItems = useMemo(
     () => navigationItems.slice(0, BOTTOM_TAB_COUNT),
     [],
@@ -144,12 +170,14 @@ function LeftSideBar() {
       setLeaveError("Invalid organization.");
       return;
     }
-    if (!startDate) {
-      setLeaveError("Start date is required.");
-      return;
-    }
-    if (!selectedLeaveTypeId) {
-      setLeaveError("Select an assigned leave type.");
+    const validationError = validateLeaveApplication({
+      startDate,
+      endDate,
+      selectedLeaveTypeId,
+      assignedOptions: assignedLeaveOptions,
+    });
+    if (validationError) {
+      setLeaveError(validationError);
       return;
     }
 
@@ -169,7 +197,9 @@ function LeftSideBar() {
         },
         body: JSON.stringify({
           org_id: orgIdNum,
-          leave_type_id: selectedLeaveTypeId,
+          leave_type_id: isUnpaidLeaveTypeId(selectedLeaveTypeId)
+            ? "000"
+            : selectedLeaveTypeId,
           start_date: startDate,
           end_date: endDate || null,
           reason: reason.trim() || null,
@@ -312,6 +342,16 @@ function LeftSideBar() {
               onSelectLeaveTypeId={setSelectedLeaveTypeId}
             />
 
+            {startDate && selectedLeaveTypeId && !isUnpaidLeaveTypeId(selectedLeaveTypeId) ? (
+              <p className="text-xs text-slate-500">
+                Requesting {leaveDaysRequested} day
+                {leaveDaysRequested === 1 ? "" : "s"}
+                {leaveValidationError ? (
+                  <span className="mt-1 block text-red-600">{leaveValidationError}</span>
+                ) : null}
+              </p>
+            ) : null}
+
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
                 <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -365,8 +405,8 @@ function LeftSideBar() {
                 disabled={
                   submittingLeave ||
                   assignedLeavesLoading ||
-                  assignedLeaveOptions.length === 0 ||
-                  !selectedLeaveTypeId
+                  !selectedLeaveTypeId ||
+                  Boolean(leaveValidationError)
                 }
                 className="inline-flex items-center gap-2 rounded-md bg-indigo-700 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-800 disabled:cursor-not-allowed disabled:opacity-60"
               >

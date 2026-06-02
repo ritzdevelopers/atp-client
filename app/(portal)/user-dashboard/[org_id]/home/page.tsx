@@ -33,8 +33,6 @@ import {
 } from "@/lib/leaveBalanceDisplay";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
-const HOME_CACHE_TTL_MS = 5 * 60 * 1000;
-const HOME_CACHE_VERSION = "v6";
 const DEFAULT_PROFILE_IMAGE = "https://i.pravatar.cc/120?img=12";
 const MAX_PROFILE_IMAGE_BYTES = 5 * 1024 * 1024;
 
@@ -101,12 +99,6 @@ type EmployeeDashboardResponse = {
   leave_summary?: LeaveSummary;
   employee_leave_balances?: EmployeeLeaveBalanceRow[];
   attendance_history?: AttendanceHistoryRow[];
-};
-
-type HomeCachePayload = {
-  savedAt: number;
-  data: EmployeeDashboardResponse;
-  addresses: UserAddressRow[];
 };
 
 function formatElapsedDuration(ms: number): string {
@@ -340,61 +332,6 @@ function LeaveBalancesPanel({
   );
 }
 
-function parseJwtUserId(token: string | null): string {
-  if (!token) return "anonymous";
-  try {
-    const payload = JSON.parse(atob(token.split(".")[1] || "")) as {
-      user_id?: string | number;
-      id?: string | number;
-    };
-    return String(payload.user_id ?? payload.id ?? "anonymous");
-  } catch {
-    return "anonymous";
-  }
-}
-
-function getHomeCacheKey(orgId: number, token: string | null): string {
-  return `user-dashboard-home:${HOME_CACHE_VERSION}:${orgId}:${parseJwtUserId(token)}`;
-}
-
-function readHomeCache(cacheKey: string): HomeCachePayload | null {
-  try {
-    const raw = sessionStorage.getItem(cacheKey);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as HomeCachePayload;
-    if (!parsed?.savedAt || Date.now() - parsed.savedAt > HOME_CACHE_TTL_MS) {
-      sessionStorage.removeItem(cacheKey);
-      return null;
-    }
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-function writeHomeCache(
-  cacheKey: string,
-  data: EmployeeDashboardResponse,
-  addresses: UserAddressRow[],
-) {
-  try {
-    sessionStorage.setItem(
-      cacheKey,
-      JSON.stringify({ savedAt: Date.now(), data, addresses }),
-    );
-  } catch {
-    // Ignore storage quota/private mode.
-  }
-}
-
-function clearHomeCache(orgId: number, token: string | null) {
-  try {
-    sessionStorage.removeItem(getHomeCacheKey(orgId, token));
-  } catch {
-    // Ignore storage quota/private mode.
-  }
-}
-
 function upsertTodayHistory(
   prev: EmployeeDashboardResponse | null,
   todayYmd: string,
@@ -603,20 +540,6 @@ function Home() {
         return;
       }
 
-      const cacheKey = getHomeCacheKey(orgId, token);
-      if (!forceRefresh) {
-        const cached = readHomeCache(cacheKey);
-        if (cached) {
-          setData(cached.data);
-          setAddresses(cached.addresses);
-          setError(null);
-          setAddressesError(null);
-          setLoading(false);
-          setAddressesLoading(false);
-          return;
-        }
-      }
-
       if (forceRefresh) {
         setRefreshing(true);
       } else {
@@ -685,8 +608,6 @@ function Home() {
           setAddresses([]);
           setAddressesError(null);
         }
-
-        writeHomeCache(cacheKey, result, nextAddresses);
       } catch (e) {
         setError(
           e instanceof Error
@@ -843,18 +764,6 @@ function Home() {
           return newUrl;
         });
 
-        if (!Number.isNaN(orgId)) {
-          const cacheKey = getHomeCacheKey(orgId, token);
-          const cached = readHomeCache(cacheKey);
-          if (cached?.data) {
-            writeHomeCache(
-              cacheKey,
-              patchEmployeeUserImage(cached.data, newUrl) ?? cached.data,
-              cached.addresses,
-            );
-          }
-        }
-
         setProfileImageSuccess(
           result.message || "Profile photo updated successfully.",
         );
@@ -894,9 +803,26 @@ function Home() {
   );
 
   const leaveSummary = useMemo((): LeaveSummary => {
+    const hasEmployeeTotals =
+      emp?.total_leaves != null ||
+      emp?.used_leaves != null ||
+      emp?.remaining_leaves != null;
+    if (hasEmployeeTotals) {
+      return {
+        total_leaves: Number(emp?.total_leaves ?? 0),
+        used_leaves: Number(emp?.used_leaves ?? 0),
+        remaining_leaves: Number(emp?.remaining_leaves ?? 0),
+      };
+    }
     if (data?.leave_summary) return data.leave_summary;
     return summarizeLeaveBalances(employeeLeaveBalances);
-  }, [data?.leave_summary, employeeLeaveBalances]);
+  }, [
+    emp?.total_leaves,
+    emp?.used_leaves,
+    emp?.remaining_leaves,
+    data?.leave_summary,
+    employeeLeaveBalances,
+  ]);
 
   const leaveBalanceRows = useMemo(
     () => mapEmployeeLeaveBalanceRows(employeeLeaveBalances),
@@ -973,7 +899,6 @@ function Home() {
       };
       if (!res.ok) throw new Error(result.message || "Could not mark check-in");
       const checkInDateTime = `${user_date} ${user_time}:00`;
-      clearHomeCache(orgId, token);
       setData((prev) =>
         upsertTodayHistory(prev, todayYmd, {
           id: result.attendance_id,
@@ -1031,7 +956,6 @@ function Home() {
       if (result.finalStatus != null)
         patch.attendance_status = result.finalStatus;
       if (workingDisplay !== undefined) patch.working_time = workingDisplay;
-      clearHomeCache(orgId, token);
       setData((prev) => upsertTodayHistory(prev, todayYmd, patch));
     } catch (e) {
       setAttendanceActionError(

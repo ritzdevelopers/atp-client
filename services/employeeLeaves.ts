@@ -18,6 +18,13 @@ export type LeaveQueryRow = {
   updated_at?: string | null;
 };
 
+export const UNPAID_LEAVE_TYPE_ID = "000";
+
+export const UNPAID_LEAVE_OPTION: AssignedLeaveBalanceRow = {
+  leave_type_id: UNPAID_LEAVE_TYPE_ID,
+  leave_type_name: "Unpaid Leave",
+};
+
 export type AssignedLeaveBalanceRow = {
   id?: number | string;
   user_id?: number | string;
@@ -28,6 +35,65 @@ export type AssignedLeaveBalanceRow = {
   used_leaves?: number | string;
   remaining_leaves?: number | string;
 };
+
+/** Inclusive calendar days (matches leave approval on the server). */
+export function countInclusiveLeaveDays(
+  startDate: string,
+  endDate?: string | null,
+): number {
+  if (!startDate) return 0;
+  const end = endDate?.trim() || startDate;
+  const startMs = Date.parse(`${startDate}T00:00:00`);
+  const endMs = Date.parse(`${end}T00:00:00`);
+  if (Number.isNaN(startMs) || Number.isNaN(endMs)) return 0;
+  const diff = Math.floor((endMs - startMs) / (1000 * 60 * 60 * 24)) + 1;
+  return diff > 0 ? diff : 0;
+}
+
+export function isUnpaidLeaveTypeId(leaveTypeId: string | number | null | undefined): boolean {
+  return String(leaveTypeId ?? "") === UNPAID_LEAVE_TYPE_ID;
+}
+
+export function validateLeaveApplication(input: {
+  startDate: string;
+  endDate?: string | null;
+  selectedLeaveTypeId: string;
+  assignedOptions: AssignedLeaveBalanceRow[];
+}): string | null {
+  const { startDate, endDate, selectedLeaveTypeId, assignedOptions } = input;
+
+  if (!startDate) {
+    return "Start date is required.";
+  }
+  if (!selectedLeaveTypeId) {
+    return "Select a leave type.";
+  }
+
+  const end = endDate?.trim() || startDate;
+  if (end < startDate) {
+    return "End date must be on or after start date.";
+  }
+
+  if (isUnpaidLeaveTypeId(selectedLeaveTypeId)) {
+    return null;
+  }
+
+  const row = assignedOptions.find(
+    (o) => String(o.leave_type_id) === selectedLeaveTypeId,
+  );
+  if (!row) {
+    return "Select an assigned leave type.";
+  }
+
+  const remaining = Number(row.remaining_leaves ?? 0);
+  const requestedDays = countInclusiveLeaveDays(startDate, endDate);
+  if (requestedDays > remaining) {
+    const name = row.leave_type_name?.trim() || "this leave type";
+    return `You cannot apply for more than your remaining ${name} balance (${remaining} day${remaining === 1 ? "" : "s"}). Select Unpaid Leave for extra days.`;
+  }
+
+  return null;
+}
 
 export type ApplyLeavePayload = {
   org_id: number;

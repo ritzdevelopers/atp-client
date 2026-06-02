@@ -1,6 +1,9 @@
 "use client";
 
-import type { AssignedLeaveBalanceRow } from "@/services/employeeLeaves";
+import {
+  isUnpaidLeaveTypeId,
+  type AssignedLeaveBalanceRow,
+} from "@/services/employeeLeaves";
 import { formatAssignedLeaveOptionLabel } from "@/hooks/useAssignedLeaveTypes";
 
 type Props = {
@@ -31,9 +34,7 @@ export default function AssignedLeaveTypeSelect({
       {loading ? (
         <p className="text-sm text-slate-500">Loading your leave types…</p>
       ) : options.length === 0 ? (
-        <p className="text-sm text-slate-500">
-          No leave types assigned. Contact HR to assign leave balance.
-        </p>
+        <p className="text-sm text-slate-500">Loading leave types…</p>
       ) : (
         <select
           value={selectedLeaveTypeId}
@@ -45,8 +46,9 @@ export default function AssignedLeaveTypeSelect({
           {options.map((row) => {
             const id = String(row.leave_type_id);
             const remaining = Number(row.remaining_leaves ?? 0);
+            const unpaid = isUnpaidLeaveTypeId(id);
             return (
-              <option key={id} value={id} disabled={remaining <= 0}>
+              <option key={id} value={id} disabled={!unpaid && remaining <= 0}>
                 {formatAssignedLeaveOptionLabel(row)}
               </option>
             );
