@@ -12,6 +12,23 @@ export function generateOrgStaticParams() {
   return getStaticOrgIds().map((org_id) => ({ org_id }));
 }
 
-export function generatePlaceholderStaticParams(paramName: string, value = "0") {
+/** Placeholder segment for static export; real IDs use `?employee_id=` (etc.). */
+export const STATIC_EXPORT_PLACEHOLDER_ID = "0";
+
+export function generatePlaceholderStaticParams(
+  paramName: string,
+  value = STATIC_EXPORT_PLACEHOLDER_ID,
+) {
   return [{ [paramName]: value }];
+}
+
+/** For nested routes under `[org_id]` with static export (Next.js 16+). */
+export function generateOrgScopedPlaceholderStaticParams(
+  paramName: string,
+  value = STATIC_EXPORT_PLACEHOLDER_ID,
+) {
+  return getStaticOrgIds().map((org_id) => ({
+    org_id,
+    [paramName]: value,
+  }));
 }

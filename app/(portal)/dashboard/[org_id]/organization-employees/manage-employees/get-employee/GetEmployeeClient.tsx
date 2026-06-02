@@ -16,7 +16,6 @@ import {
   Globe,
   Laptop,
   Loader2,
-  Mail,
   MapPin,
   Phone,
   RefreshCw,
@@ -215,6 +214,121 @@ function QuickStat({ label, value }: { label: string; value: string | number }) 
       <p className="text-lg font-bold text-[#008CD3]">{value}</p>
       <p className="mt-0.5 text-[11px] font-medium uppercase tracking-wide text-[#6B7280]">{label}</p>
     </div>
+  );
+}
+
+function CircularLeaveRing({
+  label,
+  remaining,
+  total,
+}: {
+  label: string;
+  remaining: number;
+  total: number;
+}) {
+  const size = 96;
+  const stroke = 8;
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const usedPct = total > 0 ? Math.min(100, Math.round((remaining / total) * 100)) : 0;
+  const offset = circumference - (usedPct / 100) * circumference;
+
+  return (
+    <div className="flex flex-col items-center gap-2 text-center">
+      <div className="relative" style={{ width: size, height: size }}>
+        <svg width={size} height={size} className="-rotate-90">
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="none"
+            stroke="#EEF2F6"
+            strokeWidth={stroke}
+          />
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="none"
+            stroke="#008CD3"
+            strokeWidth={stroke}
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            strokeDashoffset={offset}
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-xl font-bold text-[#1F2937]">{remaining}</span>
+          <span className="text-[10px] font-medium text-[#6B7280]">left</span>
+        </div>
+      </div>
+      <p className="max-w-[100px] text-[12px] font-semibold leading-tight text-[#1F2937]">
+        {label}
+      </p>
+      <p className="text-[11px] text-[#6B7280]">
+        {usedPct}% of {total}
+      </p>
+    </div>
+  );
+}
+
+function DesktopProfileCard({
+  name,
+  role,
+  email,
+  phone,
+  joined,
+  imageUrl,
+  stats,
+}: {
+  name: string;
+  role: string;
+  email: string;
+  phone: string;
+  joined: string;
+  imageUrl: string | null;
+  stats: { documents: number; assets: number; leaves: number; logs: number };
+}) {
+  return (
+    <article className="overflow-hidden rounded-2xl border border-[#E4E7EC] bg-white shadow-[0_4px_24px_rgba(15,23,42,0.06)]">
+      <div className="bg-gradient-to-br from-[#008CD3] via-[#007EBF] to-[#0070AA] px-5 pb-5 pt-5 text-white">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/75">
+          Employee profile
+        </p>
+        <div className="mt-4 flex items-center gap-4">
+          {imageUrl ? (
+            <img
+              src={imageUrl}
+              alt={name}
+              className="h-16 w-16 shrink-0 rounded-2xl border-2 border-white/40 object-cover shadow-md"
+            />
+          ) : (
+            <span
+              className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border-2 border-white/30 text-lg font-bold shadow-md ${userColorClass(name)}`}
+            >
+              {userInitials(name)}
+            </span>
+          )}
+          <div className="min-w-0">
+            <p className="text-sm text-white/85">Hello,</p>
+            <h2 className="truncate text-xl font-bold tracking-tight">{name}</h2>
+            <p className="mt-1 text-sm text-white/80">{role}</p>
+          </div>
+        </div>
+      </div>
+      <div className="grid grid-cols-4 gap-2 border-b border-[#EEF2F6] px-4 py-4">
+        <QuickStat label="Docs" value={stats.documents} />
+        <QuickStat label="Assets" value={stats.assets} />
+        <QuickStat label="Leaves" value={stats.leaves} />
+        <QuickStat label="Logs" value={stats.logs} />
+      </div>
+      <dl className="space-y-0 px-4 py-2">
+        <InfoRow label="Email" value={email} />
+        <InfoRow label="Phone" value={phone} />
+        <InfoRow label="Joined" value={joined} />
+        <InfoRow label="Role" value={role} />
+      </dl>
+    </article>
   );
 }
 
@@ -613,7 +727,25 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
         isEmpty={data.leave_balance.length === 0}
         emptyText="No leave balance records."
       >
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="hidden flex-wrap items-start justify-center gap-6 pb-2 lg:flex">
+          {data.leave_balance.map((row, index) => {
+            const total = asNumber(row.total_leaves);
+            const remaining = asNumber(row.remaining_leaves);
+            const label =
+              asText(row.leave_type_name, "") !== "—"
+                ? asText(row.leave_type_name)
+                : formatMonthYear(row.month, row.year);
+            return (
+              <CircularLeaveRing
+                key={String(row.id ?? index)}
+                label={label}
+                remaining={remaining}
+                total={total}
+              />
+            );
+          })}
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:hidden">
           {data.leave_balance.map((row, index) => (
             <LeaveBalanceCard key={String(row.id ?? index)} row={row} index={index} />
           ))}
@@ -654,40 +786,42 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
     </div>
   ) : null;
 
-  const moreSection = data ? (
-    <div className="space-y-4">
-      <SectionCard
-        title="Documents"
-        icon={<FileText className="h-4 w-4" />}
-        isEmpty={data.documents.length === 0}
-        emptyText="No documents uploaded."
-      >
-        <ul className="space-y-2">
-          {data.documents.map((doc, index) => (
-            <ListItemCard key={String(doc.id ?? index)}>
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate text-[15px] font-semibold text-[#1F2937]">
-                    {asText(doc.document_name ?? doc.document_type, "Document")}
-                  </p>
-                  <p className="text-[12px] text-[#6B7280]">{formatDate(doc.created_at)}</p>
-                </div>
-                {doc.doc_url ? (
-                  <Link
-                    href={asText(doc.doc_url)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="shrink-0 rounded-lg bg-[#008CD3] px-3 py-1.5 text-[12px] font-semibold text-white shadow-sm transition hover:bg-[#0070AA]"
-                  >
-                    View
-                  </Link>
-                ) : null}
+  const documentsSection = data ? (
+    <SectionCard
+      title="Documents"
+      icon={<FileText className="h-4 w-4" />}
+      isEmpty={data.documents.length === 0}
+      emptyText="No documents uploaded."
+    >
+      <ul className="space-y-2">
+        {data.documents.map((doc, index) => (
+          <ListItemCard key={String(doc.id ?? index)}>
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-[15px] font-semibold text-[#1F2937]">
+                  {asText(doc.document_name ?? doc.document_type, "Document")}
+                </p>
+                <p className="text-[12px] text-[#6B7280]">{formatDate(doc.created_at)}</p>
               </div>
-            </ListItemCard>
-          ))}
-        </ul>
-      </SectionCard>
+              {doc.doc_url ? (
+                <Link
+                  href={asText(doc.doc_url)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="shrink-0 rounded-lg bg-[#008CD3] px-3 py-1.5 text-[12px] font-semibold text-white shadow-sm transition hover:bg-[#0070AA]"
+                >
+                  View
+                </Link>
+              ) : null}
+            </div>
+          </ListItemCard>
+        ))}
+      </ul>
+    </SectionCard>
+  ) : null;
 
+  const moreSectionRest = data ? (
+    <div className="space-y-4">
       <SectionCard
         title="Attendance Logs"
         icon={<Clock className="h-4 w-4" />}
@@ -778,6 +912,45 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
           ))}
         </ul>
       </SectionCard>
+    </div>
+  ) : null;
+
+  const moreSection = data ? (
+    <div className="space-y-4">
+      {documentsSection}
+      {moreSectionRest}
+    </div>
+  ) : null;
+
+  const profileImageUrl =
+    info?.user_image != null && String(info.user_image).trim() !== ""
+      ? String(info.user_image).trim()
+      : null;
+
+  const desktopDashboard = data ? (
+    <div className="grid grid-cols-12 gap-5">
+      <div className="col-span-12 space-y-5 xl:col-span-4">
+        <DesktopProfileCard
+          name={employeeName}
+          role={formatLabel(info?.role_name)}
+          email={asText(info?.user_email)}
+          phone={asText(info?.user_phone)}
+          joined={formatDate(info?.created_at)}
+          imageUrl={profileImageUrl}
+          stats={stats}
+        />
+        {overviewSection}
+      </div>
+
+      <div className="col-span-12 space-y-5 xl:col-span-4">
+        {workSection}
+        {leavesSection}
+      </div>
+
+      <div className="col-span-12 space-y-5 xl:col-span-4">
+        {documentsSection}
+        {moreSectionRest}
+      </div>
     </div>
   ) : null;
 
@@ -984,56 +1157,6 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
           </div>
         ) : null}
 
-        <header className="overflow-hidden rounded-2xl border border-[#E4E7EC] bg-white shadow-[0_8px_30px_rgba(15,23,42,0.06)]">
-          <div className="bg-gradient-to-r from-[#008CD3] to-[#0070AA] px-6 py-5 text-white">
-            <div className="flex flex-wrap items-start gap-5">
-              <span
-                className={`flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl text-2xl font-bold shadow-lg ${userColorClass(employeeName)}`}
-              >
-                {userInitials(employeeName)}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/80">
-                  Employee Profile
-                </p>
-                <h1 className="mt-1 text-3xl font-bold tracking-tight">{employeeName}</h1>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-sm">
-                    <Shield className="h-4 w-4" />
-                    {formatLabel(info?.role_name)}
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-sm">
-                    <CalendarDays className="h-4 w-4" />
-                    Joined {formatDate(info?.created_at)}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="grid gap-4 border-t border-[#EEF2F6] px-6 py-5 sm:grid-cols-3">
-            <div className="flex items-center gap-3 rounded-xl bg-[#F8FBFF] px-4 py-3">
-              <Mail className="h-5 w-5 text-[#008CD3]" />
-              <div className="min-w-0">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">Email</p>
-                <p className="truncate text-sm font-semibold text-[#1F2937]">{asText(info?.user_email)}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 rounded-xl bg-[#F8FBFF] px-4 py-3">
-              <Phone className="h-5 w-5 text-[#008CD3]" />
-              <div className="min-w-0">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">Phone</p>
-                <p className="truncate text-sm font-semibold text-[#1F2937]">{asText(info?.user_phone)}</p>
-              </div>
-            </div>
-            <div className="grid grid-cols-4 gap-2 sm:col-span-1">
-              <QuickStat label="Docs" value={stats.documents} />
-              <QuickStat label="Assets" value={stats.assets} />
-              <QuickStat label="Leaves" value={stats.leaves} />
-              <QuickStat label="Logs" value={stats.logs} />
-            </div>
-          </div>
-        </header>
-
         {loading ? (
           <div className="rounded-2xl border border-[#E4E7EC] bg-white p-10 text-center text-sm text-[#6B7280]">
             <Loader2 className="mx-auto mb-3 h-8 w-8 animate-spin text-[#008CD3]" />
@@ -1045,14 +1168,7 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
           <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
         ) : null}
 
-        {!loading && !error && data ? (
-          <div className="grid gap-6 xl:grid-cols-2">
-            {overviewSection}
-            {workSection}
-            {leavesSection}
-            {moreSection}
-          </div>
-        ) : null}
+        {!loading && !error ? desktopDashboard : null}
       </section>
 
       <TerminateEmployeeModal

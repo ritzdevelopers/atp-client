@@ -6,7 +6,7 @@ export type LeaveQueryRow = {
   user_name: string;
   user_email: string;
   org_id: number;
-  leave_type: "full_day" | "half_day" | "short_leave";
+  leave_type: string;
   start_date: string;
   end_date: string | null;
   reason: string | null;
@@ -18,14 +18,117 @@ export type LeaveQueryRow = {
   updated_at?: string | null;
 };
 
+export const UNPAID_LEAVE_TYPE_ID = "000";
+
+export const UNPAID_LEAVE_OPTION: AssignedLeaveBalanceRow = {
+  leave_type_id: UNPAID_LEAVE_TYPE_ID,
+  leave_type_name: "Unpaid Leave",
+};
+
+export type AssignedLeaveBalanceRow = {
+  id?: number | string;
+  user_id?: number | string;
+  org_id?: number | string;
+  leave_type_id: number | string;
+  leave_type_name?: string;
+  total_leaves?: number | string;
+  used_leaves?: number | string;
+  remaining_leaves?: number | string;
+};
+
+/** Inclusive calendar days (matches leave approval on the server). */
+export function countInclusiveLeaveDays(
+  startDate: string,
+  endDate?: string | null,
+): number {
+  if (!startDate) return 0;
+  const end = endDate?.trim() || startDate;
+  const startMs = Date.parse(`${startDate}T00:00:00`);
+  const endMs = Date.parse(`${end}T00:00:00`);
+  if (Number.isNaN(startMs) || Number.isNaN(endMs)) return 0;
+  const diff = Math.floor((endMs - startMs) / (1000 * 60 * 60 * 24)) + 1;
+  return diff > 0 ? diff : 0;
+}
+
+export function isUnpaidLeaveTypeId(leaveTypeId: string | number | null | undefined): boolean {
+  return String(leaveTypeId ?? "") === UNPAID_LEAVE_TYPE_ID;
+}
+
+export function validateLeaveApplication(input: {
+  startDate: string;
+  endDate?: string | null;
+  selectedLeaveTypeId: string;
+  assignedOptions: AssignedLeaveBalanceRow[];
+}): string | null {
+  const { startDate, endDate, selectedLeaveTypeId, assignedOptions } = input;
+
+  if (!startDate) {
+    return "Start date is required.";
+  }
+  if (!selectedLeaveTypeId) {
+    return "Select a leave type.";
+  }
+
+  const end = endDate?.trim() || startDate;
+  if (end < startDate) {
+    return "End date must be on or after start date.";
+  }
+
+  if (isUnpaidLeaveTypeId(selectedLeaveTypeId)) {
+    return null;
+  }
+
+  const row = assignedOptions.find(
+    (o) => String(o.leave_type_id) === selectedLeaveTypeId,
+  );
+  if (!row) {
+    return "Select an assigned leave type.";
+  }
+
+  const remaining = Number(row.remaining_leaves ?? 0);
+  const requestedDays = countInclusiveLeaveDays(startDate, endDate);
+  if (requestedDays > remaining) {
+    const name = row.leave_type_name?.trim() || "this leave type";
+    return `You cannot apply for more than your remaining ${name} balance (${remaining} day${remaining === 1 ? "" : "s"}). Select Unpaid Leave for extra days.`;
+  }
+
+  return null;
+}
+
 export type ApplyLeavePayload = {
   org_id: number;
-  leave_type: "full_day" | "half_day" | "short_leave";
+  leave_type_id: number | string;
   start_date: string;
   end_date?: string | null;
   reason?: string | null;
   team_id?: number | string | null;
 };
+
+export async function fetchMyAssignedLeaveBalances(
+  token: string,
+  orgId: number | string,
+): Promise<AssignedLeaveBalanceRow[]> {
+  const q = encodeURIComponent(String(orgId));
+  const res = await fetch(
+    `${API_URL}/api/employees/my-assigned-leave-balances?org_id=${q}`,
+    {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+  const json = await parseJson(res);
+  if (!res.ok) {
+    throw new Error(
+      (json.message as string) || "Could not load assigned leave types",
+    );
+  }
+  const data = json.data;
+  if (!Array.isArray(data)) return [];
+  return data as AssignedLeaveBalanceRow[];
+}
 
 async function parseJson(res: Response): Promise<Record<string, unknown>> {
   try {
@@ -66,7 +169,7 @@ export async function applyForLeave(
 ): Promise<{ message?: string; id?: number }> {
   const body: Record<string, unknown> = {
     org_id: payload.org_id,
-    leave_type: payload.leave_type,
+    leave_type_id: payload.leave_type_id,
     start_date: payload.start_date,
     end_date: payload.end_date ?? null,
     reason: payload.reason ?? null,

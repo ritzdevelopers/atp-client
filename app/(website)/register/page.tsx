@@ -56,7 +56,7 @@ function RegisterPageContent() {
 
     try {
       const result = await registerUser(formData);
-      if (result.status !== 201) {
+      if (result.status !== 200) {
         setErrorMessage("Something went wrong");
         return;
       }

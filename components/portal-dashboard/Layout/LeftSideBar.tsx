@@ -17,6 +17,7 @@ import {
   MdVpnKey,
   MdWifi,
 } from "react-icons/md";
+import { MdOutlineManageAccounts } from "react-icons/md";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
@@ -218,7 +219,15 @@ function LeftSideBar({
         path: `${base}/home`,
         requiredFeature: "get-organization-info",
       },
-
+      {
+          id: "manage-organization-information",
+          name: "Manage Organization Information",
+          value: "manage-organization-information",
+          icon: <MdOutlineManageAccounts />,
+          children: [],
+          path: `${base}/organization-settings/manage-organization-information`,
+          requiredFeature: "manage-organization-information",
+      },
       {
         id: "employee-management",
         name: "Employee Management",
@@ -252,7 +261,7 @@ function LeftSideBar({
             path: `${base}/organization-employees/manage-teams`,
           },
         ],
-        requiredFeature: "employee-management",
+        requiredFeature: "employee-management", 
       },
       // employees-roles-management (either feature slug may grant access)
       {
@@ -274,7 +283,7 @@ function LeftSideBar({
         ],
         path: `${base}/organization-roles/create-new-role`,
         requiredFeatureAny: [
-          "employees-roles-management",
+          "employees-roles-management", 
           "organization-roles",
         ],
       },
@@ -285,7 +294,7 @@ function LeftSideBar({
         value: "employees-features-management",
         icon: <MdVpnKey />,
         path: `${base}/organization-features/manage-organization-features`,
-        requiredFeature: "employees-features-management",
+        requiredFeature: "employees-features-management", 
         children: [
           {
             id: "manage-organization-features",
@@ -323,7 +332,7 @@ function LeftSideBar({
             path: `${base}/organization-settings/manage-ip-addresses`,
           },
         ],
-        requiredFeature: "company-ip-addresses-management",
+        requiredFeature: "company-ip-addresses-management", 
       },
 
       // company-shift-management
@@ -345,7 +354,7 @@ function LeftSideBar({
             path: `${base}/organization-settings/create-company-shifts`,
           },
         ],
-        requiredFeature: "company-shift-management",
+        requiredFeature: "company-shift-management", 
       },
 
       // company-holiday-management
@@ -362,7 +371,7 @@ function LeftSideBar({
             path: `${base}/organization-settings/organization-holidays`,
           },    
         ],
-        requiredFeature: "company-holiday-management",
+        requiredFeature: "company-holiday-management", 
       },
 
       // company-attendance-management
@@ -379,7 +388,40 @@ function LeftSideBar({
             path: `${base}/attendance-management/manage-attendance`,
           },
         ],
-        requiredFeature: "company-attendance-management",
+        requiredFeature: "company-attendance-management", 
+      },
+
+      // company-leave-management
+      {
+        id: "company-leave-management",
+        name: "Company Leave Management",
+        value: "company-leave-management",
+        icon: <MdEvent />,
+        path: `${base}/organization-leave/manage-leave-types`,
+        children: [
+        {
+          id: "manage-leave-types",
+          name: "Manage Leave Types",
+          path: `${base}/organization-leave/manage-leave-types`,
+        },
+      ],
+      requiredFeature: "company-leave-management",
+      },
+
+      {
+        id: "payroll-management",
+        name: "Payroll Management",
+        value: "payroll-management",
+        icon: <MdEvent />,
+        path: `${base}/organization-payroll-management/manage-employee-salary`,
+        children: [
+        {
+          id: "manage-salary",
+          name: "Manage Salary",
+          path: `${base}/organization-payroll-management/manage-employee-salary`,
+        },
+      ],
+      requiredFeature: "payroll-management",
       },
     ],
     [base],

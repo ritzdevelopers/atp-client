@@ -24,10 +24,15 @@ import {
   localYmdFromAttendanceValue,
   parseAttendanceNaiveLocal,
 } from "@/lib/attendanceDates";
+import {
+  mapEmployeeLeaveBalanceRows,
+  summarizeLeaveBalances,
+  type EmployeeLeaveBalanceRow,
+  type LeaveBalanceDisplayRow,
+  type LeaveSummary,
+} from "@/lib/leaveBalanceDisplay";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
-const HOME_CACHE_TTL_MS = 5 * 60 * 1000;
-const HOME_CACHE_VERSION = "v3";
 const DEFAULT_PROFILE_IMAGE = "https://i.pravatar.cc/120?img=12";
 const MAX_PROFILE_IMAGE_BYTES = 5 * 1024 * 1024;
 
@@ -91,13 +96,9 @@ type EmployeeDashboardResponse = {
   };
   /** Legacy shape */
   employees?: EmployeeDashboardResponse["employee"];
+  leave_summary?: LeaveSummary;
+  employee_leave_balances?: EmployeeLeaveBalanceRow[];
   attendance_history?: AttendanceHistoryRow[];
-};
-
-type HomeCachePayload = {
-  savedAt: number;
-  data: EmployeeDashboardResponse;
-  addresses: UserAddressRow[];
 };
 
 function formatElapsedDuration(ms: number): string {
@@ -152,59 +153,183 @@ function joinAddressParts(parts: Array<string | null | undefined>): string {
     .join(", ");
 }
 
-function parseJwtUserId(token: string | null): string {
-  if (!token) return "anonymous";
-  try {
-    const payload = JSON.parse(atob(token.split(".")[1] || "")) as {
-      user_id?: string | number;
-      id?: string | number;
-    };
-    return String(payload.user_id ?? payload.id ?? "anonymous");
-  } catch {
-    return "anonymous";
-  }
+function leaveBalanceRowKey(row: LeaveBalanceDisplayRow, index: number): string {
+  return `${row.leave_type_id}-${index}`;
 }
 
-function getHomeCacheKey(orgId: number, token: string | null): string {
-  return `user-dashboard-home:${HOME_CACHE_VERSION}:${orgId}:${parseJwtUserId(token)}`;
+function LeaveSummaryStrip({
+  summary,
+  variant,
+}: {
+  summary: LeaveSummary;
+  variant: "mobile" | "desktop";
+}) {
+  const isMobile = variant === "mobile";
+  return (
+    <div
+      className={
+        isMobile
+          ? "mt-4 grid grid-cols-3 gap-2 text-center"
+          : "mt-4 grid grid-cols-3 gap-3 text-center"
+      }
+    >
+      <div className={isMobile ? "" : "rounded-lg bg-slate-50 px-2 py-3"}>
+        <p
+          className={
+            isMobile
+              ? "text-2xl font-semibold text-[#1F2937]"
+              : "text-2xl font-semibold text-slate-800"
+          }
+        >
+          {summary.total_leaves}
+        </p>
+        <p
+          className={
+            isMobile
+              ? "text-[11px] font-semibold uppercase text-[#9CA3AF]"
+              : "text-[11px] text-slate-400"
+          }
+        >
+          Total leaves
+        </p>
+      </div>
+      <div className={isMobile ? "" : "rounded-lg bg-slate-50 px-2 py-3"}>
+        <p
+          className={
+            isMobile
+              ? "text-2xl font-semibold text-[#E8710A]"
+              : "text-2xl font-semibold text-amber-700"
+          }
+        >
+          {summary.used_leaves}
+        </p>
+        <p
+          className={
+            isMobile
+              ? "text-[11px] font-semibold uppercase text-[#9CA3AF]"
+              : "text-[11px] text-slate-400"
+          }
+        >
+          Used leaves
+        </p>
+      </div>
+      <div className={isMobile ? "" : "rounded-lg bg-slate-50 px-2 py-3"}>
+        <p
+          className={
+            isMobile
+              ? "text-2xl font-semibold text-[#0F9D58]"
+              : "text-2xl font-semibold text-emerald-700"
+          }
+        >
+          {summary.remaining_leaves}
+        </p>
+        <p
+          className={
+            isMobile
+              ? "text-[11px] font-semibold uppercase text-[#9CA3AF]"
+              : "text-[11px] text-slate-400"
+          }
+        >
+          Remaining leaves
+        </p>
+      </div>
+    </div>
+  );
 }
 
-function readHomeCache(cacheKey: string): HomeCachePayload | null {
-  try {
-    const raw = sessionStorage.getItem(cacheKey);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as HomeCachePayload;
-    if (!parsed?.savedAt || Date.now() - parsed.savedAt > HOME_CACHE_TTL_MS) {
-      sessionStorage.removeItem(cacheKey);
-      return null;
-    }
-    return parsed;
-  } catch {
-    return null;
-  }
-}
+function LeaveBalancesPanel({
+  summary,
+  rows,
+  variant,
+}: {
+  summary: LeaveSummary;
+  rows: LeaveBalanceDisplayRow[];
+  variant: "mobile" | "desktop";
+}) {
+  const isMobile = variant === "mobile";
 
-function writeHomeCache(
-  cacheKey: string,
-  data: EmployeeDashboardResponse,
-  addresses: UserAddressRow[],
-) {
-  try {
-    sessionStorage.setItem(
-      cacheKey,
-      JSON.stringify({ savedAt: Date.now(), data, addresses }),
-    );
-  } catch {
-    // Ignore storage quota/private mode.
-  }
-}
+  return (
+    <>
+      <LeaveSummaryStrip summary={summary} variant={variant} />
 
-function clearHomeCache(orgId: number, token: string | null) {
-  try {
-    sessionStorage.removeItem(getHomeCacheKey(orgId, token));
-  } catch {
-    // Ignore storage quota/private mode.
-  }
+      {rows.length === 0 ? (
+        <p
+          className={
+            isMobile
+              ? "mt-4 text-[13px] text-[#9CA3AF]"
+              : "mt-4 text-xs text-slate-500"
+          }
+        >
+          No leave types assigned yet.
+        </p>
+      ) : isMobile ? (
+        <div className="mt-4 space-y-2">
+          <p className="text-[12px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
+            By leave type
+          </p>
+          {rows.map((row, index) => (
+            <div
+              key={leaveBalanceRowKey(row, index)}
+              className="rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] px-3 py-2.5"
+            >
+              <p className="text-[14px] font-semibold text-[#1F2937]">
+                {row.leave_type_name}
+              </p>
+              <div className="mt-2 flex justify-between text-[13px]">
+                <span className="text-[#6B7280]">
+                  Total:{" "}
+                  <span className="font-semibold text-[#1F2937]">
+                    {row.total_leaves}
+                  </span>
+                </span>
+                <span className="text-[#6B7280]">
+                  Remaining:{" "}
+                  <span className="font-semibold text-[#0F9D58]">
+                    {row.remaining_leaves}
+                  </span>
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200">
+          <p className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            By leave type
+          </p>
+          <table className="w-full min-w-[320px] text-left text-xs">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
+                <th className="px-3 py-2.5 font-semibold">Leave type</th>
+                <th className="px-3 py-2.5 text-center font-semibold">Total</th>
+                <th className="px-3 py-2.5 text-center font-semibold">
+                  Remaining
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, index) => (
+                <tr
+                  key={leaveBalanceRowKey(row, index)}
+                  className="border-b border-slate-100 last:border-0"
+                >
+                  <td className="px-3 py-2.5 font-medium text-slate-800">
+                    {row.leave_type_name}
+                  </td>
+                  <td className="px-3 py-2.5 text-center font-semibold text-slate-800">
+                    {row.total_leaves}
+                  </td>
+                  <td className="px-3 py-2.5 text-center font-semibold text-emerald-700">
+                    {row.remaining_leaves}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  );
 }
 
 function upsertTodayHistory(
@@ -400,7 +525,6 @@ function Home() {
   const [profileImageSuccess, setProfileImageSuccess] = useState<string | null>(
     null,
   );
-
   const loadDashboardData = useCallback(
     async (forceRefresh = false) => {
       await Promise.resolve();
@@ -414,20 +538,6 @@ function Home() {
         setError("Not signed in.");
         setLoading(false);
         return;
-      }
-
-      const cacheKey = getHomeCacheKey(orgId, token);
-      if (!forceRefresh) {
-        const cached = readHomeCache(cacheKey);
-        if (cached) {
-          setData(cached.data);
-          setAddresses(cached.addresses);
-          setError(null);
-          setAddressesError(null);
-          setLoading(false);
-          setAddressesLoading(false);
-          return;
-        }
       }
 
       if (forceRefresh) {
@@ -498,8 +608,6 @@ function Home() {
           setAddresses([]);
           setAddressesError(null);
         }
-
-        writeHomeCache(cacheKey, result, nextAddresses);
       } catch (e) {
         setError(
           e instanceof Error
@@ -656,18 +764,6 @@ function Home() {
           return newUrl;
         });
 
-        if (!Number.isNaN(orgId)) {
-          const cacheKey = getHomeCacheKey(orgId, token);
-          const cached = readHomeCache(cacheKey);
-          if (cached?.data) {
-            writeHomeCache(
-              cacheKey,
-              patchEmployeeUserImage(cached.data, newUrl) ?? cached.data,
-              cached.addresses,
-            );
-          }
-        }
-
         setProfileImageSuccess(
           result.message || "Profile photo updated successfully.",
         );
@@ -701,12 +797,37 @@ function Home() {
     ? String(emp.mark_attendance_late_after).slice(0, 5)
     : "—";
 
-  const fmtLeave = (v: number | string | null | undefined) =>
-    v == null ? "—" : String(v);
+  const employeeLeaveBalances = useMemo(
+    () => data?.employee_leave_balances ?? [],
+    [data?.employee_leave_balances],
+  );
 
-  const totalLeaves = fmtLeave(emp?.total_leaves);
-  const usedLeaves = fmtLeave(emp?.used_leaves);
-  const leftLeaves = fmtLeave(emp?.remaining_leaves);
+  const leaveSummary = useMemo((): LeaveSummary => {
+    const hasEmployeeTotals =
+      emp?.total_leaves != null ||
+      emp?.used_leaves != null ||
+      emp?.remaining_leaves != null;
+    if (hasEmployeeTotals) {
+      return {
+        total_leaves: Number(emp?.total_leaves ?? 0),
+        used_leaves: Number(emp?.used_leaves ?? 0),
+        remaining_leaves: Number(emp?.remaining_leaves ?? 0),
+      };
+    }
+    if (data?.leave_summary) return data.leave_summary;
+    return summarizeLeaveBalances(employeeLeaveBalances);
+  }, [
+    emp?.total_leaves,
+    emp?.used_leaves,
+    emp?.remaining_leaves,
+    data?.leave_summary,
+    employeeLeaveBalances,
+  ]);
+
+  const leaveBalanceRows = useMemo(
+    () => mapEmployeeLeaveBalanceRows(employeeLeaveBalances),
+    [employeeLeaveBalances],
+  );
 
   const addressCards = useMemo(
     () =>
@@ -778,7 +899,6 @@ function Home() {
       };
       if (!res.ok) throw new Error(result.message || "Could not mark check-in");
       const checkInDateTime = `${user_date} ${user_time}:00`;
-      clearHomeCache(orgId, token);
       setData((prev) =>
         upsertTodayHistory(prev, todayYmd, {
           id: result.attendance_id,
@@ -836,7 +956,6 @@ function Home() {
       if (result.finalStatus != null)
         patch.attendance_status = result.finalStatus;
       if (workingDisplay !== undefined) patch.working_time = workingDisplay;
-      clearHomeCache(orgId, token);
       setData((prev) => upsertTodayHistory(prev, todayYmd, patch));
     } catch (e) {
       setAttendanceActionError(
@@ -1190,20 +1309,11 @@ function Home() {
                 <CalendarCheck className="h-4 w-4 text-[#008CD3]" />
                 <p className="text-[15px] font-semibold text-[#1F2937]">Leave balance</p>
               </div>
-              <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-                <div>
-                  <p className="text-2xl font-semibold text-[#1F2937]">{totalLeaves}</p>
-                  <p className="text-[11px] font-semibold uppercase text-[#9CA3AF]">Total</p>
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold text-[#E8710A]">{usedLeaves}</p>
-                  <p className="text-[11px] font-semibold uppercase text-[#9CA3AF]">Used</p>
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold text-[#0F9D58]">{leftLeaves}</p>
-                  <p className="text-[11px] font-semibold uppercase text-[#9CA3AF]">Left</p>
-                </div>
-              </div>
+              <LeaveBalancesPanel
+                summary={leaveSummary}
+                rows={leaveBalanceRows}
+                variant="mobile"
+              />
             </div>
 
             <ul className="divide-y divide-[#E4E7EC] rounded-xl border border-[#E4E7EC] bg-white shadow-sm">
@@ -1668,26 +1778,11 @@ function Home() {
             <h3 className="text-sm font-semibold text-slate-700">
               Leave Balance
             </h3>
-            <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-              <div>
-                <p className="text-2xl font-semibold text-slate-800">
-                  {totalLeaves}
-                </p>
-                <p className="text-[11px] text-slate-400">TOTAL</p>
-              </div>
-              <div>
-                <p className="text-2xl font-semibold text-slate-800">
-                  {usedLeaves}
-                </p>
-                <p className="text-[11px] text-slate-400">USED</p>
-              </div>
-              <div>
-                <p className="text-2xl font-semibold text-slate-800">
-                  {leftLeaves}
-                </p>
-                <p className="text-[11px] text-slate-400">LEFT</p>
-              </div>
-            </div>
+            <LeaveBalancesPanel
+              summary={leaveSummary}
+              rows={leaveBalanceRows}
+              variant="desktop"
+            />
             <div className="mt-4 space-y-2 text-xs text-slate-600">
               <div className="flex items-center justify-between rounded-md bg-slate-50 p-2">
                 <span>Current Shift</span>

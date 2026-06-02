@@ -6,7 +6,6 @@ import {
   CalendarDays,
   CheckCircle2,
   ClipboardList,
-  Clock,
   Filter,
   RefreshCw,
   Search,
@@ -146,7 +145,7 @@ function ManageEmployeeLeavesPage() {
   const params = useParams();
   const orgId = String(params?.org_id ?? "");
 
-  const [mainTab, setMainTab] = useState<"leaves" | "attendance">("leaves");
+  const [mainTab, setMainTab] = useState<"leaves" | "attendance">("attendance");
 
   const [filters, setFilters] = useState<Filters>({ ...EMPTY_FILTERS });
   const [appliedFilters, setAppliedFilters] = useState<Filters>({
@@ -318,7 +317,10 @@ function ManageEmployeeLeavesPage() {
     else void loadAttendance(appliedAttFilters, true);
   };
 
-  const updateStatus = async (leaveId: number, status: LeaveStatus) => {
+  const updateStatus = async (
+    leaveId: number,
+    status: Exclude<LeaveStatus, "pending">,
+  ) => {
     const token = localStorage.getItem("token");
     if (!token) {
       setNotice({ type: "err", text: "Not signed in." });
@@ -327,13 +329,13 @@ function ManageEmployeeLeavesPage() {
     setNotice(null);
     setUpdatingId(leaveId);
     try {
-      const res = await fetch(`${API_URL}/api/user/update-leave-status`, {
+      const res = await fetch(`${API_URL}/api/user/update-leave-query-status`, {
         method: "PATCH",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ leave_id: leaveId, status }),
+        body: JSON.stringify({ query_id: leaveId, query_status: status }),
       });
       const data = (await res.json()) as { message?: string };
       if (!res.ok) {
@@ -476,21 +478,6 @@ function ManageEmployeeLeavesPage() {
           <button
             type="button"
             onClick={() => {
-              setMainTab("leaves");
-              setMobileFiltersOpen(false);
-            }}
-            className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold transition active:scale-[0.98] sm:text-sm ${
-              mainTab === "leaves"
-                ? "bg-white text-indigo-700 shadow-sm"
-                : "text-slate-600"
-            }`}
-          >
-            <CalendarDays className="h-4 w-4 shrink-0" aria-hidden />
-            Leaves
-          </button>
-          <button
-            type="button"
-            onClick={() => {
               setMainTab("attendance");
               setMobileFiltersOpen(false);
             }}
@@ -501,7 +488,22 @@ function ManageEmployeeLeavesPage() {
             }`}
           >
             <ClipboardList className="h-4 w-4 shrink-0" aria-hidden />
-            Attendance
+            Attendance queries
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMainTab("leaves");
+              setMobileFiltersOpen(false);
+            }}
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold transition active:scale-[0.98] sm:text-sm ${
+              mainTab === "leaves"
+                ? "bg-white text-indigo-700 shadow-sm"
+                : "text-slate-600"
+            }`}
+          >
+            <CalendarDays className="h-4 w-4 shrink-0" aria-hidden />
+            Leave queries
           </button>
         </div>
 
@@ -559,21 +561,6 @@ function ManageEmployeeLeavesPage() {
             <button
               type="button"
               onClick={() => {
-              setMainTab("leaves");
-              setMobileFiltersOpen(false);
-            }}
-              className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
-                mainTab === "leaves"
-                  ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/25"
-                  : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-              }`}
-            >
-              <CalendarDays className="h-4 w-4" aria-hidden />
-              Manage leaves
-            </button>
-            <button
-              type="button"
-              onClick={() => {
               setMainTab("attendance");
               setMobileFiltersOpen(false);
             }}
@@ -585,6 +572,21 @@ function ManageEmployeeLeavesPage() {
             >
               <ClipboardList className="h-4 w-4" aria-hidden />
               Attendance queries
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+              setMainTab("leaves");
+              setMobileFiltersOpen(false);
+            }}
+              className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
+                mainTab === "leaves"
+                  ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/25"
+                  : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              <CalendarDays className="h-4 w-4" aria-hidden />
+              Leave queries
             </button>
           </div>
 
@@ -793,7 +795,6 @@ function ManageEmployeeLeavesPage() {
                   disabled={updatingId === row.id}
                   onApprove={() => void updateStatus(row.id, "approved")}
                   onReject={() => void updateStatus(row.id, "rejected")}
-                  onPending={() => void updateStatus(row.id, "pending")}
                 />
               ))
             )}
@@ -863,7 +864,6 @@ function ManageEmployeeLeavesPage() {
                           disabled={updatingId === row.id}
                           onApprove={() => void updateStatus(row.id, "approved")}
                           onReject={() => void updateStatus(row.id, "rejected")}
-                          onPending={() => void updateStatus(row.id, "pending")}
                         />
                       </td>
                     </tr>
@@ -1321,13 +1321,11 @@ function LeaveRowCard({
   disabled,
   onApprove,
   onReject,
-  onPending,
 }: {
   row: LeaveRow;
   disabled: boolean;
   onApprove: () => void;
   onReject: () => void;
-  onPending: () => void;
 }) {
   return (
     <article className="rounded-2xl bg-white p-4 shadow-md ring-1 ring-slate-200/70 transition active:scale-[0.995]">
@@ -1368,7 +1366,6 @@ function LeaveRowCard({
           disabled={disabled}
           onApprove={onApprove}
           onReject={onReject}
-          onPending={onPending}
         />
       </div>
     </article>
@@ -1468,14 +1465,12 @@ function LeaveActions({
   disabled,
   onApprove,
   onReject,
-  onPending,
   layout = "inline",
 }: {
   current: LeaveStatus;
   disabled: boolean;
   onApprove: () => void;
   onReject: () => void;
-  onPending: () => void;
   layout?: "inline" | "stacked";
 }) {
   const isPending = current === "pending";
@@ -1511,16 +1506,6 @@ function LeaveActions({
       >
         <XCircle className={stacked ? "h-4 w-4" : "h-3.5 w-3.5"} aria-hidden />
         Reject
-      </button>
-      <button
-        type="button"
-        disabled={disabled || isPending}
-        onClick={onPending}
-        title="Set back to pending"
-        className={`${btnBase} border border-slate-200 bg-white text-slate-700 hover:bg-slate-50`}
-      >
-        <Clock className={stacked ? "h-4 w-4" : "h-3.5 w-3.5"} aria-hidden />
-        Pending
       </button>
     </div>
   );
