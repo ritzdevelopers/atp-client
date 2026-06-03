@@ -71,6 +71,109 @@ function userInitials(name: string) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
+const mobileLabelCls =
+  "text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]";
+function ProfilePhotoZoomModal({
+  open,
+  imageUrl,
+  alt,
+  onClose,
+}: {
+  open: boolean;
+  imageUrl: string;
+  alt: string;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[10050] flex items-center justify-center bg-[#111B21]/80 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="employee-profile-zoom-title"
+    >
+      <button
+        type="button"
+        className="absolute inset-0"
+        onClick={onClose}
+        aria-label="Close profile photo"
+      />
+      <div className="relative z-[1] w-full max-w-sm">
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute -right-1 -top-1 z-[2] flex h-9 w-9 items-center justify-center rounded-full border border-[#E4E7EC] bg-white text-[#1F2937] shadow-lg active:scale-95"
+          aria-label="Close"
+        >
+          <X className="h-5 w-5" aria-hidden />
+        </button>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={imageUrl}
+          alt={alt}
+          className="max-h-[min(78vh,560px)] w-full rounded-xl bg-white object-contain shadow-2xl ring-1 ring-[#E4E7EC]"
+        />
+        <p
+          id="employee-profile-zoom-title"
+          className="mt-2.5 text-center text-[13px] font-medium text-white"
+        >
+          {alt}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function ProfileAvatarButton({
+  name,
+  imageUrl,
+  size = "md",
+  onZoom,
+  className = "",
+}: {
+  name: string;
+  imageUrl: string | null;
+  size?: "md" | "lg";
+  onZoom: (url: string, alt: string) => void;
+  className?: string;
+}) {
+  const box = size === "lg" ? "h-14 w-14" : "h-11 w-11";
+  const textSize = size === "lg" ? "text-base" : "text-sm";
+
+  if (imageUrl) {
+    return (
+      <button
+        type="button"
+        onClick={() => onZoom(imageUrl, name)}
+        className={`${box} shrink-0 overflow-hidden rounded-md ring-2 ring-white/40 transition active:opacity-90 ${className}`}
+        aria-label={`View ${name} profile photo`}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={imageUrl} alt="" className="h-full w-full object-cover object-top" />
+      </button>
+    );
+  }
+
+  return (
+    <span
+      className={`flex ${box} shrink-0 items-center justify-center rounded-md font-bold shadow-md ${textSize} ${userColorClass(name)} ${className}`}
+      aria-hidden
+    >
+      {userInitials(name)}
+    </span>
+  );
+}
+
 function asText(value: unknown, fallback = "—"): string {
   if (value == null || value === "") return fallback;
   return String(value);
@@ -146,9 +249,13 @@ function maskAccountNumber(value: unknown): string {
 
 function InfoRow({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="flex flex-col gap-1 border-b border-[#EEF2F6] py-3.5 last:border-b-0 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-      <dt className="text-[13px] font-medium text-[#6B7280]">{label}</dt>
-      <dd className="text-[14px] font-semibold text-[#1F2937] sm:max-w-[62%] sm:text-right">{value}</dd>
+    <div className="flex flex-col gap-0.5 border-b border-[#EEF2F6] py-2 last:border-b-0 max-lg:gap-0 max-lg:py-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4 sm:py-3.5">
+      <dt className={`${mobileLabelCls} sm:text-[13px] sm:font-medium sm:normal-case sm:tracking-normal sm:text-[#6B7280]`}>
+        {label}
+      </dt>
+      <dd className="text-[13px] font-semibold text-[#1F2937] max-lg:text-left sm:max-w-[62%] sm:text-right sm:text-[14px]">
+        {value}
+      </dd>
     </div>
   );
 }
@@ -167,14 +274,16 @@ function SectionCard({
   isEmpty?: boolean;
 }) {
   return (
-    <section className="overflow-hidden rounded-2xl border border-[#E4E7EC] bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06)]">
-      <div className="flex items-center gap-3 border-b border-[#EEF2F6] bg-gradient-to-r from-[#F8FBFF] to-white px-4 py-3.5 sm:px-5">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#E8F4FB] text-[#008CD3]">
+    <section className="overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-sm max-lg:shadow-[0_1px_2px_rgba(15,23,42,0.05)] sm:rounded-2xl sm:shadow-[0_1px_3px_rgba(15,23,42,0.06)]">
+      <div className="flex items-center gap-2 border-b border-[#EEF2F6] bg-[#F9FAFB] px-3 py-2.5 sm:gap-3 sm:bg-gradient-to-r sm:from-[#F8FBFF] sm:to-white sm:px-4 sm:py-3.5 lg:px-5">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#E8F4FB] text-[#008CD3] sm:h-9 sm:w-9 sm:rounded-xl">
           {icon}
         </span>
-        <h2 className="text-[15px] font-semibold tracking-tight text-[#1F2937] sm:text-base">{title}</h2>
+        <h2 className="text-[13px] font-semibold tracking-tight text-[#1F2937] sm:text-[15px] lg:text-base">
+          {title}
+        </h2>
       </div>
-      <div className="px-4 py-4 sm:px-5">
+      <div className="px-3 py-3 sm:px-4 sm:py-4 lg:px-5">
         {isEmpty ? (
           <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
             <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#F5F7FA] text-[#9CA3AF]">
@@ -210,9 +319,9 @@ function StatusPill({ value }: { value: unknown }) {
 
 function QuickStat({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-xl border border-[#E4E7EC] bg-white px-3 py-2.5 text-center shadow-sm">
-      <p className="text-lg font-bold text-[#008CD3]">{value}</p>
-      <p className="mt-0.5 text-[11px] font-medium uppercase tracking-wide text-[#6B7280]">{label}</p>
+    <div className="rounded-md border border-[#E4E7EC] bg-white px-2 py-2 text-center shadow-sm sm:rounded-xl sm:px-3 sm:py-2.5">
+      <p className="text-base font-bold tabular-nums text-[#008CD3] sm:text-lg">{value}</p>
+      <p className={`mt-0.5 ${mobileLabelCls}`}>{label}</p>
     </div>
   );
 }
@@ -280,6 +389,7 @@ function DesktopProfileCard({
   joined,
   imageUrl,
   stats,
+  onImageZoom,
 }: {
   name: string;
   role: string;
@@ -288,6 +398,7 @@ function DesktopProfileCard({
   joined: string;
   imageUrl: string | null;
   stats: { documents: number; assets: number; leaves: number; logs: number };
+  onImageZoom: (url: string, alt: string) => void;
 }) {
   return (
     <article className="overflow-hidden rounded-2xl border border-[#E4E7EC] bg-white shadow-[0_4px_24px_rgba(15,23,42,0.06)]">
@@ -296,19 +407,13 @@ function DesktopProfileCard({
           Employee profile
         </p>
         <div className="mt-4 flex items-center gap-4">
-          {imageUrl ? (
-            <img
-              src={imageUrl}
-              alt={name}
-              className="h-16 w-16 shrink-0 rounded-2xl border-2 border-white/40 object-cover shadow-md"
-            />
-          ) : (
-            <span
-              className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border-2 border-white/30 text-lg font-bold shadow-md ${userColorClass(name)}`}
-            >
-              {userInitials(name)}
-            </span>
-          )}
+          <ProfileAvatarButton
+            name={name}
+            imageUrl={imageUrl}
+            size="lg"
+            onZoom={onImageZoom}
+            className="!h-16 !w-16 !rounded-2xl"
+          />
           <div className="min-w-0">
             <p className="text-sm text-white/85">Hello,</p>
             <h2 className="truncate text-xl font-bold tracking-tight">{name}</h2>
@@ -341,10 +446,10 @@ function LeaveBalanceCard({ row, index }: { row: Record<string, unknown>; index:
   return (
     <div
       key={String(row.id ?? index)}
-      className="rounded-xl border border-[#E4E7EC] bg-gradient-to-br from-white to-[#F8FBFF] p-4 shadow-sm"
+      className="rounded-lg border border-[#E4E7EC] bg-gradient-to-br from-white to-[#F8FBFF] p-3 shadow-sm sm:rounded-xl sm:p-4"
     >
       <div className="flex items-center justify-between gap-2">
-        <p className="text-[13px] font-semibold text-[#1F2937]">
+        <p className="text-[12px] font-semibold text-[#1F2937] sm:text-[13px]">
           {formatMonthYear(row.month, row.year)}
         </p>
         <span className="rounded-full bg-[#E8F4FB] px-2 py-0.5 text-[11px] font-semibold text-[#008CD3]">
@@ -377,7 +482,7 @@ function LeaveBalanceCard({ row, index }: { row: Record<string, unknown>; index:
 
 function ListItemCard({ children }: { children: ReactNode }) {
   return (
-    <li className="rounded-xl border border-[#EEF2F6] bg-[#FAFBFC] px-3 py-3 transition hover:border-[#D6EAF8] hover:bg-white">
+    <li className="rounded-md border border-[#EEF2F6] bg-[#FAFBFC] px-2.5 py-2.5 transition max-lg:hover:border-[#E4E7EC] sm:rounded-xl sm:px-3 sm:py-3 sm:hover:border-[#D6EAF8] sm:hover:bg-white">
       {children}
     </li>
   );
@@ -407,6 +512,14 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
   const [completeError, setCompleteError] = useState<string | null>(null);
   const [exitActionSuccess, setExitActionSuccess] = useState<string | null>(null);
   const [mobileTab, setMobileTab] = useState<MobileTab>("overview");
+  const [photoZoom, setPhotoZoom] = useState<{
+    imageUrl: string;
+    alt: string;
+  } | null>(null);
+
+  const openPhotoZoom = useCallback((imageUrl: string, alt: string) => {
+    setPhotoZoom({ imageUrl, alt });
+  }, []);
 
   const loadEmployee = useCallback(
     async (isRefresh = false) => {
@@ -580,7 +693,7 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
   );
 
   const overviewSection = data ? (
-    <div className="space-y-4">
+    <div className="space-y-2 lg:space-y-4">
       <SectionCard title="Contact Information" icon={<User className="h-4 w-4" />}>
         <dl>
           <InfoRow label="Full name" value={asText(info?.user_name)} />
@@ -614,7 +727,7 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
       </SectionCard>
 
       <SectionCard title="Address" icon={<MapPin className="h-4 w-4" />} isEmpty={buildAddress(info || {}) === "—"}>
-        <p className="rounded-xl bg-[#F8FBFF] px-4 py-3 text-[14px] leading-relaxed text-[#1F2937]">
+        <p className="rounded-lg bg-[#F8FBFF] px-3 py-2.5 text-[13px] leading-relaxed text-[#1F2937] sm:rounded-xl sm:px-4 sm:py-3 sm:text-[14px]">
           {buildAddress(info || {})}
         </p>
       </SectionCard>
@@ -634,7 +747,7 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
   ) : null;
 
   const workSection = data ? (
-    <div className="space-y-4">
+    <div className="space-y-2 lg:space-y-4">
       <SectionCard title="Shift Details" icon={<Clock className="h-4 w-4" />} isEmpty={!info?.shift_name}>
         <dl>
           <InfoRow label="Shift" value={asText(info?.shift_name)} />
@@ -680,7 +793,7 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
             <ListItemCard key={String(asset.id ?? index)}>
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <p className="text-[15px] font-semibold text-[#1F2937]">
+                  <p className="text-[13px] font-semibold text-[#1F2937] sm:text-[15px]">
                     {asText(asset.asset_name, "Asset")}
                   </p>
                   <p className="mt-1 text-[13px] text-[#6B7280]">
@@ -720,7 +833,7 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
   ) : null;
 
   const leavesSection = data ? (
-    <div className="space-y-4">
+    <div className="space-y-2 lg:space-y-4">
       <SectionCard
         title="Leave Balance"
         icon={<Briefcase className="h-4 w-4" />}
@@ -763,7 +876,7 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
             <ListItemCard key={String(row.id ?? index)}>
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <p className="text-[15px] font-semibold text-[#1F2937]">
+                  <p className="text-[13px] font-semibold text-[#1F2937] sm:text-[15px]">
                     {formatLabel(row.leave_type)} leave
                   </p>
                   <p className="mt-1 flex items-center gap-1 text-[13px] text-[#6B7280]">
@@ -798,7 +911,7 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
           <ListItemCard key={String(doc.id ?? index)}>
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="truncate text-[15px] font-semibold text-[#1F2937]">
+                <p className="truncate text-[13px] font-semibold text-[#1F2937] sm:text-[15px]">
                   {asText(doc.document_name ?? doc.document_type, "Document")}
                 </p>
                 <p className="text-[12px] text-[#6B7280]">{formatDate(doc.created_at)}</p>
@@ -821,7 +934,7 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
   ) : null;
 
   const moreSectionRest = data ? (
-    <div className="space-y-4">
+    <div className="space-y-2 lg:space-y-4">
       <SectionCard
         title="Attendance Logs"
         icon={<Clock className="h-4 w-4" />}
@@ -856,7 +969,7 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
             <ListItemCard key={String(row.id ?? index)}>
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <p className="text-[15px] font-semibold text-[#1F2937]">
+                  <p className="text-[13px] font-semibold text-[#1F2937] sm:text-[15px]">
                     {formatLabel(row.category)}
                   </p>
                   <p className="mt-1 text-[13px] text-[#6B7280]">{formatDate(row.attendance_date)}</p>
@@ -882,7 +995,7 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
         <ul className="space-y-2">
           {data.feature_overrides.map((row, index) => (
             <ListItemCard key={String(row.id ?? index)}>
-              <p className="text-[15px] font-semibold text-[#1F2937]">
+              <p className="text-[13px] font-semibold text-[#1F2937] sm:text-[15px]">
                 {asText(row.feature_name ?? row.feature_val, "Feature")}
               </p>
               <p className="mt-1 text-[13px] text-[#6B7280]">
@@ -902,7 +1015,7 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
         <ul className="space-y-2">
           {data.references.map((row, index) => (
             <ListItemCard key={String(row.id ?? index)}>
-              <p className="text-[15px] font-semibold text-[#1F2937]">
+              <p className="text-[13px] font-semibold text-[#1F2937] sm:text-[15px]">
                 {asText(row.referred_by_name, "Referrer")}
               </p>
               <p className="mt-1 text-[13px] text-[#6B7280]">
@@ -916,7 +1029,7 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
   ) : null;
 
   const moreSection = data ? (
-    <div className="space-y-4">
+    <div className="space-y-2 lg:space-y-4">
       {documentsSection}
       {moreSectionRest}
     </div>
@@ -938,6 +1051,7 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
           joined={formatDate(info?.created_at)}
           imageUrl={profileImageUrl}
           stats={stats}
+          onImageZoom={openPhotoZoom}
         />
         {overviewSection}
       </div>
@@ -971,23 +1085,25 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
       {/* Mobile / tablet */}
       <div className="lg:hidden">
         <div className="sticky top-0 z-20 border-b border-[#E4E7EC] bg-white/95 shadow-sm backdrop-blur">
-          <div className="bg-gradient-to-r from-[#008CD3] to-[#0070AA] px-4 pb-4 pt-3 text-white">
+          <div className="bg-gradient-to-r from-[#008CD3] via-[#007EBF] to-[#0070AA] px-3 pb-3 pt-2.5 text-white">
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => router.back()}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/15 text-white active:bg-white/25"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/15 text-white active:bg-white/25"
                 aria-label="Go back"
               >
-                <ChevronLeft className="h-5 w-5" />
+                <ChevronLeft className="h-[18px] w-[18px]" />
               </button>
               <div className="min-w-0 flex-1">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/80">
-                  Employee Profile
+                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-white/75">
+                  Employee profile
                 </p>
-                <h1 className="truncate text-[18px] font-bold">{employeeName}</h1>
+                <h1 className="truncate text-[16px] font-bold leading-tight tracking-tight">
+                  {employeeName}
+                </h1>
               </div>
-              <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+              <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
                 {showTerminate ? (
                   <button
                     type="button"
@@ -995,35 +1111,37 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
                       setTerminateOpen(true);
                       setTerminateSuccess(null);
                     }}
-                    className="inline-flex h-10 items-center gap-1 rounded-lg bg-white/15 px-2.5 text-[12px] font-semibold text-white active:bg-white/25 sm:px-3 sm:text-[13px]"
+                    className="inline-flex h-9 items-center gap-1 rounded-lg bg-white/15 px-2 text-[11px] font-semibold text-white active:bg-white/25"
                   >
-                    <UserX className="h-4 w-4 shrink-0" aria-hidden />
-                    Terminate
+                    <UserX className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    End
                   </button>
                 ) : null}
                 <button
                   type="button"
                   onClick={() => void loadEmployee(true)}
                   disabled={loading || refreshing}
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/15 text-white active:bg-white/25 disabled:opacity-50"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/15 text-white active:bg-white/25 disabled:opacity-50"
                   aria-label="Refresh"
                 >
-                  <RefreshCw className={`h-5 w-5 ${refreshing ? "animate-spin" : ""}`} />
+                  <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
                 </button>
               </div>
             </div>
 
             {!loading && data ? (
-              <div className="mt-4 flex items-end gap-3">
-                <span
-                  className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-base font-bold shadow-md ${userColorClass(employeeName)}`}
-                >
-                  {userInitials(employeeName)}
-                </span>
-                <div className="min-w-0 pb-1">
-                  <p className="truncate text-[13px] text-white/90">{asText(info?.user_email)}</p>
-                  <p className="mt-0.5 truncate text-[13px] text-white/80">{asText(info?.user_phone)}</p>
-                  <span className="mt-2 inline-flex rounded-full bg-white/20 px-2.5 py-0.5 text-[11px] font-semibold">
+              <div className="mt-3 flex items-center gap-2.5">
+                <ProfileAvatarButton
+                  name={employeeName}
+                  imageUrl={profileImageUrl}
+                  size="lg"
+                  onZoom={openPhotoZoom}
+                  className="!h-12 !w-12 !rounded-lg ring-2 ring-white/35"
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[12px] text-white/90">{asText(info?.user_email)}</p>
+                  <p className="mt-0.5 truncate text-[12px] text-white/75">{asText(info?.user_phone)}</p>
+                  <span className="mt-1.5 inline-flex max-w-full truncate rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-semibold">
                     {formatLabel(info?.role_name)}
                   </span>
                 </div>
@@ -1032,7 +1150,7 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
           </div>
 
           {!loading && data ? (
-            <div className="grid grid-cols-4 gap-2 border-b border-[#E4E7EC] bg-white px-3 py-3">
+            <div className="grid grid-cols-4 gap-1.5 border-b border-[#E4E7EC] bg-white px-3 py-2.5">
               <QuickStat label="Docs" value={stats.documents} />
               <QuickStat label="Assets" value={stats.assets} />
               <QuickStat label="Leaves" value={stats.leaves} />
@@ -1040,14 +1158,14 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
             </div>
           ) : null}
 
-          <div className="bg-white px-3 pb-3 pt-2">
-            <div className="flex rounded-xl bg-[#F5F7FA] p-1">
+          <div className="bg-white px-3 pb-2.5 pt-2">
+            <div className="flex rounded-lg bg-[#F5F7FA] p-0.5">
               {mobileTabs.map((tab) => (
                 <button
                   key={tab.id}
                   type="button"
                   onClick={() => setMobileTab(tab.id)}
-                  className={`flex flex-1 items-center justify-center rounded-lg py-2.5 text-[12px] font-semibold transition sm:text-[13px] ${
+                  className={`flex flex-1 items-center justify-center rounded-md py-2 text-[11px] font-semibold transition ${
                     mobileTab === tab.id
                       ? "bg-white text-[#008CD3] shadow-sm ring-1 ring-[#E4E7EC]"
                       : "text-[#6B7280]"
@@ -1067,8 +1185,8 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
         ) : null}
 
         {terminateSuccess || exitActionSuccess ? (
-          <div className="mx-4 mt-3 flex items-start gap-2 rounded-xl border border-[#C8E6C9] bg-[#E6F4EA] px-4 py-3 text-[14px] text-[#0F9D58]">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div className="mx-3 mt-2 flex items-start gap-2 rounded-lg border border-[#C8E6C9] bg-[#E6F4EA] px-3 py-2.5 text-[12px] leading-snug text-[#0F9D58]">
+            <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             <span className="flex-1">{terminateSuccess ?? exitActionSuccess}</span>
             <button
               type="button"
@@ -1076,28 +1194,28 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
                 setTerminateSuccess(null);
                 setExitActionSuccess(null);
               }}
-              className="shrink-0 rounded p-1"
+              className="shrink-0 rounded p-0.5"
               aria-label="Dismiss"
             >
-              <X className="h-4 w-4" />
+              <X className="h-3.5 w-3.5" />
             </button>
           </div>
         ) : null}
 
         {error ? (
-          <div className="mx-4 mt-3 flex items-start gap-2 rounded-xl border border-[#F5C6C2] bg-[#FCE8E6] px-4 py-3 text-[14px] text-[#D93025]">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div className="mx-3 mt-2 flex items-start gap-2 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2.5 text-[12px] leading-snug text-[#D93025]">
+            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             <span>{error}</span>
           </div>
         ) : null}
 
         {loading ? (
-          <div className="flex flex-col items-center justify-center gap-3 py-24 text-[#6B7280]">
-            <Loader2 className="h-9 w-9 animate-spin text-[#008CD3]" />
-            <p className="text-[15px]">Loading employee profile…</p>
+          <div className="flex flex-col items-center justify-center gap-2 py-20 text-[#6B7280]">
+            <Loader2 className="h-7 w-7 animate-spin text-[#008CD3]" />
+            <p className="text-[13px]">Loading employee profile…</p>
           </div>
         ) : (
-          <div className="space-y-4 p-4">{mobileContent}</div>
+          <div className="space-y-2 p-3">{mobileContent}</div>
         )}
       </div>
 
@@ -1190,6 +1308,15 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
           void loadEmployee(true);
         }}
       />
+
+      {photoZoom ? (
+        <ProfilePhotoZoomModal
+          open
+          imageUrl={photoZoom.imageUrl}
+          alt={photoZoom.alt}
+          onClose={() => setPhotoZoom(null)}
+        />
+      ) : null}
 
       {completeOpen && exitRow ? (
         <div

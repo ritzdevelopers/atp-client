@@ -787,3 +787,167 @@ export async function updateEmployeeExitProcessHandoverQuery(
 
   return json as { success: boolean; message?: string; data?: unknown };
 }
+
+export type ReturnAssetsCompletedPayload = {
+  org_id?: number | string;
+  employee_id: number | string;
+  assets_ids: Array<number | string>;
+};
+
+export async function returnAssetsCompleted(
+  token: string,
+  orgId: number | string,
+  payload: ReturnAssetsCompletedPayload,
+): Promise<{ success: boolean; message?: string; data?: unknown }> {
+  const q = new URLSearchParams({ org_id: String(orgId) });
+  const res = await fetch(
+    `${API_URL}/api/employee-exit/return-assets-completed?${q.toString()}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        org_id: orgId,
+        employee_id: payload.employee_id,
+        assets_ids: payload.assets_ids,
+      }),
+    },
+  );
+
+  let json: Record<string, unknown> = {};
+  try {
+    json = (await res.json()) as Record<string, unknown>;
+  } catch {
+    json = {};
+  }
+
+  if (!res.ok) {
+    const err = new Error(
+      (json.message as string) || "Could not confirm asset returns",
+    ) as ApiError;
+    err.status = res.status;
+    throw err;
+  }
+
+  return json as { success: boolean; message?: string; data?: unknown };
+}
+
+/** MySQL DATETIME, e.g. `YYYY-MM-DD HH:MM:SS`. */
+export function handoverDateTimeSqlNow(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mi = String(d.getMinutes()).padStart(2, "0");
+  const ss = String(d.getSeconds()).padStart(2, "0");
+  return `${y}-${m}-${day} ${hh}:${mi}:${ss}`;
+}
+
+export type AssignHandoverManagerBody = {
+  org_id: number | string;
+  employee_id: number | string;
+  manager_id: number | string;
+  asset_id: number | string;
+  handover_date: string;
+  team_id?: number | string | null;
+  remarks?: string | null;
+};
+
+export async function assignHandoverManager(
+  token: string,
+  orgId: number | string,
+  exitProcessId: number | string,
+  body: AssignHandoverManagerBody,
+): Promise<{ success: boolean; message?: string; data?: unknown }> {
+  const q = new URLSearchParams({ org_id: String(orgId) });
+  const url = `${API_URL}/api/employee-exit/assign-handover-manager/${encodeURIComponent(String(exitProcessId))}?${q.toString()}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      org_id: body.org_id,
+      employee_id: body.employee_id,
+      manager_id: body.manager_id,
+      asset_id: body.asset_id,
+      handover_date: body.handover_date,
+      team_id: body.team_id ?? null,
+      remarks: body.remarks ?? null,
+    }),
+  });
+
+  let json: Record<string, unknown> = {};
+  try {
+    json = (await res.json()) as Record<string, unknown>;
+  } catch {
+    json = {};
+  }
+
+  if (!res.ok) {
+    const err = new Error(
+      (json.message as string) || "Could not assign handover manager",
+    ) as ApiError;
+    err.status = res.status;
+    throw err;
+  }
+
+  return json as { success: boolean; message?: string; data?: unknown };
+}
+
+export type UpdateAssignedHandoverManagerBody = {
+  org_id: number | string;
+  employee_id: number | string;
+  manager_id: number | string;
+  asset_id: number | string;
+  team_id?: number | string | null;
+  remarks?: string | null;
+  handover_date?: string | null;
+};
+
+export async function updateAssignedHandoverManager(
+  token: string,
+  orgId: number | string,
+  exitProcessId: number | string,
+  body: UpdateAssignedHandoverManagerBody,
+): Promise<{ success: boolean; message?: string; data?: unknown }> {
+  const q = new URLSearchParams({ org_id: String(orgId) });
+  const url = `${API_URL}/api/employee-exit/update-assigned-handover-manager/${encodeURIComponent(String(exitProcessId))}?${q.toString()}`;
+  const res = await fetch(url, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      org_id: body.org_id,
+      employee_id: body.employee_id,
+      manager_id: body.manager_id,
+      asset_id: body.asset_id,
+      team_id: body.team_id ?? null,
+      remarks: body.remarks ?? null,
+      handover_date: body.handover_date ?? null,
+    }),
+  });
+
+  let json: Record<string, unknown> = {};
+  try {
+    json = (await res.json()) as Record<string, unknown>;
+  } catch {
+    json = {};
+  }
+
+  if (!res.ok) {
+    const err = new Error(
+      (json.message as string) || "Could not update handover manager",
+    ) as ApiError;
+    err.status = res.status;
+    throw err;
+  }
+
+  return json as { success: boolean; message?: string; data?: unknown };
+}

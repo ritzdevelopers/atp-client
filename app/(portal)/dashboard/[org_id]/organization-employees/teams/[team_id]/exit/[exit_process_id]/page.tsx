@@ -19,14 +19,23 @@ import {
   Search,
   X,
 } from "lucide-react";
-import { getManagementEmployeesPage, type ManagementEmployeeRow } from "@/services/adminUser";
 import {
+  getAllOrgUsers,
+  getManagementEmployeesPage,
+  type ManagementEmployeeRow,
+} from "@/services/adminUser";
+import {
+  assignHandoverManager,
   correctionEmployeeExitProcess,
   employeeExitCancelled,
   employeeExitCompleted,
   employeeExitMoveInProgress,
   fetchEmployeeExitProcessById,
+  handoverDateTimeSqlNow,
+  returnAssetsCompleted,
+  updateAssignedHandoverManager,
   type EmployeeExitAssetRow,
+  type EmployeeExitHandoverQueryRow,
   type EmployeeExitProcessDetail,
 } from "@/services/employeeExit";
 
@@ -129,6 +138,45 @@ function pendingReturnAssets(assets: EmployeeExitAssetRow[] | undefined): Employ
   return (assets ?? []).filter((a) => !truthyReturned(a.is_returned));
 }
 
+function normalizeHandoverQueryStatus(status: string | null | undefined): string {
+  return String(status ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_");
+}
+
+function allHandoverQueriesCompleted(
+  queries: EmployeeExitHandoverQueryRow[] | undefined,
+): boolean {
+  const list = queries ?? [];
+  if (list.length === 0) return true;
+  return list.every(
+    (q) => normalizeHandoverQueryStatus(q.handover_status) === "handover_completed",
+  );
+}
+
+function allAssetsReturnedInDb(assets: EmployeeExitAssetRow[] | undefined): boolean {
+  return pendingReturnAssets(assets).length === 0;
+}
+
+/** Outstanding assets that have a completed handover query (required by return API). */
+function assetsReadyForReturnConfirmation(
+  assets: EmployeeExitAssetRow[] | undefined,
+  queries: EmployeeExitHandoverQueryRow[] | undefined,
+): EmployeeExitAssetRow[] {
+  const pending = pendingReturnAssets(assets);
+  const completedAssetIds = new Set(
+    (queries ?? [])
+      .filter(
+        (q) =>
+          q.asset_id != null &&
+          normalizeHandoverQueryStatus(q.handover_status) === "handover_completed",
+      )
+      .map((q) => Number(q.asset_id)),
+  );
+  return pending.filter((a) => completedAssetIds.has(a.id));
+}
+
 function initialsFromName(name: string | null | undefined): string {
   const parts = String(name ?? "").split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "?";
@@ -156,24 +204,172 @@ function avatarColorClass(name: string | null | undefined) {
   return WA_AVATAR_COLORS[Math.abs(hash) % WA_AVATAR_COLORS.length];
 }
 
+function profileImageUrlFromRow(userImage: unknown): string | null {
+  const image = String(userImage ?? "").trim();
+  return image || null;
+}
+
+function dicebearAvatar(seed: string) {
+  return `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(seed)}`;
+}
+
+function resolveAvatarSrc(userImage: string | null | undefined, name: string | null | undefined) {
+  const image = profileImageUrlFromRow(userImage);
+  if (image) return image;
+  return dicebearAvatar(String(name ?? "?"));
+}
+
+const mobileLabelCls =
+  "text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]";
+const mobileCaptionCls = "text-[11px] leading-snug text-[#6B7280]";
+
+function ProfilePhotoZoomModal({
+  open,
+  imageUrl,
+  alt,
+  onClose,
+}: {
+  open: boolean;
+  imageUrl: string;
+  alt: string;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[10060] flex items-center justify-center bg-[#111B21]/80 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="exit-employee-photo-zoom-title"
+    >
+      <button
+        type="button"
+        className="absolute inset-0"
+        onClick={onClose}
+        aria-label="Close profile photo"
+      />
+      <div className="relative z-[1] w-full max-w-sm">
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute -right-1 -top-1 z-[2] flex h-9 w-9 items-center justify-center rounded-full border border-[#E4E7EC] bg-white text-[#1F2937] shadow-lg active:scale-95"
+          aria-label="Close"
+        >
+          <X className="h-5 w-5" aria-hidden />
+        </button>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={imageUrl}
+          alt={alt}
+          className="max-h-[min(78vh,560px)] w-full rounded-xl bg-white object-contain shadow-2xl ring-1 ring-[#E4E7EC]"
+        />
+        <p
+          id="exit-employee-photo-zoom-title"
+          className="mt-2.5 text-center text-[13px] font-medium text-white"
+        >
+          {alt}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function UserAvatarButton({
+  name,
+  userImage,
+  size = "md",
+  onZoom,
+}: {
+  name: string | null | undefined;
+  userImage?: string | null;
+  size?: "sm" | "md" | "lg";
+  onZoom: (url: string, alt: string) => void;
+}) {
+  const profileUrl = profileImageUrlFromRow(userImage);
+  const displayName = String(name ?? "User");
+  const box =
+    size === "lg" ? "h-14 w-14" : size === "sm" ? "h-10 w-10" : "h-11 w-11";
+  const textSize = size === "lg" ? "text-base" : size === "sm" ? "text-xs" : "text-sm";
+
+  const img = (
+    /* eslint-disable-next-line @next/next/no-img-element */
+    <img
+      src={resolveAvatarSrc(userImage, name)}
+      alt=""
+      className="h-full w-full object-cover object-top"
+      onError={(e) => {
+        e.currentTarget.src = dicebearAvatar(displayName);
+      }}
+    />
+  );
+
+  if (profileUrl) {
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onZoom(profileUrl, displayName);
+        }}
+        className={`${box} shrink-0 overflow-hidden rounded-full ring-2 ring-[#E4E7EC] transition active:opacity-90`}
+        aria-label={`View ${displayName} profile photo`}
+      >
+        {img}
+      </button>
+    );
+  }
+
+  return (
+    <span
+      className={`flex ${box} shrink-0 items-center justify-center rounded-full font-semibold ring-2 ring-[#E4E7EC] ${textSize} ${avatarColorClass(name)}`}
+      aria-hidden
+    >
+      {initialsFromName(name)}
+    </span>
+  );
+}
+
 function searchFieldCls() {
-  return "w-full rounded-lg border-0 bg-[#F0F2F5] py-2.5 pl-10 pr-4 text-[15px] text-[#111B21] outline-none transition placeholder:text-[#8696A0] focus:bg-white focus:ring-1 focus:ring-[#25D366]/40 lg:rounded-xl lg:border lg:border-slate-200 lg:px-3 lg:py-2 lg:text-sm lg:focus:ring-2 lg:focus:ring-indigo-500/25";
+  return "w-full rounded-lg border border-[#E4E7EC] bg-white py-2 pl-9 pr-3 text-[13px] text-[#1F2937] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15 lg:rounded-xl lg:py-2.5 lg:pl-10 lg:pr-4 lg:text-sm";
 }
 
 function waFieldCls() {
-  return "mt-2 w-full rounded-lg border-0 bg-[#F0F2F5] px-3 py-3 text-[15px] text-[#111B21] outline-none focus:bg-white focus:ring-1 focus:ring-[#25D366]/40 lg:rounded-xl lg:border lg:border-slate-200 lg:py-2 lg:text-sm lg:focus:ring-2 lg:focus:ring-teal-500/25";
+  return "mt-2 w-full rounded-lg border border-[#E4E7EC] bg-white px-3 py-2.5 text-[14px] text-[#1F2937] outline-none focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15 lg:rounded-xl lg:py-2 lg:text-sm";
+}
+
+function zohoPrimaryBtnCls() {
+  return "inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg bg-[#008CD3] px-4 py-2.5 text-[14px] font-semibold text-white shadow-sm transition active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 sm:w-auto lg:rounded-xl lg:bg-teal-600 lg:hover:bg-teal-700";
+}
+
+function zohoSecondaryBtnCls() {
+  return "inline-flex min-h-[44px] w-full items-center justify-center rounded-lg border border-[#E4E7EC] bg-white px-4 py-2.5 text-[14px] font-medium text-[#1F2937] transition active:scale-[0.98] disabled:opacity-50 sm:w-auto lg:rounded-xl lg:border-slate-200 lg:hover:bg-slate-50";
+}
+
+function zohoDangerBtnCls() {
+  return "inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg bg-[#D93025] px-4 py-2.5 text-[14px] font-semibold text-white shadow-sm transition active:scale-[0.98] disabled:opacity-50 sm:w-auto lg:rounded-xl lg:bg-rose-600 lg:hover:bg-rose-700";
 }
 
 function waPrimaryBtnCls() {
-  return "inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-[#25D366] px-4 py-2.5 text-[15px] font-medium text-white transition active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 lg:rounded-xl lg:bg-teal-600 lg:py-2 lg:text-sm lg:font-semibold lg:hover:bg-teal-700";
+  return zohoPrimaryBtnCls();
 }
 
 function waSecondaryBtnCls() {
-  return "inline-flex min-h-[44px] items-center justify-center rounded-lg border border-[#E9EDEF] bg-white px-4 py-2.5 text-[15px] font-medium text-[#111B21] transition active:scale-[0.98] disabled:opacity-50 lg:rounded-xl lg:border-slate-200 lg:py-2 lg:text-sm lg:font-semibold lg:text-slate-700 lg:hover:bg-slate-50";
+  return zohoSecondaryBtnCls();
 }
 
 function waDangerBtnCls() {
-  return "inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg bg-[#C62828] px-4 py-2.5 text-[15px] font-medium text-white transition active:scale-[0.98] disabled:opacity-50 lg:rounded-xl lg:bg-rose-600 lg:py-2 lg:text-sm lg:font-semibold lg:hover:bg-rose-700";
+  return zohoDangerBtnCls();
 }
 
 function waExitStatusChip(status: string | null | undefined) {
@@ -185,11 +381,27 @@ function waExitStatusChip(status: string | null | undefined) {
 }
 
 function waModalShellClass() {
-  return "fixed inset-0 z-[1100] flex items-end justify-center bg-[#111B21]/40 p-0 backdrop-blur-[1px] sm:items-center sm:bg-slate-950/60 sm:p-4 sm:backdrop-blur-sm";
+  return "fixed inset-0 z-[10050] flex items-end justify-center bg-[#111B21]/50 p-0 sm:items-center sm:p-4";
 }
 
 function waModalPanelClass() {
-  return "relative flex max-h-[92dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:max-h-[92vh] sm:rounded-2xl sm:border sm:border-slate-200";
+  return "relative flex max-h-[min(92dvh,100%)] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:max-h-[min(90vh,720px)] sm:rounded-2xl sm:border sm:border-slate-200";
+}
+
+function waModalHeaderClass(accent = "teal") {
+  const top =
+    accent === "rose"
+      ? "sm:[border-top:3px_solid_#fb7185]"
+      : accent === "indigo"
+        ? "sm:[border-top:3px_solid_#4f46e5]"
+        : accent === "emerald"
+          ? "sm:[border-top:3px_solid_#10b981]"
+          : "sm:[border-top:3px_solid_#0d9488]";
+  return `flex shrink-0 items-center justify-between gap-2 border-b border-[#E4E7EC] bg-gradient-to-r from-[#008CD3] to-[#0070AA] px-4 py-3 sm:border-slate-100 sm:bg-white sm:px-5 sm:py-4 ${top}`;
+}
+
+function waModalFooterClass() {
+  return "flex shrink-0 flex-col-reverse gap-2 border-t border-[#E4E7EC] bg-[#F9FAFB] px-4 pt-3 sm:flex-row sm:justify-end sm:gap-2 sm:border-slate-100 sm:bg-slate-50/90 sm:px-5";
 }
 
 export default function EmployeeExitDetailPage() {
@@ -257,9 +469,20 @@ function EmployeeExitDetailPageContent() {
   const [approveBusy, setApproveBusy] = useState(false);
   const [approveModalError, setApproveModalError] = useState<string | null>(null);
 
+  const [returnAssetSelection, setReturnAssetSelection] = useState<Record<number, boolean>>(
+    {},
+  );
+  const [returnAssetsBusy, setReturnAssetsBusy] = useState(false);
+  const [returnAssetsError, setReturnAssetsError] = useState<string | null>(null);
+
   const [mobileMainTab, setMobileMainTab] = useState<
     "overview" | "assets" | "tasks" | "actions"
   >("overview");
+  const [photoZoom, setPhotoZoom] = useState<{
+    imageUrl: string;
+    alt: string;
+  } | null>(null);
+  const [orgUserImageById, setOrgUserImageById] = useState<Record<number, string>>({});
 
   const teamHref = `/dashboard/${orgId}/organization-employees/teams/0?team_id=${encodeURIComponent(teamId)}`;
 
@@ -299,6 +522,32 @@ function EmployeeExitDetailPageContent() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!orgId) return;
+    let cancelled = false;
+    (async () => {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+      try {
+        const rows = await getAllOrgUsers(token);
+        const map: Record<number, string> = {};
+        for (const row of rows) {
+          const id = numericId(row.id);
+          const img = profileImageUrlFromRow(
+            (row as { user_image?: unknown }).user_image,
+          );
+          if (id != null && img) map[id] = img;
+        }
+        if (!cancelled) setOrgUserImageById(map);
+      } catch {
+        /* optional enrichment */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [orgId, data?.employee_id]);
 
   useEffect(() => {
     if (
@@ -403,43 +652,65 @@ function EmployeeExitDetailPageContent() {
   async function assignCustodian(userId: number) {
     if (assignForAssetId == null || !data) return;
     const assetId = assignForAssetId;
-
-    if (isInProgressExitStatus(data.application_status)) {
-      const token = localStorage.getItem("token");
-      if (!token) {
-        setAssignPersistError("Sign in required.");
-        return;
-      }
-      setAssignPersistError(null);
-      setAssignHandoverSaving(true);
-      try {
-        await employeeExitMoveInProgress(token, orgId, exitProcessId, {
-          application_status: "in_progress",
-          assets_handover_data: [{ asset_id: assetId, handover_to: userId }],
-        });
-        setPendingAssetHandover((prev) => {
-          const next = { ...prev };
-          delete next[assetId];
-          return next;
-        });
-        setAssignPickerOpen(false);
-        setAssignForAssetId(null);
-        setCorrectionSavedMsg("Asset handover saved.");
-        void reloadDetail();
-        setTimeout(() => setCorrectionSavedMsg(null), 6000);
-      } catch (e) {
-        setAssignPersistError(
-          e instanceof Error ? e.message : "Could not save asset handover.",
-        );
-      } finally {
-        setAssignHandoverSaving(false);
-      }
+    const asset = data.employee_assets?.find((a) => a.id === assetId);
+    if (!asset) {
+      setAssignPersistError("Asset not found.");
       return;
     }
 
-    setPendingAssetHandover((prev) => ({ ...prev, [assetId]: userId }));
-    setAssignPickerOpen(false);
-    setAssignForAssetId(null);
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setAssignPersistError("Sign in required.");
+      return;
+    }
+
+    const hasPersistedAssignee = numericId(asset.returned_to_id) != null;
+    const sharedBody = {
+      org_id: orgId,
+      employee_id: data.employee_id,
+      manager_id: userId,
+      asset_id: assetId,
+      team_id: data.team_id ?? null,
+    };
+
+    setAssignPersistError(null);
+    setAssignHandoverSaving(true);
+    try {
+      if (hasPersistedAssignee) {
+        await updateAssignedHandoverManager(token, orgId, exitProcessId, {
+          ...sharedBody,
+          handover_date: handoverDateTimeSqlNow(),
+        });
+        setCorrectionSavedMsg("Handover manager updated.");
+      } else {
+        await assignHandoverManager(token, orgId, exitProcessId, {
+          ...sharedBody,
+          handover_date: handoverDateTimeSqlNow(),
+        });
+        setCorrectionSavedMsg("Handover manager assigned.");
+      }
+
+      setPendingAssetHandover((prev) => {
+        const next = { ...prev };
+        delete next[assetId];
+        return next;
+      });
+      setEmployeeLookup((prev) => {
+        const row = assignEmployees.find((r) => numericId(r.user_id) === userId);
+        if (!row?.user_name) return prev;
+        return { ...prev, [userId]: row.user_name };
+      });
+      setAssignPickerOpen(false);
+      setAssignForAssetId(null);
+      void reloadDetail();
+      setTimeout(() => setCorrectionSavedMsg(null), 6000);
+    } catch (e) {
+      setAssignPersistError(
+        e instanceof Error ? e.message : "Could not save asset handover.",
+      );
+    } finally {
+      setAssignHandoverSaving(false);
+    }
   }
 
   function assigneeDisplayName(asset: EmployeeExitAssetRow): string | null {
@@ -521,9 +792,110 @@ function EmployeeExitDetailPageContent() {
     }
   }
 
+  const handoversComplete = data ? allHandoverQueriesCompleted(data.handover_queries) : false;
+  const showReturnCheckpoints =
+    data != null &&
+    isInProgressExitStatus(data.application_status) &&
+    handoversComplete;
+  const assetsAwaitingReturn =
+    data && showReturnCheckpoints
+      ? assetsReadyForReturnConfirmation(
+          data.employee_assets,
+          data.handover_queries,
+        )
+      : data
+        ? pendingReturnAssets(data.employee_assets)
+        : [];
+  const allAssetsReturned = data ? allAssetsReturnedInDb(data.employee_assets) : true;
+  const canApproveExit =
+    data != null &&
+    isInProgressExitStatus(data.application_status) &&
+    handoversComplete &&
+    allAssetsReturned;
+  const approveDisabled = approveBusy || !canApproveExit;
+  const approveBlockReason = !handoversComplete
+    ? "Complete all handover tasks before approving."
+    : !allAssetsReturned
+      ? "Confirm return for every outstanding asset before approving."
+      : null;
+
+  const selectedReturnCount = assetsAwaitingReturn.filter(
+    (a) => returnAssetSelection[a.id],
+  ).length;
+  const allReturnAssetsSelected =
+    assetsAwaitingReturn.length > 0 &&
+    selectedReturnCount === assetsAwaitingReturn.length;
+
+  function toggleReturnAssetSelection(assetId: number) {
+    setReturnAssetSelection((prev) => ({
+      ...prev,
+      [assetId]: !prev[assetId],
+    }));
+  }
+
+  function selectAllReturnAssets() {
+    const next: Record<number, boolean> = {};
+    for (const a of assetsAwaitingReturn) {
+      next[a.id] = true;
+    }
+    setReturnAssetSelection(next);
+  }
+
+  async function handleConfirmAssetReturns() {
+    setReturnAssetsError(null);
+    if (!data) return;
+    const pending = assetsAwaitingReturn;
+    if (pending.length === 0) return;
+
+    const selectedIds = pending
+      .filter((a) => returnAssetSelection[a.id])
+      .map((a) => a.id);
+
+    if (selectedIds.length !== pending.length) {
+      setReturnAssetsError(
+        `Select all ${pending.length} outstanding asset(s) to confirm they were returned.`,
+      );
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setReturnAssetsError("Sign in required.");
+      return;
+    }
+
+    setReturnAssetsBusy(true);
+    try {
+      await returnAssetsCompleted(token, orgId, {
+        employee_id: data.employee_id,
+        assets_ids: selectedIds,
+      });
+      setReturnAssetSelection({});
+      setCorrectionSavedMsg("Employee assets marked as returned.");
+      void reloadDetail();
+      setTimeout(() => setCorrectionSavedMsg(null), 6000);
+    } catch (e) {
+      setReturnAssetsError(
+        e instanceof Error ? e.message : "Could not confirm asset returns.",
+      );
+    } finally {
+      setReturnAssetsBusy(false);
+    }
+  }
+
   async function handleApproveSubmit() {
     setApproveModalError(null);
     if (!data) return;
+    if (!handoversComplete) {
+      setApproveModalError("Complete all handover tasks before approving.");
+      return;
+    }
+    if (!allAssetsReturned) {
+      setApproveModalError(
+        "Confirm return for every outstanding asset before approving.",
+      );
+      return;
+    }
     if (!approveMessage.trim()) {
       setApproveModalError("A completion message is required.");
       return;
@@ -560,6 +932,11 @@ function EmployeeExitDetailPageContent() {
 
   function openApproveModal() {
     setApproveModalError(null);
+    if (!canApproveExit) {
+      setCorrectionSavedMsg(approveBlockReason ?? "Cannot approve yet.");
+      setTimeout(() => setCorrectionSavedMsg(null), 6000);
+      return;
+    }
     if (!approveMessage.trim()) {
       setApproveMessage("Exit approved. Asset handovers are complete.");
     }
@@ -582,71 +959,95 @@ function EmployeeExitDetailPageContent() {
     return name.includes(q) || email.includes(q);
   });
 
+  const assignPickerAsset =
+    assignForAssetId != null && data
+      ? data.employee_assets?.find((a) => a.id === assignForAssetId)
+      : null;
+  const assignPickerIsChange =
+    assignPickerAsset != null && numericId(assignPickerAsset.returned_to_id) != null;
+
+  const openPhotoZoom = (imageUrl: string, alt: string) => {
+    setPhotoZoom({ imageUrl, alt });
+  };
+
+  const employeeProfileImage =
+    data?.employee_id != null
+      ? orgUserImageById[Number(data.employee_id)] ?? null
+      : null;
+
   return (
-    <div className="min-h-full bg-[#F0F2F5] lg:bg-[#f4f6f9] lg:pb-20">
-      {/* Mobile: WhatsApp-style header */}
-      <div className="sticky top-0 z-20 bg-[#128C7E] text-white shadow-sm lg:hidden">
-        <div className="flex items-center gap-1 px-1 py-2">
-          <Link
-            href={teamHref}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full active:bg-white/10"
-            aria-label="Back to team"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Link>
-          <div className="min-w-0 flex-1 py-1">
-            <h1 className="truncate text-[17px] font-medium leading-tight">
-              {!data && loading
-                ? "Loading…"
-                : data?.employee_name ?? `Exit #${exitProcessId}`}
-            </h1>
-            <p className="truncate text-[13px] text-white/75">
-              {data?.employee_email ?? "Exit process detail"}
-            </p>
+    <div className="min-h-full bg-[#F5F7FA] lg:bg-[#f4f6f9] lg:pb-20">
+      {/* Mobile: Zoho-style header */}
+      <div className="sticky top-0 z-20 border-b border-[#E4E7EC] bg-white/95 shadow-sm backdrop-blur lg:hidden">
+        <div className="bg-gradient-to-r from-[#008CD3] via-[#007EBF] to-[#0070AA] px-3 pb-3 pt-2.5 text-white">
+          <div className="flex items-center gap-2">
+            <Link
+              href={teamHref}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/15 active:bg-white/25"
+              aria-label="Back to team"
+            >
+              <ArrowLeft className="h-[18px] w-[18px]" />
+            </Link>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-white/75">
+                Exit process
+              </p>
+              <h1 className="truncate text-[16px] font-bold leading-tight">
+                {!data && loading
+                  ? "Loading…"
+                  : data?.employee_name ?? `Exit #${exitProcessId}`}
+              </h1>
+              <p className="truncate text-[12px] text-white/80">
+                {data?.employee_email ?? "Exit process detail"}
+                {employeeProfileImage ? " · tap photo to enlarge" : ""}
+              </p>
+            </div>
+            {data ? (
+              <span
+                className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${waExitStatusChip(data.application_status)}`}
+              >
+                {String(data.application_status).replace(/_/g, " ")}
+              </span>
+            ) : null}
           </div>
-          {data ? (
-            <span
-              className={`mr-2 shrink-0 rounded-full px-2.5 py-1 text-[10px] font-medium uppercase ${waExitStatusChip(data.application_status)}`}
-            >
-              {String(data.application_status).replace(/_/g, " ")}
-            </span>
-          ) : null}
         </div>
-        <div className="flex overflow-x-auto border-t border-white/10 [scrollbar-width:none]">
-          {(
-            [
-              { id: "overview" as const, label: "Overview" },
-              {
-                id: "assets" as const,
-                label: "Assets",
-                badge: data?.employee_assets?.length ?? 0,
-              },
-              {
-                id: "tasks" as const,
-                label: "Tasks",
-                badge: data?.handover_queries?.length ?? 0,
-              },
-              { id: "actions" as const, label: "Actions" },
-            ] as const
-          ).map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setMobileMainTab(tab.id)}
-              className={`relative shrink-0 px-4 py-3 text-[13px] font-medium transition ${
-                mobileMainTab === tab.id
-                  ? "border-b-2 border-white text-white"
-                  : "border-b-2 border-transparent text-white/70"
-              }`}
-            >
-              {tab.label}
-              {"badge" in tab && tab.badge > 0 ? (
-                <span className="ml-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-white/20 px-1 text-[11px]">
-                  {tab.badge > 9 ? "9+" : tab.badge}
-                </span>
-              ) : null}
-            </button>
-          ))}
+        <div className="bg-white px-3 pb-2.5 pt-2">
+          <div className="flex rounded-lg bg-[#F5F7FA] p-0.5">
+            {(
+              [
+                { id: "overview" as const, label: "Overview" },
+                {
+                  id: "assets" as const,
+                  label: "Assets",
+                  badge: data?.employee_assets?.length ?? 0,
+                },
+                {
+                  id: "tasks" as const,
+                  label: "Tasks",
+                  badge: data?.handover_queries?.length ?? 0,
+                },
+                { id: "actions" as const, label: "Actions" },
+              ] as const
+            ).map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setMobileMainTab(tab.id)}
+                className={`relative flex flex-1 items-center justify-center gap-1 rounded-md py-2 text-[11px] font-semibold transition ${
+                  mobileMainTab === tab.id
+                    ? "bg-white text-[#008CD3] shadow-sm ring-1 ring-[#E4E7EC]"
+                    : "text-[#6B7280]"
+                }`}
+              >
+                {tab.label}
+                {"badge" in tab && tab.badge > 0 ? (
+                  <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[#008CD3]/15 px-1 text-[9px] font-bold text-[#008CD3]">
+                    {tab.badge > 9 ? "9+" : tab.badge}
+                  </span>
+                ) : null}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -725,7 +1126,8 @@ function EmployeeExitDetailPageContent() {
                   {isInProgressExitStatus(data.application_status) ? (
                     <button
                       type="button"
-                      disabled={approveBusy}
+                      disabled={approveDisabled}
+                      title={approveBlockReason ?? undefined}
                       onClick={openApproveModal}
                       className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-300/50 bg-emerald-500/20 px-4 py-2 text-xs font-semibold tracking-wide text-emerald-100 shadow-sm transition hover:bg-emerald-500/30 disabled:opacity-50"
                     >
@@ -765,13 +1167,13 @@ function EmployeeExitDetailPageContent() {
         <div className="lg:-mt-6">
 
           {correctionSavedMsg ? (
-            <div className="mx-3 mt-3 rounded-lg bg-[#E7FCE3] px-4 py-3 text-[14px] text-[#0B5E44] lg:mx-0 lg:mb-6 lg:rounded-2xl lg:border lg:border-teal-200 lg:bg-teal-50 lg:text-sm lg:text-teal-950">
+            <div className="mx-3 mt-2 rounded-lg border border-[#C8E6C9] bg-[#E6F4EA] px-3 py-2.5 text-[12px] leading-snug text-[#0F9D58] lg:mx-0 lg:mb-6 lg:rounded-2xl lg:border lg:border-teal-200 lg:bg-teal-50 lg:text-sm lg:text-teal-950">
               {correctionSavedMsg}
             </div>
           ) : null}
 
           {teamMismatch ? (
-            <div className="mx-3 mt-3 rounded-lg bg-[#FFF8E1] px-4 py-3 text-[14px] text-[#8D6E00] lg:mx-0 lg:mb-6 lg:rounded-2xl lg:border lg:border-amber-200 lg:bg-amber-50 lg:text-sm lg:text-amber-950">
+            <div className="mx-3 mt-2 rounded-lg border border-[#F9D4A5] bg-[#FFF8E1] px-3 py-2.5 text-[12px] leading-snug text-[#8D6E00] lg:mx-0 lg:mb-6 lg:rounded-2xl lg:border lg:border-amber-200 lg:bg-amber-50 lg:text-sm lg:text-amber-950">
               This record is linked to a different team in the organization than the URL
               you opened. You still have full details below.
             </div>
@@ -800,28 +1202,29 @@ function EmployeeExitDetailPageContent() {
               {/* Mobile tab panels */}
               <div className="lg:hidden">
                 {mobileMainTab === "overview" ? (
-                  <div className="bg-white">
-                    <div className="flex items-center gap-4 border-b border-[#E9EDEF] px-4 py-4">
-                      <span
-                        className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-lg font-medium ${avatarColorClass(data.employee_name)}`}
-                      >
-                        {initialsFromName(data.employee_name)}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-[18px] font-medium text-[#111B21]">
-                          {data.employee_name ?? "—"}
-                        </p>
-                        <p className="truncate text-[14px] text-[#667781]">
-                          {data.employee_email ?? "—"}
-                        </p>
-                        <span
-                          className={`mt-2 inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-medium uppercase ${waExitStatusChip(data.application_status)}`}
-                        >
-                          {String(data.application_status).replace(/_/g, " ")}
-                        </span>
+                  <div className="space-y-2 p-3">
+                    <section className="overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-sm">
+                      <div className="flex items-center gap-3 border-b border-[#EEF2F6] px-3 py-3">
+                        <UserAvatarButton
+                          name={data.employee_name}
+                          userImage={employeeProfileImage}
+                          size="lg"
+                          onZoom={openPhotoZoom}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[14px] font-semibold text-[#1F2937]">
+                            {data.employee_name ?? "—"}
+                          </p>
+                          <p className="truncate text-[12px] text-[#6B7280]">
+                            {data.employee_email ?? "—"}
+                          </p>
+                          <span
+                            className={`mt-1.5 inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${waExitStatusChip(data.application_status)}`}
+                          >
+                            {String(data.application_status).replace(/_/g, " ")}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                    <div className="divide-y divide-[#E9EDEF]">
                       {[
                         { label: "Action type", value: data.action_type ?? "—", cap: true },
                         { label: "Team", value: data.team_name ?? `Team #${data.team_id ?? "—"}` },
@@ -833,45 +1236,101 @@ function EmployeeExitDetailPageContent() {
                       ].map((row) => (
                         <div
                           key={row.label}
-                          className="flex items-center justify-between gap-4 px-4 py-3.5"
+                          className="flex flex-col gap-0.5 border-b border-[#EEF2F6] px-3 py-2.5 last:border-b-0"
                         >
-                          <span className="text-[15px] text-[#111B21]">{row.label}</span>
+                          <span className={mobileLabelCls}>{row.label}</span>
                           <span
-                            className={`max-w-[55%] truncate text-right text-[15px] text-[#667781] ${"cap" in row && row.cap ? "capitalize" : ""}`}
+                            className={`text-[13px] font-semibold text-[#1F2937] ${"cap" in row && row.cap ? "capitalize" : ""}`}
                           >
                             {row.value}
                           </span>
                         </div>
                       ))}
-                    </div>
-                    <div className="border-t border-[#E9EDEF] px-4 py-4">
-                      <p className="text-[13px] font-medium uppercase text-[#667781]">
-                        Reason & response
-                      </p>
-                      <p className="mt-2 whitespace-pre-wrap text-[15px] leading-relaxed text-[#111B21]">
-                        {data.action_reason?.trim() || "—"}
-                      </p>
-                      {data.response_message?.trim() ? (
-                        <p className="mt-3 whitespace-pre-wrap text-[14px] text-[#667781]">
-                          {data.response_message}
+                    </section>
+                    <section className="overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-sm">
+                      <div className="border-b border-[#EEF2F6] bg-[#F9FAFB] px-3 py-2">
+                        <p className={mobileLabelCls}>Reason & response</p>
+                      </div>
+                      <div className="px-3 py-3">
+                        <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-[#1F2937]">
+                          {data.action_reason?.trim() || "—"}
                         </p>
-                      ) : null}
-                    </div>
+                        {data.response_message?.trim() ? (
+                          <p className={`mt-2 whitespace-pre-wrap ${mobileCaptionCls}`}>
+                            {data.response_message}
+                          </p>
+                        ) : null}
+                      </div>
+                    </section>
                   </div>
                 ) : null}
 
                 {mobileMainTab === "assets" ? (
-                  <ul className="divide-y divide-[#E9EDEF] bg-white">
+                  <div className="m-3 space-y-2">
+                    {isInProgressExitStatus(data.application_status) &&
+                    !handoversComplete ? (
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-[12px] text-amber-950">
+                        Complete all handover tasks before you can confirm asset returns
+                        and approve this exit.
+                      </div>
+                    ) : null}
+                    {showReturnCheckpoints && assetsAwaitingReturn.length > 0 ? (
+                      <div className="rounded-lg border border-teal-200 bg-teal-50 px-3 py-3">
+                        <p className="text-[12px] font-semibold text-teal-950">
+                          Confirm physical return
+                        </p>
+                        <p className="mt-1 text-[11px] leading-snug text-teal-900/90">
+                          Handover tasks are complete. Select every asset card you received
+                          back, then confirm in the database.
+                        </p>
+                        <div className="mt-2.5 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            disabled={returnAssetsBusy || allReturnAssetsSelected}
+                            onClick={selectAllReturnAssets}
+                            className="rounded-lg border border-teal-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-teal-900"
+                          >
+                            Select all
+                          </button>
+                          <button
+                            type="button"
+                            disabled={returnAssetsBusy || !allReturnAssetsSelected}
+                            onClick={() => void handleConfirmAssetReturns()}
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-50"
+                          >
+                            {returnAssetsBusy ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                            )}
+                            Confirm returns
+                          </button>
+                        </div>
+                        {returnAssetsError ? (
+                          <p className="mt-2 text-[11px] text-rose-700">{returnAssetsError}</p>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    {showReturnCheckpoints && allAssetsReturned ? (
+                      <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-900">
+                        All assets are marked returned. You can approve the application.
+                      </div>
+                    ) : null}
+                  <ul className="overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-sm">
                     {data.employee_assets?.length === 0 ? (
-                      <li className="px-4 py-12 text-center text-[15px] text-[#667781]">
+                      <li className="px-4 py-10 text-center text-[13px] text-[#6B7280]">
                         No assets on file.
                       </li>
                     ) : (
                       data.employee_assets?.map((a) => {
                         const assetReturned = truthyReturned(a.is_returned);
+                        const showReturnCheckpoint =
+                          showReturnCheckpoints && !assetReturned;
+                        const isSelectedForReturn = !!returnAssetSelection[a.id];
                         const showCustodyButton =
                           exitAllowsAssetCustodyActions(data.application_status) &&
-                          !assetReturned;
+                          !assetReturned &&
+                          !showReturnCheckpoints;
                         const returnedToIdNumeric = numericId(a.returned_to_id);
                         const pickedLocallyWhilePending =
                           activePendingHandover[a.id] !== undefined &&
@@ -886,25 +1345,47 @@ function EmployeeExitDetailPageContent() {
                               : null;
 
                         return (
-                          <li key={a.id} className="px-4 py-3.5">
+                          <li
+                            key={a.id}
+                            className={`border-b border-[#EEF2F6] px-3 py-2.5 last:border-b-0 ${
+                              showReturnCheckpoint && isSelectedForReturn
+                                ? "bg-teal-50/80 ring-1 ring-inset ring-teal-200"
+                                : ""
+                            }`}
+                          >
                             <div className="flex items-start justify-between gap-2">
-                              <p className="font-medium text-[#111B21]">
+                              {showReturnCheckpoint ? (
+                                <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-2.5">
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelectedForReturn}
+                                    disabled={returnAssetsBusy}
+                                    onChange={() => toggleReturnAssetSelection(a.id)}
+                                    className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                                  />
+                                  <span className="text-[13px] font-semibold text-[#1F2937]">
+                                    {a.asset_name ?? `#${a.id}`}
+                                  </span>
+                                </label>
+                              ) : (
+                              <p className="text-[13px] font-semibold text-[#1F2937]">
                                 {a.asset_name ?? `#${a.id}`}
                               </p>
+                              )}
                               <span
-                                className={`rounded-full px-2 py-0.5 text-[11px] font-medium uppercase ${
+                                className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
                                   assetReturned
-                                    ? "bg-[#E7FCE3] text-[#0B5E44]"
-                                    : "bg-[#F0F2F5] text-[#54656F]"
+                                    ? "bg-[#E6F4EA] text-[#0F9D58]"
+                                    : "bg-[#F5F7FA] text-[#6B7280]"
                                 }`}
                               >
                                 {assetReturned ? "Returned" : "Outstanding"}
                               </span>
                             </div>
                             {a.asset_summary ? (
-                              <p className="mt-1 text-[13px] text-[#667781]">{a.asset_summary}</p>
+                              <p className={`mt-1 ${mobileCaptionCls}`}>{a.asset_summary}</p>
                             ) : null}
-                            <p className="mt-2 text-[13px] text-[#667781]">
+                            <p className={`mt-1.5 ${mobileCaptionCls}`}>
                               Custodian:{" "}
                               {assetReturned
                                 ? (a.returned_to_name ?? "—")
@@ -914,44 +1395,53 @@ function EmployeeExitDetailPageContent() {
                               <button
                                 type="button"
                                 onClick={() => void openEmployeePickerForAsset(a.id)}
-                                className="mt-3 w-full rounded-lg border border-[#E9EDEF] py-2.5 text-[14px] font-medium text-[#128C7E] active:scale-[0.98]"
+                                className="mt-2.5 w-full rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] py-2 text-[13px] font-semibold text-[#008CD3] active:scale-[0.98]"
                               >
                                 {hasAssignee ? "Change custodian" : "Assign custodian"}
                               </button>
+                            ) : null}
+                            {showReturnCheckpoint ? (
+                              <p className={`mt-1.5 ${mobileCaptionCls}`}>
+                                Tap to mark this asset as returned to the organization.
+                              </p>
                             ) : null}
                           </li>
                         );
                       })
                     )}
                   </ul>
+                  </div>
                 ) : null}
 
                 {mobileMainTab === "tasks" ? (
-                  <ul className="divide-y divide-[#E9EDEF] bg-white">
+                  <ul className="m-3 overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-sm">
                     {data.handover_queries?.length === 0 ? (
-                      <li className="px-4 py-12 text-center text-[15px] text-[#667781]">
+                      <li className="px-4 py-10 text-center text-[13px] text-[#6B7280]">
                         No handover tasks.
                       </li>
                     ) : (
                       data.handover_queries?.map((h) => (
-                        <li key={h.handover_query_id} className="px-4 py-3.5">
+                        <li
+                          key={h.handover_query_id}
+                          className="border-b border-[#EEF2F6] px-3 py-2.5 last:border-b-0"
+                        >
                           <div className="flex items-start justify-between gap-2">
-                            <p className="min-w-0 flex-1 font-medium text-[#111B21]">
+                            <p className="min-w-0 flex-1 text-[13px] font-semibold text-[#1F2937]">
                               {h.custom_task_name?.trim()
                                 ? h.custom_task_name
                                 : (h.asset_name ?? `Task #${h.handover_query_id}`)}
                             </p>
                             {h.handover_status ? (
-                              <span className="rounded-full bg-[#F0F2F5] px-2 py-0.5 text-[11px] font-medium uppercase text-[#54656F]">
+                              <span className="shrink-0 rounded-full bg-[#F5F7FA] px-2 py-0.5 text-[10px] font-semibold uppercase text-[#6B7280]">
                                 {String(h.handover_status).replace(/_/g, " ")}
                               </span>
                             ) : null}
                           </div>
-                          <p className="mt-1 text-[13px] text-[#667781]">
+                          <p className={`mt-1 ${mobileCaptionCls}`}>
                             {h.manager_name ?? "—"} · Due {fmtDateOnly(h.handover_date)}
                           </p>
                           {h.remarks?.trim() ? (
-                            <p className="mt-1 text-[14px] text-[#111B21]">{h.remarks}</p>
+                            <p className="mt-1 text-[12px] text-[#1F2937]">{h.remarks}</p>
                           ) : null}
                         </li>
                       ))
@@ -960,7 +1450,7 @@ function EmployeeExitDetailPageContent() {
                 ) : null}
 
                 {mobileMainTab === "actions" ? (
-                  <div className="space-y-3 bg-white p-4">
+                  <div className="space-y-2 p-3">
                     {isPendingExitStatus(data.application_status) ? (
                       <>
                         <button
@@ -990,7 +1480,8 @@ function EmployeeExitDetailPageContent() {
                     {isInProgressExitStatus(data.application_status) ? (
                       <button
                         type="button"
-                        disabled={approveBusy}
+                        disabled={approveDisabled}
+                        title={approveBlockReason ?? undefined}
                         onClick={openApproveModal}
                         className={`w-full ${waPrimaryBtnCls()}`}
                       >
@@ -998,25 +1489,30 @@ function EmployeeExitDetailPageContent() {
                         Approve application
                       </button>
                     ) : null}
+                    {isInProgressExitStatus(data.application_status) && approveBlockReason ? (
+                      <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-950">
+                        {approveBlockReason}
+                      </p>
+                    ) : null}
                     {isTerminationAction(data.action_type) ? (
                       <button
                         type="button"
                         onClick={openCorrectionModal}
-                        className={`w-full ${waSecondaryBtnCls()}`}
+                        className={`w-full ${zohoSecondaryBtnCls()}`}
                       >
-                        <PencilLine className="h-4 w-4 text-[#128C7E]" />
+                        <PencilLine className="h-4 w-4 text-[#008CD3]" />
                         Edit correction
                       </button>
                     ) : null}
                     {forwardError ? (
-                      <p className="rounded-lg bg-[#FFECEC] px-3 py-2 text-[13px] text-[#8B1A1A]">
+                      <p className="rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2 text-[12px] text-[#D93025]">
                         {forwardError}
                       </p>
                     ) : null}
                     {!isPendingExitStatus(data.application_status) &&
                     !isInProgressExitStatus(data.application_status) &&
                     !isTerminationAction(data.action_type) ? (
-                      <p className="text-center text-[14px] text-[#667781]">
+                      <p className={`rounded-lg border border-dashed border-[#E4E7EC] bg-white px-4 py-8 text-center ${mobileCaptionCls}`}>
                         No actions available for this status.
                       </p>
                     ) : null}
@@ -1123,14 +1619,71 @@ function EmployeeExitDetailPageContent() {
                   </h2>
                 </header>
                 <div className="divide-y divide-slate-100 p-4 sm:p-6">
+                  {isInProgressExitStatus(data.application_status) &&
+                  !handoversComplete ? (
+                    <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+                      Complete all handover tasks before you can confirm asset returns and
+                      approve this exit.
+                    </div>
+                  ) : null}
+                  {showReturnCheckpoints && assetsAwaitingReturn.length > 0 ? (
+                    <div className="mb-4 rounded-xl border border-teal-200 bg-teal-50 px-4 py-4">
+                      <p className="text-sm font-semibold text-teal-950">
+                        Confirm physical return
+                      </p>
+                      <p className="mt-1 text-xs leading-relaxed text-teal-900/90">
+                        All handover tasks are marked completed. Select every outstanding asset
+                        you have received back, then save to the database.
+                      </p>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          disabled={returnAssetsBusy || allReturnAssetsSelected}
+                          onClick={selectAllReturnAssets}
+                          className="rounded-xl border border-teal-300 bg-white px-3 py-2 text-xs font-semibold text-teal-900 shadow-sm hover:bg-teal-50 disabled:opacity-50"
+                        >
+                          Select all ({assetsAwaitingReturn.length})
+                        </button>
+                        <button
+                          type="button"
+                          disabled={returnAssetsBusy || !allReturnAssetsSelected}
+                          onClick={() => void handleConfirmAssetReturns()}
+                          className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-teal-700 disabled:opacity-50"
+                        >
+                          {returnAssetsBusy ? (
+                            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                          ) : (
+                            <CheckCircle2 className="h-4 w-4" aria-hidden />
+                          )}
+                          Confirm asset returns
+                        </button>
+                        <span className="text-xs text-teal-800">
+                          {selectedReturnCount} of {assetsAwaitingReturn.length} selected
+                        </span>
+                      </div>
+                      {returnAssetsError ? (
+                        <p className="mt-2 text-sm text-rose-700">{returnAssetsError}</p>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {showReturnCheckpoints && allAssetsReturned ? (
+                    <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                      All assets are marked returned. You may approve the exit application.
+                    </div>
+                  ) : null}
                   {data.employee_assets?.length === 0 ? (
                     <p className="py-6 text-center text-sm text-slate-500">No assets on file.</p>
                   ) : (
                     data.employee_assets?.map((a) => {
                       const assetReturned = truthyReturned(a.is_returned);
+                      const showReturnCheckpoint =
+                        showReturnCheckpoints && !assetReturned;
+                      const isSelectedForReturn = !!returnAssetSelection[a.id];
                       /** Not returned assets can get assign / change while exit is pending or in progress */
                       const showCustodyButton =
-                        exitAllowsAssetCustodyActions(data.application_status) && !assetReturned;
+                        exitAllowsAssetCustodyActions(data.application_status) &&
+                        !assetReturned &&
+                        !showReturnCheckpoints;
 
                       const returnedToIdNumeric = numericId(a.returned_to_id);
                       const pickedLocallyWhilePending =
@@ -1149,9 +1702,33 @@ function EmployeeExitDetailPageContent() {
                             : null;
 
                       return (
-                        <div key={a.id} className="py-4 first:pt-0 last:pb-0">
+                        <div
+                          key={a.id}
+                          className={`py-4 first:pt-0 last:pb-0 ${
+                            showReturnCheckpoint && isSelectedForReturn
+                              ? "-mx-2 rounded-xl bg-teal-50/80 px-2 ring-1 ring-teal-200"
+                              : ""
+                          }`}
+                        >
                           <div className="flex flex-wrap items-start justify-between gap-2">
-                            <p className="font-semibold text-slate-900">{a.asset_name ?? `#${a.id}`}</p>
+                            {showReturnCheckpoint ? (
+                              <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-3">
+                                <input
+                                  type="checkbox"
+                                  checked={isSelectedForReturn}
+                                  disabled={returnAssetsBusy}
+                                  onChange={() => toggleReturnAssetSelection(a.id)}
+                                  className="mt-1 h-4 w-4 shrink-0 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                                />
+                                <span className="font-semibold text-slate-900">
+                                  {a.asset_name ?? `#${a.id}`}
+                                </span>
+                              </label>
+                            ) : (
+                              <p className="font-semibold text-slate-900">
+                                {a.asset_name ?? `#${a.id}`}
+                              </p>
+                            )}
                             <span
                               className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${
                                 assetReturned
@@ -1205,6 +1782,11 @@ function EmployeeExitDetailPageContent() {
                                 )}
                               </button>
                             </div>
+                          ) : null}
+                          {showReturnCheckpoint ? (
+                            <p className="mt-2 text-xs text-teal-800">
+                              Check this card when the asset has been physically returned.
+                            </p>
                           ) : null}
                         </div>
                       );
@@ -1276,15 +1858,15 @@ function EmployeeExitDetailPageContent() {
             onClick={() => !corrBusy && setCorrectionOpen(false)}
           />
           <div className={waModalPanelClass()}>
-            <div className="flex shrink-0 items-start justify-between bg-[#128C7E] px-4 py-3.5 sm:border-b sm:border-slate-100 sm:bg-white sm:px-5 sm:py-4 sm:[border-top:3px_solid_#0d9488]">
-              <div>
+            <div className={waModalHeaderClass("teal")}>
+              <div className="min-w-0 flex-1 pr-2">
                 <h2
                   id="correction-dialog-title"
-                  className="text-[17px] font-medium text-white sm:text-lg sm:font-bold sm:text-slate-900"
+                  className="text-[15px] font-semibold text-white sm:text-lg sm:font-bold sm:text-slate-900"
                 >
                   Correct termination
                 </h2>
-                <p className="mt-1 text-[13px] text-white/75 sm:text-sm sm:text-slate-500">
+                <p className="mt-1 text-[12px] text-white/80 sm:text-sm sm:text-slate-500">
                   Adjust termination reason, dates, or response message.
                 </p>
               </div>
@@ -1292,13 +1874,13 @@ function EmployeeExitDetailPageContent() {
                 type="button"
                 disabled={corrBusy}
                 onClick={() => setCorrectionOpen(false)}
-                className="absolute right-3 top-3 rounded-full p-2 text-white/90 active:bg-white/10 sm:hidden"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/25 bg-white/10 text-white active:bg-white/20 sm:border-slate-200 sm:bg-white sm:text-slate-700"
                 aria-label="Close"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:max-h-[min(65vh,560px)] sm:px-5">
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5">
               {corrModalError ? (
                 <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900">
                   {corrModalError}
@@ -1368,12 +1950,15 @@ function EmployeeExitDetailPageContent() {
                 />
               </div>
             </div>
-            <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-[#E9EDEF] bg-white px-4 py-3 sm:border-slate-100 sm:bg-slate-50/90 sm:px-5">
+            <div
+              className={waModalFooterClass()}
+              style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}
+            >
               <button
                 type="button"
                 disabled={corrBusy}
                 onClick={() => setCorrectionOpen(false)}
-                className={waSecondaryBtnCls()}
+                className={zohoSecondaryBtnCls()}
               >
                 Cancel
               </button>
@@ -1381,7 +1966,7 @@ function EmployeeExitDetailPageContent() {
                 type="button"
                 disabled={corrBusy}
                 onClick={() => void handleCorrectionSubmit()}
-                className={waPrimaryBtnCls()}
+                className={zohoPrimaryBtnCls()}
               >
                 {corrBusy ? (
                   <>
@@ -1402,7 +1987,7 @@ function EmployeeExitDetailPageContent() {
 
       {assignPickerOpen ? (
         <div
-          className={`${waModalShellClass()} z-[1150]`}
+          className={waModalShellClass()}
           role="dialog"
           aria-modal="true"
           aria-labelledby="assign-picker-title"
@@ -1419,16 +2004,16 @@ function EmployeeExitDetailPageContent() {
             }}
           />
           <div className={waModalPanelClass()}>
-            <div className="flex shrink-0 items-start justify-between bg-[#128C7E] px-4 py-3.5 sm:border-b sm:border-slate-100 sm:bg-white sm:px-5 sm:py-4 sm:[border-top:3px_solid_#4f46e5]">
-              <div className="pr-8">
+            <div className={waModalHeaderClass("indigo")}>
+              <div className="min-w-0 flex-1 pr-2">
                 <h2
                   id="assign-picker-title"
-                  className="text-[17px] font-medium text-white sm:text-lg sm:font-bold sm:text-slate-900"
+                  className="text-[15px] font-semibold text-white sm:text-lg sm:font-bold sm:text-slate-900"
                 >
-                  Assign custody
+                  {assignPickerIsChange ? "Change handover manager" : "Assign to user"}
                 </h2>
-                <p className="mt-1 text-[13px] text-white/75 sm:text-sm sm:text-slate-500">
-                  Pick an organization member for this asset.
+                <p className="mt-1 text-[12px] text-white/80 sm:text-sm sm:text-slate-500">
+                  Pick an organization member to receive custody of this asset.
                 </p>
               </div>
               <button
@@ -1438,7 +2023,7 @@ function EmployeeExitDetailPageContent() {
                   setAssignPickerOpen(false);
                   setAssignForAssetId(null);
                 }}
-                className="absolute right-3 top-3 rounded-full p-2 text-white/90 active:bg-white/10 sm:hidden"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/25 bg-white/10 text-white active:bg-white/20 sm:border-slate-200 sm:bg-white sm:text-slate-700"
                 aria-label="Close"
               >
                 <X className="h-5 w-5" />
@@ -1456,7 +2041,7 @@ function EmployeeExitDetailPageContent() {
                 />
               </div>
             </div>
-            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-4 sm:max-h-[min(55vh,480px)] sm:px-5">
+            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5">
               {assignPersistError ? (
                 <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900">
                   {assignPersistError}
@@ -1485,16 +2070,23 @@ function EmployeeExitDetailPageContent() {
                 assignModalFilteredEmployees.map((row) => {
                   const uid = numericId(row.user_id);
                   if (uid == null) return null;
+                  const img = orgUserImageById[uid] ?? null;
                   return (
                     <div
                       key={String(row.user_id)}
-                      className="flex items-center gap-3 py-3 lg:justify-between lg:rounded-xl lg:border lg:border-slate-100 lg:bg-slate-50/60 lg:px-3"
+                      className="flex items-center gap-2.5 rounded-lg border border-[#EEF2F6] bg-[#F9FAFB] px-2.5 py-2 lg:border-slate-100 lg:bg-slate-50/60 lg:px-3 lg:py-2.5"
                     >
+                      <UserAvatarButton
+                        name={row.user_name}
+                        userImage={img}
+                        size="sm"
+                        onZoom={openPhotoZoom}
+                      />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-[16px] text-[#111B21] lg:text-sm lg:font-semibold lg:text-slate-900">
+                        <p className="truncate text-[13px] font-semibold text-[#1F2937] lg:text-sm">
                           {row.user_name ?? `User #${row.user_id}`}
                         </p>
-                        <p className="truncate text-[14px] text-[#667781] lg:text-xs lg:text-slate-600">
+                        <p className={`truncate ${mobileCaptionCls}`}>
                           {row.user_email ?? "—"}
                         </p>
                       </div>
@@ -1502,16 +2094,19 @@ function EmployeeExitDetailPageContent() {
                         type="button"
                         disabled={assignHandoverSaving}
                         onClick={() => void assignCustodian(uid)}
-                        className="shrink-0 rounded-lg bg-[#25D366] px-4 py-2 text-[13px] font-medium text-white active:scale-[0.98] disabled:opacity-50 lg:bg-indigo-600 lg:px-3 lg:py-1.5 lg:text-xs lg:font-semibold lg:hover:bg-indigo-700"
+                        className="shrink-0 rounded-lg bg-[#008CD3] px-3 py-2 text-[12px] font-semibold text-white active:scale-[0.98] disabled:opacity-50 lg:bg-indigo-600 lg:hover:bg-indigo-700"
                       >
-                        Assign
+                        {assignPickerIsChange ? "Update" : "Assign"}
                       </button>
                     </div>
                   );
                 })
               )}
             </div>
-            <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-[#E9EDEF] bg-white px-4 py-3 sm:border-slate-100 sm:bg-slate-50/90 sm:px-5">
+            <div
+              className={waModalFooterClass()}
+              style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}
+            >
               <button
                 type="button"
                 disabled={assignHandoverSaving}
@@ -1519,7 +2114,7 @@ function EmployeeExitDetailPageContent() {
                   setAssignPickerOpen(false);
                   setAssignForAssetId(null);
                 }}
-                className={waSecondaryBtnCls()}
+                className={zohoSecondaryBtnCls()}
               >
                 Close
               </button>
@@ -1530,7 +2125,7 @@ function EmployeeExitDetailPageContent() {
 
       {rejectModalOpen ? (
         <div
-          className={`${waModalShellClass()} z-[1140]`}
+          className={waModalShellClass()}
           role="dialog"
           aria-modal="true"
           aria-labelledby="reject-exit-title"
@@ -1543,12 +2138,12 @@ function EmployeeExitDetailPageContent() {
             onClick={() => !rejectBusy && setRejectModalOpen(false)}
           />
           <div className={waModalPanelClass()}>
-            <div className="flex shrink-0 items-start justify-between bg-[#128C7E] px-4 py-3.5 sm:border-b sm:border-slate-100 sm:bg-white sm:px-5 sm:py-4 sm:[border-top:3px_solid_#fb7185]">
-              <div>
-                <h2 id="reject-exit-title" className="text-[17px] font-medium text-white sm:text-lg sm:font-bold sm:text-slate-900">
+            <div className={waModalHeaderClass("rose")}>
+              <div className="min-w-0 flex-1 pr-2">
+                <h2 id="reject-exit-title" className="text-[15px] font-semibold text-white sm:text-lg sm:font-bold sm:text-slate-900">
                   Reject application
                 </h2>
-                <p className="mt-1 text-[13px] text-white/75 sm:text-sm sm:text-slate-500">
+                <p className="mt-1 text-[12px] text-white/80 sm:text-sm sm:text-slate-500">
                   Send a rejection message for this exit application.
                 </p>
               </div>
@@ -1556,13 +2151,13 @@ function EmployeeExitDetailPageContent() {
                 type="button"
                 disabled={rejectBusy}
                 onClick={() => setRejectModalOpen(false)}
-                className="absolute right-3 top-3 rounded-full p-2 text-white/90 active:bg-white/10 sm:hidden"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/25 bg-white/10 text-white active:bg-white/20 sm:border-slate-200 sm:bg-white sm:text-slate-700"
                 aria-label="Close"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="space-y-4 px-4 py-4 sm:px-5">
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5">
               {rejectModalError ? (
                 <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900">
                   {rejectModalError}
@@ -1585,12 +2180,15 @@ function EmployeeExitDetailPageContent() {
                 />
               </div>
             </div>
-            <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-[#E9EDEF] bg-white px-4 py-3 sm:border-slate-100 sm:bg-slate-50/90 sm:px-5">
+            <div
+              className={waModalFooterClass()}
+              style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}
+            >
               <button
                 type="button"
                 disabled={rejectBusy}
                 onClick={() => setRejectModalOpen(false)}
-                className={waSecondaryBtnCls()}
+                className={zohoSecondaryBtnCls()}
               >
                 Cancel
               </button>
@@ -1598,7 +2196,7 @@ function EmployeeExitDetailPageContent() {
                 type="button"
                 disabled={rejectBusy}
                 onClick={() => void handleRejectSubmit()}
-                className={waDangerBtnCls()}
+                className={zohoDangerBtnCls()}
               >
                 {rejectBusy ? (
                   <>
@@ -1619,7 +2217,7 @@ function EmployeeExitDetailPageContent() {
 
       {approveModalOpen ? (
         <div
-          className={`${waModalShellClass()} z-[1140]`}
+          className={waModalShellClass()}
           role="dialog"
           aria-modal="true"
           aria-labelledby="approve-exit-title"
@@ -1632,15 +2230,15 @@ function EmployeeExitDetailPageContent() {
             onClick={() => !approveBusy && setApproveModalOpen(false)}
           />
           <div className={waModalPanelClass()}>
-            <div className="flex shrink-0 items-start justify-between bg-[#128C7E] px-4 py-3.5 sm:border-b sm:border-slate-100 sm:bg-white sm:px-5 sm:py-4 sm:[border-top:3px_solid_#10b981]">
-              <div>
+            <div className={waModalHeaderClass("emerald")}>
+              <div className="min-w-0 flex-1 pr-2">
                 <h2
                   id="approve-exit-title"
-                  className="text-[17px] font-medium text-white sm:text-lg sm:font-bold sm:text-slate-900"
+                  className="text-[15px] font-semibold text-white sm:text-lg sm:font-bold sm:text-slate-900"
                 >
                   Approve application
                 </h2>
-                <p className="mt-1 text-[13px] text-white/75 sm:text-sm sm:text-slate-500">
+                <p className="mt-1 text-[12px] text-white/80 sm:text-sm sm:text-slate-500">
                   Complete this exit after assets and handover tasks are done.
                 </p>
               </div>
@@ -1648,13 +2246,13 @@ function EmployeeExitDetailPageContent() {
                 type="button"
                 disabled={approveBusy}
                 onClick={() => setApproveModalOpen(false)}
-                className="absolute right-3 top-3 rounded-full p-2 text-white/90 active:bg-white/10 sm:hidden"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/25 bg-white/10 text-white active:bg-white/20 sm:border-slate-200 sm:bg-white sm:text-slate-700"
                 aria-label="Close"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="space-y-4 px-4 py-4 sm:px-5">
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5">
               {approveModalError ? (
                 <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900">
                   {approveModalError}
@@ -1676,12 +2274,15 @@ function EmployeeExitDetailPageContent() {
                 />
               </div>
             </div>
-            <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-[#E9EDEF] bg-white px-4 py-3 sm:border-slate-100 sm:bg-slate-50/90 sm:px-5">
+            <div
+              className={waModalFooterClass()}
+              style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}
+            >
               <button
                 type="button"
                 disabled={approveBusy}
                 onClick={() => setApproveModalOpen(false)}
-                className={waSecondaryBtnCls()}
+                className={zohoSecondaryBtnCls()}
               >
                 Cancel
               </button>
@@ -1689,7 +2290,7 @@ function EmployeeExitDetailPageContent() {
                 type="button"
                 disabled={approveBusy}
                 onClick={() => void handleApproveSubmit()}
-                className={waPrimaryBtnCls()}
+                className={zohoPrimaryBtnCls()}
               >
                 {approveBusy ? (
                   <>
@@ -1707,6 +2308,13 @@ function EmployeeExitDetailPageContent() {
           </div>
         </div>
       ) : null}
+
+      <ProfilePhotoZoomModal
+        open={photoZoom != null}
+        imageUrl={photoZoom?.imageUrl ?? ""}
+        alt={photoZoom?.alt ?? ""}
+        onClose={() => setPhotoZoom(null)}
+      />
     </div>
   );
 }

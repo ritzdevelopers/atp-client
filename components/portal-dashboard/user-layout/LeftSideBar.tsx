@@ -9,6 +9,7 @@ import {
   MdDashboard,
   MdExitToApp,
   MdGroups,
+  MdInventory2,
   MdLogout,
   MdMenu,
 } from "react-icons/md";
@@ -38,6 +39,12 @@ const navigationItems: { id: string; label: string; icon: NavIcon; href: string 
       href: "/user-dashboard/[org_id]/my-team",
     },
     {
+      id: "asset-handover",
+      label: "Asset handover",
+      icon: MdInventory2,
+      href: "/user-dashboard/[org_id]/asset-handover",
+    },
+    {
       id: "attendance-history",
       label: "Attendance History",
       icon: LuFileSpreadsheet,
@@ -51,7 +58,8 @@ const navigationItems: { id: string; label: string; icon: NavIcon; href: string 
     },
   ];
 
-const BOTTOM_TAB_COUNT = 4;
+/** Quick-access tabs on the bottom bar; last slot is Menu (< lg). */
+const MAX_MOBILE_BOTTOM_NAV_SLOTS = 3;
 
 const MOBILE_BOTTOM_LIGHT =
   "border-t border-slate-200 bg-[#FAFAF8] text-slate-700 shadow-[0_-1px_0_0_rgba(15,23,42,0.06)]";
@@ -74,6 +82,8 @@ function bottomTabShortLabel(item: (typeof navigationItems)[number]): string {
       return "Home";
     case "my-team":
       return "Team";
+    case "asset-handover":
+      return "Handover";
     case "attendance-history":
       return "History";
     case "exit-process":
@@ -134,11 +144,7 @@ function LeftSideBar() {
   ]);
 
   const bottomNavItems = useMemo(
-    () => navigationItems.slice(0, BOTTOM_TAB_COUNT),
-    [],
-  );
-  const overflowNavItems = useMemo(
-    () => navigationItems.slice(BOTTOM_TAB_COUNT),
+    () => navigationItems.slice(0, MAX_MOBILE_BOTTOM_NAV_SLOTS),
     [],
   );
 
@@ -151,7 +157,19 @@ function LeftSideBar() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.body.style.overflow = mobileMenuOpen ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [mobileMenuOpen]);
+
   const closeMobileMenu = useCallback(() => setMobileMenuOpen(false), []);
+
+  const toggleMobileMenu = useCallback(() => {
+    setMobileMenuOpen((open) => !open);
+  }, []);
 
   const pushNav = useCallback(
     (href: string) => {
@@ -477,38 +495,25 @@ function LeftSideBar() {
         </div>
       </aside>
 
-      {/* Mobile & small tablet: hamburger */}
-      <button
-        type="button"
-        onClick={() => setMobileMenuOpen(true)}
-        className="fixed left-3 top-3 z-[60] flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-[#FAFAF8] text-slate-800 shadow-sm lg:hidden"
-        aria-label="Open menu"
-        aria-expanded={mobileMenuOpen}
-      >
-        <MdMenu className="text-[22px]" />
-      </button>
-
-      {/* Bottom tab bar: first 4 routes */}
+      {/* Bottom tab bar: quick tabs + Menu */}
       <nav
-        className={`fixed bottom-0 left-0 right-0 z-[55] lg:hidden ${MOBILE_BOTTOM_LIGHT}`}
+        className={`fixed bottom-0 left-0 right-0 z-[10040] lg:hidden ${MOBILE_BOTTOM_LIGHT}`}
         style={{
           paddingBottom: "max(10px, env(safe-area-inset-bottom))",
         }}
         aria-label="Primary navigation"
       >
-        <div className="mx-auto flex max-w-xl items-stretch justify-around">
-          {bottomNavItems.map((item, index) => {
+        <div className="mx-auto flex max-w-xl items-stretch">
+          {bottomNavItems.map((item) => {
             const Icon = item.icon;
             const href = resolveHref(item.href, orgSlug);
             const isActive = routeActive(pathname, href);
-            const borderClass =
-              index < bottomNavItems.length - 1 ? "border-r border-slate-200" : "";
             return (
               <button
                 key={item.id}
                 type="button"
                 onClick={() => pushNav(href)}
-                className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 py-2 ${borderClass} ${
+                className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 border-r border-slate-200 px-1 py-2 transition-colors duration-200 ${
                   isActive ? "text-indigo-700" : "text-slate-600"
                 }`}
               >
@@ -519,77 +524,113 @@ function LeftSideBar() {
               </button>
             );
           })}
+          <button
+            type="button"
+            onClick={toggleMobileMenu}
+            className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 py-2 transition-colors duration-200 ${
+              mobileMenuOpen
+                ? "bg-indigo-50/90 text-indigo-800"
+                : "text-slate-600"
+            }`}
+            aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+            aria-expanded={mobileMenuOpen}
+          >
+            <span
+              className={`text-[22px] leading-none transition-transform duration-300 ${
+                mobileMenuOpen ? "rotate-90 text-indigo-700" : "text-slate-700"
+              }`}
+            >
+              {mobileMenuOpen ? <MdClose /> : <MdMenu />}
+            </span>
+            <span className="line-clamp-2 w-full text-center text-[10px] font-medium leading-tight">
+              Menu
+            </span>
+          </button>
         </div>
       </nav>
 
-      {/* Drawer: overflow links + Apply leave + Sign out */}
-      {mobileMenuOpen ? (
-        <>
-          <div
-            className="fixed inset-0 z-[62] bg-slate-900/25 lg:hidden"
-            onClick={() => setMobileMenuOpen(false)}
-            aria-hidden
-          />
-          <div className="fixed left-0 top-0 z-[63] flex h-full w-[min(20rem,88vw)] flex-col border-r border-slate-200 bg-[#FAFAF8] shadow-lg lg:hidden">
-            <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
-              <span className="truncate text-sm font-semibold text-slate-900">
-                Menu
-              </span>
-              <button
-                type="button"
-                onClick={() => setMobileMenuOpen(false)}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700"
-                aria-label="Close menu"
-              >
-                <MdClose className="text-xl" />
-              </button>
-            </div>
-            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-              <div className="border-b border-slate-200 px-4 py-4">
-                <img
-                  src="/portal/layout/logo.png"
-                  alt="Company"
-                  className="h-8 w-auto max-w-[180px] object-contain object-left"
-                />
-              </div>
-              {overflowNavItems.map((item) => {
-                const Icon = item.icon;
-                const href = resolveHref(item.href, orgSlug);
-                const isActive = routeActive(pathname, href);
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => pushNav(href)}
-                    className={`flex w-full items-center gap-3 border-b border-slate-200 px-4 py-3 text-left text-sm font-medium ${
-                      isActive ? "bg-indigo-50 text-indigo-800" : "text-slate-800"
-                    }`}
-                  >
-                    <Icon className="text-xl shrink-0 text-slate-600" />
-                    <span className="min-w-0">{item.label}</span>
-                  </button>
-                );
-              })}
-              <button
-                type="button"
-                onClick={openLeaveFromMenu}
-                className="flex w-full items-center gap-3 border-b border-slate-200 px-4 py-3 text-left text-sm font-medium text-slate-800"
-              >
-                <MdCalendarMonth className="text-xl shrink-0 text-indigo-700" />
-                Apply Leave
-              </button>
-              <button
-                type="button"
-                onClick={openLogoutFromMenu}
-                className="flex w-full items-center gap-3 border-b border-slate-200 px-4 py-3 text-left text-sm font-medium text-rose-700"
-              >
-                <MdLogout className="text-xl shrink-0" />
-                Sign out
-              </button>
-            </div>
+      {/* Drawer: all routes + Apply leave + Sign out (animated) */}
+      <div className="lg:hidden" aria-hidden={!mobileMenuOpen}>
+        <div
+          className={`fixed inset-0 z-[10045] bg-slate-900/30 transition-opacity duration-300 ease-out ${
+            mobileMenuOpen
+              ? "pointer-events-auto opacity-100"
+              : "pointer-events-none opacity-0"
+          }`}
+          onClick={() => setMobileMenuOpen(false)}
+          aria-hidden={!mobileMenuOpen}
+        />
+        <div
+          className={`fixed left-0 top-0 z-[10046] flex h-full w-[min(20rem,88vw)] flex-col border-r border-slate-200 bg-[#FAFAF8] shadow-xl transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] will-change-transform ${
+            mobileMenuOpen
+              ? "pointer-events-auto translate-x-0"
+              : "pointer-events-none -translate-x-full"
+          }`}
+          role="dialog"
+          aria-modal={mobileMenuOpen}
+          aria-label="Navigation menu"
+          aria-hidden={!mobileMenuOpen}
+        >
+          <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
+            <span className="truncate text-sm font-semibold text-slate-900">
+              All features
+            </span>
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition active:scale-95"
+              aria-label="Close menu"
+            >
+              <MdClose className="text-xl" />
+            </button>
           </div>
-        </>
-      ) : null}
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
+            <div className="border-b border-slate-200 px-4 py-4">
+              <img
+                src="/portal/layout/logo.png"
+                alt="Company"
+                className="h-8 w-auto max-w-[180px] object-contain object-left"
+              />
+            </div>
+            {navigationItems.map((item) => {
+              const Icon = item.icon;
+              const href = resolveHref(item.href, orgSlug);
+              const isActive = routeActive(pathname, href);
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => pushNav(href)}
+                  className={`flex w-full items-center gap-3 border-b border-slate-200 px-4 py-3 text-left text-sm font-medium transition-colors duration-150 ${
+                    isActive
+                      ? "bg-indigo-50 text-indigo-800"
+                      : "text-slate-800 active:bg-slate-100"
+                  }`}
+                >
+                  <Icon className="shrink-0 text-xl text-slate-600" />
+                  <span className="min-w-0">{item.label}</span>
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              onClick={openLeaveFromMenu}
+              className="flex w-full items-center gap-3 border-b border-slate-200 px-4 py-3 text-left text-sm font-medium text-slate-800 transition-colors duration-150 active:bg-slate-100"
+            >
+              <MdCalendarMonth className="shrink-0 text-xl text-indigo-700" />
+              Apply Leave
+            </button>
+            <button
+              type="button"
+              onClick={openLogoutFromMenu}
+              className="flex w-full items-center gap-3 border-b border-slate-200 px-4 py-3 text-left text-sm font-medium text-rose-700 transition-colors duration-150 active:bg-rose-50"
+            >
+              <MdLogout className="shrink-0 text-xl" />
+              Sign out
+            </button>
+          </div>
+        </div>
+      </div>
 
       {logoutDialog ? createPortal(logoutDialog, document.body) : null}
       {leaveModal ? createPortal(leaveModal, document.body) : null}

@@ -13,7 +13,13 @@ import {
   CalendarCheck,
   Users,
   Pencil,
+  X,
+  Package,
 } from "lucide-react";
+import {
+  countPendingHandoverItems,
+  fetchHandoverAssignedToMe,
+} from "@/services/handoverAssigned";
 import { updateMyProfileImage } from "@/services/adminUser";
 import {
   formatAttendanceLogLocal,
@@ -169,15 +175,21 @@ function LeaveSummaryStrip({
     <div
       className={
         isMobile
-          ? "mt-4 grid grid-cols-3 gap-2 text-center"
+          ? "mt-3 grid grid-cols-3 gap-1.5 text-center"
           : "mt-4 grid grid-cols-3 gap-3 text-center"
       }
     >
-      <div className={isMobile ? "" : "rounded-lg bg-slate-50 px-2 py-3"}>
+      <div
+        className={
+          isMobile
+            ? "rounded-md border border-[#E4E7EC] bg-[#F9FAFB] px-1.5 py-2"
+            : "rounded-lg bg-slate-50 px-2 py-3"
+        }
+      >
         <p
           className={
             isMobile
-              ? "text-2xl font-semibold text-[#1F2937]"
+              ? "text-lg font-semibold text-[#1F2937]"
               : "text-2xl font-semibold text-slate-800"
           }
         >
@@ -186,18 +198,24 @@ function LeaveSummaryStrip({
         <p
           className={
             isMobile
-              ? "text-[11px] font-semibold uppercase text-[#9CA3AF]"
+              ? "text-[10px] font-semibold uppercase text-[#9CA3AF]"
               : "text-[11px] text-slate-400"
           }
         >
-          Total leaves
+          Total
         </p>
       </div>
-      <div className={isMobile ? "" : "rounded-lg bg-slate-50 px-2 py-3"}>
+      <div
+        className={
+          isMobile
+            ? "rounded-md border border-[#E4E7EC] bg-[#F9FAFB] px-1.5 py-2"
+            : "rounded-lg bg-slate-50 px-2 py-3"
+        }
+      >
         <p
           className={
             isMobile
-              ? "text-2xl font-semibold text-[#E8710A]"
+              ? "text-lg font-semibold text-[#E8710A]"
               : "text-2xl font-semibold text-amber-700"
           }
         >
@@ -206,18 +224,24 @@ function LeaveSummaryStrip({
         <p
           className={
             isMobile
-              ? "text-[11px] font-semibold uppercase text-[#9CA3AF]"
+              ? "text-[10px] font-semibold uppercase text-[#9CA3AF]"
               : "text-[11px] text-slate-400"
           }
         >
-          Used leaves
+          Used
         </p>
       </div>
-      <div className={isMobile ? "" : "rounded-lg bg-slate-50 px-2 py-3"}>
+      <div
+        className={
+          isMobile
+            ? "rounded-md border border-[#E4E7EC] bg-[#F9FAFB] px-1.5 py-2"
+            : "rounded-lg bg-slate-50 px-2 py-3"
+        }
+      >
         <p
           className={
             isMobile
-              ? "text-2xl font-semibold text-[#0F9D58]"
+              ? "text-lg font-semibold text-[#0F9D58]"
               : "text-2xl font-semibold text-emerald-700"
           }
         >
@@ -226,11 +250,11 @@ function LeaveSummaryStrip({
         <p
           className={
             isMobile
-              ? "text-[11px] font-semibold uppercase text-[#9CA3AF]"
+              ? "text-[10px] font-semibold uppercase text-[#9CA3AF]"
               : "text-[11px] text-slate-400"
           }
         >
-          Remaining leaves
+          Left
         </p>
       </div>
     </div>
@@ -263,28 +287,32 @@ function LeaveBalancesPanel({
           No leave types assigned yet.
         </p>
       ) : isMobile ? (
-        <div className="mt-4 space-y-2">
-          <p className="text-[12px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
-            By leave type
-          </p>
+        <div className="mt-3 space-y-1.5">
+          <p className={mobileLabelCls}>By leave type</p>
           {rows.map((row, index) => (
             <div
               key={leaveBalanceRowKey(row, index)}
-              className="rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] px-3 py-2.5"
+              className="rounded-md border border-[#E4E7EC] bg-[#F9FAFB] px-2.5 py-2"
             >
-              <p className="text-[14px] font-semibold text-[#1F2937]">
+              <p className="text-[13px] font-semibold text-[#1F2937]">
                 {row.leave_type_name}
               </p>
-              <div className="mt-2 flex justify-between text-[13px]">
+              <div className="mt-1.5 grid grid-cols-3 gap-1 text-center text-[11px]">
                 <span className="text-[#6B7280]">
-                  Total:{" "}
-                  <span className="font-semibold text-[#1F2937]">
+                  Total
+                  <span className="mt-0.5 block font-semibold text-[#1F2937]">
                     {row.total_leaves}
                   </span>
                 </span>
                 <span className="text-[#6B7280]">
-                  Remaining:{" "}
-                  <span className="font-semibold text-[#0F9D58]">
+                  Used
+                  <span className="mt-0.5 block font-semibold text-[#E8710A]">
+                    {row.used_leaves}
+                  </span>
+                </span>
+                <span className="text-[#6B7280]">
+                  Left
+                  <span className="mt-0.5 block font-semibold text-[#0F9D58]">
                     {row.remaining_leaves}
                   </span>
                 </span>
@@ -411,6 +439,29 @@ function zohoDangerBtnCls(full = false) {
   return `inline-flex min-h-[44px] items-center justify-center rounded-lg bg-[#D93025] px-4 py-2.5 text-[14px] font-medium text-white transition active:scale-[0.98] hover:bg-[#B71C1C] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full flex-1" : ""}`;
 }
 
+/** Compact Zoho-style mobile dashboard tokens (lg:hidden only). */
+const mobileCardCls =
+  "rounded-lg border border-[#E4E7EC] bg-white p-3 shadow-sm";
+const mobilePagePad = "px-3 pb-[calc(1rem+env(safe-area-inset-bottom,0px))]";
+const mobileSectionGap = "space-y-2";
+const mobileLabelCls =
+  "text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]";
+const mobileValueCls = "text-[13px] font-semibold text-[#1F2937]";
+const mobileStatValueCls = "text-lg font-semibold tabular-nums";
+const mobileCaptionCls = "text-[11px] leading-snug text-[#6B7280]";
+
+function mobileActionPrimaryBtnCls(full = false) {
+  return `inline-flex min-h-[34px] items-center justify-center gap-1 rounded-md bg-[#008CD3] px-2.5 py-1.5 text-[12px] font-medium text-white transition active:scale-[0.98] hover:bg-[#0070AA] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full flex-1" : ""}`;
+}
+
+function mobileActionDangerBtnCls(full = false) {
+  return `inline-flex min-h-[34px] items-center justify-center gap-1 rounded-md bg-[#D93025] px-2.5 py-1.5 text-[12px] font-medium text-white transition active:scale-[0.98] hover:bg-[#B71C1C] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full flex-1" : ""}`;
+}
+
+function mobileActionSecondaryBtnCls(full = false) {
+  return `inline-flex min-h-[34px] items-center justify-center gap-1 rounded-md border border-[#E4E7EC] bg-white px-2.5 py-1.5 text-[12px] font-medium text-[#1F2937] transition active:scale-[0.98] hover:bg-[#F5F7FA] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full flex-1" : ""}`;
+}
+
 const USER_ICON_COLORS = [
   "bg-[#E8F4FB] text-[#008CD3]",
   "bg-[#E6F4EA] text-[#0F9D58]",
@@ -450,33 +501,106 @@ function patchEmployeeUserImage(
   };
 }
 
+function ProfilePhotoZoomModal({
+  open,
+  imageUrl,
+  alt,
+  onClose,
+}: {
+  open: boolean;
+  imageUrl: string;
+  alt: string;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-[#111B21]/80 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="profile-photo-zoom-title"
+    >
+      <button
+        type="button"
+        className="absolute inset-0"
+        onClick={onClose}
+        aria-label="Close profile photo"
+      />
+      <div className="relative z-[1] w-full max-w-sm sm:max-w-md">
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute -right-1 -top-1 z-[2] flex h-9 w-9 items-center justify-center rounded-full border border-[#E4E7EC] bg-white text-[#1F2937] shadow-lg transition hover:bg-[#F5F7FA] active:scale-95"
+          aria-label="Close"
+        >
+          <X className="h-5 w-5" aria-hidden />
+        </button>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={imageUrl}
+          alt={alt}
+          className="max-h-[min(78vh,560px)] w-full rounded-xl bg-white object-contain shadow-2xl ring-1 ring-[#E4E7EC]"
+        />
+        <p
+          id="profile-photo-zoom-title"
+          className="mt-2.5 text-center text-[13px] font-medium text-white"
+        >
+          {alt}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function ProfilePhotoWithEdit({
   imageUrl,
   alt,
   size = "md",
   uploading,
+  onImageClick,
   onEditClick,
 }: {
   imageUrl: string;
   alt: string;
-  size?: "md" | "lg";
+  size?: "sm" | "md" | "lg";
   uploading?: boolean;
+  onImageClick: () => void;
   onEditClick: () => void;
 }) {
-  const box = size === "lg" ? "h-20 w-20" : "h-14 w-14";
+  const box =
+    size === "lg" ? "h-20 w-20" : size === "sm" ? "h-11 w-11" : "h-14 w-14";
   const editBtn =
     size === "lg"
       ? "h-8 w-8 -bottom-0.5 -right-0.5"
-      : "h-7 w-7 -bottom-1 -right-1";
+      : size === "sm"
+        ? "h-6 w-6 -bottom-0.5 -right-0.5"
+        : "h-7 w-7 -bottom-1 -right-1";
 
   return (
     <div className={`relative shrink-0 ${box}`}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={imageUrl}
-        alt={alt}
-        className={`${box} rounded-xl object-cover ring-1 ring-[#E4E7EC]`}
-      />
+      <button
+        type="button"
+        onClick={onImageClick}
+        className={`${box} block overflow-hidden rounded-xl ring-1 ring-[#E4E7EC] transition active:opacity-90`}
+        aria-label={`View ${alt} profile photo`}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={imageUrl}
+          alt=""
+          className="h-full w-full object-cover"
+        />
+      </button>
       <button
         type="button"
         onClick={onEditClick}
@@ -513,6 +637,7 @@ function Home() {
     string | null
   >(null);
   const [showCheckoutConfirm, setShowCheckoutConfirm] = useState(false);
+  const [profilePhotoZoomOpen, setProfilePhotoZoomOpen] = useState(false);
   const [tick, setTick] = useState(0);
   const [mobileMainTab, setMobileMainTab] = useState<"today" | "profile" | "overview">("today");
   const [refreshing, setRefreshing] = useState(false);
@@ -525,6 +650,25 @@ function Home() {
   const [profileImageSuccess, setProfileImageSuccess] = useState<string | null>(
     null,
   );
+  const [handoverPendingCount, setHandoverPendingCount] = useState(0);
+
+  const handoverHref =
+    orgIdParam != null && String(orgIdParam) !== ""
+      ? `/user-dashboard/${encodeURIComponent(String(orgIdParam))}/asset-handover`
+      : "#";
+
+  const loadHandoverPendingCount = useCallback(async () => {
+    if (!orgId || Number.isNaN(orgId)) return;
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    try {
+      const result = await fetchHandoverAssignedToMe(token, orgId);
+      setHandoverPendingCount(countPendingHandoverItems(result));
+    } catch {
+      setHandoverPendingCount(0);
+    }
+  }, [orgId]);
+
   const loadDashboardData = useCallback(
     async (forceRefresh = false) => {
       await Promise.resolve();
@@ -631,6 +775,10 @@ function Home() {
     return () => window.clearTimeout(t);
   }, [loadDashboardData]);
 
+  useEffect(() => {
+    void loadHandoverPendingCount();
+  }, [loadHandoverPendingCount]);
+
   const emp = data?.employee ?? data?.employees;
   const owner = data?.owner;
   const org = data?.organization;
@@ -681,6 +829,10 @@ function Home() {
   const checkOutTime = hasCheckedOutToday
     ? formatAttendanceTimeLocal(todayRecord?.check_out)
     : "—";
+  const checkInTime = hasCheckedInToday
+    ? formatAttendanceTimeLocal(todayRecord?.check_in)
+    : null;
+  const shiftLabel = emp?.user_shift_name?.trim() || "Shift not assigned";
 
   const attendanceStatusRaw = todayRecord?.attendance_status;
   const attendanceStatus = String(attendanceStatusRaw || "—").toLowerCase();
@@ -716,6 +868,10 @@ function Home() {
 
   const openProfileImagePicker = useCallback(() => {
     profileFileInputRef.current?.click();
+  }, []);
+
+  const openProfilePhotoZoom = useCallback(() => {
+    setProfilePhotoZoomOpen(true);
   }, []);
 
   const handleProfileImagePick = useCallback(
@@ -1039,42 +1195,79 @@ function Home() {
         }}
       />
 
-      {/* Mobile & tablet: Zoho admin portal style */}
+      {/* Mobile & tablet: compact Zoho-style portal */}
       <div className="lg:hidden">
         <div className="sticky top-0 z-20 border-b border-[#E4E7EC] bg-white shadow-sm">
-          <div className="flex items-center gap-2 px-4 py-3">
-            <span
-              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-sm font-semibold ${userColorClass(employeeName)}`}
-            >
-              {userInitials(employeeName)}
-            </span>
+          <div className="flex items-center gap-2 px-3 py-2.5">
+            {loading ? (
+              <span
+                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-xs font-semibold ${userColorClass(employeeName)}`}
+              >
+                {userInitials(employeeName)}
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={openProfilePhotoZoom}
+                className="relative h-9 w-9 shrink-0 overflow-hidden rounded-md ring-1 ring-[#E4E7EC] transition active:opacity-90"
+                aria-label={`View ${employeeName} profile photo`}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={imgSrc}
+                  alt=""
+                  className="h-full w-full object-cover"
+                />
+              </button>
+            )}
             <div className="min-w-0 flex-1">
-              <h1 className="truncate text-[17px] font-semibold text-[#1F2937]">
+              <h1 className="truncate text-[15px] font-semibold text-[#1F2937]">
                 {loading ? "Loading…" : employeeName}
               </h1>
-              <p className="truncate text-[13px] text-[#6B7280]">
+              <p className="truncate text-[11px] text-[#6B7280]">
                 {org?.org_name || "Employee home"} · {employeeCode}
               </p>
+              {!loading && !error ? (
+                <p className="truncate text-[10px] text-[#9CA3AF]">
+                  {shiftLabel} · {shiftRange}
+                </p>
+              ) : null}
             </div>
+            <Link
+              href={handoverHref}
+              className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[#E4E7EC] text-[#008CD3] active:bg-[#F5F7FA]"
+              aria-label={
+                handoverPendingCount > 0
+                  ? `${handoverPendingCount} pending asset handovers`
+                  : "Asset handover"
+              }
+            >
+              <Package className="h-4 w-4" aria-hidden />
+              {handoverPendingCount > 0 ? (
+                <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#E8710A] px-1 text-[9px] font-bold text-white">
+                  {handoverPendingCount > 9 ? "9+" : handoverPendingCount}
+                </span>
+              ) : null}
+            </Link>
             <button
               type="button"
               onClick={() => void loadDashboardData(true)}
               disabled={loading || refreshing}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#008CD3] active:bg-[#F5F7FA] disabled:opacity-50"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[#E4E7EC] text-[#008CD3] active:bg-[#F5F7FA] disabled:opacity-50"
               aria-label="Refresh dashboard"
             >
-              <RefreshCw className={`h-5 w-5 ${refreshing ? "animate-spin" : ""}`} />
+              <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
             </button>
           </div>
 
-          <div className="px-4 pb-3">
-            <div className="flex rounded-lg bg-[#F5F7FA] p-1">
+          <div className="px-3 pb-2.5">
+            <div className="flex rounded-md bg-[#F5F7FA] p-0.5">
               {mobileTabs.map((tab) => (
                 <button
                   key={tab.id}
                   type="button"
                   onClick={() => setMobileMainTab(tab.id)}
-                  className={`flex flex-1 items-center justify-center rounded-md py-2 text-[13px] font-medium transition ${
+                  className={`flex flex-1 items-center justify-center rounded-[5px] py-1.5 text-[12px] font-medium transition ${
                     mobileMainTab === tab.id
                       ? "bg-white text-[#008CD3] shadow-sm"
                       : "text-[#6B7280]"
@@ -1088,78 +1281,94 @@ function Home() {
         </div>
 
         {error && !loading ? (
-          <div className="mx-4 mt-3 flex items-start gap-2 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-4 py-3 text-[14px] text-[#D93025]">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div className="mx-3 mt-2 flex items-start gap-2 rounded-md border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2 text-[12px] text-[#D93025]">
+            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             <span>{error}</span>
           </div>
         ) : null}
 
         {loading ? (
-          <div className="flex flex-col items-center justify-center gap-3 py-24 text-[#6B7280]">
-            <Loader2 className="h-9 w-9 animate-spin text-[#008CD3]" />
-            <p className="text-[15px]">Loading your dashboard…</p>
+          <div className="flex flex-col items-center justify-center gap-2 py-16 text-[#6B7280]">
+            <Loader2 className="h-7 w-7 animate-spin text-[#008CD3]" />
+            <p className="text-[13px]">Loading your dashboard…</p>
           </div>
         ) : null}
 
         {!loading && !error && mobileMainTab === "today" ? (
-          <div className="space-y-3 p-4 pb-28">
-            <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
-              <div className="flex items-center justify-between">
-                <p className="text-[15px] font-semibold text-[#1F2937]">This week</p>
-                <span className="text-[12px] text-[#6B7280]">{monthYearLabel}</span>
+          <div className={`${mobileSectionGap} ${mobilePagePad} pt-2`}>
+            <div className={mobileCardCls}>
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-[13px] font-semibold text-[#1F2937]">This week</p>
+                  <p className={mobileCaptionCls}>
+                    Tap a day for status · today highlighted
+                  </p>
+                </div>
+                <span className="shrink-0 text-[11px] text-[#6B7280]">{monthYearLabel}</span>
               </div>
-              <div className="mt-3 grid grid-cols-7 gap-1.5">
+              <div className="mt-2 grid grid-cols-7 gap-1">
                 {attendanceDays.map((day) => (
                   <div
                     key={day.ymd}
-                    className={`rounded-lg border p-1.5 text-center text-[10px] font-medium leading-tight ${day.visual.boxClass} ${
-                      day.active ? "ring-2 ring-[#008CD3] ring-offset-1" : ""
+                    className={`rounded-md border p-1 text-center text-[9px] font-medium leading-tight ${day.visual.boxClass} ${
+                      day.active ? "ring-1 ring-[#008CD3] ring-offset-1" : ""
                     }`}
                     title={day.visual.meaning}
                   >
                     <p className="opacity-90">{day.day}</p>
-                    <p className="text-[13px] font-semibold">{day.dateNum}</p>
+                    <p className="text-[11px] font-semibold">{day.dateNum}</p>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
-                <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">
+            <div className="grid grid-cols-2 gap-2">
+              <div className={mobileCardCls}>
+                <p className={mobileLabelCls}>
                   {showLiveTimer ? "Working (live)" : "Working hours"}
                 </p>
-                <p className="mt-1 text-2xl font-semibold tabular-nums text-[#008CD3]">
+                <p className={`mt-0.5 ${mobileStatValueCls} text-[#008CD3]`}>
                   {String(workingHoursDisplay)}
                 </p>
+                {showLiveTimer && checkInTime ? (
+                  <p className={`mt-0.5 ${mobileCaptionCls}`}>Since {checkInTime}</p>
+                ) : null}
               </div>
-              <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
-                <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">Status</p>
-                <p className="mt-1 text-[15px] font-semibold capitalize text-[#1F2937]">
+              <div className={mobileCardCls}>
+                <p className={mobileLabelCls}>Status</p>
+                <p className={`mt-0.5 capitalize ${mobileValueCls}`}>
                   {attendanceStatus === "—"
                     ? "—"
                     : attendanceStatus.replace(/_/g, " ")}
                 </p>
+                {checkInTime ? (
+                  <p className={`mt-0.5 ${mobileCaptionCls}`}>In at {checkInTime}</p>
+                ) : (
+                  <p className={`mt-0.5 ${mobileCaptionCls}`}>Not checked in</p>
+                )}
               </div>
-              <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
-                <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">Check out</p>
-                <p className="mt-1 text-[15px] font-semibold text-[#1F2937]">{checkOutTime}</p>
+              <div className={mobileCardCls}>
+                <p className={mobileLabelCls}>Check out</p>
+                <p className={`mt-0.5 ${mobileValueCls}`}>{checkOutTime}</p>
               </div>
-              <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
-                <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">Late after</p>
-                <p className="mt-1 text-[15px] font-semibold text-[#E8710A]">{lateAfter}</p>
+              <div className={mobileCardCls}>
+                <p className={mobileLabelCls}>Late after</p>
+                <p className={`mt-0.5 font-semibold text-[#E8710A] ${mobileStatValueCls}`}>
+                  {lateAfter}
+                </p>
+                <p className={`mt-0.5 ${mobileCaptionCls}`}>{shiftRange}</p>
               </div>
             </div>
 
-            <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
-              <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">Today log</p>
-              <p className="mt-1 text-[14px] leading-relaxed text-[#1F2937]">{todayLog}</p>
-              <div className="mt-3 flex flex-wrap gap-2">
+            <div className={mobileCardCls}>
+              <p className={mobileLabelCls}>Today log</p>
+              <p className={`mt-0.5 text-[12px] leading-snug text-[#1F2937]`}>{todayLog}</p>
+              <div className="mt-2.5 flex flex-wrap gap-1.5">
                 <button
                   type="button"
                   onClick={() => void markCheckIn()}
                   disabled={hasCheckedInToday || checkInSubmitting}
-                  className={`${zohoPrimaryBtnCls()} min-h-[40px] flex-1 px-3 py-2 text-[13px] sm:flex-none`}
+                  className={mobileActionPrimaryBtnCls()}
                 >
                   {checkInSubmitting ? "Marking…" : "Check in"}
                 </button>
@@ -1167,7 +1376,7 @@ function Home() {
                   type="button"
                   onClick={() => setShowCheckoutConfirm(true)}
                   disabled={hasCheckedOutToday || checkOutSubmitting}
-                  className={`${zohoDangerBtnCls()} min-h-[40px] flex-1 px-3 py-2 text-[13px] sm:flex-none`}
+                  className={mobileActionDangerBtnCls()}
                 >
                   {hasCheckedOutToday
                     ? "Checked out"
@@ -1185,115 +1394,128 @@ function Home() {
                     todayRecord?.id == null ||
                     todayRecord?.id === ""
                   }
-                  className={`${zohoSecondaryBtnCls()} min-h-[40px] flex-1 px-3 py-2 text-[13px] sm:flex-none`}
+                  className={mobileActionSecondaryBtnCls()}
                   title="Log stepping out / back in (washroom, errand, etc.)"
                 >
                   {logSubmitting ? "Saving…" : "Mark log"}
                 </button>
               </div>
+              <p className={`mt-1.5 ${mobileCaptionCls}`}>
+                Mark log for short breaks while still on the clock (washroom, errand, etc.).
+              </p>
             </div>
 
             {logSuccessMessage ? (
-              <div className="rounded-lg border border-[#C8E6C9] bg-[#E6F4EA] px-4 py-3 text-[14px] text-[#0F9D58]">
+              <div className="rounded-md border border-[#C8E6C9] bg-[#E6F4EA] px-3 py-2 text-[12px] text-[#0F9D58]">
                 {logSuccessMessage}
               </div>
             ) : null}
             {attendanceActionError ? (
-              <div className="flex items-start gap-2 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-4 py-3 text-[14px] text-[#D93025]">
-                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <div className="flex items-start gap-2 rounded-md border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2 text-[12px] text-[#D93025]">
+                <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <span>{attendanceActionError}</span>
               </div>
             ) : null}
 
-            <div className="rounded-xl border border-[#E4E7EC] bg-[#E8F4FB] p-4">
-              <div className="flex gap-3">
-                <Info className="h-5 w-5 shrink-0 text-[#008CD3]" />
-                <p className="text-[13px] leading-relaxed text-[#4B5563]">
-                  Check in, check out, or mark a log from the buttons above or the action bar below.
-                </p>
+            <div className="rounded-md border border-[#E4E7EC] bg-[#E8F4FB] px-3 py-2.5">
+              <div className="flex gap-2">
+                <Info className="h-4 w-4 shrink-0 text-[#008CD3]" />
+                <div className="min-w-0">
+                  <p className="text-[12px] font-medium text-[#1F2937]">Quick guide</p>
+                  <p className={`mt-0.5 ${mobileCaptionCls}`}>
+                    Green = full day · amber = partial · orange = late · gray = no record.
+                  </p>
+                </div>
               </div>
             </div>
           </div>
         ) : null}
 
         {!loading && !error && mobileMainTab === "profile" ? (
-          <div className="space-y-3 p-4">
-            <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
-              <div className="flex items-start gap-3">
+          <div className={`${mobileSectionGap} ${mobilePagePad} pt-2`}>
+            <div className={mobileCardCls}>
+              <div className="flex items-start gap-2.5">
                 <ProfilePhotoWithEdit
                   imageUrl={imgSrc}
                   alt={employeeName}
-                  size="md"
+                  size="sm"
                   uploading={profileImageUploading}
+                  onImageClick={openProfilePhotoZoom}
                   onEditClick={openProfileImagePicker}
                 />
                 <div className="min-w-0">
-                  <p className="text-[17px] font-semibold text-[#1F2937]">{employeeName}</p>
-                  <p className="text-[14px] text-[#6B7280]">{employeeCode}</p>
-                  <p className="mt-1 text-[13px] text-[#9CA3AF]">{roleName}</p>
+                  <p className="text-[15px] font-semibold text-[#1F2937]">{employeeName}</p>
+                  <p className="text-[12px] text-[#6B7280]">{employeeCode}</p>
+                  <p className="mt-0.5 text-[11px] text-[#9CA3AF]">{roleName}</p>
+                  <p className={`mt-1 ${mobileCaptionCls}`}>
+                    Tap photo to enlarge · pencil to update image.
+                  </p>
                 </div>
               </div>
               {profileImageSuccess ? (
-                <p className="mt-3 text-[13px] text-[#0F9D58]">{profileImageSuccess}</p>
+                <p className="mt-2 text-[12px] text-[#0F9D58]">{profileImageSuccess}</p>
               ) : null}
               {profileImageError ? (
-                <p className="mt-3 text-[13px] text-[#D93025]">{profileImageError}</p>
+                <p className="mt-2 text-[12px] text-[#D93025]">{profileImageError}</p>
               ) : null}
             </div>
 
-            <ul className="divide-y divide-[#E4E7EC] rounded-xl border border-[#E4E7EC] bg-white shadow-sm">
-              <li className="px-4 py-3">
-                <p className="text-[12px] font-semibold uppercase tracking-wide text-[#9CA3AF]">Email</p>
-                <p className="mt-0.5 text-[15px] text-[#1F2937]">{emp?.user_email || "—"}</p>
-              </li>
-              <li className="px-4 py-3">
-                <p className="text-[12px] font-semibold uppercase tracking-wide text-[#9CA3AF]">Phone</p>
-                <p className="mt-0.5 text-[15px] text-[#1F2937]">{emp?.user_phone || "—"}</p>
-              </li>
-              <li className="px-4 py-3">
-                <p className="text-[12px] font-semibold uppercase tracking-wide text-[#9CA3AF]">Emergency</p>
-                <p className="mt-0.5 text-[15px] text-[#1F2937]">{emergency}</p>
-              </li>
-              <li className="px-4 py-3">
-                <p className="text-[12px] font-semibold uppercase tracking-wide text-[#9CA3AF]">Organization</p>
-                <p className="mt-0.5 text-[15px] text-[#1F2937]">{org?.org_name || "—"}</p>
-              </li>
-            </ul>
+            <div>
+              <p className={`mb-1.5 px-0.5 ${mobileLabelCls}`}>Contact & organization</p>
+              <ul className="divide-y divide-[#E4E7EC] rounded-lg border border-[#E4E7EC] bg-white shadow-sm">
+                <li className="px-3 py-2.5">
+                  <p className={mobileLabelCls}>Email</p>
+                  <p className={`mt-0.5 ${mobileValueCls}`}>{emp?.user_email || "—"}</p>
+                </li>
+                <li className="px-3 py-2.5">
+                  <p className={mobileLabelCls}>Phone</p>
+                  <p className={`mt-0.5 ${mobileValueCls}`}>{emp?.user_phone || "—"}</p>
+                </li>
+                <li className="px-3 py-2.5">
+                  <p className={mobileLabelCls}>Emergency</p>
+                  <p className={`mt-0.5 ${mobileValueCls}`}>{emergency}</p>
+                </li>
+                <li className="px-3 py-2.5">
+                  <p className={mobileLabelCls}>Organization</p>
+                  <p className={`mt-0.5 ${mobileValueCls}`}>{org?.org_name || "—"}</p>
+                </li>
+              </ul>
+            </div>
 
-            <div className="rounded-xl border border-[#E4E7EC] bg-white shadow-sm">
-              <div className="flex items-center justify-between border-b border-[#E4E7EC] px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-[#008CD3]" />
-                  <p className="text-[15px] font-semibold text-[#1F2937]">Saved addresses</p>
+            <div className="overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-sm">
+              <div className="flex items-center justify-between border-b border-[#E4E7EC] px-3 py-2.5">
+                <div className="flex items-center gap-1.5">
+                  <MapPin className="h-3.5 w-3.5 text-[#008CD3]" />
+                  <p className="text-[13px] font-semibold text-[#1F2937]">Saved addresses</p>
                 </div>
-                <span className="rounded-full bg-[#F5F7FA] px-2 py-0.5 text-[11px] font-semibold text-[#6B7280]">
+                <span className="rounded-full bg-[#F5F7FA] px-1.5 py-0.5 text-[10px] font-semibold text-[#6B7280]">
                   {addresses.length}
                 </span>
               </div>
               {addressesLoading ? (
-                <p className="px-4 py-6 text-center text-[14px] text-[#6B7280]">Loading addresses…</p>
+                <p className="px-3 py-4 text-center text-[12px] text-[#6B7280]">Loading addresses…</p>
               ) : null}
               {addressesError ? (
-                <p className="px-4 py-4 text-[14px] text-[#D93025]">{addressesError}</p>
+                <p className="px-3 py-3 text-[12px] text-[#D93025]">{addressesError}</p>
               ) : null}
               {!addressesLoading && !addressesError && addressCards.length === 0 ? (
-                <p className="px-4 py-6 text-center text-[14px] text-[#6B7280]">
+                <p className="px-3 py-4 text-center text-[12px] text-[#6B7280]">
                   No address added yet.
                 </p>
               ) : null}
               {!addressesLoading && !addressesError && addressCards.length > 0 ? (
                 <ul className="divide-y divide-[#E4E7EC]">
                   {addressCards.map((address) => (
-                    <li key={address.key} className="px-4 py-3.5">
+                    <li key={address.key} className="px-3 py-2.5">
                       <div className="flex items-start justify-between gap-2">
-                        <p className="text-[15px] font-medium text-[#1F2937]">{address.label}</p>
-                        <span className="rounded-full bg-[#F5F7FA] px-2 py-0.5 text-[11px] font-medium text-[#6B7280]">
+                        <p className="text-[13px] font-medium text-[#1F2937]">{address.label}</p>
+                        <span className="rounded-full bg-[#F5F7FA] px-1.5 py-0.5 text-[10px] font-medium text-[#6B7280]">
                           {address.typeLabel}
                         </span>
                       </div>
-                      <p className="mt-1 text-[14px] text-[#6B7280]">{address.lineOne}</p>
-                      <p className="text-[13px] text-[#9CA3AF]">{address.lineTwo}</p>
-                      <p className="mt-1 text-[12px] text-[#9CA3AF]">ZIP: {address.zipCode}</p>
+                      <p className="mt-0.5 text-[12px] text-[#6B7280]">{address.lineOne}</p>
+                      <p className="text-[11px] text-[#9CA3AF]">{address.lineTwo}</p>
+                      <p className="mt-0.5 text-[10px] text-[#9CA3AF]">ZIP: {address.zipCode}</p>
                     </li>
                   ))}
                 </ul>
@@ -1303,11 +1525,16 @@ function Home() {
         ) : null}
 
         {!loading && !error && mobileMainTab === "overview" ? (
-          <div className="space-y-3 p-4">
-            <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
-              <div className="flex items-center gap-2">
-                <CalendarCheck className="h-4 w-4 text-[#008CD3]" />
-                <p className="text-[15px] font-semibold text-[#1F2937]">Leave balance</p>
+          <div className={`${mobileSectionGap} ${mobilePagePad} pt-2`}>
+            <div className={mobileCardCls}>
+              <div className="flex items-start gap-2">
+                <CalendarCheck className="h-3.5 w-3.5 shrink-0 text-[#008CD3]" />
+                <div>
+                  <p className="text-[13px] font-semibold text-[#1F2937]">Leave balance</p>
+                  <p className={mobileCaptionCls}>
+                    Assigned types and days remaining for this org.
+                  </p>
+                </div>
               </div>
               <LeaveBalancesPanel
                 summary={leaveSummary}
@@ -1316,50 +1543,80 @@ function Home() {
               />
             </div>
 
-            <ul className="divide-y divide-[#E4E7EC] rounded-xl border border-[#E4E7EC] bg-white shadow-sm">
-              <li className="flex items-center justify-between px-4 py-3.5">
-                <span className="text-[14px] text-[#6B7280]">Current shift</span>
-                <span className="rounded-full bg-[#E6F4EA] px-2.5 py-0.5 text-[12px] font-medium text-[#0F9D58]">
-                  {emp?.user_shift_name || "Not assigned"}
-                </span>
-              </li>
-              <li className="flex items-center justify-between px-4 py-3.5">
-                <span className="text-[14px] text-[#6B7280]">Shift timings</span>
-                <span className="text-[14px] font-medium text-[#1F2937]">{shiftRange}</span>
-              </li>
-              <li className="flex items-center justify-between px-4 py-3.5">
-                <span className="text-[14px] text-[#6B7280]">Job type</span>
-                <span className="text-[14px] font-medium text-[#1F2937]">{jobType}</span>
-              </li>
-              <li className="flex items-center justify-between px-4 py-3.5">
-                <span className="text-[14px] text-[#6B7280]">Admin</span>
-                <span className="truncate pl-4 text-[14px] font-medium text-[#1F2937]">{managerName}</span>
-              </li>
-              <li className="flex items-center justify-between px-4 py-3.5">
-                <span className="text-[14px] text-[#6B7280]">Joined</span>
-                <span className="text-[14px] font-medium text-[#1F2937]">
-                  {emp?.created_at
-                    ? new Date(String(emp.created_at)).toLocaleDateString()
-                    : "—"}
-                </span>
-              </li>
-            </ul>
+            <div>
+              <p className={`mb-1.5 px-0.5 ${mobileLabelCls}`}>Work schedule</p>
+              <ul className="divide-y divide-[#E4E7EC] rounded-lg border border-[#E4E7EC] bg-white shadow-sm">
+                <li className="flex items-center justify-between gap-2 px-3 py-2.5">
+                  <span className="text-[12px] text-[#6B7280]">Current shift</span>
+                  <span className="rounded-full bg-[#E6F4EA] px-2 py-0.5 text-[11px] font-medium text-[#0F9D58]">
+                    {emp?.user_shift_name || "Not assigned"}
+                  </span>
+                </li>
+                <li className="flex items-center justify-between gap-2 px-3 py-2.5">
+                  <span className="text-[12px] text-[#6B7280]">Shift timings</span>
+                  <span className={`${mobileValueCls} text-[12px]`}>{shiftRange}</span>
+                </li>
+                <li className="flex items-center justify-between gap-2 px-3 py-2.5">
+                  <span className="text-[12px] text-[#6B7280]">Job type</span>
+                  <span className={`${mobileValueCls} text-[12px]`}>{jobType}</span>
+                </li>
+                <li className="flex items-center justify-between gap-2 px-3 py-2.5">
+                  <span className="text-[12px] text-[#6B7280]">Admin</span>
+                  <span className={`truncate ${mobileValueCls} text-[12px]`}>{managerName}</span>
+                </li>
+                <li className="flex items-center justify-between gap-2 px-3 py-2.5">
+                  <span className="text-[12px] text-[#6B7280]">Joined</span>
+                  <span className={`${mobileValueCls} text-[12px]`}>
+                    {emp?.created_at
+                      ? new Date(String(emp.created_at)).toLocaleDateString()
+                      : "—"}
+                  </span>
+                </li>
+              </ul>
+            </div>
 
-            <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
-              <div className="flex items-start gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#E8F4FB] text-[#008CD3]">
-                  <Users className="h-5 w-5" />
+            <div className={mobileCardCls}>
+              <div className="flex items-start gap-2.5">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#E8F4FB] text-[#008CD3]">
+                  <Users className="h-4 w-4" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[15px] font-semibold text-[#1F2937]">My team</p>
-                  <p className="mt-1 text-[13px] text-[#6B7280]">
-                    View roster, leave requests, and approval status.
+                  <p className="text-[13px] font-semibold text-[#1F2937]">My team</p>
+                  <p className={`mt-0.5 ${mobileCaptionCls}`}>
+                    Roster, leave requests, and attendance corrections.
                   </p>
                   <Link
                     href={`/user-dashboard/${orgId}/my-team`}
-                    className={`mt-3 ${zohoPrimaryBtnCls(true)}`}
+                    className={`mt-2 ${mobileActionPrimaryBtnCls(true)}`}
                   >
                     Go to team
+                  </Link>
+                </div>
+              </div>
+            </div>
+
+            <div className={mobileCardCls}>
+              <div className="flex items-start gap-2.5">
+                <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#FFF4E5] text-[#E8710A]">
+                  <Package className="h-4 w-4" />
+                  {handoverPendingCount > 0 ? (
+                    <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#E8710A] px-1 text-[9px] font-bold text-white">
+                      {handoverPendingCount > 9 ? "9+" : handoverPendingCount}
+                    </span>
+                  ) : null}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13px] font-semibold text-[#1F2937]">Asset handover</p>
+                  <p className={`mt-0.5 ${mobileCaptionCls}`}>
+                    Exit custody items and custom tasks assigned to you.
+                  </p>
+                  <Link
+                    href={handoverHref}
+                    className={`mt-2 ${mobileActionPrimaryBtnCls(true)}`}
+                  >
+                    {handoverPendingCount > 0
+                      ? `View handovers (${handoverPendingCount} pending)`
+                      : "View handovers"}
                   </Link>
                 </div>
               </div>
@@ -1367,47 +1624,6 @@ function Home() {
           </div>
         ) : null}
 
-        {!loading && !error && mobileMainTab === "today" ? (
-          <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#E4E7EC] bg-white p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-4px_16px_rgba(0,0,0,0.06)]">
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => void markCheckIn()}
-                disabled={hasCheckedInToday || checkInSubmitting}
-                className={`${zohoPrimaryBtnCls(true)} flex-1 px-2 text-[13px]`}
-              >
-                {checkInSubmitting ? "Marking…" : "Check in"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowCheckoutConfirm(true)}
-                disabled={hasCheckedOutToday || checkOutSubmitting}
-                className={`${zohoDangerBtnCls(true)} flex-1 px-2 text-[13px]`}
-              >
-                {hasCheckedOutToday
-                  ? "Done"
-                  : checkOutSubmitting
-                    ? "…"
-                    : "Check out"}
-              </button>
-              <button
-                type="button"
-                onClick={() => void markAttendanceLog()}
-                disabled={
-                  !hasCheckedInToday ||
-                  hasCheckedOutToday ||
-                  logSubmitting ||
-                  todayRecord?.id == null ||
-                  todayRecord?.id === ""
-                }
-                className={`${zohoSecondaryBtnCls(true)} flex-1 px-2 text-[13px]`}
-                title="Log stepping out / back in (washroom, errand, etc.)"
-              >
-                {logSubmitting ? "Saving…" : "Mark log"}
-              </button>
-            </div>
-          </div>
-        ) : null}
       </div>
 
       {/* Desktop layout (unchanged) */}
@@ -1422,13 +1638,23 @@ function Home() {
               className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-3 text-sm text-slate-700 outline-none ring-indigo-200 placeholder:text-slate-400 focus:ring-2"
             />
           </div>
-          <button
-            type="button"
-            className="rounded-full p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
-            aria-label="Notifications"
+          <Link
+            href={handoverHref}
+            className="relative rounded-full p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+            aria-label={
+              handoverPendingCount > 0
+                ? `${handoverPendingCount} pending asset handovers`
+                : "Asset handover notifications"
+            }
+            title="Asset handover"
           >
             <MdNotificationsNone className="text-[22px]" />
-          </button>
+            {handoverPendingCount > 0 ? (
+              <span className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold text-white">
+                {handoverPendingCount > 9 ? "9+" : handoverPendingCount}
+              </span>
+            ) : null}
+          </Link>
         </div>
       </header>
 
@@ -1451,6 +1677,32 @@ function Home() {
             className="inline-flex w-full items-center justify-center rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 sm:w-auto"
           >
             Go to team
+          </Link>
+        </div>
+        <div className="mt-3 flex flex-col gap-4 rounded-xl border border-amber-100 bg-gradient-to-r from-amber-50 to-white p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-600 text-white">
+              <Package className="h-5 w-5" aria-hidden />
+              {handoverPendingCount > 0 ? (
+                <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">
+                  {handoverPendingCount > 9 ? "9+" : handoverPendingCount}
+                </span>
+              ) : null}
+            </span>
+            <div>
+              <h2 className="text-sm font-semibold text-slate-800">Asset handover</h2>
+              <p className="mt-0.5 text-xs leading-relaxed text-slate-600">
+                Review exit assets and custom tasks assigned to you as custodian.
+              </p>
+            </div>
+          </div>
+          <Link
+            href={handoverHref}
+            className="inline-flex w-full items-center justify-center rounded-lg border border-amber-200 bg-white px-4 py-2.5 text-sm font-semibold text-amber-900 shadow-sm transition hover:bg-amber-50 sm:w-auto"
+          >
+            {handoverPendingCount > 0
+              ? `Open handovers (${handoverPendingCount} pending)`
+              : "Open handovers"}
           </Link>
         </div>
       </div>
@@ -1476,6 +1728,7 @@ function Home() {
                 alt={employeeName}
                 size="lg"
                 uploading={profileImageUploading}
+                onImageClick={openProfilePhotoZoom}
                 onEditClick={openProfileImagePicker}
               />
               <div className="min-w-[240px] flex-1">
@@ -1807,6 +2060,13 @@ function Home() {
         </section>
       </div>
       </section>
+      <ProfilePhotoZoomModal
+        open={profilePhotoZoomOpen}
+        imageUrl={imgSrc}
+        alt={employeeName}
+        onClose={() => setProfilePhotoZoomOpen(false)}
+      />
+
       {showCheckoutConfirm && (
         <div
           className="fixed inset-0 z-50 flex items-end justify-center bg-[#1F2937]/40 p-0 backdrop-blur-[1px] sm:items-center sm:bg-slate-900/50 sm:p-4"
@@ -1818,19 +2078,19 @@ function Home() {
             className="absolute inset-0 sm:bg-slate-900/50 sm:backdrop-blur-sm"
             onClick={() => !checkOutSubmitting && setShowCheckoutConfirm(false)}
           />
-          <div className="relative w-full max-w-sm overflow-hidden rounded-t-2xl border border-[#E4E7EC] bg-white p-5 shadow-xl sm:rounded-xl sm:border-slate-200">
-            <h3 className="text-[17px] font-semibold text-[#1F2937] sm:text-base sm:text-slate-800">
+          <div className="relative w-full max-w-sm overflow-hidden rounded-t-2xl border border-[#E4E7EC] bg-white p-4 shadow-xl sm:rounded-xl sm:border-slate-200 sm:p-5">
+            <h3 className="text-[15px] font-semibold text-[#1F2937] sm:text-base sm:text-slate-800">
               Confirm check out
             </h3>
-            <p className="mt-2 text-[14px] text-[#6B7280] sm:text-sm sm:text-slate-600">
-              Are you sure you want to mark your check-out attendance?
+            <p className="mt-1.5 text-[12px] text-[#6B7280] sm:mt-2 sm:text-sm sm:text-slate-600">
+              End your work day? Working time will be calculated from check-in.
             </p>
-            <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <div className="mt-3 flex flex-col-reverse gap-1.5 sm:mt-4 sm:flex-row sm:justify-end sm:gap-2">
               <button
                 type="button"
                 onClick={() => setShowCheckoutConfirm(false)}
                 disabled={checkOutSubmitting}
-                className={zohoSecondaryBtnCls(true)}
+                className={`${mobileActionSecondaryBtnCls(true)} sm:min-h-[44px] sm:rounded-lg sm:px-4 sm:py-2.5 sm:text-[14px]`}
               >
                 Cancel
               </button>
@@ -1838,7 +2098,7 @@ function Home() {
                 type="button"
                 onClick={() => void markCheckOut()}
                 disabled={checkOutSubmitting}
-                className={zohoDangerBtnCls(true)}
+                className={`${mobileActionDangerBtnCls(true)} sm:min-h-[44px] sm:rounded-lg sm:px-4 sm:py-2.5 sm:text-[14px]`}
               >
                 {checkOutSubmitting ? "Confirming…" : "Confirm"}
               </button>

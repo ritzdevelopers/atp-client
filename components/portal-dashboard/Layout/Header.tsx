@@ -1,8 +1,7 @@
 function Header() {
   return (
     <header className="sticky top-0 z-[9999] w-full border-b border-gray-200/80 bg-white/90 shadow-sm backdrop-blur-md supports-[backdrop-filter]:bg-white/75">
-      <div className="flex h-12 min-h-12 w-full min-w-0 items-center pr-3 pl-14 sm:h-14 sm:min-h-14 sm:pr-4 sm:pl-16 md:h-16 md:min-h-16 md:px-6 lg:px-8">
-        {/* Leave pl-14/sm:pl-16 on small screens for the fixed nav hamburger (management layout). */}
+      <div className="flex h-12 min-h-12 w-full min-w-0 items-center px-3 sm:h-14 sm:min-h-14 sm:px-4 md:h-16 md:min-h-16 md:px-6 lg:px-8">
         <div className="flex min-h-0 min-w-0 flex-1 items-center">
           <img
             src="/portal/layout/logo.png"

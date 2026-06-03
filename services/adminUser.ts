@@ -700,6 +700,8 @@ export type OrgUserRow = {
   is_active?: number | boolean | string | null;
   exit_process_action_type?: string | null;
   exit_process_application_status?: string | null;
+  /** `team_members.team_id` from `get_all_users` (null if not on a team). */
+  employee_team_id?: number | string | null;
   orgID?: number | string;
   /** From `get_all_users` join with `user_shifts` / `shifts` */
   user_shift_id?: number | string | null;
@@ -712,6 +714,14 @@ export type OrgUserRow = {
   assigned_ips?: OrgUserAssignedIp[] | string | null;
   [key: string]: unknown;
 };
+
+/** Team id for exit/termination payloads; null when the employee has no team. */
+export function orgUserEmployeeTeamId(row: OrgUserRow): number | null {
+  const v = row.employee_team_id;
+  if (v == null || v === "") return null;
+  const n = typeof v === "number" ? v : Number(String(v));
+  return Number.isFinite(n) ? n : null;
+}
 
 function isOrgMemberActiveForDedupe(value: unknown): boolean {
   if (value === false || value === 0 || value === "0") return false;
@@ -736,11 +746,17 @@ export function dedupeOrgUserRows(rows: OrgUserRow[]): OrgUserRow[] {
       if (!isOrgMemberActiveForDedupe(r.is_active)) s += 4;
       if (r.exit_process_action_type) s += 2;
       if (r.exit_process_application_status) s += 1;
+      if (orgUserEmployeeTeamId(r) != null) s += 1;
       return s;
     };
-    if (score(row) >= score(existing)) {
-      byUserId.set(userId, row);
+    const winner = score(row) >= score(existing) ? row : existing;
+    const loser = winner === row ? existing : row;
+    const merged: OrgUserRow = { ...winner };
+    if (orgUserEmployeeTeamId(merged) == null) {
+      const teamFromLoser = orgUserEmployeeTeamId(loser);
+      if (teamFromLoser != null) merged.employee_team_id = teamFromLoser;
     }
+    byUserId.set(userId, merged);
   }
   return [...byUserId.values()];
 }

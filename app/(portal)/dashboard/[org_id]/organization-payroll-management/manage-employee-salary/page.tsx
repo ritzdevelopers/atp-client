@@ -10,6 +10,7 @@ import {
   Search,
   ChevronRight,
   Users,
+  X,
 } from "lucide-react";
 import { useManagementDashboardContext } from "@/components/portal-dashboard/Layout/ManagementDashboardContext";
 import { STATIC_EXPORT_PLACEHOLDER_ID } from "@/lib/static-export";
@@ -21,6 +22,117 @@ function inputCls() {
 
 function avatarUrl(seed: string) {
   return `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(seed)}`;
+}
+
+function profileImageUrlFromRow(userImage: unknown): string | null {
+  const image = String(userImage ?? "").trim();
+  return image || null;
+}
+
+function resolveAvatarSrc(userImage: unknown, seed: string) {
+  const image = profileImageUrlFromRow(userImage);
+  if (image) return image;
+  return avatarUrl(seed);
+}
+
+function ProfilePhotoZoomModal({
+  open,
+  imageUrl,
+  alt,
+  onClose,
+}: {
+  open: boolean;
+  imageUrl: string;
+  alt: string;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[10050] flex items-center justify-center bg-[#111B21]/80 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="salary-employee-photo-zoom-title"
+    >
+      <button
+        type="button"
+        className="absolute inset-0"
+        onClick={onClose}
+        aria-label="Close profile photo"
+      />
+      <div className="relative z-[1] w-full max-w-sm">
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute -right-1 -top-1 z-[2] flex h-9 w-9 items-center justify-center rounded-full border border-[#E4E7EC] bg-white text-[#1F2937] shadow-lg active:scale-95"
+          aria-label="Close"
+        >
+          <X className="h-5 w-5" aria-hidden />
+        </button>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={imageUrl}
+          alt={alt}
+          className="max-h-[min(78vh,560px)] w-full rounded-xl bg-white object-contain shadow-2xl ring-1 ring-[#E4E7EC]"
+        />
+        <p
+          id="salary-employee-photo-zoom-title"
+          className="mt-2.5 text-center text-[13px] font-medium text-white"
+        >
+          {alt}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function EmployeeListAvatar({
+  emp,
+  onZoom,
+}: {
+  emp: EmployeeListItem;
+  onZoom: (imageUrl: string, alt: string) => void;
+}) {
+  const img = (
+    /* eslint-disable-next-line @next/next/no-img-element */
+    <img
+      src={emp.avatarSrc}
+      alt=""
+      className="h-11 w-11 rounded-full bg-slate-100 object-cover object-top ring-2 ring-white"
+      onError={(e) => {
+        e.currentTarget.src = avatarUrl(emp.avatarSeed);
+      }}
+    />
+  );
+
+  if (emp.profileImageUrl) {
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onZoom(emp.profileImageUrl!, emp.name);
+        }}
+        className="shrink-0 rounded-full transition active:opacity-90"
+        aria-label={`View ${emp.name} profile photo`}
+      >
+        {img}
+      </button>
+    );
+  }
+
+  return <span className="shrink-0">{img}</span>;
 }
 
 function formatRoleLabel(role: string | undefined) {
@@ -42,18 +154,23 @@ type EmployeeListItem = {
   email: string;
   roleLabel: string;
   avatarSeed: string;
+  avatarSrc: string;
+  profileImageUrl: string | null;
 };
 
 function mapRow(row: OrgUserRow): EmployeeListItem | null {
   if (row.id == null) return null;
   if (!isOrgMemberActive(row.is_active)) return null;
   const name = row.user_name?.trim() || row.user_email?.trim() || "Employee";
+  const userImage = (row as { user_image?: unknown }).user_image;
   return {
     id: String(row.id),
     name,
     email: row.user_email?.trim() ?? "—",
     roleLabel: formatRoleLabel(row.role_name ?? row.user_role_name),
     avatarSeed: name,
+    avatarSrc: resolveAvatarSrc(userImage, name),
+    profileImageUrl: profileImageUrlFromRow(userImage),
   };
 }
 
@@ -74,6 +191,10 @@ export default function ManageEmployeeSalaryPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [photoZoom, setPhotoZoom] = useState<{
+    imageUrl: string;
+    alt: string;
+  } | null>(null);
 
   const loadEmployees = useCallback(
     async (opts?: { silent?: boolean }) => {
@@ -148,7 +269,11 @@ export default function ManageEmployeeSalaryPage() {
                 Employee salary
               </h1>
               <p className="truncate text-[13px] text-[#6B7280]">
-                {loading ? "Loading…" : `${employees.length} active · ${orgName}`}
+                {loading
+                  ? "Loading…"
+                  : `${employees.length} active · ${orgName}${
+                      employees.some((e) => e.profileImageUrl) ? " · tap photo to enlarge" : ""
+                    }`}
               </p>
             </div>
             <button
@@ -243,31 +368,44 @@ export default function ManageEmployeeSalaryPage() {
       {!loading && filtered.length > 0 ? (
         <ul className="mt-1 divide-y divide-[#E4E7EC] border-t border-[#E4E7EC] bg-white lg:mt-6 lg:overflow-hidden lg:rounded-2xl lg:border lg:border-slate-200/90 lg:shadow-sm">
           {filtered.map((emp) => (
-            <li key={emp.id}>
-              <button
-                type="button"
-                onClick={() => openSalaryStack(emp.id)}
-                className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition hover:bg-slate-50 active:bg-slate-100 lg:px-6 lg:py-4"
-              >
-                <img
-                  src={avatarUrl(emp.avatarSeed)}
-                  alt=""
-                  className="h-11 w-11 shrink-0 rounded-full bg-slate-100 ring-2 ring-white"
+            <li
+              key={emp.id}
+              className="transition hover:bg-slate-50 active:bg-slate-100"
+            >
+              <div className="flex w-full items-center gap-3 px-4 py-3.5 lg:px-6 lg:py-4">
+                <EmployeeListAvatar
+                  emp={emp}
+                  onZoom={(imageUrl, alt) => setPhotoZoom({ imageUrl, alt })}
                 />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium text-[#1F2937] lg:text-[#0C123A]">{emp.name}</p>
-                  <p className="truncate text-sm text-[#6B7280]">{emp.email}</p>
-                  <p className="mt-0.5 text-xs text-[#9CA3AF]">{emp.roleLabel}</p>
-                </div>
-                <span className="hidden shrink-0 text-sm font-semibold cursor-pointer text-teal-700 lg:inline">
-                  Salary info
-                </span>
-                <ChevronRight className="h-5 w-5 shrink-0 text-slate-400" />
-              </button>
+                <button
+                  type="button"
+                  onClick={() => openSalaryStack(emp.id)}
+                  className="flex min-w-0 flex-1 items-center gap-3 text-left transition hover:opacity-90 active:opacity-80"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium text-[#1F2937] lg:text-[#0C123A]">
+                      {emp.name}
+                    </p>
+                    <p className="truncate text-sm text-[#6B7280]">{emp.email}</p>
+                    <p className="mt-0.5 text-xs text-[#9CA3AF]">{emp.roleLabel}</p>
+                  </div>
+                  <span className="hidden shrink-0 text-sm font-semibold text-teal-700 lg:inline">
+                    Salary info
+                  </span>
+                  <ChevronRight className="h-5 w-5 shrink-0 text-slate-400" />
+                </button>
+              </div>
             </li>
           ))}
         </ul>
       ) : null}
+
+      <ProfilePhotoZoomModal
+        open={photoZoom != null}
+        imageUrl={photoZoom?.imageUrl ?? ""}
+        alt={photoZoom?.alt ?? ""}
+        onClose={() => setPhotoZoom(null)}
+      />
     </div>
   );
 }

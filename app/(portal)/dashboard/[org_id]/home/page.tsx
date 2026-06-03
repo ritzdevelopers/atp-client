@@ -1,9 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { BarChart3, Building2, MapPin, Plus, UserCircle, UsersRound } from "lucide-react";
+import { BarChart3, Building2, MapPin, Package, Plus, UserCircle, UsersRound } from "lucide-react";
+import {
+  countPendingHandoverItems,
+  fetchHandoverAssignedToMe,
+} from "@/services/handoverAssigned";
 import type { OrganizationAddress } from "@/services/organization";
 import { MdWorkspacePremium } from "react-icons/md";
 import { useManagementDashboardContext } from "@/components/portal-dashboard/Layout/ManagementDashboardContext";
@@ -105,6 +109,29 @@ function formatRoleLabel(role: string | null | undefined): string {
   return r.charAt(0).toUpperCase() + r.slice(1).toLowerCase();
 }
 
+/** Zoho-style density for mobile & tablet (max-lg). Desktop uses existing classes. */
+const mobileLabelCls =
+  "text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]";
+const mobileCaptionCls = "text-[11px] leading-snug text-[#6B7280]";
+const mobileValueCls = "text-[13px] font-semibold text-[#1F2937]";
+const mobileStatValueCls = "text-lg font-bold tabular-nums tracking-tight";
+
+function mobilePrimaryBtnCls(full = false) {
+  return `inline-flex min-h-[34px] items-center justify-center gap-1 rounded-md bg-[#008CD3] px-2.5 py-1.5 text-[12px] font-medium text-white transition active:scale-[0.98] hover:bg-[#0070AA] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full" : ""}`;
+}
+
+function mobileDangerBtnCls(full = false) {
+  return `inline-flex min-h-[34px] items-center justify-center gap-1 rounded-md bg-[#D93025] px-2.5 py-1.5 text-[12px] font-medium text-white transition active:scale-[0.98] hover:bg-[#B71C1C] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full" : ""}`;
+}
+
+function mobileSecondaryBtnCls(full = false) {
+  return `inline-flex min-h-[34px] items-center justify-center gap-1 rounded-md border border-[#E4E7EC] bg-white px-2.5 py-1.5 text-[12px] font-medium text-[#1F2937] transition active:scale-[0.98] hover:bg-[#F5F7FA] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full flex-1" : ""}`;
+}
+
+function mobileGoldBtnCls(full = false) {
+  return `inline-flex min-h-[36px] items-center justify-center gap-1.5 rounded-md bg-[#C99237] px-3 py-2 text-[12px] font-semibold text-[#0C123A] transition active:scale-[0.98] hover:bg-[#b87d2e] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full" : ""}`;
+}
+
 function InfoRow({
   label,
   value,
@@ -114,9 +141,13 @@ function InfoRow({
 }) {
   const display = value != null && String(value).length > 0 ? String(value) : "—";
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-slate-100/90 py-3 last:border-b-0 last:pb-0 first:pt-0 max-lg:rounded-xl max-lg:border-0 max-lg:bg-slate-50/90 max-lg:px-3.5 max-lg:py-2.5 max-lg:first:mt-0 max-lg:last:mb-0 lg:flex-row">
-      <span className="shrink-0 text-xs font-medium text-slate-500 lg:text-sm">{label}</span>
-      <span className="min-w-0 text-right text-sm font-semibold text-[#0C123A]">{display}</span>
+    <div className="flex items-center justify-between gap-2 border-b border-slate-100/90 py-3 last:border-b-0 last:pb-0 first:pt-0 max-lg:rounded-md max-lg:border-0 max-lg:bg-[#F9FAFB] max-lg:px-2.5 max-lg:py-2 max-lg:first:mt-0 max-lg:last:mb-0 lg:flex-row lg:gap-3 lg:py-3">
+      <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF] lg:text-xs lg:font-medium lg:normal-case lg:tracking-normal lg:text-slate-500">
+        {label}
+      </span>
+      <span className="min-w-0 text-right text-[13px] font-semibold text-[#1F2937] lg:text-sm lg:text-[#0C123A]">
+        {display}
+      </span>
     </div>
   );
 }
@@ -138,19 +169,19 @@ function DashboardCard({
     <section
       id={id}
       aria-labelledby={`${id}-title`}
-      className="dashboard-enter overflow-hidden rounded-3xl bg-white shadow-md ring-1 ring-slate-200/70 transition-all duration-300 max-lg:p-0 lg:rounded-2xl lg:border lg:border-slate-200/90 lg:p-6 lg:shadow-sm lg:ring-0 lg:hover:border-slate-300 lg:hover:shadow-md"
+      className="dashboard-enter overflow-hidden rounded-3xl bg-white shadow-md ring-1 ring-slate-200/70 transition-all duration-300 max-lg:rounded-lg max-lg:shadow-sm max-lg:ring-[#E4E7EC] max-lg:p-0 lg:rounded-2xl lg:border lg:border-slate-200/90 lg:p-6 lg:shadow-sm lg:ring-0 lg:hover:border-slate-300 lg:hover:shadow-md"
       style={{ animationDelay: `${delayMs}ms` }}
     >
-      <div className="flex items-center gap-3 border-b border-slate-100/80 px-4 py-3.5 max-lg:bg-slate-50/50 lg:border-0 lg:bg-transparent lg:px-0 lg:py-0">
-        <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[#C99237]/15 lg:h-10 lg:w-10 lg:rounded-xl">
-          <Icon className="h-[18px] w-[18px] shrink-0 text-[#C99237] lg:h-5 lg:w-5" aria-hidden />
+      <div className="flex items-center gap-2 border-b border-[#E4E7EC] px-3 py-2.5 max-lg:bg-[#F9FAFB] lg:gap-3 lg:border-slate-100/80 lg:px-0 lg:py-0 lg:bg-transparent">
+        <span className="flex h-8 w-8 items-center justify-center rounded-md bg-[#C99237]/15 lg:h-10 lg:w-10 lg:rounded-xl">
+          <Icon className="h-4 w-4 shrink-0 text-[#C99237] lg:h-5 lg:w-5" aria-hidden />
         </span>
-        <h2 id={`${id}-title`} className="text-[15px] font-semibold text-[#0C123A] lg:text-base">
+        <h2 id={`${id}-title`} className="text-[13px] font-semibold text-[#1F2937] lg:text-base lg:text-[#0C123A]">
           {title}
         </h2>
       </div>
       <div className="hidden border-t border-slate-100 lg:my-4 lg:block" />
-      <div className="flex flex-col gap-1.5 px-3 py-3 max-lg:pb-3.5 lg:gap-0 lg:px-0 lg:py-0">
+      <div className="flex flex-col gap-1 px-2.5 py-2.5 max-lg:gap-1 lg:gap-0 lg:px-0 lg:py-0">
         {children}
       </div>
     </section>
@@ -173,22 +204,22 @@ function OrganizationAddressesSection({
     <section
       id="dash-addresses"
       aria-labelledby="dash-addresses-title"
-      className="dashboard-enter overflow-hidden rounded-3xl bg-white shadow-md ring-1 ring-slate-200/70 lg:rounded-2xl lg:border lg:border-slate-200/90 lg:p-6 lg:shadow-sm lg:ring-0"
+      className="dashboard-enter overflow-hidden rounded-3xl bg-white shadow-md ring-1 ring-slate-200/70 max-lg:rounded-lg max-lg:ring-[#E4E7EC] lg:rounded-2xl lg:border lg:border-slate-200/90 lg:p-6 lg:shadow-sm lg:ring-0"
       style={{ animationDelay: `${delayMs}ms` }}
     >
-      <div className="flex items-center justify-between gap-3 border-b border-slate-100/80 px-4 py-3.5 max-lg:bg-slate-50/50 lg:border-0 lg:px-0 lg:py-0 lg:pb-4">
-        <div className="flex items-center gap-3">
-          <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[#C99237]/15 lg:h-10 lg:w-10 lg:rounded-xl">
-            <MapPin className="h-[18px] w-[18px] shrink-0 text-[#C99237] lg:h-5 lg:w-5" aria-hidden />
+      <div className="flex items-center justify-between gap-2 border-b border-[#E4E7EC] px-3 py-2.5 max-lg:bg-[#F9FAFB] lg:gap-3 lg:border-slate-100/80 lg:px-0 lg:py-0 lg:pb-4">
+        <div className="flex items-center gap-2 lg:gap-3">
+          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-[#C99237]/15 lg:h-10 lg:w-10 lg:rounded-xl">
+            <MapPin className="h-4 w-4 shrink-0 text-[#C99237] lg:h-5 lg:w-5" aria-hidden />
           </span>
           <div>
             <h2
               id="dash-addresses-title"
-              className="text-[15px] font-semibold text-[#0C123A] lg:text-base"
+              className="text-[13px] font-semibold text-[#1F2937] lg:text-base lg:text-[#0C123A]"
             >
               Organization addresses
             </h2>
-            <p className="text-xs text-slate-500 lg:text-sm">
+            <p className="text-[11px] text-[#6B7280] lg:text-xs lg:text-slate-500 lg:text-sm">
               {hasAddresses
                 ? `${addresses.length} registered location${addresses.length === 1 ? "" : "s"}`
                 : "No locations on file yet"}
@@ -205,33 +236,30 @@ function OrganizationAddressesSection({
         ) : null}
       </div>
 
-      <div className="px-3 py-3 max-lg:pb-4 lg:px-0 lg:py-0">
+      <div className="px-2.5 py-2.5 max-lg:pb-3 lg:px-0 lg:py-0">
         {!hasAddresses ? (
-          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-8 text-center max-lg:mx-0 lg:py-10">
-            <MapPin className="mx-auto h-9 w-9 text-slate-300" aria-hidden />
-            <p className="mt-3 text-sm font-semibold text-[#0C123A]">No address added yet</p>
-            <p className="mt-1 text-sm text-slate-500">
+          <div className="rounded-lg border border-dashed border-[#E4E7EC] bg-[#F9FAFB] px-3 py-8 text-center max-lg:mx-0 lg:rounded-2xl lg:border-slate-200 lg:py-10">
+            <MapPin className="mx-auto h-8 w-8 text-[#9CA3AF] lg:h-9 lg:w-9 lg:text-slate-300" aria-hidden />
+            <p className="mt-2 text-[13px] font-semibold text-[#1F2937] lg:mt-3 lg:text-sm lg:text-[#0C123A]">
+              No address added yet
+            </p>
+            <p className={`mt-1 ${mobileCaptionCls} lg:text-sm lg:text-slate-500`}>
               Add your office or branch locations for this organization.
             </p>
-            <Link
-              href={manageHref}
-              className="mt-5 inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-[#C99237] px-5 py-2.5 text-sm font-bold text-[#0C123A] shadow-sm transition hover:bg-[#b87d2e] active:scale-[0.98]"
-            >
-              <Plus className="h-4 w-4" aria-hidden />
+            <Link href={manageHref} className={`mt-4 ${mobileGoldBtnCls()} lg:mt-5 lg:min-h-[44px] lg:rounded-xl lg:px-5 lg:py-2.5 lg:text-sm lg:font-bold`}>
+              <Plus className="h-3.5 w-3.5 lg:h-4 lg:w-4" aria-hidden />
               Add organization address
             </Link>
           </div>
         ) : (
-          <ul className="grid gap-3 sm:grid-cols-2">
+          <ul className="grid gap-2 sm:grid-cols-2 lg:gap-3">
             {addresses.map((addr, index) => (
               <li
                 key={String(addr.id ?? index)}
-                className="rounded-2xl border border-slate-200/90 bg-slate-50/60 p-4 lg:rounded-xl"
+                className="rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] p-3 lg:rounded-xl lg:border-slate-200/90 lg:bg-slate-50/60 lg:p-4"
               >
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                  {addressLocationLabel(addr, index)}
-                </p>
-                <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-[#0C123A]">
+                <p className={mobileLabelCls}>{addressLocationLabel(addr, index)}</p>
+                <p className="mt-1.5 whitespace-pre-line text-[12px] leading-snug text-[#1F2937] lg:mt-2 lg:text-sm lg:leading-relaxed lg:text-[#0C123A]">
                   {formatOrganizationAddress(addr)}
                 </p>
               </li>
@@ -241,7 +269,7 @@ function OrganizationAddressesSection({
         {hasAddresses ? (
           <Link
             href={manageHref}
-            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-[#C99237]/40 bg-[#C99237]/5 px-4 py-3 text-sm font-semibold text-[#0C123A] transition hover:bg-[#C99237]/10 max-lg:min-h-[44px] sm:w-auto"
+            className={`mt-3 ${mobileGoldBtnCls(true)} border border-dashed border-[#C99237]/40 !bg-[#C99237]/5 !text-[#0C123A] hover:!bg-[#C99237]/10 lg:mt-4 lg:min-h-[44px] lg:rounded-xl lg:px-4 lg:py-3 lg:text-sm`}
           >
             <Plus className="h-4 w-4 text-[#C99237]" aria-hidden />
             Add another address
@@ -288,6 +316,28 @@ function HomeOverview({
   const [logSubmitting, setLogSubmitting] = useState(false);
   const [logSuccessMessage, setLogSuccessMessage] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
+  const [handoverPendingCount, setHandoverPendingCount] = useState(0);
+
+  const handoverHref =
+    orgId && !Number.isNaN(orgId)
+      ? `/dashboard/${encodeURIComponent(String(orgId))}/asset-handover`
+      : "#";
+
+  const loadHandoverPendingCount = useCallback(async () => {
+    if (!orgId || Number.isNaN(orgId)) return;
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    try {
+      const result = await fetchHandoverAssignedToMe(token, orgId);
+      setHandoverPendingCount(countPendingHandoverItems(result));
+    } catch {
+      setHandoverPendingCount(0);
+    }
+  }, [orgId]);
+
+  useEffect(() => {
+    void loadHandoverPendingCount();
+  }, [loadHandoverPendingCount]);
 
   useEffect(() => {
     async function loadAttendance() {
@@ -488,25 +538,28 @@ function HomeOverview({
   const dayVisual = getAttendanceDayVisual(todayRecord?.attendance_status);
 
   return (
-    <div className="-mx-1 space-y-4 sm:-mx-2 sm:space-y-5 lg:mx-0 lg:space-y-8">
-      {/* Mobile & tablet: app-style hero */}
+    <div className="-mx-1 space-y-2.5 max-lg:bg-[#F5F7FA] max-lg:px-1 max-lg:pb-2 sm:-mx-2 sm:space-y-3 lg:mx-0 lg:space-y-8 lg:bg-transparent lg:px-0 lg:pb-0">
+      {/* Mobile & tablet: Zoho-style compact hero */}
       <header
-        className="dashboard-enter overflow-hidden rounded-3xl bg-gradient-to-br from-[#0C123A] via-[#151f52] to-[#0C123A] px-4 py-5 shadow-lg sm:px-5 sm:py-6 lg:hidden"
+        className="dashboard-enter overflow-hidden rounded-lg border border-[#0C123A]/20 bg-gradient-to-br from-[#0C123A] via-[#151f52] to-[#0C123A] px-3 py-3.5 shadow-md lg:hidden"
         style={{ animationDelay: "0ms" }}
       >
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-medium uppercase tracking-wider text-[#C99237]/90">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-[#C99237]">
               {greetingForHour()}
             </p>
-            <h1 className="mt-1 flex items-center gap-2 text-xl font-bold leading-tight text-white sm:text-2xl">
+            <h1 className="mt-0.5 flex items-center gap-1.5 text-[16px] font-bold leading-tight text-white">
               <span className="truncate">{displayName}</span>
-              <MdWorkspacePremium className="h-7 w-7 shrink-0 text-[#C99237]" aria-hidden />
+              <MdWorkspacePremium className="h-5 w-5 shrink-0 text-[#C99237]" aria-hidden />
             </h1>
-            <p className="mt-1.5 truncate text-sm text-slate-300">{orgTitle}</p>
+            <p className="mt-0.5 truncate text-[11px] text-slate-300">{orgTitle}</p>
+            <p className="mt-1 text-[10px] text-slate-400">
+              Management dashboard · quick overview
+            </p>
           </div>
           <span
-            className={`shrink-0 rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wide ${roleBadgeClass}`}
+            className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${roleBadgeClass}`}
           >
             {roleBadgeLabel}
           </span>
@@ -541,25 +594,24 @@ function HomeOverview({
 
       {roleKey !== "admin" ? (
         <section
-          className="dashboard-enter overflow-hidden rounded-3xl bg-gradient-to-r from-[#0C123A] to-[#151f52] p-4 shadow-lg ring-1 ring-[#C99237]/25 sm:p-5 lg:rounded-2xl lg:border lg:border-[#C99237]/35 lg:p-7 lg:shadow-md lg:ring-0"
+          className="dashboard-enter overflow-hidden rounded-lg border border-[#C99237]/30 bg-gradient-to-r from-[#0C123A] to-[#151f52] p-3 shadow-md max-lg:ring-1 max-lg:ring-[#C99237]/20 sm:p-4 lg:rounded-2xl lg:border lg:border-[#C99237]/35 lg:p-7 lg:shadow-md lg:ring-0"
           style={{ animationDelay: "50ms" }}
         >
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-start gap-3">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#C99237]/20 lg:rounded-xl">
-                <UsersRound className="h-6 w-6 text-[#C99237]" aria-hidden />
+          <div className="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between lg:gap-4">
+            <div className="flex items-start gap-2.5 lg:gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#C99237]/20 lg:h-11 lg:w-11 lg:rounded-xl">
+                <UsersRound className="h-5 w-5 text-[#C99237] lg:h-6 lg:w-6" aria-hidden />
               </span>
-              <div>
-                <h2 className="text-[15px] font-semibold text-white lg:text-base">Your team group</h2>
-                <p className="mt-1 text-sm leading-relaxed text-slate-300 max-lg:line-clamp-2 lg:max-w-xl">
-                  Open your team workspace to see the full roster, when the team was created, who
-                  invited each member, and a live activity feed for this team.
+              <div className="min-w-0">
+                <h2 className="text-[13px] font-semibold text-white lg:text-base">Your team group</h2>
+                <p className={`mt-0.5 max-lg:line-clamp-2 ${mobileCaptionCls} !text-slate-300 lg:mt-1 lg:text-sm lg:leading-relaxed lg:max-w-xl`}>
+                  Roster, invites, and live activity feed for your team.
                 </p>
               </div>
             </div>
             <Link
               href={`/dashboard/${orgId}/organization-employees/team-group`}
-              className="inline-flex w-full shrink-0 items-center justify-center rounded-2xl bg-[#C99237] px-5 py-3.5 text-sm font-semibold text-[#0C123A] shadow-lg transition active:scale-[0.98] hover:bg-[#d9a343] lg:w-auto lg:rounded-xl lg:py-2.5"
+              className={`${mobileGoldBtnCls(true)} lg:inline-flex lg:w-auto lg:shrink-0 lg:rounded-xl lg:px-5 lg:py-2.5 lg:text-sm lg:shadow-lg`}
             >
               Go to team group
             </Link>
@@ -567,8 +619,44 @@ function HomeOverview({
         </section>
       ) : null}
 
+      <section
+        className="dashboard-enter overflow-hidden rounded-lg border border-amber-200/80 bg-gradient-to-r from-amber-50 to-white p-3 shadow-sm ring-1 ring-amber-100 sm:p-4 lg:rounded-2xl lg:p-6"
+        style={{ animationDelay: "75ms" }}
+      >
+        <div className="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between lg:gap-4">
+          <div className="flex items-start gap-2.5 lg:gap-3">
+            <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-amber-100 text-amber-800 lg:h-11 lg:w-11 lg:rounded-xl">
+              <Package className="h-5 w-5 lg:h-6 lg:w-6" aria-hidden />
+              {handoverPendingCount > 0 ? (
+                <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#E8710A] px-1 text-[9px] font-bold text-white">
+                  {handoverPendingCount > 9 ? "9+" : handoverPendingCount}
+                </span>
+              ) : null}
+            </span>
+            <div className="min-w-0">
+              <h2 className="text-[13px] font-semibold text-[#0C123A] lg:text-base">
+                Asset handover
+              </h2>
+              <p
+                className={`mt-0.5 max-lg:line-clamp-2 ${mobileCaptionCls} lg:mt-1 lg:text-sm lg:leading-relaxed lg:max-w-xl`}
+              >
+                Exit assets and custom tasks assigned to you as custodian.
+              </p>
+            </div>
+          </div>
+          <Link
+            href={handoverHref}
+            className={`${mobileGoldBtnCls(true)} !bg-[#008CD3] !text-white hover:!bg-[#0070AA] lg:inline-flex lg:w-auto lg:shrink-0 lg:rounded-xl lg:px-5 lg:py-2.5 lg:text-sm lg:shadow-md`}
+          >
+            {handoverPendingCount > 0
+              ? `Open handovers (${handoverPendingCount} pending)`
+              : "Open asset handover"}
+          </Link>
+        </div>
+      </section>
+
       <div
-        className={`grid grid-cols-1 gap-3 sm:gap-4 lg:gap-6 ${ownerMatchesUser ? "lg:grid-cols-2" : "lg:grid-cols-3"}`}
+        className={`grid grid-cols-1 gap-2 sm:gap-2.5 lg:gap-6 ${ownerMatchesUser ? "lg:grid-cols-2" : "lg:grid-cols-3"}`}
       >
         <DashboardCard icon={Building2} title="Organization" delayMs={100} id="dash-org-card">
           <InfoRow label="Name" value={organization.org_name} />
@@ -606,88 +694,85 @@ function HomeOverview({
 
       {showAttendance ? (
         <section
-          className="dashboard-enter overflow-hidden rounded-3xl bg-white shadow-md ring-1 ring-slate-200/70 lg:rounded-2xl lg:border lg:border-slate-200/90 lg:p-6 lg:shadow-sm lg:ring-0"
+          className="dashboard-enter overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-[#E4E7EC] lg:rounded-2xl lg:border lg:border-slate-200/90 lg:p-6 lg:shadow-sm lg:ring-0"
           style={{ animationDelay: "150ms" }}
         >
-          {/* Mobile & tablet: attendance hub */}
+          {/* Mobile & tablet: Zoho-style attendance hub */}
           <div className="lg:hidden">
-            <div className="bg-gradient-to-br from-[#0C123A] via-[#151f52] to-[#0C123A] px-4 py-5 sm:px-5">
+            <div className="border-b border-[#E4E7EC] bg-gradient-to-br from-[#0C123A] via-[#151f52] to-[#0C123A] px-3 py-3.5">
               <div className="flex items-center justify-between gap-2">
-                <h2 className="text-sm font-semibold text-white">Today&apos;s attendance</h2>
+                <div>
+                  <h2 className="text-[13px] font-semibold text-white">Today&apos;s attendance</h2>
+                  <p className="mt-0.5 text-[10px] text-slate-400">Mark in, out, or break logs</p>
+                </div>
                 <span
-                  className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${statusTone}`}
+                  className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${statusTone}`}
                 >
                   {statusLabel}
                 </span>
               </div>
-              <p className="mt-3 text-[11px] font-medium uppercase tracking-wider text-slate-400">
-                {showLiveTimer ? "Working time (live)" : "Working hours"}
+              <p className={`mt-2 ${mobileLabelCls} !text-slate-400`}>
+                {showLiveTimer ? "Working (live)" : "Working hours"}
               </p>
-              <p className="mt-0.5 text-4xl font-bold tabular-nums tracking-tight text-white sm:text-[2.75rem]">
+              <p className={`mt-0.5 ${mobileStatValueCls} text-white`}>
                 {String(workingHoursDisplay)}
               </p>
               {showLiveTimer ? (
-                <p className="mt-1 text-xs text-slate-400">Updates until you check out</p>
+                <p className={`mt-0.5 ${mobileCaptionCls} !text-slate-400`}>
+                  Updates until you check out
+                </p>
               ) : null}
               {attendanceLoading ? (
-                <p className="mt-2 text-xs text-slate-400">Loading attendance…</p>
+                <p className={`mt-1 ${mobileCaptionCls} !text-slate-400`}>Loading attendance…</p>
               ) : null}
               {attendanceError ? (
-                <p className="mt-2 text-xs text-rose-300">{attendanceError}</p>
+                <p className="mt-1 text-[11px] text-rose-300">{attendanceError}</p>
               ) : null}
             </div>
 
-            <div className="grid grid-cols-2 gap-2 p-3 sm:gap-2.5 sm:p-4">
-              <div className="rounded-2xl bg-slate-50 px-3 py-3 ring-1 ring-slate-200/80">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                  Check in
-                </p>
-                <p className="mt-1 text-sm font-semibold text-[#0C123A]">
+            <div className="grid grid-cols-2 gap-1.5 p-2.5">
+              <div className="rounded-md border border-[#E4E7EC] bg-[#F9FAFB] px-2.5 py-2">
+                <p className={mobileLabelCls}>Check in</p>
+                <p className={`mt-0.5 ${mobileValueCls}`}>
                   {hasCheckedInToday ? formatAttendanceLogLocal(todayRecord?.check_in) : "—"}
                 </p>
               </div>
-              <div className="rounded-2xl bg-slate-50 px-3 py-3 ring-1 ring-slate-200/80">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                  Check out
-                </p>
-                <p className="mt-1 text-sm font-semibold text-[#0C123A]">
+              <div className="rounded-md border border-[#E4E7EC] bg-[#F9FAFB] px-2.5 py-2">
+                <p className={mobileLabelCls}>Check out</p>
+                <p className={`mt-0.5 ${mobileValueCls}`}>
                   {hasCheckedOutToday
                     ? formatAttendanceTimeLocal(todayRecord?.check_out)
                     : "—"}
                 </p>
               </div>
-              <div className="rounded-2xl bg-slate-50 px-3 py-3 ring-1 ring-slate-200/80">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                  Late after
-                </p>
-                <p className="mt-1 text-sm font-semibold text-rose-600">{lateAfter}</p>
+              <div className="rounded-md border border-[#E4E7EC] bg-[#F9FAFB] px-2.5 py-2">
+                <p className={mobileLabelCls}>Late after</p>
+                <p className="mt-0.5 text-[13px] font-semibold text-[#E8710A]">{lateAfter}</p>
               </div>
-              <div className="rounded-2xl bg-slate-50 px-3 py-3 ring-1 ring-slate-200/80">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                  Day status
-                </p>
+              <div className="rounded-md border border-[#E4E7EC] bg-[#F9FAFB] px-2.5 py-2">
+                <p className={mobileLabelCls}>Day status</p>
                 <span
-                  className={`mt-1 inline-block rounded-lg px-2 py-0.5 text-xs font-semibold ${dayVisual.boxClass}`}
+                  className={`mt-0.5 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${dayVisual.boxClass}`}
                 >
                   {dayVisual.meaning}
                 </span>
               </div>
             </div>
 
-            <div className="flex flex-col gap-2 border-t border-slate-100 px-3 pb-4 pt-1 sm:px-4 sm:pb-5">
+            <div className="flex flex-wrap gap-1.5 border-t border-[#E4E7EC] px-2.5 py-2.5">
               <button
                 type="button"
                 onClick={() => void markCheckIn()}
                 disabled={hasCheckedInToday || checkInSubmitting}
-                className="flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-emerald-600 text-sm font-semibold text-white shadow-sm transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45"
+                className={mobilePrimaryBtnCls(true)}
               >
-                {checkInSubmitting ? "Marking check-in…" : hasCheckedInToday ? "Checked in" : "Check in"}
+                {checkInSubmitting ? "Marking…" : hasCheckedInToday ? "Checked in" : "Check in"}
               </button>
               <button
                 type="button"
                 onClick={() => void markCheckOut()}
                 disabled={!hasCheckedInToday || hasCheckedOutToday || checkOutSubmitting}
-                className="flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-rose-600 text-sm font-semibold text-white shadow-sm transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45"
+                className={mobileDangerBtnCls(true)}
               >
                 {checkOutSubmitting
                   ? "Processing…"
@@ -705,19 +790,19 @@ function HomeOverview({
                   todayRecord?.id == null ||
                   todayRecord?.id === ""
                 }
-                className="flex min-h-[48px] w-full items-center justify-center rounded-2xl border-2 border-slate-200 bg-white text-sm font-semibold text-slate-700 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45"
+                className={mobileSecondaryBtnCls(true)}
                 title="Log stepping out / back in (washroom, errand, etc.)"
               >
-                {logSubmitting ? "Saving log…" : "Mark break / return log"}
+                {logSubmitting ? "Saving…" : "Mark log"}
               </button>
             </div>
             {logSuccessMessage ? (
-              <p className="border-t border-slate-100 px-4 pb-3 text-sm text-emerald-700">
+              <p className="border-t border-[#E4E7EC] px-3 py-2 text-[12px] text-[#0F9D58]">
                 {logSuccessMessage}
               </p>
             ) : null}
             {attendanceActionError ? (
-              <p className="border-t border-slate-100 px-4 pb-4 text-sm text-red-600">
+              <p className="border-t border-[#E4E7EC] px-3 pb-2.5 text-[12px] text-[#D93025]">
                 {attendanceActionError}
               </p>
             ) : null}
@@ -854,10 +939,10 @@ export default function HomePage() {
   if (loading || !organization || !user) {
     return (
       <div
-        className="dashboard-enter rounded-3xl bg-white p-8 shadow-md ring-1 ring-slate-200/70 max-lg:-mx-1 lg:rounded-2xl lg:border lg:border-slate-200 lg:shadow-sm lg:ring-0"
+        className="dashboard-enter rounded-lg bg-white p-6 shadow-sm ring-1 ring-[#E4E7EC] max-lg:mx-0 max-lg:p-5 lg:rounded-2xl lg:border lg:border-slate-200 lg:p-8 lg:shadow-md lg:ring-slate-200/70"
         style={{ animationDelay: "0ms" }}
       >
-        <p className="text-base font-medium text-[#0C123A]">
+        <p className="text-[13px] font-medium text-[#1F2937] lg:text-base lg:text-[#0C123A]">
           {loading ? "Loading dashboard…" : "Could not load organization."}
         </p>
       </div>
