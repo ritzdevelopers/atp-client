@@ -26,7 +26,7 @@ export type LeaveBalanceDisplayRow = {
 export function summarizeLeaveBalances(
   balances: EmployeeLeaveBalanceRow[],
 ): LeaveSummary {
-  return balances.reduce(
+  return balances.reduce<LeaveSummary>(
     (acc, row) => ({
       total_leaves: acc.total_leaves + Number(row.total_leaves || 0),
       used_leaves: acc.used_leaves + Number(row.used_leaves || 0),

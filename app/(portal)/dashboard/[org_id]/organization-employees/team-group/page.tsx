@@ -32,8 +32,11 @@ import {
   applyForLeave,
   fetchMyLeaveQueries,
   respondToLeaveRequest,
+  validateLeaveApplication,
   type LeaveQueryRow as EmployeeLeaveRow,
 } from "@/services/employeeLeaves";
+import AssignedLeaveTypeSelect from "@/components/portal-dashboard/user-layout/AssignedLeaveTypeSelect";
+import { useAssignedLeaveTypes } from "@/hooks/useAssignedLeaveTypes";
 import {
   addMemberToOrgTeam,
   fetchMyOrgTeam,
@@ -311,6 +314,10 @@ function TeamGroupPageContent() {
   const params = useParams();
   const router = useRouter();
   const orgId = String(params?.org_id ?? "");
+  const orgIdNum = useMemo(() => {
+    const n = Number(orgId);
+    return Number.isNaN(n) ? undefined : n;
+  }, [orgId]);
 
   const [detail, setDetail] = useState<OrgTeamDetail | null>(null);
   const [noTeam, setNoTeam] = useState(false);
@@ -354,9 +361,13 @@ function TeamGroupPageContent() {
 
   const [adminLeaveModalOpen, setAdminLeaveModalOpen] = useState(false);
   const [adminAttModalOpen, setAdminAttModalOpen] = useState(false);
-  const [leaveType, setLeaveType] = useState<
-    "full_day" | "half_day" | "short_leave"
-  >("full_day");
+  const {
+    options: assignedLeaveOptions,
+    selectedLeaveTypeId,
+    setSelectedLeaveTypeId,
+    loading: assignedLeavesLoading,
+    error: assignedLeavesError,
+  } = useAssignedLeaveTypes(orgIdNum, adminLeaveModalOpen);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [reason, setReason] = useState("");
@@ -727,7 +738,6 @@ function TeamGroupPageContent() {
   }
 
   function openAdminLeaveModal() {
-    setLeaveType("full_day");
     setStartDate("");
     setEndDate("");
     setReason("");
@@ -743,16 +753,25 @@ function TeamGroupPageContent() {
       setLeaveFormError("Sign in required.");
       return;
     }
-    const orgIdNum = Number(orgId);
-    if (Number.isNaN(orgIdNum) || !startDate) {
-      setLeaveFormError("Start date is required.");
+    if (orgIdNum == null) {
+      setLeaveFormError("Invalid organization.");
+      return;
+    }
+    const validationError = validateLeaveApplication({
+      startDate,
+      endDate,
+      selectedLeaveTypeId,
+      assignedOptions: assignedLeaveOptions,
+    });
+    if (validationError) {
+      setLeaveFormError(validationError);
       return;
     }
     setLeaveSubmitting(true);
     try {
       await applyForLeave(t, {
         org_id: orgIdNum,
-        leave_type: leaveType,
+        leave_type_id: selectedLeaveTypeId,
         start_date: startDate,
         end_date: endDate || null,
         reason: reason.trim() || null,
@@ -2327,20 +2346,15 @@ function TeamGroupPageContent() {
                   {leaveFormError}
                 </p>
               ) : null}
-              <label className="block">
-                <span className="text-[13px] font-medium text-[#667781] sm:text-xs sm:font-semibold sm:text-slate-600">Leave type</span>
-                <select
-                  value={leaveType}
-                  onChange={(e) =>
-                    setLeaveType(e.target.value as typeof leaveType)
-                  }
-                  className={waFieldCls()}
-                >
-                  <option value="full_day">Full day</option>
-                  <option value="half_day">Half day</option>
-                  <option value="short_leave">Short leave</option>
-                </select>
-              </label>
+              <AssignedLeaveTypeSelect
+                options={assignedLeaveOptions}
+                loading={assignedLeavesLoading}
+                error={assignedLeavesError}
+                selectedLeaveTypeId={selectedLeaveTypeId}
+                onSelectLeaveTypeId={setSelectedLeaveTypeId}
+                className={waFieldCls()}
+                labelClassName="text-[13px] font-medium text-[#667781] sm:text-xs sm:font-semibold sm:text-slate-600"
+              />
               <label className="block">
                 <span className="text-[13px] font-medium text-[#667781] sm:text-xs sm:font-semibold sm:text-slate-600">Start date</span>
                 <input
@@ -2385,7 +2399,12 @@ function TeamGroupPageContent() {
                 </button>
                 <button
                   type="submit"
-                  disabled={leaveSubmitting}
+                  disabled={
+                    leaveSubmitting ||
+                    assignedLeavesLoading ||
+                    assignedLeaveOptions.length === 0 ||
+                    !selectedLeaveTypeId
+                  }
                   className={waPrimaryBtnCls()}
                 >
                   {leaveSubmitting ? "Submitting…" : "Submit"}
