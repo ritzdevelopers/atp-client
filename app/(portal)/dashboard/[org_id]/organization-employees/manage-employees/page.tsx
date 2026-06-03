@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useParams } from "next/navigation";
 import {
   Star,
@@ -23,15 +23,18 @@ import {
   Pencil,
   Shield,
   FileText,
+  Package,
   Upload,
   UserX,
 } from "lucide-react";
 import { useManagementDashboardContext } from "@/components/portal-dashboard/Layout/ManagementDashboardContext";
+import AssignEmployeeAssetsModal from "@/components/portal-dashboard/employees/AssignEmployeeAssetsModal";
 import TerminateEmployeeModal from "@/components/portal-dashboard/employees/TerminateEmployeeModal";
 import {
   addUserAddress,
   dedupeOrgUserRows,
   getAllOrgUsers,
+  orgUserEmployeeTeamId,
   getOrganizationRoles,
   getUserAddresses,
   updateUserAddress,
@@ -69,6 +72,7 @@ type EmployeeCard = {
   exitStatusLabel: string | null;
   avatarSrc: string;
   avatarSeed: string;
+  profileImageUrl: string | null;
 };
 
 function hasExitProcessRecord(row: OrgUserRow): boolean {
@@ -109,10 +113,359 @@ function avatarUrl(seed: string) {
   return `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(seed)}`;
 }
 
-function resolveAvatarSrc(userImage: unknown, seed: string) {
+function profileImageUrlFromRow(userImage: unknown): string | null {
   const image = String(userImage ?? "").trim();
+  return image || null;
+}
+
+function resolveAvatarSrc(userImage: unknown, seed: string) {
+  const image = profileImageUrlFromRow(userImage);
   if (image) return image;
   return avatarUrl(seed);
+}
+
+const mobileLabelCls =
+  "text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]";
+const mobileCaptionCls = "text-[11px] leading-snug text-[#6B7280]";
+const mobileValueCls = "text-[13px] font-semibold text-[#1F2937]";
+
+function ProfilePhotoZoomModal({
+  open,
+  imageUrl,
+  alt,
+  onClose,
+}: {
+  open: boolean;
+  imageUrl: string;
+  alt: string;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-[#111B21]/80 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="employee-photo-zoom-title"
+    >
+      <button
+        type="button"
+        className="absolute inset-0"
+        onClick={onClose}
+        aria-label="Close profile photo"
+      />
+      <div className="relative z-[1] w-full max-w-sm">
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute -right-1 -top-1 z-[2] flex h-9 w-9 items-center justify-center rounded-full border border-[#E4E7EC] bg-white text-[#1F2937] shadow-lg active:scale-95"
+          aria-label="Close"
+        >
+          <X className="h-5 w-5" aria-hidden />
+        </button>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={imageUrl}
+          alt={alt}
+          className="max-h-[min(78vh,560px)] w-full rounded-xl bg-white object-contain shadow-2xl ring-1 ring-[#E4E7EC]"
+        />
+        <p
+          id="employee-photo-zoom-title"
+          className="mt-2.5 text-center text-[13px] font-medium text-white"
+        >
+          {alt}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function EmployeeAvatar({
+  emp,
+  size = "md",
+  onZoom,
+}: {
+  emp: EmployeeCard;
+  size?: "md" | "lg";
+  onZoom: (imageUrl: string, name: string) => void;
+}) {
+  const box = size === "lg" ? "h-14 w-14" : "h-11 w-11";
+  const dot =
+    size === "lg" ? "h-3 w-3 border-2" : "h-2.5 w-2.5 border-[1.5px]";
+  const img = (
+    <>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={emp.avatarSrc}
+        alt=""
+        className="h-full w-full object-cover object-top"
+        onError={(e) => {
+          e.currentTarget.src = avatarUrl(emp.avatarSeed);
+        }}
+      />
+      <span
+        className={`absolute bottom-0 right-0 rounded-full border-white ${dot} ${
+          emp.status === "in" ? "bg-[#0F9D58]" : "bg-[#D93025]"
+        }`}
+        aria-hidden
+      />
+    </>
+  );
+
+  const shell = `relative ${box} shrink-0 overflow-hidden rounded-md border border-[#E4E7EC] bg-[#F9FAFB]`;
+
+  if (emp.profileImageUrl) {
+    return (
+      <button
+        type="button"
+        onClick={() => onZoom(emp.profileImageUrl!, emp.name)}
+        className={`${shell} transition active:opacity-90`}
+        aria-label={`View ${emp.name} profile photo`}
+      >
+        {img}
+      </button>
+    );
+  }
+
+  return <div className={shell}>{img}</div>;
+}
+
+function MobileEmployeeMenuSheet({
+  emp,
+  onClose,
+  children,
+}: {
+  emp: EmployeeCard;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[10050] flex flex-col justify-end lg:hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="employee-actions-sheet-title"
+      data-employee-menu-sheet
+    >
+      <button
+        type="button"
+        className="absolute inset-0 bg-[#111B21]/50"
+        onClick={onClose}
+        aria-label="Close menu"
+      />
+      <div className="relative flex max-h-[min(88vh,560px)] flex-col overflow-hidden rounded-t-2xl bg-white shadow-[0_-8px_32px_rgba(15,23,42,0.18)]">
+        <div className="flex shrink-0 items-center justify-between border-b border-[#E4E7EC] px-4 py-3">
+          <div className="min-w-0 pr-3">
+            <p id="employee-actions-sheet-title" className="truncate text-[15px] font-semibold text-[#1F2937]">
+              {emp.name}
+            </p>
+            <p className="text-[11px] text-[#6B7280]">{emp.empCode} · {emp.roleLabel}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#E4E7EC] text-[#6B7280] active:bg-[#F5F7FA]"
+            aria-label="Close"
+          >
+            <X className="h-5 w-5" aria-hidden />
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-1">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EmployeeActionsMenuList({
+  orgIdParam,
+  emp,
+  row,
+  isReadOnlyRosterTab,
+  viewerCanTerminate,
+  viewerCanAssignLeaves,
+  viewerCanManageAddresses,
+  variant,
+  onClose,
+  onEdit,
+  onRole,
+  onTerminate,
+  onDocuments,
+  onPaidLeave,
+  onAssignAssets,
+  onUpdateAddresses,
+  onAddAddress,
+}: {
+  orgIdParam: string | string[] | undefined;
+  emp: EmployeeCard;
+  row: OrgUserRow;
+  isReadOnlyRosterTab: boolean;
+  viewerCanTerminate: boolean;
+  viewerCanAssignLeaves: boolean;
+  viewerCanManageAddresses: boolean;
+  variant: "dropdown" | "sheet";
+  onClose: () => void;
+  onEdit: (row: OrgUserRow) => void;
+  onRole: (row: OrgUserRow) => void;
+  onTerminate: (row: OrgUserRow) => void;
+  onDocuments: (row: OrgUserRow) => void;
+  onPaidLeave: (row: OrgUserRow) => void;
+  onAssignAssets: (row: OrgUserRow) => void;
+  onUpdateAddresses: (row: OrgUserRow) => void;
+  onAddAddress: (row: OrgUserRow) => void;
+}) {
+  const itemCls =
+    variant === "sheet"
+      ? "flex w-full touch-manipulation items-center gap-2.5 px-4 py-3 text-left text-[14px] text-[#1F2937] active:bg-[#F5F7FA]"
+      : "flex w-full touch-manipulation items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-700 active:bg-slate-50";
+
+  return (
+    <>
+      <Link
+        href={`/dashboard/${orgIdParam}/organization-employees/manage-employees/get-employee?user_id=${encodeURIComponent(emp.id)}`}
+        role="menuitem"
+        className={itemCls}
+        onClick={onClose}
+      >
+        <Users className="h-4 w-4 shrink-0 text-[#008CD3]" aria-hidden />
+        View profile
+      </Link>
+      {!isReadOnlyRosterTab ? (
+        <button
+          type="button"
+          role="menuitem"
+          className={itemCls}
+          onClick={() => {
+            onEdit(row);
+            onClose();
+          }}
+        >
+          <Pencil className="h-4 w-4 shrink-0 text-[#008CD3]" aria-hidden />
+          Edit
+        </button>
+      ) : null}
+      {!isReadOnlyRosterTab ? (
+        <button
+          type="button"
+          role="menuitem"
+          className={itemCls}
+          onClick={() => {
+            onRole(row);
+            onClose();
+          }}
+        >
+          <Shield className="h-4 w-4 shrink-0 text-[#008CD3]" aria-hidden />
+          Update role
+        </button>
+      ) : null}
+      {!isReadOnlyRosterTab && viewerCanTerminate && emp.isActive && !emp.hasExitProcess ? (
+        <button
+          type="button"
+          role="menuitem"
+          className={`${itemCls} text-red-700 active:bg-red-50`}
+          onClick={() => {
+            onTerminate(row);
+            onClose();
+          }}
+        >
+          <UserX className="h-4 w-4 shrink-0" aria-hidden />
+          Employee termination
+        </button>
+      ) : null}
+      {!isReadOnlyRosterTab && viewerCanAssignLeaves ? (
+        <>
+          <button
+            type="button"
+            role="menuitem"
+            className={itemCls}
+            onClick={() => {
+              onDocuments(row);
+              onClose();
+            }}
+          >
+            <FileText className="h-4 w-4 shrink-0 text-[#008CD3]" aria-hidden />
+            Add documents
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className={itemCls}
+            onClick={() => {
+              void onPaidLeave(row);
+              onClose();
+            }}
+          >
+            <BadgeDollarSign className="h-4 w-4 shrink-0 text-[#008CD3]" aria-hidden />
+            Assign paid leaves
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className={itemCls}
+            onClick={() => {
+              onAssignAssets(row);
+              onClose();
+            }}
+          >
+            <Package className="h-4 w-4 shrink-0 text-[#008CD3]" aria-hidden />
+            Assign assets
+          </button>
+        </>
+      ) : null}
+      {!isReadOnlyRosterTab && viewerCanManageAddresses ? (
+        <>
+          <button
+            type="button"
+            role="menuitem"
+            className={itemCls}
+            onClick={() => {
+              void onUpdateAddresses(row);
+              onClose();
+            }}
+          >
+            <MapPin className="h-4 w-4 shrink-0 text-[#008CD3]" aria-hidden />
+            Update prev address
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className={itemCls}
+            onClick={() => {
+              onAddAddress(row);
+              onClose();
+            }}
+          >
+            <PlusCircle className="h-4 w-4 shrink-0 text-[#008CD3]" aria-hidden />
+            Add one more address
+          </button>
+        </>
+      ) : null}
+    </>
+  );
 }
 
 function formatRoleLabel(role: string | undefined) {
@@ -198,6 +551,7 @@ function mapApiUserToCard(row: OrgUserRow): EmployeeCard {
     exitStatusLabel,
     avatarSrc: resolveAvatarSrc((row as { user_image?: unknown }).user_image, avatarSeed),
     avatarSeed,
+    profileImageUrl: profileImageUrlFromRow((row as { user_image?: unknown }).user_image),
   };
 }
 
@@ -316,6 +670,14 @@ export default function ManageEmployeesPage() {
   const [tab, setTab] = useState<EmployeeTier>("employees");
   const [search, setSearch] = useState("");
   const [favorites, setFavorites] = useState<Set<string>>(() => new Set());
+  const [photoZoom, setPhotoZoom] = useState<{
+    imageUrl: string;
+    alt: string;
+  } | null>(null);
+
+  const openPhotoZoom = useCallback((imageUrl: string, alt: string) => {
+    setPhotoZoom({ imageUrl, alt });
+  }, []);
 
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
@@ -362,6 +724,9 @@ export default function ManageEmployeesPage() {
   const [documentsError, setDocumentsError] = useState<string | null>(null);
   const [documentsSuccess, setDocumentsSuccess] = useState<string | null>(null);
 
+  const [assetsRow, setAssetsRow] = useState<OrgUserRow | null>(null);
+  const [assetsSuccess, setAssetsSuccess] = useState<string | null>(null);
+
   const [terminateRow, setTerminateRow] = useState<OrgUserRow | null>(null);
   const [terminateSuccess, setTerminateSuccess] = useState<string | null>(null);
 
@@ -405,7 +770,9 @@ export default function ManageEmployeesPage() {
     function onDoc(e: MouseEvent | TouchEvent) {
       if (!menuUserId) return;
       const t = e.target as HTMLElement;
-      if (t.closest("[data-employee-menu]")) return;
+      if (t.closest("[data-employee-menu]") || t.closest("[data-employee-menu-sheet]")) {
+        return;
+      }
       setMenuUserId(null);
     }
     document.addEventListener("mousedown", onDoc);
@@ -544,6 +911,11 @@ export default function ManageEmployeesPage() {
     setDocFiles({});
     setDocumentsError(null);
     setDocumentsSuccess(null);
+  }
+
+  function openAssignAssetsModal(row: OrgUserRow) {
+    setAssetsRow(row);
+    setAssetsSuccess(null);
   }
 
   async function submitEmployeeDocuments(e: React.FormEvent) {
@@ -1002,11 +1374,29 @@ export default function ManageEmployeesPage() {
           ? "Members with an active exit workflow"
           : "Former members (left or terminated)";
 
+  const activeMenuContext = useMemo(() => {
+    if (!menuUserId) return null;
+    const emp = filtered.find((e) => e.id === menuUserId);
+    const row = findRow(userRows, menuUserId);
+    if (!emp || !row) return null;
+    const isInactiveTab = tab === "inactive";
+    const isExitProcessTab = tab === "exit_process";
+    return {
+      emp,
+      row,
+      isReadOnlyRosterTab: isInactiveTab || isExitProcessTab,
+    };
+  }, [menuUserId, filtered, userRows, tab]);
+
+  const closeEmployeeMenu = useCallback(() => {
+    setMenuUserId(null);
+  }, []);
+
   return (
-    <div className="min-h-full bg-[#F5F5F3] pb-4 [font-family:var(--font-inter),system-ui,sans-serif] max-lg:-mx-1 sm:max-lg:-mx-2 lg:bg-slate-100/90 lg:pb-10">
+    <div className="min-h-full bg-[#F5F7FA] pb-3 [font-family:var(--font-inter),system-ui,sans-serif] max-lg:-mx-1 sm:max-lg:-mx-2 lg:bg-slate-100/90 lg:pb-10">
       <div className="mx-auto max-w-6xl max-lg:max-w-none lg:px-4 lg:pt-6 md:max-w-7xl md:px-6">
         {terminateSuccess ? (
-          <div className="mb-4 flex items-start gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 max-lg:mx-3 max-lg:mt-3 lg:rounded-lg">
+          <div className="mb-3 flex items-start gap-2 rounded-md border border-[#C8E6C9] bg-[#E6F4EA] px-3 py-2 text-[12px] text-[#0F9D58] max-lg:mx-3 max-lg:mt-2 lg:mb-4 lg:rounded-lg lg:border-emerald-200 lg:bg-emerald-50 lg:px-4 lg:py-3 lg:text-sm lg:text-emerald-900">
             <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
             <span className="flex-1">{terminateSuccess}</span>
             <button
@@ -1020,8 +1410,23 @@ export default function ManageEmployeesPage() {
           </div>
         ) : null}
 
+        {assetsSuccess ? (
+          <div className="mb-3 flex items-start gap-2 rounded-md border border-[#C8E6C9] bg-[#E6F4EA] px-3 py-2 text-[12px] text-[#0F9D58] max-lg:mx-3 max-lg:mt-2 lg:mb-4 lg:rounded-lg lg:border-emerald-200 lg:bg-emerald-50 lg:px-4 lg:py-3 lg:text-sm lg:text-emerald-900">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
+            <span className="flex-1">{assetsSuccess}</span>
+            <button
+              type="button"
+              onClick={() => setAssetsSuccess(null)}
+              className="shrink-0 rounded-lg p-1 text-emerald-800 hover:bg-emerald-100"
+              aria-label="Dismiss"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        ) : null}
+
         {listError && (
-          <div className="mb-4 flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 max-lg:mx-3 max-lg:mt-3 lg:rounded-lg">
+          <div className="mb-3 flex items-start gap-2 rounded-md border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2 text-[12px] text-[#D93025] max-lg:mx-3 max-lg:mt-2 lg:mb-4 lg:rounded-lg lg:border-red-200 lg:bg-red-50 lg:px-4 lg:py-3 lg:text-sm lg:text-red-900">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" aria-hidden />
             <div className="flex flex-1 flex-wrap items-center justify-between gap-2">
               <span>{listError}</span>
@@ -1036,11 +1441,11 @@ export default function ManageEmployeesPage() {
           </div>
         )}
         
-        {/* Mobile & tablet: app-style sticky header */}
-        <div className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/95 px-3 pb-3 pt-3 backdrop-blur-md sm:px-4 lg:hidden">
-          <h1 className="text-lg font-bold tracking-tight text-slate-900">Team members</h1>
-          <p className="mt-0.5 text-xs text-slate-500">{tabSubtitle}</p>
-          <div className="mt-3 flex gap-1 overflow-x-auto rounded-2xl bg-slate-100 p-1 ring-1 ring-slate-200/60 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {/* Mobile & tablet: Zoho-style sticky header */}
+        <div className="sticky top-0 z-20 border-b border-[#E4E7EC] bg-white px-3 pb-2.5 pt-2.5 shadow-sm lg:hidden">
+          <h1 className="text-[15px] font-semibold text-[#1F2937]">Team members</h1>
+          <p className={`mt-0.5 ${mobileCaptionCls}`}>{tabSubtitle}</p>
+          <div className="mt-2 flex gap-0.5 overflow-x-auto rounded-md bg-[#F5F7FA] p-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {tabOptions.map((t) => (
               <button
                 key={t.id}
@@ -1049,44 +1454,42 @@ export default function ManageEmployeesPage() {
                   setTab(t.id);
                   setSearch("");
                 }}
-                className={`min-w-[5.5rem] shrink-0 rounded-xl px-3 py-2.5 text-sm font-semibold transition active:scale-[0.98] ${
+                className={`min-w-[4.75rem] shrink-0 rounded-[5px] px-2.5 py-1.5 text-[12px] font-medium transition active:scale-[0.98] ${
                   tab === t.id
-                    ? "bg-white text-teal-700 shadow-sm"
-                    : "text-slate-600"
+                    ? "bg-white text-[#008CD3] shadow-sm"
+                    : "text-[#6B7280]"
                 }`}
               >
                 {t.label}
               </button>
             ))}
           </div>
-          <div className="relative mt-3">
-            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <div className="relative mt-2">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#9CA3AF]" />
             <input
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search name, email, role…"
               disabled={listLoading || !!listError}
-              className="w-full rounded-2xl border-0 bg-slate-100 py-3 pl-10 pr-3 text-sm text-slate-800 outline-none ring-1 ring-slate-200/80 placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-teal-500/25 disabled:opacity-60"
+              className="w-full rounded-md border border-[#E4E7EC] bg-[#F9FAFB] py-2 pl-9 pr-3 text-[13px] text-[#1F2937] outline-none placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:bg-white focus:ring-2 focus:ring-[#008CD3]/15 disabled:opacity-60"
             />
           </div>
-          <div className="mt-2.5 flex flex-wrap items-center gap-2">
-            <p className="text-xs text-slate-600">
-              <span className="font-semibold text-slate-900">
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            <p className={mobileCaptionCls}>
+              <span className="font-semibold text-[#1F2937]">
                 {listLoading ? "…" : filtered.length}
               </span>{" "}
               member{filtered.length === 1 ? "" : "s"}
+              {filtered.some((e) => e.profileImageUrl) ? " · tap photo to enlarge" : ""}
             </p>
             {activeFilterLabel ? (
-              <span
-                className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium text-teal-800"
-                style={{ backgroundColor: ACCENT_SOFT }}
-              >
+              <span className="inline-flex items-center gap-1 rounded-full bg-[#E8F4FB] px-2 py-0.5 text-[10px] font-medium text-[#008CD3]">
                 {activeFilterLabel}
                 <button
                   type="button"
                   onClick={() => setSearch("")}
-                  className="rounded-full p-0.5 hover:bg-teal-200/50"
+                  className="rounded-full p-0.5 active:bg-[#008CD3]/10"
                   aria-label="Clear search"
                 >
                   <X className="h-3 w-3" />
@@ -1164,13 +1567,13 @@ export default function ManageEmployeesPage() {
         </div>
 
         {listLoading ? (
-          <div className="mt-16 flex flex-col items-center justify-center gap-3 px-4 text-slate-500 max-lg:mt-10">
-            <Loader2 className="h-8 w-8 animate-spin text-teal-600" aria-hidden />
-            <p className="text-sm">Loading team members…</p>
+          <div className="mt-12 flex flex-col items-center justify-center gap-2 px-4 text-[#6B7280] max-lg:mt-8 lg:mt-16 lg:gap-3">
+            <Loader2 className="h-7 w-7 animate-spin text-[#008CD3] lg:h-8 lg:w-8 lg:text-teal-600" aria-hidden />
+            <p className="text-[13px] lg:text-sm">Loading team members…</p>
           </div>
         ) : (
           <>
-            <div className="mt-3 flex flex-col gap-2.5 px-3 max-lg:pb-2 lg:mt-6 lg:grid lg:grid-cols-2 lg:gap-5 lg:px-0 xl:grid-cols-3">
+            <div className="mt-2 flex flex-col gap-2 px-3 max-lg:pb-3 lg:mt-6 lg:grid lg:grid-cols-2 lg:gap-5 lg:px-0 xl:grid-cols-3">
               {filtered.map((emp) => {
                 const fav = favorites.has(emp.id);
                 const row = findRow(userRows, emp.id);
@@ -1181,116 +1584,30 @@ export default function ManageEmployeesPage() {
                 const menuPanel = menuOpen && row && (
                   <div
                     role="menu"
-                    className="absolute right-0 bottom-full z-50 mb-1 max-h-[min(70vh,20rem)] min-w-[200px] overflow-y-auto overscroll-contain rounded-2xl border border-slate-200 bg-white py-1 shadow-xl ring-1 ring-slate-200/60 lg:bottom-auto lg:top-full lg:mb-0 lg:mt-1"
+                    className="absolute right-0 top-full z-[10001] mt-1 hidden min-w-[12.5rem] rounded-lg border border-[#E4E7EC] bg-white py-1 shadow-xl lg:block"
                   >
-                    <Link
-                      href={`/dashboard/${orgIdParam}/organization-employees/manage-employees/get-employee?user_id=${encodeURIComponent(emp.id)}`}
-                      role="menuitem"
-                      className="flex w-full touch-manipulation items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-700 active:bg-slate-50"
-                      onClick={() => setMenuUserId(null)}
-                    >
-                      <Users className="h-4 w-4 text-teal-600" aria-hidden />
-                      View profile
-                    </Link>
-                    {!isReadOnlyRosterTab ? (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="flex w-full touch-manipulation items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-700 active:bg-slate-50"
-                      onClick={() => {
-                        openEditModal(row);
-                        setMenuUserId(null);
+                    <EmployeeActionsMenuList
+                      orgIdParam={orgIdParam}
+                      emp={emp}
+                      row={row}
+                      isReadOnlyRosterTab={isReadOnlyRosterTab}
+                      viewerCanTerminate={viewerCanTerminate}
+                      viewerCanAssignLeaves={viewerCanAssignLeaves}
+                      viewerCanManageAddresses={viewerCanManageAddresses}
+                      variant="dropdown"
+                      onClose={closeEmployeeMenu}
+                      onEdit={openEditModal}
+                      onRole={openRoleModal}
+                      onTerminate={(r) => {
+                        setTerminateRow(r);
+                        setTerminateSuccess(null);
                       }}
-                    >
-                      <Pencil className="h-4 w-4 text-teal-600" aria-hidden />
-                      Edit
-                    </button>
-                    ) : null}
-                    {!isReadOnlyRosterTab ? (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="flex w-full touch-manipulation items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-700 active:bg-slate-50"
-                      onClick={() => {
-                        openRoleModal(row);
-                        setMenuUserId(null);
-                      }}
-                    >
-                      <Shield className="h-4 w-4 text-teal-600" aria-hidden />
-                      Update role
-                    </button>
-                    ) : null}
-                    {!isReadOnlyRosterTab && viewerCanTerminate && emp.isActive && !emp.hasExitProcess ? (
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="flex w-full touch-manipulation items-center gap-2 px-3 py-2.5 text-left text-sm text-red-700 active:bg-red-50"
-                        onClick={() => {
-                          setTerminateRow(row);
-                          setTerminateSuccess(null);
-                          setMenuUserId(null);
-                        }}
-                      >
-                        <UserX className="h-4 w-4" aria-hidden />
-                        Employee termination
-                      </button>
-                    ) : null}
-                    {!isReadOnlyRosterTab && viewerCanAssignLeaves && (
-                      <>
-                        <button
-                          type="button"
-                          role="menuitem"
-                          className="flex w-full touch-manipulation items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-700 active:bg-slate-50"
-                          onClick={() => {
-                            openDocumentsModal(row);
-                            setMenuUserId(null);
-                          }}
-                        >
-                          <FileText className="h-4 w-4 text-teal-600" aria-hidden />
-                          Add documents
-                        </button>
-                        <button
-                          type="button"
-                          role="menuitem"
-                          className="flex w-full touch-manipulation items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-700 active:bg-slate-50"
-                          onClick={() => {
-                            void openPaidLeaveModal(row);
-                            setMenuUserId(null);
-                          }}
-                        >
-                          <BadgeDollarSign className="h-4 w-4 text-teal-600" aria-hidden />
-                          Assign paid leaves
-                        </button>
-                      </>
-                    )}
-                    {!isReadOnlyRosterTab && viewerCanManageAddresses && (
-                      <>
-                        <button
-                          type="button"
-                          role="menuitem"
-                          className="flex w-full touch-manipulation items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-700 active:bg-slate-50"
-                          onClick={() => {
-                            void openUpdateAddressesModal(row);
-                            setMenuUserId(null);
-                          }}
-                        >
-                          <MapPin className="h-4 w-4 text-teal-600" aria-hidden />
-                          Update prev address
-                        </button>
-                        <button
-                          type="button"
-                          role="menuitem"
-                          className="flex w-full touch-manipulation items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-700 active:bg-slate-50"
-                          onClick={() => {
-                            openAddAddressModal(row);
-                            setMenuUserId(null);
-                          }}
-                        >
-                          <PlusCircle className="h-4 w-4 text-teal-600" aria-hidden />
-                          Add one more address
-                        </button>
-                      </>
-                    )}
+                      onDocuments={openDocumentsModal}
+                      onPaidLeave={openPaidLeaveModal}
+                      onAssignAssets={openAssignAssetsModal}
+                      onUpdateAddresses={openUpdateAddressesModal}
+                      onAddAddress={openAddAddressModal}
+                    />
                   </div>
                 );
 
@@ -1307,54 +1624,40 @@ export default function ManageEmployeesPage() {
                 return (
                   <article
                     key={listKey}
-                    className={`overflow-visible rounded-2xl bg-white shadow-md ring-1 ring-slate-200/70 transition-shadow active:scale-[0.995] lg:rounded-xl lg:border lg:border-slate-200/90 lg:shadow-sm lg:ring-0 lg:hover:shadow-md${menuOpen ? " relative z-50" : ""}`}
+                    className={`rounded-lg border border-[#E4E7EC] bg-white shadow-sm transition-shadow active:scale-[0.995] lg:overflow-visible lg:rounded-xl lg:border-slate-200/90 lg:shadow-sm lg:ring-0 lg:hover:shadow-md${menuOpen ? " lg:relative lg:z-[100]" : ""}`}
                   >
-                    {/* Mobile & tablet: compact list card */}
-                    <div className="relative flex gap-3 p-3 lg:hidden">
-                      <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-2xl border border-slate-100 bg-slate-50">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={emp.avatarSrc}
-                          alt=""
-                          width={56}
-                          height={56}
-                          className="h-full w-full object-cover object-top"
-                          onError={(e) => {
-                            e.currentTarget.src = avatarUrl(emp.avatarSeed);
-                          }}
-                        />
-                        <span
-                          className={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white ${
-                            emp.status === "in" ? "bg-emerald-500" : "bg-red-500"
-                          }`}
-                          aria-hidden
-                        />
-                      </div>
+                    {/* Mobile & tablet: Zoho-style list card */}
+                    <div className="relative flex gap-2.5 p-2.5 lg:hidden">
+                      <EmployeeAvatar
+                        emp={emp}
+                        size="lg"
+                        onZoom={openPhotoZoom}
+                      />
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-start justify-between gap-1.5">
                           <div className="min-w-0">
-                            <p className="truncate font-semibold text-slate-900">{emp.name}</p>
-                            <p className="text-[11px] text-slate-500">{emp.empCode}</p>
+                            <p className={`truncate ${mobileValueCls}`}>{emp.name}</p>
+                            <p className={mobileCaptionCls}>{emp.empCode}</p>
                           </div>
-                          <div className="flex shrink-0 items-center gap-0.5">
+                          <div className="flex shrink-0 items-center gap-0">
                             <Link
                               href={`/dashboard/${orgIdParam}/organization-employees/manage-employees/get-employee?user_id=${encodeURIComponent(emp.id)}`}
-                              className="rounded-xl p-2 text-[#008CD3] active:bg-slate-100"
+                              className="rounded-md p-1.5 text-[#008CD3] active:bg-[#F5F7FA]"
                               aria-label="View employee profile"
                             >
-                              <Eye className="h-4 w-4" />
+                              <Eye className="h-3.5 w-3.5" />
                             </Link>
                             <button
                               type="button"
                               onClick={() => toggleFavorite(emp.id)}
-                              className="rounded-xl p-2 text-slate-400 active:bg-slate-100"
+                              className="rounded-md p-1.5 text-[#9CA3AF] active:bg-[#F5F7FA]"
                               aria-label={fav ? "Remove favorite" : "Add favorite"}
                             >
                               <Star
-                                className="h-4 w-4"
+                                className="h-3.5 w-3.5"
                                 style={{
-                                  color: fav ? "#ea580c" : undefined,
-                                  fill: fav ? "#ea580c" : "none",
+                                  color: fav ? "#E8710A" : undefined,
+                                  fill: fav ? "#E8710A" : "none",
                                 }}
                               />
                             </button>
@@ -1362,54 +1665,50 @@ export default function ManageEmployeesPage() {
                               <button
                                 type="button"
                                 onClick={() => setMenuUserId(menuOpen ? null : emp.id)}
-                                className="rounded-xl p-2 text-slate-500 active:bg-slate-100"
+                                className="rounded-md p-1.5 text-[#6B7280] active:bg-[#F5F7FA]"
                                 aria-expanded={menuOpen}
                                 aria-haspopup="menu"
                                 aria-label="More options"
                               >
-                                <MoreHorizontal className="h-5 w-5" />
+                                <MoreHorizontal className="h-4 w-4" />
                               </button>
-                              {menuPanel}
                             </div>
                           </div>
                         </div>
-                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                          <span
-                            className="inline-flex rounded-lg px-2 py-0.5 text-[11px] font-semibold"
-                            style={{ backgroundColor: ACCENT_SOFT, color: ACCENT }}
-                          >
+                        <div className="mt-1 flex flex-wrap items-center gap-1">
+                          <span className="inline-flex rounded-full bg-[#E8F4FB] px-1.5 py-0.5 text-[10px] font-semibold text-[#008CD3]">
                             {emp.roleLabel}
                           </span>
                           {isInactiveTab ? (
-                            <span className="inline-flex rounded-lg bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700 ring-1 ring-red-200/80">
+                            <span className="inline-flex rounded-full bg-[#FCE8E6] px-1.5 py-0.5 text-[10px] font-semibold text-[#D93025]">
                               Inactive
                             </span>
                           ) : null}
                           {isExitProcessTab ? (
-                            <span className="inline-flex rounded-lg bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800 ring-1 ring-amber-200/80">
+                            <span className="inline-flex rounded-full bg-[#FFF8E1] px-1.5 py-0.5 text-[10px] font-semibold text-[#F9A825]">
                               Exit process
                             </span>
                           ) : null}
                         </div>
                         {(isInactiveTab || isExitProcessTab) && exitDetailLine ? (
-                          <p className="mt-1.5 text-[11px] font-medium text-slate-600">{exitDetailLine}</p>
+                          <p className={`mt-1 ${mobileCaptionCls}`}>{exitDetailLine}</p>
                         ) : null}
-                        <div className="mt-2 space-y-1">
+                        <div className="mt-1.5 space-y-0.5">
                           {emp.email ? (
                             <a
                               href={`mailto:${emp.email}`}
-                              className="flex items-center gap-1.5 truncate text-xs text-sky-600"
+                              className="flex items-center gap-1 truncate text-[11px] text-[#008CD3]"
                             >
-                              <AtSign className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
+                              <AtSign className="h-3 w-3 shrink-0 text-[#9CA3AF]" aria-hidden />
                               {emp.email}
                             </a>
                           ) : null}
-                          <p className="flex items-center gap-1.5 text-xs text-slate-600">
-                            <Phone className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
+                          <p className={`flex items-center gap-1 ${mobileCaptionCls}`}>
+                            <Phone className="h-3 w-3 shrink-0" aria-hidden />
                             {emp.phone}
                           </p>
-                          <p className="flex items-center gap-1.5 text-[11px] text-slate-500">
-                            <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                          <p className={`flex items-center gap-1 ${mobileCaptionCls}`}>
+                            <CalendarDays className="h-3 w-3 shrink-0" aria-hidden />
                             Since {emp.memberSince}
                           </p>
                         </div>
@@ -1466,19 +1765,40 @@ export default function ManageEmployeesPage() {
                       </div>
 
                       <div className="mt-2 flex flex-col items-center">
-                        <div className="relative h-24 w-24 overflow-hidden rounded-full border-2 border-slate-100 bg-slate-50">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={emp.avatarSrc}
-                            alt=""
-                            width={96}
-                            height={96}
-                            className="h-full w-full object-cover object-top"
-                            onError={(e) => {
-                              e.currentTarget.src = avatarUrl(emp.avatarSeed);
-                            }}
-                          />
-                        </div>
+                        {emp.profileImageUrl ? (
+                          <button
+                            type="button"
+                            onClick={() => openPhotoZoom(emp.profileImageUrl!, emp.name)}
+                            className="relative h-24 w-24 overflow-hidden rounded-full border-2 border-slate-100 bg-slate-50 transition hover:ring-2 hover:ring-teal-500/30"
+                            aria-label={`View ${emp.name} profile photo`}
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={emp.avatarSrc}
+                              alt=""
+                              width={96}
+                              height={96}
+                              className="h-full w-full object-cover object-top"
+                              onError={(e) => {
+                                e.currentTarget.src = avatarUrl(emp.avatarSeed);
+                              }}
+                            />
+                          </button>
+                        ) : (
+                          <div className="relative h-24 w-24 overflow-hidden rounded-full border-2 border-slate-100 bg-slate-50">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={emp.avatarSrc}
+                              alt=""
+                              width={96}
+                              height={96}
+                              className="h-full w-full object-cover object-top"
+                              onError={(e) => {
+                                e.currentTarget.src = avatarUrl(emp.avatarSeed);
+                              }}
+                            />
+                          </div>
+                        )}
                         <div className="mt-3 flex w-full items-start justify-center gap-2 px-1">
                           <p className="text-center text-sm text-slate-600">
                             {emp.empCode} –{" "}
@@ -1550,7 +1870,7 @@ export default function ManageEmployeesPage() {
             </div>
 
             {!listError && filtered.length === 0 && (
-              <p className="mt-12 px-4 text-center text-sm text-slate-500 max-lg:mt-8">
+              <p className={`mt-10 px-4 text-center max-lg:mt-6 ${mobileCaptionCls} lg:mt-12 lg:text-sm lg:text-slate-500`}>
                 {tab === "inactive"
                   ? `No inactive members${search.trim() ? " match your search" : ""}.`
                   : tab === "exit_process"
@@ -2159,6 +2479,58 @@ export default function ManageEmployeesPage() {
         </div>
       )}
 
+      <ProfilePhotoZoomModal
+        open={photoZoom != null}
+        imageUrl={photoZoom?.imageUrl ?? ""}
+        alt={photoZoom?.alt ?? ""}
+        onClose={() => setPhotoZoom(null)}
+      />
+
+      {activeMenuContext ? (
+        <MobileEmployeeMenuSheet
+          emp={activeMenuContext.emp}
+          onClose={closeEmployeeMenu}
+        >
+          <EmployeeActionsMenuList
+            orgIdParam={orgIdParam}
+            emp={activeMenuContext.emp}
+            row={activeMenuContext.row}
+            isReadOnlyRosterTab={activeMenuContext.isReadOnlyRosterTab}
+            viewerCanTerminate={viewerCanTerminate}
+            viewerCanAssignLeaves={viewerCanAssignLeaves}
+            viewerCanManageAddresses={viewerCanManageAddresses}
+            variant="sheet"
+            onClose={closeEmployeeMenu}
+            onEdit={openEditModal}
+            onRole={openRoleModal}
+            onTerminate={(r) => {
+              setTerminateRow(r);
+              setTerminateSuccess(null);
+            }}
+            onDocuments={openDocumentsModal}
+            onPaidLeave={openPaidLeaveModal}
+            onAssignAssets={openAssignAssetsModal}
+            onUpdateAddresses={openUpdateAddressesModal}
+            onAddAddress={openAddAddressModal}
+          />
+        </MobileEmployeeMenuSheet>
+      ) : null}
+
+      <AssignEmployeeAssetsModal
+        open={assetsRow != null}
+        orgId={organizationIdNum}
+        employee={
+          assetsRow
+            ? {
+                userId: assetsRow.id ?? "",
+                userName: String(assetsRow.user_name ?? "Employee"),
+              }
+            : null
+        }
+        onClose={() => setAssetsRow(null)}
+        onSuccess={(message) => setAssetsSuccess(message)}
+      />
+
       <TerminateEmployeeModal
         open={terminateRow != null}
         orgId={organizationIdNum}
@@ -2168,6 +2540,7 @@ export default function ManageEmployeesPage() {
                 userId: terminateRow.id ?? "",
                 userName: String(terminateRow.user_name ?? "Employee"),
                 userEmail: terminateRow.user_email,
+                teamId: orgUserEmployeeTeamId(terminateRow),
                 subtitle: formatRoleLabel(
                   terminateRow.role_name ?? terminateRow.user_role_name,
                 ),

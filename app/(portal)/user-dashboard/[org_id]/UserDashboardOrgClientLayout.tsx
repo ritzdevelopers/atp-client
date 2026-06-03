@@ -9,7 +9,7 @@ function UserDashboardComponent({ children }: { children: React.ReactNode }) {
     <main className="relative min-h-screen w-full overflow-x-hidden bg-slate-50">
       {/* <DraggableClock /> */}
       <LeftSideBar />
-      <div className="w-full pb-[calc(4.5rem+env(safe-area-inset-bottom))] pt-14 lg:pb-0 lg:pl-[250px] lg:pt-0">
+      <div className="w-full pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-0 lg:pl-[250px]">
         <RightMainSide>{children}</RightMainSide>
       </div>
     </main>

@@ -14,6 +14,7 @@ import {
   MdMenu,
   MdLogout,
   MdClose,
+  MdChevronRight,
   MdVpnKey,
   MdWifi,
 } from "react-icons/md";
@@ -21,13 +22,15 @@ import { MdOutlineManageAccounts } from "react-icons/md";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
-/** Admin mobile bottom bar: first four primary sections. */
+/** Admin mobile bottom bar: quick-access tabs (fourth slot is Menu). */
 const ADMIN_BOTTOM_TAB_IDS: string[] = [
   "home",
   "employee-management",
   "employees-roles-management",
-  "employees-features-management",
 ];
+
+/** Nav slots on the bottom bar before the Menu button (< lg). */
+const MAX_MOBILE_BOTTOM_NAV_SLOTS = 3;
 
 const MOBILE_BOTTOM_LIGHT =
   "border-t border-slate-200 bg-[#FAFAF8] text-slate-700 shadow-[0_-1px_0_0_rgba(15,23,42,0.06)]";
@@ -458,7 +461,7 @@ function LeftSideBar({
         const item = filteredNavItems.find((i) => i.id === id);
         if (item) slots.push({ kind: "nav", item });
       }
-      return slots.slice(0, 4);
+      return slots.slice(0, MAX_MOBILE_BOTTOM_NAV_SLOTS);
     }
     const slots: BottomSlot[] = [];
     const home = filteredNavItems.find((i) => i.id === "home");
@@ -466,25 +469,11 @@ function LeftSideBar({
     slots.push({ kind: "my-attendance" });
     for (const item of filteredNavItems) {
       if (item.id === "home") continue;
-      if (slots.length >= 4) break;
+      if (slots.length >= MAX_MOBILE_BOTTOM_NAV_SLOTS) break;
       slots.push({ kind: "nav", item });
     }
-    return slots.slice(0, 4);
+    return slots.slice(0, MAX_MOBILE_BOTTOM_NAV_SLOTS);
   }, [isAdmin, filteredNavItems]);
-
-  const bottomTabNavIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const slot of bottomSlots) {
-      if (slot.kind === "nav") ids.add(slot.item.id);
-    }
-    return ids;
-  }, [bottomSlots]);
-
-  /** Nav items not pinned on the bottom tab (open from the hamburger menu). */
-  const overflowNavItems = useMemo(
-    () => filteredNavItems.filter((i) => !bottomTabNavIds.has(i.id)),
-    [filteredNavItems, bottomTabNavIds],
-  );
 
   useEffect(() => {
     if (!pathname || filteredNavItems.length === 0) return;
@@ -527,6 +516,20 @@ function LeftSideBar({
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const lock = mobileFullMenuOpen || mobileSubParent != null;
+    document.body.style.overflow = lock ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [mobileFullMenuOpen, mobileSubParent]);
+
+  const toggleMobileMenu = useCallback(() => {
+    setMobileSubParent(null);
+    setMobileFullMenuOpen((open) => !open);
   }, []);
 
   useEffect(() => {
@@ -852,33 +855,17 @@ function LeftSideBar({
       )}
       </div>
 
-      {/* Mobile & tablet: hamburger (overflow links) */}
-      <button
-        type="button"
-        onClick={() => {
-          setMobileFullMenuOpen(true);
-          setMobileSubParent(null);
-        }}
-        className="fixed left-3 top-[calc(3rem+10px)] z-40 flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-[#FAFAF8] text-slate-800 shadow-sm sm:top-[calc(3.5rem+10px)] md:top-[calc(4rem+12px)] lg:hidden"
-        aria-label="Open navigation menu"
-        aria-expanded={mobileFullMenuOpen}
-      >
-        <MdMenu className="text-[22px]" />
-      </button>
-
-      {/* Bottom tab bar (< lg): light, bordered */}
+      {/* Bottom tab bar (< lg): quick tabs + Menu */}
       <nav
-        className={`fixed bottom-0 left-0 right-0 z-40 lg:hidden ${MOBILE_BOTTOM_LIGHT}`}
+        className={`fixed bottom-0 left-0 right-0 z-[10040] lg:hidden ${MOBILE_BOTTOM_LIGHT}`}
         style={{
           paddingBottom: "max(10px, env(safe-area-inset-bottom))",
         }}
         aria-label="Primary navigation"
       >
-        <div className="mx-auto flex max-w-3xl items-stretch justify-around">
-          {bottomSlots.map((slot, index) => {
+        <div className="mx-auto flex max-w-3xl items-stretch">
+          {bottomSlots.map((slot) => {
             const isActive = isMobileBottomSlotActive(slot);
-            const borderClass =
-              index < bottomSlots.length - 1 ? "border-r border-slate-200" : "";
             if (slot.kind === "my-attendance") {
               return (
                 <button
@@ -888,7 +875,7 @@ function LeftSideBar({
                     router.push(`${base}/my-attendance-history`);
                     closeMobileDrawers();
                   }}
-                  className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 py-2 ${borderClass} ${
+                  className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 border-r border-slate-200 px-1 py-2 transition-colors duration-200 ${
                     isActive ? "text-amber-800" : "text-slate-600"
                   }`}
                 >
@@ -907,7 +894,7 @@ function LeftSideBar({
                 key={item.id}
                 type="button"
                 onClick={() => selectMobileNavItem(item)}
-                className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 py-2 ${borderClass} ${
+                className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 border-r border-slate-200 px-1 py-2 transition-colors duration-200 ${
                   isActive ? "text-amber-800" : "text-slate-600"
                 }`}
               >
@@ -920,46 +907,98 @@ function LeftSideBar({
               </button>
             );
           })}
+          <button
+            type="button"
+            onClick={toggleMobileMenu}
+            className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 py-2 transition-colors duration-200 ${
+              mobileFullMenuOpen
+                ? "bg-amber-50/90 text-amber-900"
+                : "text-slate-600"
+            }`}
+            aria-label={mobileFullMenuOpen ? "Close menu" : "Open all features"}
+            aria-expanded={mobileFullMenuOpen}
+          >
+            <span
+              className={`text-[22px] leading-none transition-transform duration-300 ${
+                mobileFullMenuOpen ? "rotate-90 text-amber-800" : "text-slate-700"
+              }`}
+            >
+              {mobileFullMenuOpen ? <MdClose /> : <MdMenu />}
+            </span>
+            <span className="line-clamp-2 w-full text-center text-[10px] font-medium leading-tight">
+              Menu
+            </span>
+          </button>
         </div>
       </nav>
 
-      {/* Left sheet: links not shown on the bottom tabs + sign out */}
-      {mobileFullMenuOpen ? (
-        <>
-          <div
-            className="fixed inset-0 z-50 bg-slate-900/25 lg:hidden"
-            onClick={() => setMobileFullMenuOpen(false)}
-            aria-hidden
-          />
-          <div className="fixed left-0 top-0 z-[51] flex h-full w-[min(20rem,88vw)] flex-col border-r border-slate-200 bg-[#FAFAF8] shadow-lg lg:hidden">
+      {/* Left sheet: all accessible features (animated) */}
+      <div className="lg:hidden" aria-hidden={!mobileFullMenuOpen && !mobileSubParent}>
+        <div
+          className={`fixed inset-0 z-[10045] bg-slate-900/30 transition-opacity duration-300 ease-out ${
+            mobileFullMenuOpen
+              ? "pointer-events-auto opacity-100"
+              : "pointer-events-none opacity-0"
+          }`}
+          onClick={() => setMobileFullMenuOpen(false)}
+          aria-hidden={!mobileFullMenuOpen}
+        />
+        <div
+          className={`fixed left-0 top-0 z-[10046] flex h-full w-[min(20rem,88vw)] flex-col border-r border-slate-200 bg-[#FAFAF8] shadow-xl transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] will-change-transform lg:hidden ${
+            mobileFullMenuOpen
+              ? "pointer-events-auto translate-x-0"
+              : "pointer-events-none -translate-x-full"
+          }`}
+          role="dialog"
+          aria-modal={mobileFullMenuOpen}
+          aria-label="Navigation menu"
+          aria-hidden={!mobileFullMenuOpen}
+        >
             <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-              <span className="text-sm font-semibold text-slate-900">More</span>
+              <span className="text-sm font-semibold text-slate-900">All features</span>
               <button
                 type="button"
                 onClick={() => setMobileFullMenuOpen(false)}
-                className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700"
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition active:scale-95"
                 aria-label="Close menu"
               >
                 <MdClose className="text-xl" />
               </button>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              {overflowNavItems.length === 0 ? (
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+              {filteredNavItems.length === 0 ? (
                 <p className="border-b border-slate-200 px-4 py-3 text-sm text-slate-500">
-                  All sections are on the tab bar.
+                  No features available for your role.
                 </p>
               ) : (
-                overflowNavItems.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => selectMobileNavItem(item)}
-                    className="flex w-full items-center gap-3 border-b border-slate-200 px-4 py-3 text-left text-sm font-medium text-slate-800"
-                  >
-                    <span className="text-xl text-slate-600">{item.icon}</span>
-                    <span className="min-w-0 flex-1 leading-snug">{item.name}</span>
-                  </button>
-                ))
+                filteredNavItems.map((item) => {
+                  const itemActive =
+                    activeMain === item.id ||
+                    Boolean(
+                      item.path && pathname?.startsWith(item.path),
+                    ) ||
+                    item.children.some(
+                      (c) => c.path && pathname?.startsWith(c.path),
+                    );
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => selectMobileNavItem(item)}
+                      className={`flex w-full items-center gap-3 border-b border-slate-200 px-4 py-3 text-left text-sm font-medium transition-colors duration-150 ${
+                        itemActive
+                          ? "bg-amber-50/80 text-amber-900"
+                          : "text-slate-800 active:bg-slate-100"
+                      }`}
+                    >
+                      <span className="text-xl text-slate-600">{item.icon}</span>
+                      <span className="min-w-0 flex-1 leading-snug">{item.name}</span>
+                      {item.children.length > 0 ? (
+                        <MdChevronRight className="shrink-0 text-lg text-slate-400" aria-hidden />
+                      ) : null}
+                    </button>
+                  );
+                })
               )}
               <button
                 type="button"
@@ -967,7 +1006,7 @@ function LeftSideBar({
                   setMobileFullMenuOpen(false);
                   setShowLogoutConfirm(true);
                 }}
-                className="flex w-full items-center gap-3 border-b border-slate-200 px-4 py-3 text-left text-sm font-medium text-rose-700"
+                className="flex w-full items-center gap-3 border-b border-slate-200 px-4 py-3 text-left text-sm font-medium text-rose-700 transition-colors duration-150 active:bg-rose-50"
               >
                 <span className="text-xl">
                   <MdLogout />
@@ -976,39 +1015,46 @@ function LeftSideBar({
               </button>
             </div>
           </div>
-        </>
-      ) : null}
 
-      {/* Right sheet: submenu when a tab has children */}
-      {mobileSubParent && mobileSubParent.children.length > 0 ? (
-        <>
+      {/* Right sheet: submenu when a section has children (animated) */}
           <div
-            className="fixed inset-0 z-[52] bg-slate-900/25 lg:hidden"
+            className={`fixed inset-0 z-[10047] bg-slate-900/30 transition-opacity duration-300 ease-out ${
+              mobileSubParent && mobileSubParent.children.length > 0
+                ? "pointer-events-auto opacity-100"
+                : "pointer-events-none opacity-0"
+            }`}
             onClick={() => setMobileSubParent(null)}
-            aria-hidden
+            aria-hidden={!mobileSubParent}
           />
           <aside
-            className={`fixed right-0 top-0 z-[53] flex h-full flex-col lg:hidden ${MOBILE_DRAWER_PANEL}`}
+            className={`fixed right-0 top-0 z-[10048] flex h-full flex-col transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] will-change-transform lg:hidden ${MOBILE_DRAWER_PANEL} ${
+              mobileSubParent && mobileSubParent.children.length > 0
+                ? "pointer-events-auto translate-x-0"
+                : "pointer-events-none translate-x-full"
+            }`}
             style={{
               width: "min(80vw, 22rem)",
             }}
-            aria-label={`${mobileSubParent.name} links`}
+            aria-label={
+              mobileSubParent ? `${mobileSubParent.name} links` : "Submenu"
+            }
+            aria-hidden={!mobileSubParent}
           >
             <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-3 py-3">
               <span className="min-w-0 truncate text-sm font-semibold text-slate-900">
-                {mobileSubParent.name}
+                {mobileSubParent?.name ?? ""}
               </span>
               <button
                 type="button"
                 onClick={() => setMobileSubParent(null)}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition active:scale-95"
                 aria-label="Close submenu"
               >
                 <MdClose className="text-xl" />
               </button>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              {mobileSubParent.children.map((sub) => {
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+              {(mobileSubParent?.children ?? []).map((sub) => {
                 const subActive =
                   Boolean(sub.path && pathname?.startsWith(sub.path));
                 return (
@@ -1019,8 +1065,8 @@ function LeftSideBar({
                       handleSubClick(sub);
                       setMobileSubParent(null);
                     }}
-                    className={`w-full border-b border-slate-200 px-4 py-3 text-left text-sm font-medium ${
-                      subActive ? "bg-slate-100 text-amber-900" : "text-slate-800"
+                    className={`w-full border-b border-slate-200 px-4 py-3 text-left text-sm font-medium transition-colors duration-150 ${
+                      subActive ? "bg-slate-100 text-amber-900" : "text-slate-800 active:bg-slate-50"
                     }`}
                   >
                     {sub.name}
@@ -1029,8 +1075,7 @@ function LeftSideBar({
               })}
             </div>
           </aside>
-        </>
-      ) : null}
+      </div>
 
       {logoutDialog ? createPortal(logoutDialog, document.body) : null}
     </>

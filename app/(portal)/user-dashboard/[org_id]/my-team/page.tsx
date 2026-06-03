@@ -109,11 +109,147 @@ function zohoSecondaryBtnCls(full = false) {
 
 /** Sits above the layout bottom tab bar (z-[55]) on mobile/tablet. */
 const mobileActionBarCls =
-  "fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] z-[54] border-t border-[#E4E7EC] bg-white p-4 shadow-[0_-4px_16px_rgba(0,0,0,0.06)]";
-const mobileContentBottomPad = "pb-[calc(9rem+env(safe-area-inset-bottom,0px))]";
+  "fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] z-[54] border-t border-[#E4E7EC] bg-white px-3 py-2.5 shadow-[0_-4px_16px_rgba(0,0,0,0.06)]";
+const mobileContentBottomPad = "pb-[calc(7rem+env(safe-area-inset-bottom,0px))]";
+const mobileCardCls =
+  "rounded-lg border border-[#E4E7EC] bg-white p-3 shadow-sm";
+const mobileSectionGap = "space-y-2";
+const mobileLabelCls =
+  "text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]";
+const mobileCaptionCls = "text-[11px] leading-snug text-[#6B7280]";
+const mobileValueCls = "text-[13px] font-semibold text-[#1F2937]";
+
+function mobileActionPrimaryBtnCls(full = false) {
+  return `inline-flex min-h-[34px] items-center justify-center gap-1 rounded-md bg-[#008CD3] px-2.5 py-1.5 text-[12px] font-medium text-white transition active:scale-[0.98] hover:bg-[#0070AA] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full flex-1" : ""}`;
+}
+
+function mobileActionSecondaryBtnCls(full = false) {
+  return `inline-flex min-h-[34px] items-center justify-center gap-1 rounded-md border border-[#E4E7EC] bg-white px-2.5 py-1.5 text-[12px] font-medium text-[#1F2937] transition active:scale-[0.98] hover:bg-[#F5F7FA] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full flex-1" : ""}`;
+}
 
 function zohoInputCls() {
-  return "mt-1.5 w-full rounded-lg border border-[#E4E7EC] bg-white px-3.5 py-2.5 text-[15px] text-[#1F2937] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15 lg:text-sm";
+  return "mt-1 w-full rounded-md border border-[#E4E7EC] bg-white px-3 py-2 text-[14px] text-[#1F2937] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15 lg:mt-1.5 lg:rounded-lg lg:px-3.5 lg:py-2.5 lg:text-[15px] lg:text-sm";
+}
+
+function jwtUserId(token: string | null): number | null {
+  if (!token) return null;
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1] || "")) as {
+      id?: number | string;
+      user_id?: number | string;
+    };
+    const raw = payload.id ?? payload.user_id;
+    if (raw == null || raw === "") return null;
+    const n = Number(raw);
+    return Number.isNaN(n) ? null : n;
+  } catch {
+    return null;
+  }
+}
+
+function memberImageUrl(value: string | null | undefined): string | null {
+  const url = value?.trim();
+  return url ? url : null;
+}
+
+function ProfilePhotoZoomModal({
+  open,
+  imageUrl,
+  alt,
+  onClose,
+}: {
+  open: boolean;
+  imageUrl: string;
+  alt: string;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-[#111B21]/80 p-4 backdrop-blur-sm lg:hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="team-photo-zoom-title"
+    >
+      <button
+        type="button"
+        className="absolute inset-0"
+        onClick={onClose}
+        aria-label="Close profile photo"
+      />
+      <div className="relative z-[1] w-full max-w-sm">
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute -right-1 -top-1 z-[2] flex h-9 w-9 items-center justify-center rounded-full border border-[#E4E7EC] bg-white text-[#1F2937] shadow-lg active:scale-95"
+          aria-label="Close"
+        >
+          <X className="h-5 w-5" aria-hidden />
+        </button>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={imageUrl}
+          alt={alt}
+          className="max-h-[min(78vh,560px)] w-full rounded-xl bg-white object-contain shadow-2xl ring-1 ring-[#E4E7EC]"
+        />
+        <p
+          id="team-photo-zoom-title"
+          className="mt-2.5 text-center text-[13px] font-medium text-white"
+        >
+          {alt}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function MemberAvatarButton({
+  name,
+  userImage,
+  size = "md",
+  onZoom,
+}: {
+  name: string;
+  userImage?: string | null;
+  size?: "sm" | "md";
+  onZoom: (imageUrl: string, alt: string) => void;
+}) {
+  const img = memberImageUrl(userImage);
+  const box = size === "sm" ? "h-9 w-9" : "h-10 w-10";
+  const label = name?.trim() || "Team member";
+
+  if (img) {
+    return (
+      <button
+        type="button"
+        onClick={() => onZoom(img, label)}
+        className={`${box} shrink-0 overflow-hidden rounded-md ring-1 ring-[#E4E7EC] transition active:opacity-90`}
+        aria-label={`View ${label} profile photo`}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={img} alt="" className="h-full w-full object-cover" />
+      </button>
+    );
+  }
+
+  return (
+    <span
+      className={`flex ${box} shrink-0 items-center justify-center rounded-md text-xs font-semibold ${memberColorClass(label)}`}
+      aria-hidden
+    >
+      {initialsFromName(label)}
+    </span>
+  );
 }
 
 function mobileStatusCls(tone: "emerald" | "rose" | "amber"): string {
@@ -138,19 +274,27 @@ function memberColorClass(name: string) {
   return MOBILE_ICON_COLORS[Math.abs(hash) % MOBILE_ICON_COLORS.length];
 }
 
-function MobileMemberRow({ member }: { member: OrgTeamMemberRow }) {
+function MobileMemberRow({
+  member,
+  onZoomPhoto,
+}: {
+  member: OrgTeamMemberRow;
+  onZoomPhoto: (imageUrl: string, alt: string) => void;
+}) {
   return (
     <li>
-      <div className="flex items-center gap-3 px-4 py-3.5">
-        <span
-          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-sm font-semibold ${memberColorClass(member.user_name ?? "?")}`}
-        >
-          {initialsFromName(member.user_name)}
-        </span>
+      <div className="flex items-center gap-2.5 px-3 py-2.5">
+        <MemberAvatarButton
+          name={member.user_name}
+          userImage={member.user_image}
+          onZoom={onZoomPhoto}
+        />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[16px] font-medium text-[#1F2937]">{member.user_name}</p>
-          <p className="truncate text-[13px] text-[#6B7280]">{member.user_email}</p>
-          <p className="mt-0.5 text-[12px] text-[#9CA3AF]">
+          <p className="truncate text-[13px] font-medium text-[#1F2937]">
+            {member.user_name}
+          </p>
+          <p className="truncate text-[11px] text-[#6B7280]">{member.user_email}</p>
+          <p className={`mt-0.5 ${mobileCaptionCls}`}>
             Joined {formatDate(member.joined_date)}
           </p>
         </div>
@@ -163,26 +307,29 @@ function MobileLeaveRow({ row }: { row: LeaveQueryRow }) {
   const tone = leaveStatusTone(row.status);
   return (
     <li>
-      <div className="px-4 py-3.5">
+      <div className="px-3 py-2.5">
         <div className="flex items-start justify-between gap-2">
           <span
-            className={`rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase ${mobileStatusCls(tone)}`}
+            className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase ${mobileStatusCls(tone)}`}
           >
             {row.status}
           </span>
-          <time className="text-[12px] tabular-nums text-[#9CA3AF]" dateTime={row.created_at ?? undefined}>
+          <time
+            className="text-[10px] tabular-nums text-[#9CA3AF]"
+            dateTime={row.created_at ?? undefined}
+          >
             {formatDate(row.created_at)}
           </time>
         </div>
-        <p className="mt-2 text-[15px] font-medium capitalize text-[#1F2937]">
+        <p className="mt-1.5 text-[13px] font-medium capitalize text-[#1F2937]">
           {row.leave_type.replace(/_/g, " ")}
         </p>
-        <p className="mt-0.5 text-[13px] text-[#6B7280]">
+        <p className={`mt-0.5 ${mobileCaptionCls}`}>
           {formatDate(row.start_date)}
           {row.end_date ? ` → ${formatDate(row.end_date)}` : ""}
         </p>
         {row.reason ? (
-          <p className="mt-2 line-clamp-2 text-[13px] text-[#6B7280]">{row.reason}</p>
+          <p className={`mt-1.5 line-clamp-2 ${mobileCaptionCls}`}>{row.reason}</p>
         ) : null}
       </div>
     </li>
@@ -200,10 +347,10 @@ function MobileAttendanceRow({
   const pending = String(row.query_status).toLowerCase() === "pending";
   return (
     <li>
-      <div className="px-4 py-3.5">
+      <div className="px-3 py-2.5">
         <div className="flex items-start justify-between gap-2">
           <span
-            className={`rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase ${mobileStatusCls(tone)}`}
+            className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase ${mobileStatusCls(tone)}`}
           >
             {row.query_status}
           </span>
@@ -211,20 +358,18 @@ function MobileAttendanceRow({
             <button
               type="button"
               onClick={onEdit}
-              className="inline-flex items-center gap-1 rounded-lg border border-[#E4E7EC] px-2 py-1 text-[12px] font-medium text-[#008CD3]"
+              className="inline-flex items-center gap-1 rounded-md border border-[#E4E7EC] px-1.5 py-0.5 text-[11px] font-medium text-[#008CD3]"
             >
               <Pencil className="h-3 w-3" />
               Edit
             </button>
           ) : null}
         </div>
-        <p className="mt-2 text-[15px] font-medium text-[#1F2937]">
+        <p className={`mt-1.5 ${mobileValueCls}`}>
           {attendanceCategoryLabel(row.category)}
         </p>
-        <p className="mt-0.5 text-[13px] text-[#6B7280]">
-          {formatDate(row.attendance_date)}
-        </p>
-        <p className="mt-2 line-clamp-2 text-[13px] text-[#6B7280]">{row.query_message}</p>
+        <p className={mobileCaptionCls}>{formatDate(row.attendance_date)}</p>
+        <p className={`mt-1 line-clamp-2 ${mobileCaptionCls}`}>{row.query_message}</p>
       </div>
     </li>
   );
@@ -278,6 +423,14 @@ export default function UserMyTeamPage() {
   const [mobileMainTab, setMobileMainTab] = useState<
     "team" | "leave" | "corrections"
   >("team");
+  const [photoZoom, setPhotoZoom] = useState<{
+    imageUrl: string;
+    alt: string;
+  } | null>(null);
+
+  const openPhotoZoom = useCallback((imageUrl: string, alt: string) => {
+    setPhotoZoom({ imageUrl, alt });
+  }, []);
 
   const loadData = useCallback(
     async (isRefresh = false) => {
@@ -504,6 +657,15 @@ export default function UserMyTeamPage() {
     ? team.members.find((m) => Number(m.user_id) === Number(team.admin_id))
     : undefined;
 
+  const myTeamMember = useMemo(() => {
+    if (!team || !token) return undefined;
+    const uid = jwtUserId(token);
+    if (uid == null) return undefined;
+    return team.members.find((m) => Number(m.user_id) === uid);
+  }, [team, token]);
+
+  const myProfileImage = memberImageUrl(myTeamMember?.user_image);
+
   const otherMembers =
     team?.members.filter((m) => Number(m.user_id) !== Number(team.admin_id)) ??
     [];
@@ -519,20 +681,38 @@ export default function UserMyTeamPage() {
       {/* Mobile & tablet: Zoho admin portal style */}
       <div className="lg:hidden">
         <div className="sticky top-0 z-20 border-b border-[#E4E7EC] bg-white shadow-sm">
-          <div className="flex items-center gap-2 px-3 py-3">
+          <div className="flex items-center gap-2 px-3 py-2.5">
             <Link
               href={`/user-dashboard/${orgIdParam}/home`}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#6B7280] active:bg-[#F5F7FA]"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[#E4E7EC] text-[#6B7280] active:bg-[#F5F7FA]"
               aria-label="Back to dashboard"
             >
-              <ArrowLeft className="h-5 w-5" />
+              <ArrowLeft className="h-4 w-4" />
             </Link>
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#E8F4FB] text-[#008CD3]">
-              <Users className="h-5 w-5" />
-            </span>
+            {myProfileImage && !loading ? (
+              <button
+                type="button"
+                onClick={() =>
+                  openPhotoZoom(myProfileImage, myTeamMember?.user_name ?? "You")
+                }
+                className="h-9 w-9 shrink-0 overflow-hidden rounded-md ring-1 ring-[#E4E7EC] active:opacity-90"
+                aria-label="View your profile photo"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={myProfileImage}
+                  alt=""
+                  className="h-full w-full object-cover"
+                />
+              </button>
+            ) : (
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#E8F4FB] text-[#008CD3]">
+                <Users className="h-4 w-4" />
+              </span>
+            )}
             <div className="min-w-0 flex-1">
-              <h1 className="truncate text-[17px] font-semibold text-[#1F2937]">My team</h1>
-              <p className="truncate text-[13px] text-[#6B7280]">
+              <h1 className="truncate text-[15px] font-semibold text-[#1F2937]">My team</h1>
+              <p className="truncate text-[11px] text-[#6B7280]">
                 {loading
                   ? "Loading…"
                   : team
@@ -541,26 +721,34 @@ export default function UserMyTeamPage() {
                       ? "No team assigned"
                       : "Team workspace"}
               </p>
+              {!loading && team ? (
+                <p className={`truncate ${mobileCaptionCls}`}>
+                  {team.members.length} members
+                  {pendingLeaveCount + pendingAttCount > 0
+                    ? ` · ${pendingLeaveCount + pendingAttCount} pending`
+                    : ""}
+                </p>
+              ) : null}
             </div>
             <button
               type="button"
               onClick={() => void loadData(true)}
               disabled={loading || refreshing}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#008CD3] active:bg-[#F5F7FA] disabled:opacity-50"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[#E4E7EC] text-[#008CD3] active:bg-[#F5F7FA] disabled:opacity-50"
               aria-label="Refresh"
             >
-              <RefreshCw className={`h-5 w-5 ${refreshing ? "animate-spin" : ""}`} />
+              <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
             </button>
           </div>
 
-          <div className="px-4 pb-3">
-            <div className="flex rounded-lg bg-[#F5F7FA] p-1">
+          <div className="px-3 pb-2.5">
+            <div className="flex rounded-md bg-[#F5F7FA] p-0.5">
               {mobileTabs.map((tab) => (
                 <button
                   key={tab.id}
                   type="button"
                   onClick={() => setMobileMainTab(tab.id)}
-                  className={`flex flex-1 items-center justify-center gap-1 rounded-md py-2 text-[12px] font-medium transition sm:text-[13px] ${
+                  className={`flex flex-1 items-center justify-center gap-1 rounded-[5px] py-1.5 text-[12px] font-medium transition ${
                     mobileMainTab === tab.id
                       ? "bg-white text-[#008CD3] shadow-sm"
                       : "text-[#6B7280]"
@@ -569,7 +757,7 @@ export default function UserMyTeamPage() {
                   {tab.label}
                   {"count" in tab && tab.count != null ? (
                     <span
-                      className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] ${
+                      className={`inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] ${
                         mobileMainTab === tab.id
                           ? "bg-[#E8F4FB] text-[#008CD3]"
                           : "bg-[#E4E7EC] text-[#6B7280]"
@@ -585,14 +773,14 @@ export default function UserMyTeamPage() {
         </div>
 
         {!loading && (pendingLeaveCount > 0 || pendingAttCount > 0) ? (
-          <div className="mx-4 mt-3 flex flex-wrap gap-2">
+          <div className="mx-3 mt-2 flex flex-wrap gap-1.5">
             {pendingLeaveCount > 0 ? (
-              <span className="rounded-full bg-[#FFF8E1] px-2.5 py-1 text-[12px] font-medium text-[#F9A825]">
+              <span className="rounded-full bg-[#FFF8E1] px-2 py-0.5 text-[11px] font-medium text-[#F9A825]">
                 {pendingLeaveCount} leave pending
               </span>
             ) : null}
             {pendingAttCount > 0 ? (
-              <span className="rounded-full bg-[#E8F4FB] px-2.5 py-1 text-[12px] font-medium text-[#008CD3]">
+              <span className="rounded-full bg-[#E8F4FB] px-2 py-0.5 text-[11px] font-medium text-[#008CD3]">
                 {pendingAttCount} correction pending
               </span>
             ) : null}
@@ -600,90 +788,98 @@ export default function UserMyTeamPage() {
         ) : null}
 
         {teamError && !loading && !noTeam ? (
-          <div className="mx-4 mt-3 flex items-start gap-2 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-4 py-3 text-[14px] text-[#D93025]">
+          <div className="mx-3 mt-2 rounded-md border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2 text-[12px] text-[#D93025]">
             <span>{teamError}</span>
           </div>
         ) : null}
 
         {loading ? (
-          <div className="flex flex-col items-center justify-center gap-3 py-24 text-[#6B7280]">
-            <Loader2 className="h-9 w-9 animate-spin text-[#008CD3]" />
-            <p className="text-[15px]">Loading your team…</p>
+          <div className="flex flex-col items-center justify-center gap-2 py-16 text-[#6B7280]">
+            <Loader2 className="h-7 w-7 animate-spin text-[#008CD3]" />
+            <p className="text-[13px]">Loading your team…</p>
           </div>
         ) : null}
 
         {!loading && mobileMainTab === "team" && noTeam ? (
-          <div className="mx-4 mt-4 rounded-xl border border-dashed border-[#E4E7EC] bg-white px-6 py-16 text-center">
-            <Building2 className="mx-auto h-10 w-10 text-[#9CA3AF]" />
-            <p className="mt-4 text-[17px] font-semibold text-[#1F2937]">No team yet</p>
-            <p className="mt-2 text-[14px] text-[#6B7280]">
+          <div className="mx-3 mt-3 rounded-lg border border-dashed border-[#E4E7EC] bg-white px-4 py-12 text-center">
+            <Building2 className="mx-auto h-8 w-8 text-[#9CA3AF]" />
+            <p className="mt-3 text-[15px] font-semibold text-[#1F2937]">No team yet</p>
+            <p className={`mt-1.5 ${mobileCaptionCls}`}>
               When HR adds you to a roster, it will appear here. You can still submit leave and
               corrections from other tabs.
             </p>
-            <Link href={`/user-dashboard/${orgIdParam}/home`} className={`mt-6 ${zohoPrimaryBtnCls()}`}>
+            <Link
+              href={`/user-dashboard/${orgIdParam}/home`}
+              className={`mt-4 ${mobileActionPrimaryBtnCls()}`}
+            >
               Back to home
             </Link>
           </div>
         ) : null}
 
         {!loading && mobileMainTab === "team" && team ? (
-          <div className={`space-y-3 p-4 ${mobileContentBottomPad}`}>
-            <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
-              <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">
-                Team overview
-              </p>
-              <p className="mt-1 text-[18px] font-semibold text-[#1F2937]">{team.team_name}</p>
+          <div className={`${mobileSectionGap} px-3 pt-2 ${mobileContentBottomPad}`}>
+            <div className={mobileCardCls}>
+              <p className={mobileLabelCls}>Team overview</p>
+              <p className={`mt-0.5 ${mobileValueCls} text-[15px]`}>{team.team_name}</p>
               {team.team_info?.trim() ? (
-                <p className="mt-2 text-[14px] text-[#6B7280]">{team.team_info}</p>
+                <p className={`mt-1 ${mobileCaptionCls}`}>{team.team_info}</p>
               ) : null}
-              <div className="mt-3 flex flex-wrap gap-2">
+              <div className="mt-2 flex flex-wrap gap-1.5">
                 {team.is_admin ? (
-                  <span className="rounded-full bg-[#E8F4FB] px-2.5 py-0.5 text-[11px] font-semibold text-[#008CD3]">
+                  <span className="rounded-full bg-[#E8F4FB] px-2 py-0.5 text-[10px] font-semibold text-[#008CD3]">
                     Team admin
                   </span>
                 ) : (
-                  <span className="rounded-full bg-[#F5F7FA] px-2.5 py-0.5 text-[11px] font-semibold text-[#6B7280]">
+                  <span className="rounded-full bg-[#F5F7FA] px-2 py-0.5 text-[10px] font-semibold text-[#6B7280]">
                     Member
                   </span>
                 )}
-                <span className="rounded-full bg-[#F5F7FA] px-2.5 py-0.5 text-[11px] font-medium text-[#6B7280]">
+                <span className="rounded-full bg-[#F5F7FA] px-2 py-0.5 text-[10px] font-medium text-[#6B7280]">
                   {team.members.length} members
                 </span>
               </div>
             </div>
 
-            <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
-              <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">
-                Team lead
-              </p>
-              <div className="mt-2 flex items-center gap-3">
-                <span
-                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-sm font-semibold ${memberColorClass(team.admin_name ?? "?")}`}
-                >
-                  {initialsFromName(team.admin_name)}
-                </span>
-                <div>
-                  <p className="text-[15px] font-medium text-[#1F2937]">{team.admin_name ?? "—"}</p>
-                  <p className="text-[13px] text-[#6B7280]">
+            <div className={mobileCardCls}>
+              <p className={mobileLabelCls}>Team lead</p>
+              <div className="mt-2 flex items-center gap-2.5">
+                <MemberAvatarButton
+                  name={team.admin_name ?? "Team lead"}
+                  userImage={adminMember?.user_image}
+                  onZoom={openPhotoZoom}
+                />
+                <div className="min-w-0">
+                  <p className={mobileValueCls}>{team.admin_name ?? "—"}</p>
+                  <p className={mobileCaptionCls}>
                     Joined {formatDate(adminMember?.joined_date ?? null)}
                   </p>
+                  {adminMember?.user_email ? (
+                    <p className={`truncate ${mobileCaptionCls}`}>
+                      {adminMember.user_email}
+                    </p>
+                  ) : null}
                 </div>
               </div>
             </div>
 
-            <div className="overflow-hidden rounded-xl border border-[#E4E7EC] bg-white shadow-sm">
-              <div className="border-b border-[#E4E7EC] px-4 py-3">
-                <p className="text-[15px] font-semibold text-[#1F2937]">Roster</p>
-                <p className="text-[13px] text-[#6B7280]">Team members excluding lead</p>
+            <div className="overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-sm">
+              <div className="border-b border-[#E4E7EC] px-3 py-2.5">
+                <p className={mobileValueCls}>Roster</p>
+                <p className={mobileCaptionCls}>Tap a photo to enlarge</p>
               </div>
               {otherMembers.length === 0 ? (
-                <p className="px-4 py-10 text-center text-[14px] text-[#6B7280]">
+                <p className={`px-3 py-8 text-center ${mobileCaptionCls}`}>
                   No other members on this roster yet.
                 </p>
               ) : (
                 <ul className="divide-y divide-[#E4E7EC]">
                   {otherMembers.map((m) => (
-                    <MobileMemberRow key={m.team_member_id} member={m} />
+                    <MobileMemberRow
+                      key={m.team_member_id}
+                      member={m}
+                      onZoomPhoto={openPhotoZoom}
+                    />
                   ))}
                 </ul>
               )}
@@ -692,17 +888,17 @@ export default function UserMyTeamPage() {
         ) : null}
 
         {!loading && mobileMainTab === "leave" ? (
-          <div className={mobileContentBottomPad}>
+          <div className={`pt-2 ${mobileContentBottomPad}`}>
             {leaveLoadError ? (
-              <div className="mx-4 mt-3 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-4 py-3 text-[14px] text-[#D93025]">
+              <div className="mx-3 mt-2 rounded-md border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2 text-[12px] text-[#D93025]">
                 {leaveLoadError}
               </div>
             ) : null}
             {leaveRows.length === 0 && !leaveLoadError ? (
-              <div className="mx-4 mt-4 rounded-xl border border-dashed border-[#E4E7EC] bg-white px-6 py-16 text-center">
-                <CalendarDays className="mx-auto h-10 w-10 text-[#9CA3AF]" />
-                <p className="mt-4 text-[17px] font-semibold text-[#1F2937]">No leave requests</p>
-                <p className="mt-2 text-[14px] text-[#6B7280]">
+              <div className="mx-3 mt-3 rounded-lg border border-dashed border-[#E4E7EC] bg-white px-4 py-12 text-center">
+                <CalendarDays className="mx-auto h-8 w-8 text-[#9CA3AF]" />
+                <p className="mt-3 text-[15px] font-semibold text-[#1F2937]">No leave requests</p>
+                <p className={`mt-1.5 ${mobileCaptionCls}`}>
                   Tap Request time off below to submit a new request.
                 </p>
               </div>
@@ -717,17 +913,17 @@ export default function UserMyTeamPage() {
         ) : null}
 
         {!loading && mobileMainTab === "corrections" ? (
-          <div className={mobileContentBottomPad}>
+          <div className={`pt-2 ${mobileContentBottomPad}`}>
             {attendanceLoadError ? (
-              <div className="mx-4 mt-3 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-4 py-3 text-[14px] text-[#D93025]">
+              <div className="mx-3 mt-2 rounded-md border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2 text-[12px] text-[#D93025]">
                 {attendanceLoadError}
               </div>
             ) : null}
             {attendanceRows.length === 0 && !attendanceLoadError ? (
-              <div className="mx-4 mt-4 rounded-xl border border-dashed border-[#E4E7EC] bg-white px-6 py-16 text-center">
-                <ClipboardList className="mx-auto h-10 w-10 text-[#9CA3AF]" />
-                <p className="mt-4 text-[17px] font-semibold text-[#1F2937]">No corrections yet</p>
-                <p className="mt-2 text-[14px] text-[#6B7280]">
+              <div className="mx-3 mt-3 rounded-lg border border-dashed border-[#E4E7EC] bg-white px-4 py-12 text-center">
+                <ClipboardList className="mx-auto h-8 w-8 text-[#9CA3AF]" />
+                <p className="mt-3 text-[15px] font-semibold text-[#1F2937]">No corrections yet</p>
+                <p className={`mt-1.5 ${mobileCaptionCls}`}>
                   Tap Correction below to report a missed punch or timing issue.
                 </p>
               </div>
@@ -745,9 +941,9 @@ export default function UserMyTeamPage() {
           </div>
         ) : null}
 
-        {!loading ? (
+        {!loading && !leaveModalOpen && !attModalOpen ? (
           <div className={mobileActionBarCls}>
-            <div className="flex gap-2">
+            <div className="flex gap-1.5">
               <button
                 type="button"
                 onClick={() => {
@@ -755,17 +951,17 @@ export default function UserMyTeamPage() {
                   setLeaveFormError(null);
                   setLeaveFormSuccess(null);
                 }}
-                className={zohoPrimaryBtnCls(true)}
+                className={mobileActionPrimaryBtnCls(true)}
               >
-                <CalendarDays className="h-4 w-4" />
+                <CalendarDays className="h-3.5 w-3.5 shrink-0" />
                 Request time off
               </button>
               <button
                 type="button"
                 onClick={openNewAttendanceModal}
-                className={zohoSecondaryBtnCls(true)}
+                className={mobileActionSecondaryBtnCls(true)}
               >
-                <ClipboardList className="h-4 w-4" />
+                <ClipboardList className="h-3.5 w-3.5 shrink-0" />
                 Correction
               </button>
             </div>
@@ -1156,6 +1352,13 @@ export default function UserMyTeamPage() {
       </div>
       </div>
       </div>
+
+      <ProfilePhotoZoomModal
+        open={photoZoom != null}
+        imageUrl={photoZoom?.imageUrl ?? ""}
+        alt={photoZoom?.alt ?? ""}
+        onClose={() => setPhotoZoom(null)}
+      />
 
       {/* Leave modal */}
       {leaveModalOpen ? (

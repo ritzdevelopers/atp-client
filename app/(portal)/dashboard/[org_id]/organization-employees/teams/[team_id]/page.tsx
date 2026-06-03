@@ -89,12 +89,171 @@ function avatarColorClass(name: string | null | undefined) {
   return WA_AVATAR_COLORS[Math.abs(hash) % WA_AVATAR_COLORS.length];
 }
 
+function profileImageUrlFromRow(userImage: unknown): string | null {
+  const image = String(userImage ?? "").trim();
+  return image || null;
+}
+
+function dicebearAvatar(seed: string) {
+  return `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(seed)}`;
+}
+
+function resolveMemberAvatarSrc(
+  userImage: unknown,
+  name: string | null | undefined,
+): string {
+  const image = profileImageUrlFromRow(userImage);
+  if (image) return image;
+  return dicebearAvatar(String(name ?? "?"));
+}
+
+const mobileLabelCls =
+  "text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]";
+const mobileCaptionCls = "text-[11px] leading-snug text-[#6B7280]";
+
+function ProfilePhotoZoomModal({
+  open,
+  imageUrl,
+  alt,
+  onClose,
+}: {
+  open: boolean;
+  imageUrl: string;
+  alt: string;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[10060] flex items-center justify-center bg-[#111B21]/80 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="team-member-photo-zoom-title"
+    >
+      <button
+        type="button"
+        className="absolute inset-0"
+        onClick={onClose}
+        aria-label="Close profile photo"
+      />
+      <div className="relative z-[1] w-full max-w-sm">
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute -right-1 -top-1 z-[2] flex h-9 w-9 items-center justify-center rounded-full border border-[#E4E7EC] bg-white text-[#1F2937] shadow-lg active:scale-95"
+          aria-label="Close"
+        >
+          <X className="h-5 w-5" aria-hidden />
+        </button>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={imageUrl}
+          alt={alt}
+          className="max-h-[min(78vh,560px)] w-full rounded-xl bg-white object-contain shadow-2xl ring-1 ring-[#E4E7EC]"
+        />
+        <p
+          id="team-member-photo-zoom-title"
+          className="mt-2.5 text-center text-[13px] font-medium text-white"
+        >
+          {alt}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function TeamMemberAvatar({
+  name,
+  userImage,
+  isAdmin = false,
+  size = "md",
+  onZoom,
+}: {
+  name: string | null | undefined;
+  userImage?: unknown;
+  isAdmin?: boolean;
+  size?: "sm" | "md";
+  onZoom: (url: string, alt: string) => void;
+}) {
+  const profileUrl = profileImageUrlFromRow(userImage);
+  const displayName = String(name ?? "Member");
+  const box = size === "sm" ? "h-10 w-10" : "h-11 w-11";
+  const textSize = size === "sm" ? "text-xs" : "text-sm";
+
+  const img = (
+    /* eslint-disable-next-line @next/next/no-img-element */
+    <img
+      src={resolveMemberAvatarSrc(userImage, name)}
+      alt=""
+      className="h-full w-full object-cover object-top"
+      onError={(e) => {
+        e.currentTarget.src = dicebearAvatar(displayName);
+      }}
+    />
+  );
+
+  const adminBadge =
+    isAdmin && profileUrl ? (
+      <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#FFF8E1] ring-2 ring-white">
+        <Crown className="h-2.5 w-2.5 text-[#8D6E00]" aria-hidden />
+      </span>
+    ) : null;
+
+  if (profileUrl) {
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onZoom(profileUrl, displayName);
+        }}
+        className={`relative ${box} shrink-0 overflow-hidden rounded-full ring-2 ring-[#E4E7EC] transition active:opacity-90`}
+        aria-label={`View ${displayName} profile photo`}
+      >
+        {img}
+        {adminBadge}
+      </button>
+    );
+  }
+
+  return (
+    <span
+      className={`relative flex ${box} shrink-0 items-center justify-center rounded-full font-semibold ring-2 ring-[#E4E7EC] ${textSize} ${
+        isAdmin ? "bg-[#FFF8E1] text-[#8D6E00]" : avatarColorClass(name)
+      }`}
+      aria-hidden
+    >
+      {isAdmin ? <Crown className="h-5 w-5" /> : memberInitials(name)}
+      {adminBadge}
+    </span>
+  );
+}
+
+function zohoPrimaryBtnCls() {
+  return "inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg bg-[#008CD3] px-4 py-2.5 text-[14px] font-semibold text-white shadow-sm transition active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 sm:w-auto";
+}
+
+function zohoSecondaryBtnCls() {
+  return "inline-flex min-h-[44px] w-full items-center justify-center rounded-lg border border-[#E4E7EC] bg-white px-4 py-2.5 text-[14px] font-medium text-[#1F2937] transition active:scale-[0.98] disabled:opacity-50 sm:w-auto";
+}
+
 function searchFieldCls() {
-  return "w-full rounded-lg border-0 bg-[#F0F2F5] py-2.5 pl-10 pr-4 text-[15px] text-[#111B21] outline-none transition placeholder:text-[#8696A0] focus:bg-white focus:ring-1 focus:ring-[#25D366]/40 lg:rounded-xl lg:border lg:border-slate-200/90 lg:bg-white lg:py-2.5 lg:pl-10 lg:pr-4 lg:text-sm lg:shadow-sm lg:focus:border-teal-500/45 lg:focus:ring-2 lg:focus:ring-teal-500/15";
+  return "w-full rounded-lg border border-[#E4E7EC] bg-white py-2 pl-9 pr-3 text-[13px] text-[#1F2937] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15 lg:rounded-xl lg:py-2.5 lg:pl-10 lg:pr-4 lg:text-sm lg:shadow-sm";
 }
 
 function waFieldCls() {
-  return "mt-2 w-full rounded-lg border-0 bg-[#F0F2F5] px-3 py-3 text-[15px] text-[#111B21] outline-none focus:bg-white focus:ring-1 focus:ring-[#25D366]/40 lg:rounded-xl lg:border lg:border-slate-200 lg:bg-white lg:py-2.5 lg:text-sm lg:shadow-sm lg:focus:border-teal-500/50 lg:focus:ring-2 lg:focus:ring-teal-500/15";
+  return "mt-2 w-full rounded-lg border border-[#E4E7EC] bg-white px-3 py-2.5 text-[14px] text-[#1F2937] outline-none focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15 lg:rounded-xl lg:py-2.5 lg:text-sm lg:shadow-sm";
 }
 
 function waPrimaryBtnCls() {
@@ -192,6 +351,7 @@ function detailToRow(d: OrgTeamDetail): OrgTeamRow {
       removed_by_name: m.removed_by_name,
       exit_process_action_type: m.exit_process_action_type ?? null,
       exit_process_application_status: m.exit_process_application_status ?? null,
+      user_image: m.user_image ?? null,
     })),
   };
 }
@@ -204,7 +364,7 @@ function modalShell(
 ) {
   return (
     <div
-      className="fixed inset-0 z-[1000] flex items-end justify-center bg-[#111B21]/40 p-0 backdrop-blur-[1px] sm:items-center sm:bg-slate-950/50 sm:p-4 sm:backdrop-blur-sm"
+      className="fixed inset-0 z-[10050] flex items-end justify-center bg-[#111B21]/50 p-0 sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="team-detail-modal"
@@ -215,28 +375,31 @@ function modalShell(
         aria-label="Close"
         onClick={onClose}
       />
-      <div className="relative flex max-h-[92dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:max-h-[90vh] sm:rounded-2xl sm:border sm:border-slate-200/90">
-        <div className="flex shrink-0 items-start justify-between bg-[#128C7E] px-4 py-3.5 sm:border-b sm:border-slate-100 sm:bg-white sm:px-5 sm:py-4 sm:[border-top:3px_solid_#0d9488]">
+      <div className="relative flex max-h-[min(92dvh,100%)] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:max-h-[min(90vh,720px)] sm:rounded-2xl sm:border sm:border-slate-200/90">
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[#E4E7EC] bg-gradient-to-r from-[#008CD3] to-[#0070AA] px-4 py-3 sm:border-slate-100 sm:bg-white sm:px-5 sm:py-4 sm:[border-top:3px_solid_#0d9488]">
           <h2
             id="team-detail-modal"
-            className="pr-8 text-[17px] font-medium leading-snug text-white sm:text-lg sm:font-bold sm:text-slate-900"
+            className="min-w-0 flex-1 pr-2 text-[15px] font-semibold leading-snug text-white sm:text-lg sm:font-bold sm:text-slate-900"
           >
             {title}
           </h2>
           <button
             type="button"
             onClick={onClose}
-            className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full text-white/90 active:bg-white/10 sm:hidden"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/25 bg-white/10 text-white active:bg-white/20 sm:border-slate-200 sm:bg-white sm:text-slate-700"
             aria-label="Close"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:max-h-[min(60vh,500px)] sm:px-5">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5">
           {children}
         </div>
         {footer ? (
-          <div className="shrink-0 border-t border-[#E9EDEF] bg-white px-4 py-3 sm:border-slate-100 sm:bg-slate-50/90 sm:px-5">
+          <div
+            className="shrink-0 border-t border-[#E4E7EC] bg-[#F9FAFB] px-4 pt-3 sm:bg-slate-50/90 sm:px-5"
+            style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}
+          >
             {footer}
           </div>
         ) : null}
@@ -303,6 +466,10 @@ function TeamDetailPageContent() {
   const [mobileMainTab, setMobileMainTab] = useState<
     "members" | "info" | "exits" | "manage"
   >("members");
+  const [photoZoom, setPhotoZoom] = useState<{
+    imageUrl: string;
+    alt: string;
+  } | null>(null);
 
   const backHref = `/dashboard/${orgId}/organization-employees/manage-teams`;
 
@@ -521,65 +688,79 @@ function TeamDetailPageContent() {
     { id: "manage" as const, label: "Manage" },
   ];
 
+  const openPhotoZoom = (imageUrl: string, alt: string) => {
+    setPhotoZoom({ imageUrl, alt });
+  };
+
   return (
-    <div className="min-h-full bg-[#F0F2F5] pb-24 lg:bg-[#f4f6f9]">
-      {/* Mobile & tablet: WhatsApp-style shell */}
+    <div className="min-h-full bg-[#F5F7FA] pb-6 lg:bg-[#f4f6f9] lg:pb-0">
+      {/* Mobile & tablet: Zoho-style shell */}
       <div className="lg:hidden">
-        <div className="sticky top-0 z-20 bg-[#128C7E] text-white shadow-sm">
-          <div className="flex items-center gap-1 px-1 py-2">
-            <button
-              type="button"
-              onClick={() => router.push(backHref)}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full active:bg-white/10"
-              aria-label="Back to teams"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </button>
-            <div className="min-w-0 flex-1 py-1">
-              <h1 className="truncate text-[17px] font-medium leading-tight">{title}</h1>
-              <p className="truncate text-[13px] text-white/75">
-                {detail.total_number_of_members} members ·{" "}
-                {detail.admin_name ?? `User #${detail.admin_id}`}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => void loadAll()}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full active:bg-white/10"
-              aria-label="Refresh"
-            >
-              <RefreshCw className={`h-5 w-5 ${loading ? "animate-spin" : ""}`} />
-            </button>
-          </div>
-          <div className="flex overflow-x-auto border-t border-white/10 [scrollbar-width:none]">
-            {mobileTabs.map((tab) => (
+        <div className="sticky top-0 z-20 border-b border-[#E4E7EC] bg-white/95 shadow-sm backdrop-blur">
+          <div className="bg-gradient-to-r from-[#008CD3] via-[#007EBF] to-[#0070AA] px-3 pb-3 pt-2.5 text-white">
+            <div className="flex items-center gap-2">
               <button
-                key={tab.id}
                 type="button"
-                onClick={() => setMobileMainTab(tab.id)}
-                className={`relative shrink-0 px-4 py-3 text-[13px] font-medium transition ${
-                  mobileMainTab === tab.id
-                    ? "border-b-2 border-white text-white"
-                    : "border-b-2 border-transparent text-white/70"
-                }`}
+                onClick={() => router.push(backHref)}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/15 active:bg-white/25"
+                aria-label="Back to teams"
               >
-                {tab.label}
-                {tab.badge != null && tab.badge > 0 ? (
-                  <span className="ml-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-white/20 px-1 text-[11px]">
-                    {tab.badge > 9 ? "9+" : tab.badge}
-                  </span>
-                ) : null}
+                <ArrowLeft className="h-[18px] w-[18px]" />
               </button>
-            ))}
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-white/75">
+                  Team
+                </p>
+                <h1 className="truncate text-[16px] font-bold leading-tight">{title}</h1>
+                <p className="truncate text-[12px] text-white/80">
+                  {detail.total_number_of_members} members ·{" "}
+                  {detail.admin_name ?? `User #${detail.admin_id}`}
+                  {detail.members.some((m) => profileImageUrlFromRow(m.user_image))
+                    ? " · tap photo to enlarge"
+                    : ""}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void loadAll()}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/15 active:bg-white/25"
+                aria-label="Refresh"
+              >
+                <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              </button>
+            </div>
+          </div>
+          <div className="bg-white px-3 pb-2.5 pt-2">
+            <div className="flex rounded-lg bg-[#F5F7FA] p-0.5">
+              {mobileTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setMobileMainTab(tab.id)}
+                  className={`relative flex flex-1 items-center justify-center gap-1 rounded-md py-2 text-[11px] font-semibold transition ${
+                    mobileMainTab === tab.id
+                      ? "bg-white text-[#008CD3] shadow-sm ring-1 ring-[#E4E7EC]"
+                      : "text-[#6B7280]"
+                  }`}
+                >
+                  {tab.label}
+                  {tab.badge != null && tab.badge > 0 ? (
+                    <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[#008CD3]/15 px-1 text-[9px] font-bold text-[#008CD3]">
+                      {tab.badge > 9 ? "9+" : tab.badge}
+                    </span>
+                  ) : null}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
         {banner ? (
           <div
-            className={`mx-3 mt-3 rounded-lg px-4 py-3 text-[14px] ${
+            className={`mx-3 mt-2 rounded-lg px-3 py-2.5 text-[12px] leading-snug ${
               banner.type === "ok"
-                ? "bg-[#E7FCE3] text-[#0B5E44]"
-                : "bg-[#FFECEC] text-[#8B1A1A]"
+                ? "border border-[#C8E6C9] bg-[#E6F4EA] text-[#0F9D58]"
+                : "border border-[#F5C6C2] bg-[#FCE8E6] text-[#D93025]"
             }`}
             role="status"
           >
@@ -588,22 +769,20 @@ function TeamDetailPageContent() {
         ) : null}
 
         {mobileMainTab === "members" ? (
-          <div>
-            <div className="bg-white px-3 py-2">
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8696A0]" />
-                <input
-                  type="search"
-                  placeholder="Search by name or email"
-                  value={memberTableSearch}
-                  onChange={(e) => setMemberTableSearch(e.target.value)}
-                  className={searchFieldCls()}
-                />
-              </div>
+          <div className="space-y-2 p-3">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF]" />
+              <input
+                type="search"
+                placeholder="Search by name or email"
+                value={memberTableSearch}
+                onChange={(e) => setMemberTableSearch(e.target.value)}
+                className={searchFieldCls()}
+              />
             </div>
-            <ul className="divide-y divide-[#E9EDEF] bg-white">
+            <ul className="overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-sm">
               {filteredTableMembers.length === 0 ? (
-                <li className="px-4 py-12 text-center text-[15px] text-[#667781]">
+                <li className="px-4 py-10 text-center text-[13px] text-[#6B7280]">
                   No members match your search.
                 </li>
               ) : (
@@ -612,52 +791,51 @@ function TeamDetailPageContent() {
                   const hideTerminate =
                     sessionUserId != null && Number(sessionUserId) === Number(m.user_id);
                   return (
-                    <li key={m.team_member_id}>
-                      <div className="flex items-center gap-3 px-4 py-3">
-                        <span
-                          className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-medium ${
-                            isAdmin
-                              ? "bg-[#FFF8E1] text-[#8D6E00]"
-                              : avatarColorClass(m.user_name)
-                          }`}
-                          aria-hidden
-                        >
-                          {isAdmin ? (
-                            <Crown className="h-5 w-5" />
-                          ) : (
-                            memberInitials(m.user_name)
-                          )}
-                        </span>
+                    <li
+                      key={m.team_member_id}
+                      className="border-b border-[#EEF2F6] last:border-b-0"
+                    >
+                      <div className="flex items-start gap-2.5 px-3 py-2.5">
+                        <TeamMemberAvatar
+                          name={m.user_name}
+                          userImage={m.user_image}
+                          isAdmin={isAdmin}
+                          onZoom={openPhotoZoom}
+                        />
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <p className="truncate text-[17px] text-[#111B21]">{m.user_name}</p>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <p className="truncate text-[13px] font-semibold text-[#1F2937]">
+                              {m.user_name}
+                            </p>
                             {isAdmin ? (
-                              <span className="shrink-0 rounded-full bg-[#FFF8E1] px-2 py-0.5 text-[11px] font-medium text-[#8D6E00]">
+                              <span className="shrink-0 rounded-full bg-[#FFF8E1] px-2 py-0.5 text-[10px] font-semibold text-[#8D6E00]">
                                 Admin
                               </span>
                             ) : null}
                           </div>
-                          <p className="truncate text-[14px] text-[#667781]">{m.user_email}</p>
-                          <p className="truncate text-[13px] text-[#8696A0]">
+                          <p className="truncate text-[12px] text-[#6B7280]">{m.user_email}</p>
+                          <p className={`mt-0.5 ${mobileCaptionCls}`}>
                             Joined {fmtLong(m.joined_date)}
                           </p>
                         </div>
                         {!hideTerminate ? (
-                          memberHasExitProcess(m) ? (
-                            <MemberExitStatusBadge
-                              mobile
-                              status={String(m.exit_process_application_status)}
-                            />
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => openTerminateForMember(m)}
-                              className={waDangerBtnCls()}
-                            >
-                              <ShieldAlert className="h-3.5 w-3.5" />
-                              Exit
-                            </button>
-                          )
+                          <div className="shrink-0 self-center">
+                            {memberHasExitProcess(m) ? (
+                              <MemberExitStatusBadge
+                                mobile
+                                status={String(m.exit_process_application_status)}
+                              />
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => openTerminateForMember(m)}
+                                className="inline-flex min-h-[34px] items-center gap-1 rounded-md border border-[#FFCDD2] bg-[#FFECEC] px-2 py-1.5 text-[11px] font-semibold text-[#C62828] active:scale-[0.98]"
+                              >
+                                <ShieldAlert className="h-3 w-3" />
+                                Exit
+                              </button>
+                            )}
+                          </div>
                         ) : null}
                       </div>
                     </li>
@@ -669,176 +847,174 @@ function TeamDetailPageContent() {
         ) : null}
 
         {mobileMainTab === "info" ? (
-          <div className="divide-y divide-[#E9EDEF] bg-white">
-            <div className="px-4 py-4">
-              <p className="text-[13px] font-medium uppercase tracking-wide text-[#667781]">
-                About
-              </p>
-              <p className="mt-2 text-[15px] leading-relaxed text-[#111B21]">
+          <div className="space-y-2 p-3">
+            <section className="overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-sm">
+              <div className="border-b border-[#EEF2F6] bg-[#F9FAFB] px-3 py-2">
+                <p className={`${mobileLabelCls}`}>About</p>
+              </div>
+              <p className="px-3 py-3 text-[13px] leading-relaxed text-[#1F2937]">
                 {detail.team_info?.trim() ||
                   "No description yet — add context so others know what this team owns."}
               </p>
-            </div>
-            <div className="px-4 py-3.5">
-              <p className="text-[13px] text-[#667781]">Total members</p>
-              <p className="mt-0.5 text-[17px] font-medium text-[#111B21]">
-                {detail.total_number_of_members}
-              </p>
-            </div>
-            <div className="px-4 py-3.5">
-              <p className="text-[13px] text-[#667781]">Team admin</p>
-              <p className="mt-0.5 text-[17px] font-medium text-[#111B21]">
-                {detail.admin_name ?? `User #${detail.admin_id}`}
-              </p>
-              <p className="mt-1 text-[14px] text-[#8696A0]">
-                Joined {fmtLong(detail.admin_joined_date)}
-              </p>
-            </div>
-            <div className="px-4 py-3.5">
-              <p className="text-[13px] text-[#667781]">Added by</p>
-              <p className="mt-0.5 text-[15px] text-[#111B21]">
-                {detail.admin_added_by_name ?? "—"}
-              </p>
-            </div>
-            <div className="px-4 py-3.5">
-              <p className="text-[13px] text-[#667781]">Created</p>
-              <p className="mt-0.5 text-[15px] text-[#111B21]">{fmtLong(detail.created_at)}</p>
-              <p className="mt-1 text-[14px] text-[#8696A0]">
-                By {detail.created_by_name ?? `User #${detail.created_by ?? "—"}`}
-              </p>
-            </div>
-            <div className="px-4 py-3.5">
-              <p className="text-[13px] text-[#667781]">Last updated</p>
-              <p className="mt-0.5 text-[15px] text-[#111B21]">{fmtLong(detail.updated_at)}</p>
-            </div>
+            </section>
+            <section className="overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-sm">
+              {[
+                ["Total members", String(detail.total_number_of_members)],
+                [
+                  "Team admin",
+                  detail.admin_name ?? `User #${detail.admin_id}`,
+                  `Joined ${fmtLong(detail.admin_joined_date)}`,
+                ],
+                ["Added by", detail.admin_added_by_name ?? "—"],
+                [
+                  "Created",
+                  fmtLong(detail.created_at),
+                  `By ${detail.created_by_name ?? `User #${detail.created_by ?? "—"}`}`,
+                ],
+                ["Last updated", fmtLong(detail.updated_at)],
+              ].map(([label, value, sub]) => (
+                <div
+                  key={label}
+                  className="border-b border-[#EEF2F6] px-3 py-2.5 last:border-b-0"
+                >
+                  <p className={mobileLabelCls}>{label}</p>
+                  <p className="mt-0.5 text-[13px] font-semibold text-[#1F2937]">{value}</p>
+                  {sub ? <p className={`mt-0.5 ${mobileCaptionCls}`}>{sub}</p> : null}
+                </div>
+              ))}
+            </section>
           </div>
         ) : null}
 
         {mobileMainTab === "exits" ? (
-          <div>
+          <div className="p-3">
             {exitListError ? (
-              <div className="mx-3 mt-3 rounded-lg bg-[#FFECEC] px-4 py-3 text-[14px] text-[#8B1A1A]">
+              <div className="rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2.5 text-[12px] text-[#D93025]">
                 {exitListError}
               </div>
             ) : exitProcesses.length === 0 ? (
-              <div className="mx-3 mt-4 rounded-lg bg-white px-6 py-16 text-center">
-                <ClipboardList className="mx-auto h-10 w-10 text-[#8696A0]" />
-                <p className="mt-4 text-[17px] font-medium text-[#111B21]">No exit processes yet</p>
-                <p className="mt-2 text-[14px] text-[#667781]">
+              <div className="rounded-lg border border-dashed border-[#E4E7EC] bg-white px-4 py-12 text-center">
+                <ClipboardList className="mx-auto h-9 w-9 text-[#9CA3AF]" />
+                <p className="mt-3 text-[14px] font-semibold text-[#1F2937]">
+                  No exit processes yet
+                </p>
+                <p className={`mt-1 ${mobileCaptionCls}`}>
                   Terminations linked to this team appear here once created.
                 </p>
               </div>
             ) : (
-              <ul className="mt-1 divide-y divide-[#E9EDEF] bg-white">
-                {exitProcesses.map((row) => (
-                  <li key={row.id}>
-                    <Link
-                      href={`/dashboard/${orgId}/organization-employees/teams/0/exit/0?team_id=${encodeURIComponent(teamId)}&exit_process_id=${encodeURIComponent(String(row.id))}`}
-                      className="flex items-center gap-3 px-4 py-3.5 active:bg-[#F0F2F5]"
-                    >
-                      <span
-                        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-medium ${avatarColorClass(row.employee_name)}`}
+              <ul className="overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-sm">
+                {exitProcesses.map((row) => {
+                  const memberForExit = detail.members.find(
+                    (m) => Number(m.user_id) === Number(row.employee_id),
+                  );
+                  return (
+                    <li key={row.id} className="border-b border-[#EEF2F6] last:border-b-0">
+                      <Link
+                        href={`/dashboard/${orgId}/organization-employees/teams/0/exit/0?team_id=${encodeURIComponent(teamId)}&exit_process_id=${encodeURIComponent(String(row.id))}`}
+                        className="flex items-center gap-2.5 px-3 py-2.5 active:bg-[#F5F7FA]"
                       >
-                        {memberInitials(row.employee_name)}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-[17px] text-[#111B21]">
-                          {row.employee_name ?? `Employee #${row.employee_id}`}
-                        </p>
-                        <p className="truncate text-[14px] capitalize text-[#667781]">
-                          {row.action_type}
-                        </p>
-                        <p className="truncate text-[13px] text-[#8696A0]">
-                          Last day:{" "}
-                          {row.last_working_day ? fmtLong(row.last_working_day) : "—"}
-                        </p>
-                      </div>
-                      <span
-                        className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-medium capitalize ${waExitStatusChip(row.application_status)}`}
-                      >
-                        {String(row.application_status).replace(/_/g, " ")}
-                      </span>
-                      <ChevronRight className="h-5 w-5 shrink-0 text-[#8696A0]" />
-                    </Link>
-                  </li>
-                ))}
+                        <TeamMemberAvatar
+                          name={row.employee_name}
+                          userImage={memberForExit?.user_image}
+                          size="sm"
+                          onZoom={openPhotoZoom}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[13px] font-semibold text-[#1F2937]">
+                            {row.employee_name ?? `Employee #${row.employee_id}`}
+                          </p>
+                          <p className="truncate text-[12px] capitalize text-[#6B7280]">
+                            {row.action_type}
+                          </p>
+                          <p className={`truncate ${mobileCaptionCls}`}>
+                            Last day:{" "}
+                            {row.last_working_day ? fmtLong(row.last_working_day) : "—"}
+                          </p>
+                        </div>
+                        <span
+                          className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize ${waExitStatusChip(row.application_status)}`}
+                        >
+                          {String(row.application_status).replace(/_/g, " ")}
+                        </span>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-[#9CA3AF]" />
+                      </Link>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>
         ) : null}
 
         {mobileMainTab === "manage" ? (
-          <ul className="mt-1 divide-y divide-[#E9EDEF] bg-white">
-            <li>
-              <button
-                type="button"
-                onClick={() => setModal("add")}
-                className="flex w-full items-center gap-4 px-4 py-4 text-left active:bg-[#F0F2F5]"
-              >
-                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#E7FCE3] text-[#0B5E44]">
-                  <UserPlus className="h-5 w-5" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[17px] text-[#111B21]">Add members</p>
-                  <p className="text-[14px] text-[#667781]">Invite people to this team</p>
-                </div>
-                <ChevronRight className="h-5 w-5 text-[#8696A0]" />
-              </button>
-            </li>
-            <li>
-              <button
-                type="button"
-                onClick={() => setModal("admin")}
-                className="flex w-full items-center gap-4 px-4 py-4 text-left active:bg-[#F0F2F5]"
-              >
-                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#FFF8E1] text-[#8D6E00]">
-                  <Crown className="h-5 w-5" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[17px] text-[#111B21]">Change admin</p>
-                  <p className="text-[14px] text-[#667781]">
-                    Current: {detail.admin_name ?? `User #${detail.admin_id}`}
-                  </p>
-                </div>
-                <ChevronRight className="h-5 w-5 text-[#8696A0]" />
-              </button>
-            </li>
-            <li>
-              <button
-                type="button"
-                onClick={() => {
+          <ul className="m-3 overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-sm">
+            {[
+              {
+                key: "add",
+                onClick: () => setModal("add"),
+                icon: UserPlus,
+                iconCls: "bg-[#E6F4EA] text-[#0F9D58]",
+                title: "Add members",
+                sub: "Invite people to this team",
+                titleCls: "text-[#1F2937]",
+              },
+              {
+                key: "admin",
+                onClick: () => setModal("admin"),
+                icon: Crown,
+                iconCls: "bg-[#FFF8E1] text-[#8D6E00]",
+                title: "Change admin",
+                sub: `Current: ${detail.admin_name ?? `User #${detail.admin_id}`}`,
+                titleCls: "text-[#1F2937]",
+              },
+              {
+                key: "update",
+                onClick: () => {
                   setUpdateName(detail.team_name);
                   setUpdateInfo(detail.team_info ?? "");
                   setModal("update");
-                }}
-                className="flex w-full items-center gap-4 px-4 py-4 text-left active:bg-[#F0F2F5]"
-              >
-                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#E3F2FD] text-[#1565C0]">
-                  <Settings2 className="h-5 w-5" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[17px] text-[#111B21]">Update info</p>
-                  <p className="text-[14px] text-[#667781]">Edit team name and description</p>
-                </div>
-                <ChevronRight className="h-5 w-5 text-[#8696A0]" />
-              </button>
-            </li>
-            <li>
-              <button
-                type="button"
-                onClick={() => setModal("remove")}
-                className="flex w-full items-center gap-4 px-4 py-4 text-left active:bg-[#F0F2F5]"
-              >
-                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#FFECEC] text-[#C62828]">
-                  <UserMinus className="h-5 w-5" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[17px] text-[#C62828]">Remove members</p>
-                  <p className="text-[14px] text-[#667781]">Take people off the roster</p>
-                </div>
-                <ChevronRight className="h-5 w-5 text-[#8696A0]" />
-              </button>
-            </li>
+                },
+                icon: Settings2,
+                iconCls: "bg-[#E8F4FB] text-[#008CD3]",
+                title: "Update team info",
+                sub: "Edit team name and description",
+                titleCls: "text-[#1F2937]",
+              },
+              {
+                key: "remove",
+                onClick: () => setModal("remove"),
+                icon: UserMinus,
+                iconCls: "bg-[#FFECEC] text-[#C62828]",
+                title: "Remove members",
+                sub: "Take people off the roster",
+                titleCls: "text-[#C62828]",
+              },
+            ].map((action) => {
+              const Icon = action.icon;
+              return (
+                <li key={action.key} className="border-b border-[#EEF2F6] last:border-b-0">
+                  <button
+                    type="button"
+                    onClick={action.onClick}
+                    className="flex w-full items-center gap-3 px-3 py-3 text-left active:bg-[#F5F7FA]"
+                  >
+                    <span
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${action.iconCls}`}
+                    >
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className={`text-[13px] font-semibold ${action.titleCls}`}>
+                        {action.title}
+                      </p>
+                      <p className={mobileCaptionCls}>{action.sub}</p>
+                    </div>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-[#9CA3AF]" />
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         ) : null}
       </div>
@@ -1306,7 +1482,7 @@ function TeamDetailPageContent() {
 
       {terminateMember ? (
         <div
-          className="fixed inset-0 z-[1001] flex items-end justify-center bg-[#111B21]/40 p-0 backdrop-blur-[1px] sm:items-center sm:bg-slate-950/55 sm:p-4 sm:backdrop-blur-md"
+          className="fixed inset-0 z-[10050] flex items-end justify-center bg-[#111B21]/50 p-0 sm:items-center sm:p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="terminate-exit-dialog-title"
@@ -1317,8 +1493,8 @@ function TeamDetailPageContent() {
             aria-label="Close dialog"
             onClick={() => !busy && closeTerminateModal()}
           />
-          <div className="relative flex max-h-[92dvh] w-full max-w-xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:max-h-[92vh] sm:rounded-[22px] sm:border sm:border-white/10 sm:shadow-[0_24px_80px_-12px_rgba(15,23,42,0.45)] sm:ring-1 sm:ring-slate-950/[0.06]">
-            <div className="relative shrink-0 overflow-hidden bg-[#128C7E] px-4 py-4 text-white sm:bg-gradient-to-br sm:from-slate-950 sm:via-slate-900 sm:to-rose-950 sm:px-6 sm:pb-8 sm:pt-7">
+          <div className="relative flex max-h-[min(92dvh,100%)] w-full max-w-xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:max-h-[min(92vh,720px)] sm:rounded-[22px] sm:border sm:border-white/10 sm:shadow-[0_24px_80px_-12px_rgba(15,23,42,0.45)] sm:ring-1 sm:ring-slate-950/[0.06]">
+            <div className="relative shrink-0 overflow-hidden bg-gradient-to-r from-[#008CD3] to-[#0070AA] px-4 py-3.5 text-white sm:bg-gradient-to-br sm:from-slate-950 sm:via-slate-900 sm:to-rose-950 sm:px-6 sm:pb-8 sm:pt-7">
               <button
                 type="button"
                 onClick={() => !busy && closeTerminateModal()}
@@ -1350,13 +1526,13 @@ function TeamDetailPageContent() {
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:max-h-[min(52vh,520px)] sm:px-6 sm:py-5">
-              <div className="flex items-center gap-4 rounded-xl border border-[#E9EDEF] bg-[#F0F2F5] p-4 sm:rounded-2xl sm:border-slate-100 sm:bg-gradient-to-r sm:from-slate-50 sm:to-white sm:ring-1 sm:ring-slate-950/[0.03]">
-                <div
-                  className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-semibold sm:rounded-2xl sm:bg-gradient-to-br sm:from-slate-800 sm:to-slate-950 sm:text-white sm:shadow-inner sm:shadow-black/30 ${avatarColorClass(terminateMember.user_name)}`}
-                >
-                  {memberInitials(terminateMember.user_name)}
-                </div>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
+              <div className="flex items-center gap-3 rounded-xl border border-[#E4E7EC] bg-[#F9FAFB] p-3 sm:gap-4 sm:rounded-2xl sm:border-slate-100 sm:bg-gradient-to-r sm:from-slate-50 sm:to-white sm:p-4 sm:ring-1 sm:ring-slate-950/[0.03]">
+                <TeamMemberAvatar
+                  name={terminateMember.user_name}
+                  userImage={terminateMember.user_image}
+                  onZoom={openPhotoZoom}
+                />
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold text-slate-900">{terminateMember.user_name}</p>
                   <p className="truncate text-sm text-slate-500">{terminateMember.user_email}</p>
@@ -1476,12 +1652,15 @@ function TeamDetailPageContent() {
               </div>
             </div>
 
-            <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-[#E9EDEF] bg-white px-4 py-3 sm:flex-row sm:justify-end sm:gap-3 sm:border-slate-100 sm:bg-slate-50/95 sm:px-6 sm:py-4">
+            <div
+              className="flex shrink-0 flex-col-reverse gap-2 border-t border-[#E4E7EC] bg-[#F9FAFB] px-4 pt-3 sm:flex-row sm:justify-end sm:gap-3 sm:border-slate-100 sm:bg-slate-50/95 sm:px-6 sm:py-4"
+              style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}
+            >
               <button
                 type="button"
                 disabled={busy}
                 onClick={() => closeTerminateModal()}
-                className={`w-full sm:w-auto ${waSecondaryBtnCls()}`}
+                className={zohoSecondaryBtnCls()}
               >
                 Cancel
               </button>
@@ -1536,7 +1715,7 @@ function TeamDetailPageContent() {
                     }
                   })()
                 }
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-rose-600 to-rose-700 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-rose-900/25 transition hover:from-rose-500 hover:to-rose-600 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-rose-600 to-rose-700 px-4 py-2.5 text-[14px] font-semibold text-white shadow-sm transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:rounded-xl sm:px-5 sm:text-sm"
               >
                 {busy ? (
                   <>
@@ -1565,17 +1744,17 @@ function TeamDetailPageContent() {
                 before you can start termination for them.
               </p>
             </>,
-            <div className="flex flex-wrap items-center justify-end gap-2">
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-2">
               <button
                 type="button"
-                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                className={zohoSecondaryBtnCls()}
                 onClick={closeChangeAdminBeforeTerminatePrompt}
               >
                 Cancel
               </button>
               <button
                 type="button"
-                className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700"
+                className={`${zohoPrimaryBtnCls()} gap-2`}
                 onClick={() => {
                   closeChangeAdminBeforeTerminatePrompt();
                   setModal("admin");
@@ -1793,7 +1972,7 @@ function TeamDetailPageContent() {
                       });
                     })
                   }
-                  className="w-full rounded-xl bg-teal-600 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
+                  className={zohoPrimaryBtnCls()}
                 >
                   Save changes
                 </button>,
@@ -1802,6 +1981,13 @@ function TeamDetailPageContent() {
             return null;
           })()
         : null}
+
+      <ProfilePhotoZoomModal
+        open={photoZoom != null}
+        imageUrl={photoZoom?.imageUrl ?? ""}
+        alt={photoZoom?.alt ?? ""}
+        onClose={() => setPhotoZoom(null)}
+      />
     </div>
   );
 }

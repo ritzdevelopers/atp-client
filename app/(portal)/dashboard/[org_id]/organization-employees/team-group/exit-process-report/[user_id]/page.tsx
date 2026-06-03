@@ -20,7 +20,9 @@ import {
   UserRound,
   CircleCheck,
   CircleX,
+  X,
 } from "lucide-react";
+import { getAllOrgUsers } from "@/services/adminUser";
 import {
   fetchTeamMemberExitProcessReport,
   type TeamMemberExitProcessReportData,
@@ -142,16 +144,160 @@ function avatarColorClass(name: string | null | undefined) {
   return WA_AVATAR_COLORS[Math.abs(hash) % WA_AVATAR_COLORS.length];
 }
 
+function profileImageUrlFromRow(userImage: unknown): string | null {
+  const image = String(userImage ?? "").trim();
+  return image || null;
+}
+
+function dicebearAvatar(seed: string) {
+  return `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(seed)}`;
+}
+
+function resolveAvatarSrc(userImage: string | null | undefined, name: string | null | undefined) {
+  const image = profileImageUrlFromRow(userImage);
+  if (image) return image;
+  return dicebearAvatar(String(name ?? "?"));
+}
+
+const mobileLabelCls =
+  "text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]";
+const mobileCaptionCls = "text-[11px] leading-snug text-[#6B7280]";
+
+function ProfilePhotoZoomModal({
+  open,
+  imageUrl,
+  alt,
+  onClose,
+}: {
+  open: boolean;
+  imageUrl: string;
+  alt: string;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[10060] flex items-center justify-center bg-[#111B21]/80 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="team-exit-report-photo-zoom-title"
+    >
+      <button
+        type="button"
+        className="absolute inset-0"
+        onClick={onClose}
+        aria-label="Close profile photo"
+      />
+      <div className="relative z-[1] w-full max-w-sm">
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute -right-1 -top-1 z-[2] flex h-9 w-9 items-center justify-center rounded-full border border-[#E4E7EC] bg-white text-[#1F2937] shadow-lg active:scale-95"
+          aria-label="Close"
+        >
+          <X className="h-5 w-5" aria-hidden />
+        </button>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={imageUrl}
+          alt={alt}
+          className="max-h-[min(78vh,560px)] w-full rounded-xl bg-white object-contain shadow-2xl ring-1 ring-[#E4E7EC]"
+        />
+        <p
+          id="team-exit-report-photo-zoom-title"
+          className="mt-2.5 text-center text-[13px] font-medium text-white"
+        >
+          {alt}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function UserAvatarButton({
+  name,
+  userImage,
+  size = "md",
+  onZoom,
+}: {
+  name: string | null | undefined;
+  userImage?: string | null;
+  size?: "sm" | "md" | "lg";
+  onZoom: (url: string, alt: string) => void;
+}) {
+  const profileUrl = profileImageUrlFromRow(userImage);
+  const displayName = String(name ?? "Employee");
+  const box =
+    size === "lg" ? "h-14 w-14" : size === "sm" ? "h-10 w-10" : "h-11 w-11";
+  const textSize = size === "lg" ? "text-base" : size === "sm" ? "text-xs" : "text-sm";
+
+  const img = (
+    /* eslint-disable-next-line @next/next/no-img-element */
+    <img
+      src={resolveAvatarSrc(userImage, name)}
+      alt=""
+      className="h-full w-full object-cover object-top"
+      onError={(e) => {
+        e.currentTarget.src = dicebearAvatar(displayName);
+      }}
+    />
+  );
+
+  if (profileUrl) {
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onZoom(profileUrl, displayName);
+        }}
+        className={`${box} shrink-0 overflow-hidden rounded-full ring-2 ring-[#E4E7EC] transition active:opacity-90`}
+        aria-label={`View ${displayName} profile photo`}
+      >
+        {img}
+      </button>
+    );
+  }
+
+  return (
+    <span
+      className={`flex ${box} shrink-0 items-center justify-center rounded-full font-semibold ring-2 ring-[#E4E7EC] ${textSize} ${avatarColorClass(name)}`}
+      aria-hidden
+    >
+      {initialsFromName(name)}
+    </span>
+  );
+}
+
 function waFieldCls() {
-  return "mt-1.5 w-full rounded-lg border-0 bg-[#F0F2F5] px-3 py-3 text-[15px] text-[#111B21] outline-none focus:bg-white focus:ring-1 focus:ring-[#25D366]/40 lg:rounded-lg lg:border lg:border-slate-200 lg:bg-white lg:py-2 lg:text-sm lg:shadow-sm lg:focus:border-[#C99237]/50 lg:focus:ring-2 lg:focus:ring-[#C99237]/20";
+  return "mt-1.5 w-full rounded-lg border border-[#E4E7EC] bg-white px-3 py-2.5 text-[14px] text-[#1F2937] outline-none focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15 lg:rounded-lg lg:py-2 lg:text-sm lg:shadow-sm lg:focus:border-[#C99237]/50 lg:focus:ring-2 lg:focus:ring-[#C99237]/20";
+}
+
+function zohoPrimaryBtnCls() {
+  return "inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg bg-[#008CD3] px-4 py-2.5 text-[14px] font-semibold text-white shadow-sm transition active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60 sm:w-auto lg:rounded-xl lg:bg-[#0C123A] lg:hover:bg-[#121a4a]";
+}
+
+function zohoSecondaryBtnCls() {
+  return "inline-flex min-h-[44px] w-full items-center justify-center rounded-lg border border-[#E4E7EC] bg-white px-4 py-2.5 text-[14px] font-medium text-[#1F2937] transition active:scale-[0.98] disabled:opacity-50 sm:w-auto lg:rounded-xl lg:border-slate-300 lg:hover:bg-slate-50";
 }
 
 function waPrimaryBtnCls() {
-  return "inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-[#25D366] px-4 py-2.5 text-[15px] font-medium text-white transition active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60 lg:rounded-xl lg:bg-[#0C123A] lg:py-2 lg:text-sm lg:font-semibold lg:hover:bg-[#121a4a]";
+  return zohoPrimaryBtnCls();
 }
 
 function waSecondaryBtnCls() {
-  return "inline-flex min-h-[44px] items-center justify-center rounded-lg border border-[#E9EDEF] bg-white px-4 py-2.5 text-[15px] font-medium text-[#111B21] transition active:scale-[0.98] disabled:opacity-50 lg:rounded-xl lg:border-slate-300 lg:py-2 lg:text-sm lg:font-semibold lg:text-slate-700 lg:hover:bg-slate-50";
+  return zohoSecondaryBtnCls();
 }
 
 function waExitStatusChip(status: string | null | undefined) {
@@ -168,8 +314,8 @@ export default function TeamMemberExitProcessReportPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-slate-500">
-          <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
+        <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 bg-[#F5F7FA] text-[#6B7280]">
+          <Loader2 className="h-8 w-8 animate-spin text-[#008CD3]" />
           <p className="text-sm">Loading exit process report…</p>
         </div>
       }
@@ -236,6 +382,11 @@ function TeamMemberExitProcessReportPageContent() {
   const [mobileMainTab, setMobileMainTab] = useState<
     "employee" | "timeline" | "assets" | "handover"
   >("employee");
+  const [employeeUserImage, setEmployeeUserImage] = useState<string | null>(null);
+  const [photoZoom, setPhotoZoom] = useState<{
+    imageUrl: string;
+    alt: string;
+  } | null>(null);
 
   const teamGroupHref =
     `/dashboard/${orgId}/organization-employees/team-group`;
@@ -256,14 +407,19 @@ function TeamMemberExitProcessReportPageContent() {
         setData(null);
         return;
       }
-      const report = await fetchTeamMemberExitProcessReport(
-        token,
-        orgIdNum,
-        userIdParam.trim(),
-      );
+      const [report, users] = await Promise.all([
+        fetchTeamMemberExitProcessReport(token, orgIdNum, userIdParam.trim()),
+        getAllOrgUsers(token).catch(() => []),
+      ]);
       setData(report);
+      const empId = Number(report.exit_process.employee_id);
+      const match = users.find((u) => Number(u.id) === empId);
+      setEmployeeUserImage(
+        profileImageUrlFromRow((match as { user_image?: unknown } | undefined)?.user_image),
+      );
     } catch (e) {
       setData(null);
+      setEmployeeUserImage(null);
       setError(e instanceof Error ? e.message : "Could not load report.");
     } finally {
       setLoading(false);
@@ -571,69 +727,81 @@ function TeamMemberExitProcessReportPageContent() {
     }
   };
 
+  const openPhotoZoom = (imageUrl: string, alt: string) => {
+    setPhotoZoom({ imageUrl, alt });
+  };
+
   return (
-    <div className="min-h-full bg-[#F0F2F5] lg:bg-[#f4f6f9] lg:pb-20">
-      {/* Mobile: WhatsApp-style header */}
-      <div className="sticky top-0 z-20 bg-[#128C7E] text-white shadow-sm lg:hidden">
-        <div className="flex items-center gap-1 px-1 py-2">
-          <Link
-            href={teamGroupHref}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full active:bg-white/10"
-            aria-label="Back to team group"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Link>
-          <div className="min-w-0 flex-1 py-1">
-            <h1 className="truncate text-[17px] font-medium leading-tight">
-              {loading ? "Loading…" : ep?.employee_name ?? "Exit report"}
-            </h1>
-            <p className="truncate text-[13px] text-white/75">
-              {ep?.team_name ?? "Exit process report"}
-            </p>
+    <div className="min-h-full bg-[#F5F7FA] lg:bg-[#f4f6f9] lg:pb-20">
+      {/* Mobile: Zoho-style header */}
+      <div className="sticky top-0 z-20 border-b border-[#E4E7EC] bg-white/95 shadow-sm backdrop-blur lg:hidden">
+        <div className="bg-gradient-to-r from-[#008CD3] via-[#007EBF] to-[#0070AA] px-3 pb-3 pt-2.5 text-white">
+          <div className="flex items-center gap-2">
+            <Link
+              href={teamGroupHref}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/15 active:bg-white/25"
+              aria-label="Back to team group"
+            >
+              <ArrowLeft className="h-[18px] w-[18px]" />
+            </Link>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-white/75">
+                Exit report
+              </p>
+              <h1 className="truncate text-[16px] font-bold leading-tight">
+                {loading ? "Loading…" : ep?.employee_name ?? "Exit report"}
+              </h1>
+              <p className="truncate text-[12px] text-white/80">
+                {ep?.team_name ?? "Exit process report"}
+                {employeeUserImage ? " · tap photo to enlarge" : ""}
+              </p>
+            </div>
+            {ep?.application_status ? (
+              <span
+                className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${waExitStatusChip(ep.application_status)}`}
+              >
+                {String(ep.application_status).replace(/_/g, " ")}
+              </span>
+            ) : null}
           </div>
-          {ep?.application_status ? (
-            <span
-              className={`mr-2 shrink-0 rounded-full px-2.5 py-1 text-[10px] font-medium uppercase ${waExitStatusChip(ep.application_status)}`}
-            >
-              {String(ep.application_status).replace(/_/g, " ")}
-            </span>
-          ) : null}
         </div>
-        <div className="flex overflow-x-auto border-t border-white/10 [scrollbar-width:none]">
-          {(
-            [
-              { id: "employee" as const, label: "Employee" },
-              { id: "timeline" as const, label: "Timeline" },
-              {
-                id: "assets" as const,
-                label: "Assets",
-                badge: custodyHandoverAssets.length,
-              },
-              {
-                id: "handover" as const,
-                label: "Tasks",
-                badge: hq.length,
-              },
-            ] as const
-          ).map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setMobileMainTab(tab.id)}
-              className={`relative shrink-0 px-4 py-3 text-[13px] font-medium transition ${
-                mobileMainTab === tab.id
-                  ? "border-b-2 border-white text-white"
-                  : "border-b-2 border-transparent text-white/70"
-              }`}
-            >
-              {tab.label}
-              {"badge" in tab && tab.badge > 0 ? (
-                <span className="ml-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-white/20 px-1 text-[11px]">
-                  {tab.badge > 9 ? "9+" : tab.badge}
-                </span>
-              ) : null}
-            </button>
-          ))}
+        <div className="bg-white px-3 pb-2.5 pt-2">
+          <div className="flex rounded-lg bg-[#F5F7FA] p-0.5">
+            {(
+              [
+                { id: "employee" as const, label: "Employee" },
+                { id: "timeline" as const, label: "Timeline" },
+                {
+                  id: "assets" as const,
+                  label: "Assets",
+                  badge: custodyHandoverAssets.length,
+                },
+                {
+                  id: "handover" as const,
+                  label: "Tasks",
+                  badge: hq.length,
+                },
+              ] as const
+            ).map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setMobileMainTab(tab.id)}
+                className={`relative flex flex-1 items-center justify-center gap-1 rounded-md py-2 text-[11px] font-semibold transition ${
+                  mobileMainTab === tab.id
+                    ? "bg-white text-[#008CD3] shadow-sm ring-1 ring-[#E4E7EC]"
+                    : "text-[#6B7280]"
+                }`}
+              >
+                {tab.label}
+                {"badge" in tab && tab.badge > 0 ? (
+                  <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[#008CD3]/15 px-1 text-[9px] font-bold text-[#008CD3]">
+                    {tab.badge > 9 ? "9+" : tab.badge}
+                  </span>
+                ) : null}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -672,7 +840,7 @@ function TeamMemberExitProcessReportPageContent() {
       <div className="relative z-10 mx-auto max-w-4xl lg:px-4 lg:sm:px-8">
         <div className="space-y-0 lg:-mt-8 lg:space-y-6">
           {error ? (
-            <div className="mx-3 mt-3 rounded-lg bg-[#FFECEC] px-4 py-8 text-center text-[15px] text-[#8B1A1A] lg:mx-0 lg:rounded-[22px] lg:border lg:border-rose-200 lg:bg-white lg:px-6 lg:py-10 lg:text-rose-800 lg:shadow-lg lg:ring-1 lg:ring-slate-950/[0.04]">
+            <div className="mx-3 mt-3 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-4 py-8 text-center text-[13px] text-[#D93025] lg:mx-0 lg:rounded-[22px] lg:border lg:border-rose-200 lg:bg-white lg:px-6 lg:py-10 lg:text-rose-800 lg:shadow-lg lg:ring-1 lg:ring-slate-950/[0.04]">
               <p>{error}</p>
               <div className="mt-6 flex justify-center">
                 <button
@@ -687,9 +855,9 @@ function TeamMemberExitProcessReportPageContent() {
           ) : null}
 
           {loading && !error ? (
-            <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 bg-[#F0F2F5] py-16 text-[#667781] lg:min-h-0 lg:rounded-[22px] lg:border lg:border-slate-200 lg:bg-white lg:py-0 lg:shadow-lg lg:ring-1 lg:ring-slate-950/[0.04]">
-              <Loader2 className="h-9 w-9 animate-spin text-[#128C7E] lg:text-[#C99237]" />
-              <p className="text-[15px] lg:text-sm lg:text-slate-600">Loading exit report…</p>
+            <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 py-16 text-[#6B7280] lg:min-h-0 lg:rounded-[22px] lg:border lg:border-slate-200 lg:bg-white lg:py-0 lg:shadow-lg lg:ring-1 lg:ring-slate-950/[0.04]">
+              <Loader2 className="h-9 w-9 animate-spin text-[#008CD3] lg:text-[#C99237]" />
+              <p className="text-[13px] lg:text-sm lg:text-slate-600">Loading exit report…</p>
             </div>
           ) : null}
 
@@ -698,28 +866,29 @@ function TeamMemberExitProcessReportPageContent() {
               {/* Mobile tab panels */}
               <div className="lg:hidden">
                 {mobileMainTab === "employee" ? (
-                  <div className="bg-white">
-                    <div className="flex items-center gap-4 border-b border-[#E9EDEF] px-4 py-4">
-                      <span
-                        className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-lg font-medium ${avatarColorClass(ep.employee_name)}`}
-                      >
-                        {initialsFromName(ep.employee_name)}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-[18px] font-medium text-[#111B21]">
-                          {ep.employee_name ?? "—"}
-                        </p>
-                        <p className="truncate text-[14px] text-[#667781]">
-                          {ep.employee_email ?? "—"}
-                        </p>
-                        <span
-                          className={`mt-2 inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-medium uppercase ${waExitStatusChip(ep.application_status)}`}
-                        >
-                          {String(ep.application_status ?? "—").replace(/_/g, " ")}
-                        </span>
+                  <div className="space-y-2 p-3">
+                    <section className="overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-sm">
+                      <div className="flex items-center gap-3 border-b border-[#EEF2F6] px-3 py-3">
+                        <UserAvatarButton
+                          name={ep.employee_name}
+                          userImage={employeeUserImage}
+                          size="lg"
+                          onZoom={openPhotoZoom}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[14px] font-semibold text-[#1F2937]">
+                            {ep.employee_name ?? "—"}
+                          </p>
+                          <p className="truncate text-[12px] text-[#6B7280]">
+                            {ep.employee_email ?? "—"}
+                          </p>
+                          <span
+                            className={`mt-1.5 inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${waExitStatusChip(ep.application_status)}`}
+                          >
+                            {String(ep.application_status ?? "—").replace(/_/g, " ")}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                    <div className="divide-y divide-[#E9EDEF]">
                       {[
                         { label: "Team", value: ep.team_name ?? `Team #${ep.team_id ?? "—"}` },
                         { label: "Phone", value: ep.employee_phone ?? "—" },
@@ -731,103 +900,95 @@ function TeamMemberExitProcessReportPageContent() {
                       ].map((row) => (
                         <div
                           key={row.label}
-                          className="flex items-center justify-between gap-4 px-4 py-3.5"
+                          className="flex items-center justify-between gap-3 border-b border-[#EEF2F6] px-3 py-2.5 last:border-b-0"
                         >
-                          <span className="text-[15px] text-[#111B21]">{row.label}</span>
-                          <span className="max-w-[55%] truncate text-right text-[15px] text-[#667781]">
+                          <p className={mobileLabelCls}>{row.label}</p>
+                          <p className="max-w-[58%] truncate text-right text-[13px] font-semibold text-[#1F2937]">
                             {row.value}
-                          </span>
+                          </p>
                         </div>
                       ))}
-                    </div>
+                    </section>
                   </div>
                 ) : null}
 
                 {mobileMainTab === "timeline" ? (
-                  <div className="divide-y divide-[#E9EDEF] bg-white">
-                    <div className="px-4 py-3.5">
-                      <p className="text-[13px] font-medium uppercase text-[#667781]">
-                        Action type
-                      </p>
-                      <p className="mt-1 text-[16px] capitalize text-[#111B21]">
-                        {ep.action_type ?? "—"}
-                      </p>
-                    </div>
-                    <div className="px-4 py-3.5">
-                      <p className="text-[13px] font-medium uppercase text-[#667781]">
-                        Last working day
-                      </p>
-                      <p className="mt-1 text-[16px] text-[#111B21]">
-                        {fmtDateOnly(ep.last_working_day)}
-                      </p>
-                    </div>
-                    <div className="px-4 py-3.5">
-                      <p className="text-[13px] font-medium uppercase text-[#667781]">
-                        Exit date
-                      </p>
-                      <p className="mt-1 text-[16px] text-[#111B21]">
-                        {fmtDateOnly(ep.exit_date)}
-                      </p>
-                    </div>
-                    <div className="px-4 py-3.5">
-                      <p className="text-[13px] font-medium uppercase text-[#667781]">
-                        Reason / context
-                      </p>
-                      <p className="mt-2 whitespace-pre-wrap text-[15px] leading-relaxed text-[#111B21]">
+                  <div className="space-y-2 p-3">
+                    <section className="overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-sm">
+                      {[
+                        { label: "Action type", value: ep.action_type ?? "—", cap: true },
+                        { label: "Last working day", value: fmtDateOnly(ep.last_working_day) },
+                        { label: "Exit date", value: fmtDateOnly(ep.exit_date) },
+                        { label: "Created", value: fmtLong(ep.created_at) },
+                        { label: "Resolved", value: fmtLong(ep.resolved_at) },
+                      ].map((row) => (
+                        <div
+                          key={row.label}
+                          className="flex flex-col gap-0.5 border-b border-[#EEF2F6] px-3 py-2.5 last:border-b-0"
+                        >
+                          <span className={mobileLabelCls}>{row.label}</span>
+                          <span
+                            className={`text-[13px] font-semibold text-[#1F2937] ${"cap" in row && row.cap ? "capitalize" : ""}`}
+                          >
+                            {row.value}
+                          </span>
+                        </div>
+                      ))}
+                    </section>
+                    <section className="overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-sm">
+                      <div className="border-b border-[#EEF2F6] bg-[#F9FAFB] px-3 py-2">
+                        <p className={mobileLabelCls}>Reason / context</p>
+                      </div>
+                      <p className="px-3 py-3 text-[13px] leading-relaxed text-[#1F2937]">
                         {ep.action_reason?.trim() || "—"}
                       </p>
-                    </div>
+                    </section>
                     {ep.response_message?.trim() ? (
-                      <div className="bg-[#F0F2F5] px-4 py-3.5">
-                        <p className="text-[13px] font-medium uppercase text-[#667781]">
-                          Response
-                        </p>
-                        <p className="mt-1 whitespace-pre-wrap text-[15px] text-[#111B21]">
+                      <section className="overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-sm">
+                        <div className="border-b border-[#EEF2F6] bg-[#F9FAFB] px-3 py-2">
+                          <p className={mobileLabelCls}>Response</p>
+                        </div>
+                        <p className="px-3 py-3 text-[13px] leading-relaxed text-[#1F2937]">
                           {ep.response_message}
                         </p>
-                      </div>
+                      </section>
                     ) : null}
-                    <div className="flex items-center justify-between px-4 py-3.5">
-                      <span className="text-[15px] text-[#111B21]">Created</span>
-                      <span className="text-[14px] text-[#667781]">{fmtLong(ep.created_at)}</span>
-                    </div>
-                    <div className="flex items-center justify-between px-4 py-3.5">
-                      <span className="text-[15px] text-[#111B21]">Resolved</span>
-                      <span className="text-[14px] text-[#667781]">{fmtLong(ep.resolved_at)}</span>
-                    </div>
                   </div>
                 ) : null}
 
                 {mobileMainTab === "assets" ? (
-                  <div>
-                    <p className="bg-[#F0F2F5] px-4 py-2 text-[13px] font-medium uppercase tracking-wide text-[#667781]">
+                  <div className="space-y-2 p-3">
+                    <p className={`px-1 ${mobileLabelCls}`}>
                       Assets for your handover ({custodyHandoverAssets.length})
                     </p>
                     {custodyHandoverLoading ? (
-                      <div className="flex flex-col items-center gap-2 bg-white py-12 text-[#667781]">
-                        <Loader2 className="h-8 w-8 animate-spin text-[#128C7E]" />
-                        Loading assets…
+                      <div className="flex flex-col items-center gap-2 rounded-lg border border-[#E4E7EC] bg-white py-12 text-[#6B7280] shadow-sm">
+                        <Loader2 className="h-8 w-8 animate-spin text-[#008CD3]" />
+                        <p className="text-[13px]">Loading assets…</p>
                       </div>
                     ) : custodyHandoverError ? (
-                      <p className="mx-3 mt-3 rounded-lg bg-[#FFECEC] px-4 py-3 text-[14px] text-[#8B1A1A]">
+                      <p className="rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2.5 text-[12px] text-[#D93025]">
                         {custodyHandoverError}
                       </p>
                     ) : custodyHandoverAssets.length === 0 ? (
-                      <p className="px-4 py-12 text-center text-[15px] text-[#667781]">
+                      <p className="rounded-lg border border-dashed border-[#E4E7EC] bg-white px-4 py-10 text-center text-[13px] text-[#6B7280]">
                         No assets assigned to you for this exit yet.
                       </p>
                     ) : (
-                      <ul className="divide-y divide-[#E9EDEF] bg-white">
+                      <ul className="overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-sm">
                         {custodyHandoverAssets.map((row) => {
                           const rowReturned = truthyReturned(row.is_returned);
                           return (
-                            <li key={row.id} className="px-4 py-3.5">
+                            <li
+                              key={row.id}
+                              className="border-b border-[#EEF2F6] px-3 py-2.5 last:border-b-0"
+                            >
                               <div className="flex items-start justify-between gap-2">
-                                <p className="font-medium text-[#111B21]">
+                                <p className="text-[13px] font-semibold text-[#1F2937]">
                                   {row.asset_name?.trim() ? row.asset_name : `#${row.id}`}
                                 </p>
                                 <span
-                                  className={`rounded-full px-2 py-0.5 text-[11px] font-medium uppercase ${
+                                  className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
                                     rowReturned
                                       ? "bg-[#E7FCE3] text-[#0B5E44]"
                                       : "bg-[#E3F2FD] text-[#1565C0]"
@@ -837,18 +998,18 @@ function TeamMemberExitProcessReportPageContent() {
                                 </span>
                               </div>
                               {row.asset_summary?.trim() ? (
-                                <p className="mt-1 text-[13px] text-[#667781]">
+                                <p className={`mt-1 ${mobileCaptionCls}`}>
                                   {row.asset_summary}
                                 </p>
                               ) : null}
-                              <div className="mt-3 flex gap-2">
+                              <div className="mt-2.5 flex gap-2">
                                 <button
                                   type="button"
                                   disabled={
                                     custodyAssetPatchingId === row.id || rowReturned
                                   }
                                   onClick={() => void patchCustodyAssetReturned(row.id, true)}
-                                  className="flex-1 rounded-lg bg-[#25D366] py-2 text-[13px] font-medium text-white disabled:opacity-50"
+                                  className="flex-1 rounded-md bg-[#008CD3] py-2 text-[12px] font-semibold text-white disabled:opacity-50"
                                 >
                                   Returned
                                 </button>
@@ -858,13 +1019,13 @@ function TeamMemberExitProcessReportPageContent() {
                                     custodyAssetPatchingId === row.id || !rowReturned
                                   }
                                   onClick={() => void patchCustodyAssetReturned(row.id, false)}
-                                  className="flex-1 rounded-lg border border-[#E9EDEF] py-2 text-[13px] font-medium text-[#667781] disabled:opacity-50"
+                                  className="flex-1 rounded-md border border-[#E4E7EC] py-2 text-[12px] font-semibold text-[#6B7280] disabled:opacity-50"
                                 >
                                   Not returned
                                 </button>
                               </div>
                               {custodyAssetPatchErrorById[row.id] ? (
-                                <p className="mt-2 text-[12px] text-[#C62828]">
+                                <p className="mt-2 text-[11px] text-[#C62828]">
                                   {custodyAssetPatchErrorById[row.id]}
                                 </p>
                               ) : null}
@@ -877,9 +1038,9 @@ function TeamMemberExitProcessReportPageContent() {
                 ) : null}
 
                 {mobileMainTab === "handover" ? (
-                  <div>
-                    <div className="flex items-center justify-between bg-white px-4 py-3">
-                      <p className="text-[15px] font-medium text-[#111B21]">
+                  <div className="space-y-2 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[13px] font-semibold text-[#1F2937]">
                         Handover tasks ({hq.length})
                       </p>
                       <button
@@ -891,15 +1052,15 @@ function TeamMemberExitProcessReportPageContent() {
                           setStatusPanelHandoverId(null);
                           setStatusApplyError(null);
                         }}
-                        className="inline-flex items-center gap-1 rounded-lg bg-[#128C7E] px-3 py-2 text-[13px] font-medium text-white active:scale-[0.98]"
+                        className="inline-flex items-center gap-1 rounded-lg bg-[#008CD3] px-3 py-2 text-[12px] font-semibold text-white shadow-sm active:scale-[0.98]"
                       >
                         <Plus className="h-4 w-4" />
                         {handoverFormOpen ? "Cancel" : "Add"}
                       </button>
                     </div>
                     {handoverFormOpen ? (
-                      <div className="border-b border-[#E9EDEF] bg-white px-4 py-4">
-                        <label className="block text-[13px] font-medium text-[#667781]">
+                      <div className="rounded-lg border border-[#E4E7EC] bg-white px-3 py-3 shadow-sm">
+                        <label className="block text-[12px] font-semibold text-[#6B7280]">
                           Task name *
                         </label>
                         <input
@@ -910,7 +1071,7 @@ function TeamMemberExitProcessReportPageContent() {
                           placeholder="e.g. Return laptop"
                           className={waFieldCls()}
                         />
-                        <label className="mt-3 block text-[13px] font-medium text-[#667781]">
+                        <label className="mt-3 block text-[12px] font-semibold text-[#6B7280]">
                           Handover date *
                         </label>
                         <input
@@ -919,7 +1080,7 @@ function TeamMemberExitProcessReportPageContent() {
                           onChange={(ev) => setHandoverDateLocal(ev.target.value)}
                           className={waFieldCls()}
                         />
-                        <label className="mt-3 block text-[13px] font-medium text-[#667781]">
+                        <label className="mt-3 block text-[12px] font-semibold text-[#6B7280]">
                           Remarks
                         </label>
                         <textarea
@@ -929,7 +1090,7 @@ function TeamMemberExitProcessReportPageContent() {
                           className={waFieldCls()}
                         />
                         {handoverFormError ? (
-                          <p className="mt-2 text-[13px] text-[#C62828]">{handoverFormError}</p>
+                          <p className="mt-2 text-[12px] text-[#C62828]">{handoverFormError}</p>
                         ) : null}
                         <button
                           type="button"
@@ -941,9 +1102,9 @@ function TeamMemberExitProcessReportPageContent() {
                         </button>
                       </div>
                     ) : null}
-                    <ul className="divide-y divide-[#E9EDEF] bg-white">
+                    <ul className="overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-sm">
                       {hq.length === 0 ? (
-                        <li className="px-4 py-12 text-center text-[15px] text-[#667781]">
+                        <li className="px-4 py-10 text-center text-[13px] text-[#6B7280]">
                           No handover tasks yet.
                         </li>
                       ) : (
@@ -965,7 +1126,7 @@ function TeamMemberExitProcessReportPageContent() {
 
                           if (isEditing) {
                             return (
-                              <li key={key} className="bg-[#F0F2F5] px-4 py-4">
+                              <li key={key} className="border-b border-[#EEF2F6] bg-[#F9FAFB] px-3 py-3 last:border-b-0">
                                 <input
                                   type="text"
                                   value={handoverEditTaskName}
@@ -1018,43 +1179,43 @@ function TeamMemberExitProcessReportPageContent() {
                           }
 
                           return (
-                            <li key={key} className="px-4 py-3.5">
+                            <li key={key} className="border-b border-[#EEF2F6] px-3 py-2.5 last:border-b-0">
                               <div className="flex items-start justify-between gap-2">
-                                <p className="min-w-0 flex-1 font-medium text-[#111B21]">
+                                <p className="min-w-0 flex-1 text-[13px] font-semibold text-[#1F2937]">
                                   {title}
                                 </p>
                                 {h.handover_status ? (
-                                  <span className="rounded-full bg-[#F0F2F5] px-2 py-0.5 text-[11px] font-medium uppercase text-[#54656F]">
+                                  <span className="shrink-0 rounded-full bg-[#F5F7FA] px-2 py-0.5 text-[10px] font-semibold uppercase text-[#6B7280]">
                                     {String(h.handover_status).replace(/_/g, " ")}
                                   </span>
                                 ) : null}
                               </div>
-                              <p className="mt-1 text-[13px] text-[#667781]">
+                              <p className={`mt-0.5 ${mobileCaptionCls}`}>
                                 Due {fmtDateOnly(h.handover_date)}
                               </p>
                               {h.remarks?.trim() ? (
-                                <p className="mt-1 text-[14px] text-[#111B21]">{h.remarks}</p>
+                                <p className="mt-1 text-[12px] text-[#1F2937]">{h.remarks}</p>
                               ) : null}
                               {canAct ? (
-                                <div className="mt-3 flex flex-wrap gap-2">
+                                <div className="mt-2.5 flex flex-wrap gap-2">
                                   <button
                                     type="button"
                                     onClick={() => openHandoverEdit(h)}
-                                    className="rounded-lg border border-[#E9EDEF] px-3 py-1.5 text-[13px] font-medium text-[#128C7E]"
+                                    className="rounded-md border border-[#E4E7EC] px-3 py-1.5 text-[12px] font-semibold text-[#008CD3]"
                                   >
                                     Edit
                                   </button>
                                   <button
                                     type="button"
                                     onClick={() => toggleStatusPanel(h)}
-                                    className="rounded-lg border border-[#E9EDEF] px-3 py-1.5 text-[13px] font-medium text-[#128C7E]"
+                                    className="rounded-md border border-[#E4E7EC] px-3 py-1.5 text-[12px] font-semibold text-[#008CD3]"
                                   >
                                     Status
                                   </button>
                                 </div>
                               ) : null}
                               {statusOpen && canAct ? (
-                                <div className="mt-3 rounded-lg bg-[#F0F2F5] p-3">
+                                <div className="mt-2.5 rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] p-3">
                                   <select
                                     value={statusSelectValue}
                                     onChange={(ev) =>
@@ -1107,9 +1268,12 @@ function TeamMemberExitProcessReportPageContent() {
                   </span>
                 </header>
                 <div className="flex flex-col gap-6 p-5 sm:flex-row sm:items-start sm:p-6">
-                  <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#0C123A] to-[#121a4a] text-xl font-bold text-[#C99237] shadow-inner ring-2 ring-[#C99237]/35">
-                    {initialsFromName(ep.employee_name)}
-                  </div>
+                  <UserAvatarButton
+                    name={ep.employee_name}
+                    userImage={employeeUserImage}
+                    size="lg"
+                    onZoom={openPhotoZoom}
+                  />
                   <dl className="grid min-w-0 flex-1 gap-4 text-sm sm:grid-cols-2">
                     <div>
                       <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -1717,6 +1881,13 @@ function TeamMemberExitProcessReportPageContent() {
           ) : null}
         </div>
       </div>
+
+      <ProfilePhotoZoomModal
+        open={photoZoom != null}
+        imageUrl={photoZoom?.imageUrl ?? ""}
+        alt={photoZoom?.alt ?? "Profile photo"}
+        onClose={() => setPhotoZoom(null)}
+      />
     </div>
   );
 }

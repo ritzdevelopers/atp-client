@@ -7,6 +7,7 @@ export type OrgTeamMemberRow = {
   user_id: number;
   user_name: string;
   user_email: string;
+  user_image?: string | null;
   user_phone: string | null;
   joined_date: string;
   leave_date: string | null;
