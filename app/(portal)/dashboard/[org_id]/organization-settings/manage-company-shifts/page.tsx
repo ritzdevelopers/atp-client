@@ -18,6 +18,7 @@ import {
   Sun,
   Timer,
   UserPlus,
+  UserMinus,
   Search,
   Info,
 } from "lucide-react";
@@ -25,6 +26,7 @@ import { useManagementDashboardContext } from "@/components/portal-dashboard/Lay
 import { type OrgUserRow, getAllOrgUsers } from "@/services/adminUser";
 import {
   assignUserToShift,
+  unassignUserFromShift,
   type CompanyShiftRow,
   deleteCompanyShift,
   getCompanyShifts,
@@ -157,6 +159,12 @@ function currentShiftLabel(u: OrgUserRow): string | null {
   return null;
 }
 
+function userOnSameShift(u: OrgUserRow, shiftId: number | string): boolean {
+  const sid = u.user_shift_id;
+  if (sid == null || sid === "") return false;
+  return Number(sid) === Number(shiftId);
+}
+
 type ShiftCardProps = {
   row: CompanyShiftRow;
   onEdit: () => void;
@@ -167,120 +175,107 @@ type ShiftCardProps = {
 function ShiftCard({ row, onEdit, onDelete, onAssignStaff }: ShiftCardProps) {
   const dayTags = workingDayAbbrevList(row.working_days);
   const night = isNight(row.is_night_shift);
+  const name = row.shift_name?.trim() || "Unnamed shift";
 
   return (
-    <article className="group relative flex flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06)] ring-1 ring-slate-900/[0.03] transition duration-300 hover:-translate-y-1 hover:shadow-[0_12px_40px_-12px_rgba(12,18,58,0.12)] hover:ring-[#C99237]/25">
-      <div className="h-1.5 bg-gradient-to-r from-[#8B6914] via-[#C99237] to-amber-300/90" aria-hidden />
-      <div className="flex flex-1 flex-col p-5 sm:p-6">
+    <article className="flex flex-col overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-sm transition hover:border-[#008CD3]/40 hover:shadow-md">
+      <div className="border-l-4 border-[#008CD3] px-5 py-4">
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-lg font-bold tracking-tight text-[#0C123A]">
-              {row.shift_name || "Unnamed shift"}
-            </p>
-            <p className="mt-1 font-mono text-[11px] font-medium uppercase tracking-wider text-slate-400">
-              Shift #{row.id}
-            </p>
+          <div className="flex min-w-0 items-start gap-3">
+            <span
+              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-sm font-semibold ${shiftColorClass(name)}`}
+            >
+              {shiftInitials(name)}
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-[16px] font-semibold text-[#1F2937]">{name}</p>
+              <p className="mt-0.5 text-[12px] text-[#6B7280]">ID {row.id}</p>
+            </div>
           </div>
           {night ? (
-            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-br from-indigo-600 to-violet-700 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-white shadow-md shadow-indigo-500/25">
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-[#F3E8FD] px-2 py-0.5 text-[10px] font-semibold uppercase text-[#7B1FA2]">
               <Moon className="h-3 w-3" aria-hidden />
               Night
             </span>
           ) : (
-            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-br from-amber-100 to-amber-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-amber-900 ring-1 ring-amber-200/80">
-              <Sun className="h-3 w-3 text-amber-600" aria-hidden />
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-[#FEF3E6] px-2 py-0.5 text-[10px] font-semibold uppercase text-[#E8710A]">
+              <Sun className="h-3 w-3" aria-hidden />
               Day
             </span>
           )}
         </div>
 
-        <div className="mt-5 flex items-center gap-3 rounded-xl border border-slate-100 bg-gradient-to-br from-slate-50 to-white px-4 py-3.5">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#0C123A] text-white shadow-inner">
-            <Timer className="h-5 w-5 opacity-90" aria-hidden />
-          </span>
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Schedule</p>
-            <p className="font-mono text-base font-semibold tabular-nums text-[#0C123A]">
-              {formatTimeDisplay(row.start_time)}
-              <span className="mx-1.5 font-sans font-normal text-slate-300">→</span>
-              {formatTimeDisplay(row.end_time)}
-            </p>
-          </div>
+        <div className="mt-4 flex items-center gap-2 rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] px-3 py-2.5">
+          <Timer className="h-4 w-4 shrink-0 text-[#008CD3]" aria-hidden />
+          <p className="font-mono text-[13px] font-medium tabular-nums text-[#1F2937]">
+            {formatTimeDisplay(row.start_time)}
+            <span className="mx-1.5 text-[#9CA3AF]">–</span>
+            {formatTimeDisplay(row.end_time)}
+          </p>
         </div>
 
-        <dl className="mt-4 grid grid-cols-3 gap-2 text-center">
-          <div className="rounded-lg bg-slate-50/90 px-2 py-2.5 ring-1 ring-slate-100">
-            <dt className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Late</dt>
-            <dd className="mt-0.5 font-mono text-xs font-semibold text-slate-800">
-              {formatTimeDisplay(row.late_after)}
-            </dd>
-          </div>
-          <div className="rounded-lg bg-slate-50/90 px-2 py-2.5 ring-1 ring-slate-100">
-            <dt className="text-[10px] font-bold uppercase tracking-wide text-slate-400">½ day</dt>
-            <dd className="mt-0.5 font-mono text-xs font-semibold text-slate-800">
-              {formatTimeDisplay(row.half_day_hours)}
-            </dd>
-          </div>
-          <div className="rounded-lg bg-slate-50/90 px-2 py-2.5 ring-1 ring-slate-100">
-            <dt className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Short</dt>
-            <dd className="mt-0.5 font-mono text-xs font-semibold text-slate-800">
-              {formatTimeDisplay(row.short_leave_hours)}
-            </dd>
-          </div>
+        <dl className="mt-3 grid grid-cols-3 gap-2">
+          {[
+            ["Late", row.late_after],
+            ["½ day", row.half_day_hours],
+            ["Short", row.short_leave_hours],
+          ].map(([label, val]) => (
+            <div key={String(label)} className="rounded-md border border-[#E4E7EC] bg-white px-2 py-2 text-center">
+              <dt className="text-[10px] font-medium uppercase tracking-wide text-[#9CA3AF]">{label}</dt>
+              <dd className="mt-0.5 font-mono text-[11px] font-semibold text-[#374151]">
+                {formatTimeDisplay(val as string)}
+              </dd>
+            </div>
+          ))}
         </dl>
 
-        <div className="mt-4">
-          <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-400">Working days</p>
-          <div className="flex flex-wrap gap-1.5">
+        <div className="mt-3">
+          <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-[#9CA3AF]">Working days</p>
+          <div className="flex flex-wrap gap-1">
             {dayTags.length > 0 ? (
               dayTags.map((d) => (
                 <span
                   key={`${row.id}-${d}`}
-                  className="rounded-md bg-[#0C123A]/[0.06] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#0C123A]/80 ring-1 ring-[#0C123A]/[0.08]"
+                  className="rounded bg-[#E8F4FB] px-1.5 py-0.5 text-[10px] font-semibold uppercase text-[#008CD3]"
                 >
                   {d}
                 </span>
               ))
             ) : (
-              <span className="text-xs text-slate-400">—</span>
+              <span className="text-xs text-[#9CA3AF]">—</span>
             )}
           </div>
         </div>
 
-        {row.shift_creator_name && (
-          <p className="mt-4 border-t border-slate-100 pt-3 text-xs text-slate-500">
-            Created by{" "}
-            <span className="font-semibold text-slate-700">{row.shift_creator_name}</span>
+        {row.shift_creator_name ? (
+          <p className="mt-3 text-[12px] text-[#6B7280]">
+            Created by <span className="font-medium text-[#374151]">{row.shift_creator_name}</span>
           </p>
-        )}
+        ) : null}
+      </div>
 
-        <div className="mt-5 flex flex-col gap-2 border-t border-slate-100 pt-4">
+      <div className="flex flex-col gap-2 border-t border-[#E4E7EC] bg-[#F9FAFB] px-5 py-4">
+        <button type="button" onClick={onAssignStaff} className={zohoPrimaryBtnCls(true)}>
+          <UserPlus className="h-4 w-4" aria-hidden />
+          Assign staff
+        </button>
+        <div className="flex gap-2">
           <button
             type="button"
-            onClick={onAssignStaff}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[#C99237]/40 bg-gradient-to-r from-[#C99237]/12 to-amber-50/80 py-2.5 text-sm font-bold text-[#0C123A] shadow-sm ring-1 ring-[#C99237]/15 transition hover:from-[#C99237]/20 hover:to-amber-50 active:scale-[0.98]"
+            onClick={onEdit}
+            className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-[#E4E7EC] bg-white py-2 text-[13px] font-medium text-[#1F2937] transition hover:border-[#008CD3]/40 hover:bg-[#E8F4FB]/50"
           >
-            <UserPlus className="h-4 w-4 text-[#b87d2e]" aria-hidden />
-            Add user to this shift
+            <Pencil className="h-4 w-4 text-[#008CD3]" aria-hidden />
+            Edit
           </button>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={onEdit}
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-bold text-[#0C123A] shadow-sm transition hover:border-[#C99237]/50 hover:bg-[#C99237]/[0.08] active:scale-[0.98]"
-            >
-              <Pencil className="h-4 w-4 text-[#C99237]" aria-hidden />
-              Edit
-            </button>
-            <button
-              type="button"
-              onClick={onDelete}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-100 bg-red-50/90 px-4 py-2.5 text-sm font-bold text-red-700 shadow-sm transition hover:bg-red-100 active:scale-[0.98]"
-              aria-label={`Delete ${row.shift_name || "shift"}`}
-            >
-              <Trash2 className="h-4 w-4" aria-hidden />
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={onDelete}
+            className={zohoDangerIconBtnCls()}
+            aria-label={`Delete ${name}`}
+          >
+            <Trash2 className="h-4 w-4" aria-hidden />
+          </button>
         </div>
       </div>
     </article>
@@ -391,6 +386,7 @@ export default function ManageCompanyShiftsPage() {
   const [assignUsersError, setAssignUsersError] = useState<string | null>(null);
   const [assignConfirmUser, setAssignConfirmUser] = useState<OrgUserRow | null>(null);
   const [assignSubmitting, setAssignSubmitting] = useState(false);
+  const [unassignBusyUserId, setUnassignBusyUserId] = useState<number | string | null>(null);
   const [assignActionError, setAssignActionError] = useState<string | null>(null);
 
   const [mobileMainTab, setMobileMainTab] = useState<"shifts" | "overview">("shifts");
@@ -563,12 +559,13 @@ export default function ManageCompanyShiftsPage() {
   }
 
   function closeAssignModal() {
-    if (assignSubmitting) return;
+    if (assignSubmitting || unassignBusyUserId != null) return;
     setAssignForShift(null);
     setAssignSearch("");
     setAssignConfirmUser(null);
     setAssignActionError(null);
     setAssignUsersError(null);
+    setUnassignBusyUserId(null);
   }
 
   async function confirmAssignUser() {
@@ -601,6 +598,34 @@ export default function ManageCompanyShiftsPage() {
     }
   }
 
+  async function confirmUnassignUser(user: OrgUserRow) {
+    if (!assignForShift || orgMissing) return;
+    const uid = user.id;
+    if (uid == null) {
+      setAssignActionError("Invalid user.");
+      return;
+    }
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setAssignActionError("Not signed in.");
+      return;
+    }
+    setUnassignBusyUserId(uid);
+    setAssignActionError(null);
+    try {
+      await unassignUserFromShift(token, {
+        org_id: organizationIdNum,
+        user_id: uid,
+        shift_id: assignForShift.id,
+      });
+      await loadAssignUsers();
+    } catch (err) {
+      setAssignActionError(err instanceof Error ? err.message : "Unassign failed.");
+    } finally {
+      setUnassignBusyUserId(null);
+    }
+  }
+
   async function confirmDelete() {
     if (!deleteTarget || orgMissing) return;
     setDeleteError(null);
@@ -630,7 +655,7 @@ export default function ManageCompanyShiftsPage() {
   ];
 
   return (
-    <div className="min-h-full bg-[#F5F7FA] lg:min-h-[70vh] lg:bg-slate-50 lg:pb-16">
+    <div className="min-h-full bg-[#F5F7FA] lg:min-h-[70vh] lg:pb-10">
       {/* Mobile & tablet: Zoho admin portal style */}
       <div className="lg:hidden">
         <div className="sticky top-0 z-20 border-b border-[#E4E7EC] bg-white shadow-sm">
@@ -799,160 +824,135 @@ export default function ManageCompanyShiftsPage() {
         ) : null}
       </div>
 
-      {/* Desktop layout (unchanged) */}
+      {/* Desktop — Zoho Attendance–style layout */}
       <div className="hidden lg:block">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:px-6 sm:py-3.5 lg:px-8">
-          <div className="flex min-w-0 items-start gap-3.5 sm:items-center sm:gap-4">
-            <div
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-[#0C123A]"
-              aria-hidden
-            >
-              <Clock3 className="h-5 w-5" strokeWidth={1.75} />
-            </div>
-            <div className="min-w-0 pt-0.5 sm:pt-0">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                Workforce · Shifts
-              </p>
-              <h1 className="mt-0.5 text-xl font-bold tracking-tight text-[#0C123A] sm:text-2xl">
-                Shift directory
-              </h1>
-              <p className="mt-1 max-w-2xl text-sm leading-snug text-slate-600">
-                Schedules, grace windows, and working days for{" "}
-                <span className="font-medium text-[#0C123A]">{orgName}</span>. Use sync to reload after
-                changes elsewhere.
-              </p>
-            </div>
-          </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
-            <button
-              type="button"
-              onClick={() => void loadShifts()}
-              disabled={listLoading || orgMissing}
-              className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 text-xs font-semibold text-[#0C123A] shadow-sm transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <RefreshCw className={`h-3.5 w-3.5 ${listLoading ? "animate-spin" : ""}`} aria-hidden />
-              Sync list
-            </button>
-            <Link
-              href={`${basePath}/create-company-shifts`}
-              className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[#0C123A] px-3.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[#151f4a] active:scale-[0.98]"
-            >
-              <Plus className="h-3.5 w-3.5" aria-hidden />
-              New shift
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      <div className="mx-auto max-w-6xl space-y-8 px-4 pt-8 sm:px-6 lg:px-8">
-        {/* Stats */}
-        {!orgMissing && !listLoading && shifts.length > 0 && (
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="rounded-2xl border border-slate-200/80 bg-white/90 p-5 shadow-sm backdrop-blur-sm">
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Total shifts</p>
-              <p className="mt-2 text-3xl font-black tabular-nums text-[#0C123A]">{shifts.length}</p>
-            </div>
-            <div className="rounded-2xl border border-slate-200/80 bg-white/90 p-5 shadow-sm backdrop-blur-sm">
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Night coverage</p>
-              <p className="mt-2 text-3xl font-black tabular-nums text-indigo-700">{nightShiftCount}</p>
-              <p className="mt-1 text-xs text-slate-500">Shifts marked as night</p>
-            </div>
-            <div className="rounded-2xl border border-[#0C123A]/20 bg-[#0C123A] p-5 text-white shadow-sm">
-              <p className="text-xs font-bold uppercase tracking-wider text-white/60">Organization</p>
-              <p className="mt-2 line-clamp-2 text-lg font-bold leading-snug">{orgName}</p>
-              <p className="mt-2 font-mono text-xs text-white/50">ID {organizationIdNum}</p>
-            </div>
-          </div>
-        )}
-
-        {/* Main content */}
-        <section className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white/90 shadow-[0_4px_24px_rgba(12,18,58,0.06)] backdrop-blur-sm">
-          <div className="flex flex-col gap-2 border-b border-slate-100 bg-slate-50 px-6 py-5 sm:flex-row sm:items-end sm:justify-between sm:px-8">
-            <div>
-              <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">Live roster</h2>
-              <p className="mt-1 text-2xl font-extrabold text-[#0C123A]">All configured shifts</p>
-            </div>
-            {!listLoading && !orgMissing && shifts.length > 0 && (
-              <p className="text-sm text-slate-500">
-                Showing <span className="font-bold text-[#0C123A]">{shifts.length}</span>{" "}
-                {shifts.length === 1 ? "entry" : "entries"}
-              </p>
-            )}
-          </div>
-
-          <div className="p-6 sm:p-8">
-            {listError && (
-              <div
-                className="mb-6 flex items-start gap-3 rounded-2xl border border-red-200/80 bg-gradient-to-br from-red-50 to-white px-5 py-4 text-sm text-red-900 shadow-sm"
-                role="alert"
-              >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-100">
-                  <AlertCircle className="h-5 w-5 text-red-600" aria-hidden />
-                </span>
-                <span className="pt-1 font-medium">{listError}</span>
-              </div>
-            )}
-
-            {orgMissing && (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50/90 px-5 py-4 text-sm font-medium text-amber-950">
-                Invalid organization context. Open this page from your dashboard.
-              </div>
-            )}
-
-            {!orgMissing && listLoading && (
-              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                {[1, 2, 3].map((i) => (
-                  <div
-                    key={i}
-                    className="h-72 animate-pulse rounded-2xl border border-slate-100 bg-gradient-to-br from-slate-100 to-slate-50/50"
-                  />
-                ))}
-              </div>
-            )}
-
-            {!orgMissing && !listLoading && shifts.length === 0 && !listError && (
-              <div className="flex flex-col items-center rounded-3xl border border-dashed border-slate-200 bg-gradient-to-b from-slate-50/80 to-white px-8 py-20 text-center">
-                <div className="relative mb-6">
-                  <div className="absolute inset-0 rounded-full bg-[#C99237]/20 blur-xl" />
-                  <div className="relative flex h-20 w-20 items-center justify-center rounded-2xl bg-white shadow-lg ring-1 ring-slate-200/80">
-                    <Clock3 className="h-9 w-9 text-[#C99237]" aria-hidden />
-                  </div>
-                </div>
-                <p className="text-xl font-extrabold text-[#0C123A]">No shifts configured yet</p>
-                <p className="mt-2 max-w-md text-sm leading-relaxed text-slate-500">
-                  Build your first shift to set core hours, late rules, and which weekdays count—your team
-                  check-ins will follow these rules.
+        <header className="border-b border-[#E4E7EC] bg-white">
+          <div className="mx-auto flex max-w-[1280px] items-center justify-between gap-6 px-8 py-4">
+            <div className="flex min-w-0 items-center gap-4">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[#E8F4FB] text-[#008CD3]">
+                <Clock3 className="h-5 w-5" strokeWidth={1.75} />
+              </span>
+              <div className="min-w-0">
+                <h1 className="text-[20px] font-semibold text-[#1F2937]">Shift directory</h1>
+                <p className="mt-0.5 text-[14px] text-[#6B7280]">
+                  {orgName}
+                  {!listLoading ? ` · ${shifts.length} shift${shifts.length === 1 ? "" : "s"}` : ""}
                 </p>
-                <Link
-                  href={`${basePath}/create-company-shifts`}
-                  className="mt-8 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#C99237] to-amber-500 px-8 py-3.5 text-sm font-extrabold text-[#0C123A] shadow-lg shadow-amber-900/15 transition hover:brightness-105"
-                >
-                  <Plus className="h-4 w-4" aria-hidden />
-                  Create your first shift
-                </Link>
               </div>
-            )}
-
-            {!orgMissing && !listLoading && shifts.length > 0 && (
-              <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
-                {shifts.map((row) => (
-                  <ShiftCard
-                    key={row.id}
-                    row={row}
-                    onEdit={() => openEdit(row)}
-                    onAssignStaff={() => openAssignModal(row)}
-                    onDelete={() => {
-                      setDeleteError(null);
-                      setDeleteTarget(row);
-                    }}
-                  />
-                ))}
-              </div>
-            )}
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void loadShifts()}
+                disabled={listLoading || orgMissing}
+                className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#E4E7EC] bg-white px-3.5 text-[13px] font-medium text-[#374151] transition hover:bg-[#F9FAFB] disabled:opacity-50"
+              >
+                <RefreshCw className={`h-4 w-4 ${listLoading ? "animate-spin" : ""}`} aria-hidden />
+                Refresh
+              </button>
+              <Link href={`${basePath}/create-company-shifts`} className={zohoPrimaryBtnCls()}>
+                <Plus className="h-4 w-4" aria-hidden />
+                New shift
+              </Link>
+            </div>
           </div>
-        </section>
-      </div>
+        </header>
+
+        <div className="mx-auto max-w-[1280px] px-8 py-6">
+          {!orgMissing && !listLoading && shifts.length > 0 ? (
+            <div className="mb-6 grid gap-4 sm:grid-cols-3">
+              <div className="rounded-lg border border-[#E4E7EC] bg-white p-4 shadow-sm">
+                <p className="text-[12px] font-medium uppercase tracking-wide text-[#6B7280]">Total shifts</p>
+                <p className="mt-1 text-[28px] font-semibold tabular-nums text-[#1F2937]">{shifts.length}</p>
+              </div>
+              <div className="rounded-lg border border-[#E4E7EC] bg-white p-4 shadow-sm">
+                <p className="text-[12px] font-medium uppercase tracking-wide text-[#6B7280]">Night shifts</p>
+                <p className="mt-1 text-[28px] font-semibold tabular-nums text-[#7B1FA2]">{nightShiftCount}</p>
+              </div>
+              <div className="rounded-lg border border-[#E4E7EC] bg-[#E8F4FB]/40 p-4">
+                <p className="text-[12px] font-medium uppercase tracking-wide text-[#008CD3]">Organization</p>
+                <p className="mt-1 truncate text-[15px] font-semibold text-[#1F2937]">{orgName}</p>
+                <p className="mt-0.5 text-[12px] text-[#6B7280]">ID {organizationIdNum}</p>
+              </div>
+            </div>
+          ) : null}
+
+          <section className="overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#E4E7EC] bg-[#F9FAFB] px-5 py-3.5">
+              <p className="text-[14px] font-semibold text-[#1F2937]">Configured shifts</p>
+              {shifts.length > 0 ? (
+                <div className="relative w-full max-w-xs">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF]" />
+                  <input
+                    type="search"
+                    value={shiftSearchQuery}
+                    onChange={(e) => setShiftSearchQuery(e.target.value)}
+                    placeholder="Search shifts"
+                    className={zohoSearchCls()}
+                  />
+                </div>
+              ) : null}
+            </div>
+
+            <div className="p-5">
+              {listError ? (
+                <div className="mb-4 flex items-start gap-2 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-4 py-3 text-[14px] text-[#D93025]">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{listError}</span>
+                </div>
+              ) : null}
+
+              {orgMissing ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-[14px] text-amber-950">
+                  Invalid organization context. Open this page from your dashboard.
+                </div>
+              ) : null}
+
+              {!orgMissing && listLoading ? (
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="h-64 animate-pulse rounded-lg border border-[#E4E7EC] bg-[#F3F4F6]" />
+                  ))}
+                </div>
+              ) : null}
+
+              {!orgMissing && !listLoading && shifts.length === 0 && !listError ? (
+                <div className="flex flex-col items-center rounded-lg border border-dashed border-[#E4E7EC] px-8 py-16 text-center">
+                  <Clock3 className="h-10 w-10 text-[#9CA3AF]" aria-hidden />
+                  <p className="mt-4 text-[17px] font-semibold text-[#1F2937]">No shifts configured</p>
+                  <p className="mt-2 max-w-sm text-[14px] text-[#6B7280]">
+                    Create a shift to define work hours, grace periods, and working days.
+                  </p>
+                  <Link href={`${basePath}/create-company-shifts`} className={`mt-6 ${zohoPrimaryBtnCls()}`}>
+                    <Plus className="h-4 w-4" />
+                    Create shift
+                  </Link>
+                </div>
+              ) : null}
+
+              {!orgMissing && !listLoading && shifts.length > 0 ? (
+                filteredShifts.length === 0 ? (
+                  <p className="py-12 text-center text-[14px] text-[#6B7280]">No shifts match your search.</p>
+                ) : (
+                  <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                    {filteredShifts.map((row) => (
+                      <ShiftCard
+                        key={row.id}
+                        row={row}
+                        onEdit={() => openEdit(row)}
+                        onAssignStaff={() => openAssignModal(row)}
+                        onDelete={() => {
+                          setDeleteError(null);
+                          setDeleteTarget(row);
+                        }}
+                      />
+                    ))}
+                  </div>
+                )
+              ) : null}
+            </div>
+          </section>
+        </div>
       </div>
 
       {/* Assign staff — pick employee */}
@@ -970,7 +970,7 @@ export default function ManageCompanyShiftsPage() {
             onClick={closeAssignModal}
           />
           <div className="relative flex max-h-[min(92dvh,640px)] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl border border-[#E4E7EC] bg-white shadow-2xl sm:max-h-[min(85vh,720px)] sm:rounded-3xl sm:border-slate-200/90">
-            <div className="relative shrink-0 border-b border-[#E4E7EC] bg-white px-4 py-4 sm:border-amber-100/80 sm:bg-gradient-to-r sm:from-[#C99237]/20 sm:via-amber-50/90 sm:to-white sm:px-6 sm:py-5 sm:[border-top:3px_solid_#008CD3]">
+            <div className="relative shrink-0 border-b border-[#E4E7EC] border-t-[3px] border-t-[#008CD3] bg-white px-4 py-4 sm:px-6 sm:py-5">
               <div className="relative flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-[11px] font-semibold uppercase tracking-wider text-[#008CD3] sm:font-bold sm:text-[#0C123A]/50">
@@ -1024,9 +1024,16 @@ export default function ManageCompanyShiftsPage() {
                 </div>
               )}
 
+              {assignActionError && !assignConfirmUser ? (
+                <div className="mt-4 flex items-start gap-2 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2.5 text-[14px] text-[#D93025]">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                  <span>{assignActionError}</span>
+                </div>
+              ) : null}
+
               {assignUsersLoading && (
-                <div className="mt-8 flex flex-col items-center gap-3 py-8 text-slate-500">
-                  <Loader2 className="h-8 w-8 animate-spin text-[#C99237]" aria-hidden />
+                <div className="mt-8 flex flex-col items-center gap-3 py-8 text-[#6B7280]">
+                  <Loader2 className="h-8 w-8 animate-spin text-[#008CD3]" aria-hidden />
                   <p className="text-sm font-medium">Loading team directory…</p>
                 </div>
               )}
@@ -1039,11 +1046,14 @@ export default function ManageCompanyShiftsPage() {
 
               {!assignUsersLoading && filteredAssignList.length > 0 && (
                 <>
-                  <ul className="mt-4 divide-y divide-[#E4E7EC] rounded-xl border border-[#E4E7EC] bg-white lg:hidden">
+                  <ul className="mt-4 divide-y divide-[#E4E7EC] rounded-lg border border-[#E4E7EC] bg-white">
                     {filteredAssignList.map((u) => {
                       const shiftLabel = currentShiftLabel(u);
                       const uid = u.id;
                       const name = u.user_name ?? "—";
+                      const onThisShift =
+                        assignForShift != null && userOnSameShift(u, assignForShift.id);
+                      const unassignBusy = uid != null && unassignBusyUserId === uid;
                       return (
                         <li key={uid != null ? String(uid) : u.user_email} className="px-4 py-3">
                           <div className="flex items-center gap-3">
@@ -1055,61 +1065,41 @@ export default function ManageCompanyShiftsPage() {
                               <p className="truncate text-[13px] text-[#6B7280]">{u.user_email ?? "—"}</p>
                               <p className="mt-0.5 text-[12px] text-[#9CA3AF]">
                                 Current: {shiftLabel ?? "None"}
+                                {onThisShift ? (
+                                  <span className="ml-1.5 rounded bg-[#E6F4EA] px-1.5 py-0.5 text-[10px] font-semibold uppercase text-[#0F9D58]">
+                                    This shift
+                                  </span>
+                                ) : null}
                               </p>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setAssignActionError(null);
-                                setAssignConfirmUser(u);
-                              }}
-                              className={zohoPrimaryBtnCls()}
-                            >
-                              Add
-                            </button>
+                            {onThisShift ? (
+                              <button
+                                type="button"
+                                disabled={unassignBusy || assignSubmitting}
+                                onClick={() => void confirmUnassignUser(u)}
+                                className="inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg border border-[#FFCDD2] bg-white px-3 py-2 text-[13px] font-medium text-[#C62828] transition hover:bg-[#FFECEC] disabled:opacity-50"
+                              >
+                                {unassignBusy ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                                ) : (
+                                  <UserMinus className="h-4 w-4" aria-hidden />
+                                )}
+                                Unassign
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled={assignSubmitting || unassignBusyUserId != null}
+                                onClick={() => {
+                                  setAssignActionError(null);
+                                  setAssignConfirmUser(u);
+                                }}
+                                className={zohoPrimaryBtnCls()}
+                              >
+                                Add
+                              </button>
+                            )}
                           </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                  <ul className="mt-4 hidden space-y-3 lg:block">
-                    {filteredAssignList.map((u) => {
-                      const shiftLabel = currentShiftLabel(u);
-                      const uid = u.id;
-                      return (
-                        <li
-                          key={uid != null ? String(uid) : u.user_email}
-                          className="rounded-2xl border border-slate-200/90 bg-gradient-to-br from-white to-slate-50/50 p-4 shadow-sm ring-1 ring-slate-900/[0.02]"
-                        >
-                          <div className="flex gap-3">
-                            <img
-                              src={demoAvatarUrl(uid)}
-                              alt=""
-                              width={48}
-                              height={48}
-                              className="h-12 w-12 shrink-0 rounded-2xl object-cover ring-2 ring-white shadow-md"
-                            />
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate font-bold text-[#0C123A]">{u.user_name ?? "—"}</p>
-                              <p className="truncate text-xs text-slate-500">{u.user_email ?? "—"}</p>
-                              <p className="mt-2 text-xs">
-                                <span className="font-semibold text-slate-600">Current shift: </span>
-                                <span className={shiftLabel ? "text-[#0C123A]" : "italic text-slate-400"}>
-                                  {shiftLabel ?? "None assigned"}
-                                </span>
-                              </p>
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setAssignActionError(null);
-                              setAssignConfirmUser(u);
-                            }}
-                            className="mt-3 w-full rounded-xl bg-gradient-to-r from-[#C99237] to-amber-500 py-2.5 text-sm font-extrabold text-[#0C123A] shadow-md shadow-amber-900/10 ring-1 ring-white/30 transition hover:brightness-105 active:scale-[0.99]"
-                          >
-                            Add user to this shift
-                          </button>
                         </li>
                       );
                     })}
@@ -1135,35 +1125,35 @@ export default function ManageCompanyShiftsPage() {
             aria-label="Close dialog"
             onClick={() => !assignSubmitting && setAssignConfirmUser(null)}
           />
-          <div className="relative w-full max-w-md overflow-hidden rounded-3xl border border-slate-200/90 bg-white shadow-2xl">
-            <div className="border-b border-slate-100 bg-gradient-to-br from-amber-50/80 to-white px-6 py-5">
-              <h3 id="assign-confirm-title" className="text-lg font-extrabold text-[#0C123A]">
+          <div className="relative w-full max-w-md overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-2xl">
+            <div className="border-b border-[#E4E7EC] border-t-[3px] border-t-[#008CD3] bg-white px-6 py-5">
+              <h3 id="assign-confirm-title" className="text-[17px] font-semibold text-[#1F2937]">
                 Confirm assignment
               </h3>
-              <p className="mt-2 text-sm leading-relaxed text-slate-600">
+              <p className="mt-2 text-[14px] leading-relaxed text-[#6B7280]">
                 Assign{" "}
-                <span className="font-semibold text-[#0C123A]">
+                <span className="font-semibold text-[#1F2937]">
                   {assignConfirmUser.user_name ?? "this user"}
                 </span>{" "}
                 to shift{" "}
-                <span className="font-semibold text-[#0C123A]">
+                <span className="font-semibold text-[#1F2937]">
                   {assignForShift.shift_name || `#${assignForShift.id}`}
                 </span>
                 ? Their previous shift mapping for this organization will be updated.
               </p>
             </div>
             {assignActionError && (
-              <div className="mx-6 mt-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900">
+              <div className="mx-6 mt-4 flex items-start gap-2 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2 text-[14px] text-[#D93025]">
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
                 <span>{assignActionError}</span>
               </div>
             )}
-            <div className="flex flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50/90 px-6 py-4 sm:flex-row sm:justify-end">
+            <div className="flex flex-col-reverse gap-2 border-t border-[#E4E7EC] bg-[#F9FAFB] px-6 py-4 sm:flex-row sm:justify-end">
               <button
                 type="button"
                 disabled={assignSubmitting}
                 onClick={() => setAssignConfirmUser(null)}
-                className="rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-[#0C123A] shadow-sm transition hover:bg-slate-50 disabled:opacity-50"
+                className="rounded-lg border border-[#E4E7EC] bg-white px-5 py-2.5 text-[14px] font-medium text-[#374151] transition hover:bg-[#F9FAFB] disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -1171,7 +1161,7 @@ export default function ManageCompanyShiftsPage() {
                 type="button"
                 disabled={assignSubmitting}
                 onClick={() => void confirmAssignUser()}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#C99237] to-amber-500 px-5 py-3 text-sm font-extrabold text-[#0C123A] shadow-lg shadow-amber-900/15 transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+                className={`${zohoPrimaryBtnCls()} px-5 py-2.5`}
               >
                 {assignSubmitting ? (
                   <>

@@ -460,6 +460,34 @@ export async function assignUserToShift(
   return result;
 }
 
+export async function unassignUserFromShift(
+  token: string,
+  payload: AssignUserShiftPayload,
+): Promise<{ message?: string }> {
+  const res = await fetch(`${API_URL}/api/organization-settings/unassign-user-shift`, {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      org_id: payload.org_id,
+      user_id: payload.user_id,
+      shift_id: payload.shift_id,
+    }),
+  });
+
+  const result = (await res.json()) as { message?: string };
+
+  if (!res.ok) {
+    const error: ApiError = new Error(result.message || "Could not unassign shift");
+    error.status = res.status;
+    throw error;
+  }
+
+  return result;
+}
+
 export async function deleteCompanyShift(
   token: string,
   payload: DeleteCompanyShiftPayload,

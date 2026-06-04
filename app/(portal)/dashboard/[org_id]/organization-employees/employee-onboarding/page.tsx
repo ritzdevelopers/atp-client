@@ -51,35 +51,63 @@ const ONBOARDING_STEPS_ORDER = [
 type OnboardingWizardStep = (typeof ONBOARDING_STEPS_ORDER)[number];
 
 function labelCls() {
-  return "mb-1.5 block text-sm font-medium text-[#0C123A]";
+  return "mb-1 block text-[12px] font-medium text-[#374151] lg:text-[13px]";
 }
 
 function inputCls() {
-  return "w-full rounded-2xl border-0 bg-slate-100 px-3.5 py-3 text-sm text-[#0C123A] shadow-sm outline-none ring-1 ring-slate-200/80 transition placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-[#C99237]/25 lg:rounded-lg lg:border lg:border-slate-200 lg:bg-white lg:py-2.5 lg:focus:border-[#C99237] lg:focus:ring-[#C99237]/20";
+  return "w-full rounded-lg border border-[#E4E7EC] bg-white px-3 py-2 text-[14px] text-[#1F2937] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15";
 }
 
 function stepPanelShell() {
-  return "rounded-3xl bg-white p-4 shadow-md ring-1 ring-slate-200/70 max-lg:overflow-hidden lg:rounded-2xl lg:border lg:border-slate-200/90 lg:p-6 lg:shadow-sm lg:ring-0 sm:lg:p-8";
+  return "overflow-hidden rounded-lg border border-[#E4E7EC] bg-white p-3 shadow-sm sm:p-4 lg:p-6";
 }
 
 function stepSectionHeaderShell() {
-  return "mb-5 flex gap-3 max-lg:mb-4 max-lg:rounded-2xl max-lg:bg-slate-50/80 max-lg:p-3 max-lg:ring-1 max-lg:ring-slate-200/60 lg:mb-6 lg:bg-transparent lg:p-0 lg:ring-0";
+  return "mb-4 flex gap-2.5 max-lg:mb-3 max-lg:rounded-lg max-lg:border max-lg:border-[#E4E7EC] max-lg:bg-[#F9FAFB] max-lg:p-2.5 lg:mb-5 lg:border-0 lg:bg-transparent lg:p-0";
+}
+
+function stepIconShellCls() {
+  return "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#E8F4FB] text-[#008CD3] lg:h-10 lg:w-10";
 }
 
 function stepFooterShell() {
-  return "flex flex-col gap-2 border-t border-slate-100 pt-5 lg:flex-row lg:flex-wrap lg:items-center lg:gap-3 lg:pt-6";
+  return "flex flex-col gap-2 border-t border-[#E4E7EC] pt-4 lg:flex-row lg:flex-wrap lg:items-center lg:gap-2 lg:pt-5";
 }
 
 function stepFooterEndShell() {
-  return "flex flex-col gap-2 border-t border-slate-100 pt-5 lg:flex-row lg:justify-end lg:gap-3 lg:pt-6";
+  return "flex flex-col gap-2 border-t border-[#E4E7EC] pt-4 lg:flex-row lg:justify-end lg:gap-2 lg:pt-5";
 }
 
 function btnPrimaryCls() {
-  return "inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-2xl bg-[#C99237] px-5 py-3 text-sm font-bold text-[#0C123A] shadow-sm transition active:scale-[0.98] hover:bg-[#b87d2e] disabled:cursor-not-allowed disabled:opacity-60 lg:min-h-0 lg:w-auto lg:rounded-lg lg:px-5 lg:py-2.5";
+  return "inline-flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-lg bg-[#008CD3] px-4 py-2 text-[14px] font-medium text-white transition hover:bg-[#0070AA] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 lg:w-auto";
 }
 
 function btnSecondaryCls() {
-  return "inline-flex min-h-[44px] w-full items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-[#0C123A] shadow-sm transition active:scale-[0.98] hover:bg-slate-50 disabled:opacity-60 lg:min-h-0 lg:w-auto lg:rounded-lg";
+  return "inline-flex min-h-[40px] w-full items-center justify-center rounded-lg border border-[#E4E7EC] bg-white px-4 py-2 text-[14px] font-medium text-[#374151] transition hover:bg-[#F9FAFB] disabled:opacity-50 lg:w-auto";
+}
+
+function alertSuccessCls() {
+  return "mb-4 flex items-start gap-2 rounded-lg border border-[#A8DAB5] bg-[#E6F4EA] px-3 py-2.5 text-[13px] text-[#1F2937] max-lg:mb-3";
+}
+
+function alertErrorCls() {
+  return "mb-4 flex items-start gap-2 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2.5 text-[13px] text-[#1F2937] max-lg:mb-3";
+}
+
+function btnSkipCls() {
+  return "inline-flex min-h-[40px] w-full items-center justify-center rounded-lg border border-dashed border-[#E4E7EC] bg-[#F9FAFB] px-4 py-2 text-[13px] font-medium text-[#374151] transition hover:border-[#008CD3]/40 hover:bg-white disabled:opacity-50 lg:w-auto";
+}
+
+function btnAddCls() {
+  return "inline-flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-[#008CD3]/50 bg-[#E8F4FB] px-4 py-2 text-[13px] font-medium text-[#008CD3] transition hover:bg-[#008CD3]/10 disabled:opacity-50 lg:w-auto";
+}
+
+function stepTitleCls() {
+  return "text-[15px] font-semibold text-[#1F2937] lg:text-[16px]";
+}
+
+function stepDescCls() {
+  return "mt-0.5 text-[11px] text-[#6B7280] max-lg:line-clamp-2 lg:text-[12px]";
 }
 
 const ONBOARDING_STEP_NAV = [
@@ -219,15 +247,15 @@ const ONBOARDING_DOC_SLOTS: {
 function skeletonFrameClass(skeleton: (typeof ONBOARDING_DOC_SLOTS)[number]["skeleton"]): string {
   switch (skeleton) {
     case "passport":
-      return "aspect-[3/4] max-h-64 w-full max-w-[13rem]";
+      return "aspect-[3/4] max-h-44 w-full max-w-[10rem] sm:max-h-52 sm:max-w-[11rem]";
     case "aadhar":
-      return "aspect-[85/53] w-full max-w-md";
+      return "aspect-[85/53] w-full max-w-[14rem] sm:max-w-md";
     case "pan":
-      return "aspect-[1.587/1] w-full max-w-sm";
+      return "aspect-[1.587/1] w-full max-w-[12rem] sm:max-w-sm";
     case "marksheet":
-      return "aspect-[210/297] max-h-80 w-full max-w-xs sm:max-w-sm";
+      return "aspect-[210/297] max-h-56 w-full max-w-[9rem] sm:max-h-64 sm:max-w-xs";
     case "letter":
-      return "aspect-[8.5/11] max-h-72 w-full max-w-xs sm:max-w-sm";
+      return "aspect-[8.5/11] max-h-52 w-full max-w-[9rem] sm:max-h-60 sm:max-w-xs";
     default:
       return "aspect-video w-full";
   }
@@ -974,27 +1002,27 @@ export default function EmployeOnboardingPage() {
     ONBOARDING_STEP_NAV.find((s) => s.key === onboardingStep)?.label ?? "Onboarding";
 
   return (
-    <div className="space-y-4 max-lg:-mx-1 max-lg:space-y-3 max-lg:pb-2 sm:max-lg:-mx-2 lg:mx-0 lg:space-y-6 lg:pb-0">
-      {/* Mobile & tablet: sticky app header + progress */}
-      <div className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/95 px-3 pb-3 pt-3 backdrop-blur-md sm:px-4 lg:hidden">
-        <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#C99237]/15">
-            <UserPlus className="h-5 w-5 text-[#C99237]" aria-hidden />
+    <div className="min-h-full bg-[#F5F7FA] pb-4 max-lg:pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:space-y-4 lg:pb-8">
+      {/* Mobile & tablet: sticky header + progress */}
+      <div className="sticky top-0 z-20 border-b border-[#E4E7EC] bg-white shadow-sm lg:hidden">
+        <div className="flex items-center gap-2.5 px-3 py-2.5">
+          <span className={stepIconShellCls()}>
+            <UserPlus className="h-4 w-4" aria-hidden />
           </span>
           <div className="min-w-0 flex-1">
-            <h1 className="truncate text-lg font-bold text-[#0C123A]">Employee onboarding</h1>
-            <p className="truncate text-xs text-slate-500">{orgName}</p>
+            <h1 className="truncate text-[16px] font-semibold text-[#1F2937]">Employee onboarding</h1>
+            <p className="truncate text-[12px] text-[#6B7280]">{orgName}</p>
           </div>
         </div>
-        <div className="mt-3">
-          <div className="mb-2 flex items-center justify-between gap-2 text-xs">
-            <span className="font-semibold text-[#C99237]">
+        <div className="border-t border-[#E4E7EC] px-3 pb-2.5 pt-2">
+          <div className="mb-1.5 flex items-center justify-between gap-2 text-[11px]">
+            <span className="font-semibold text-[#008CD3]">
               Step {currentStepIndex + 1} of {ONBOARDING_STEPS_ORDER.length}
             </span>
-            <span className="truncate text-slate-500">{currentStepLabel}</span>
+            <span className="truncate text-[#6B7280]">{currentStepLabel}</span>
           </div>
           <div
-            className="h-1.5 overflow-hidden rounded-full bg-slate-200"
+            className="h-1 overflow-hidden rounded-full bg-[#E4E7EC]"
             role="progressbar"
             aria-valuenow={currentStepIndex + 1}
             aria-valuemin={1}
@@ -1002,12 +1030,12 @@ export default function EmployeOnboardingPage() {
             aria-label="Onboarding progress"
           >
             <div
-              className="h-full rounded-full bg-[#C99237] transition-all duration-300"
+              className="h-full rounded-full bg-[#008CD3] transition-all duration-300"
               style={{ width: `${progressPct}%` }}
             />
           </div>
         </div>
-        <div className="mt-3 flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex gap-1.5 overflow-x-auto border-t border-[#E4E7EC] bg-[#F9FAFB] px-2 py-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {ONBOARDING_STEP_NAV.map(({ key, short, n }) => {
             const order = [...ONBOARDING_STEPS_ORDER];
             const cur = order.indexOf(onboardingStep);
@@ -1017,12 +1045,12 @@ export default function EmployeOnboardingPage() {
             return (
               <span
                 key={key}
-                className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold ring-1 ${
+                className={`inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium ${
                   active
-                    ? "bg-[#C99237]/15 text-[#0C123A] ring-[#C99237]/40"
+                    ? "bg-white text-[#008CD3] ring-1 ring-[#008CD3]/30"
                     : done
-                      ? "bg-emerald-50 text-emerald-800 ring-emerald-200"
-                      : "bg-slate-100 text-slate-500 ring-slate-200"
+                      ? "bg-[#E6F4EA] text-[#0F9D58]"
+                      : "bg-white text-[#6B7280] ring-1 ring-[#E4E7EC]"
                 }`}
               >
                 {done ? (
@@ -1037,30 +1065,26 @@ export default function EmployeOnboardingPage() {
         </div>
       </div>
 
+      <div className="mx-auto max-w-5xl space-y-3 px-3 pt-3 sm:px-4 lg:space-y-4 lg:px-6 lg:pt-6">
       {/* Desktop: page intro */}
       <div className={`${stepPanelShell()} hidden lg:block`}>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex gap-3">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#C99237]/12">
-              <UserPlus className="h-6 w-6 text-[#C99237]" aria-hidden />
-            </span>
-            <div>
-              <h1 className="text-xl font-bold text-[#0C123A] sm:text-2xl">Employee onboarding</h1>
-              <p className="mt-1 text-xs text-slate-500 max-lg:line-clamp-2 lg:text-sm">
-                Six steps for <span className="font-medium text-slate-700">{orgName}</span>: basics → emergency
-                contact → internal reference → optional assets → documents → optional address.
-              </p>
-            </div>
+        <div className="flex items-start gap-3">
+          <span className={stepIconShellCls()}>
+            <UserPlus className="h-4 w-4" aria-hidden />
+          </span>
+          <div className="min-w-0">
+            <h1 className="text-[18px] font-semibold text-[#1F2937]">Employee onboarding</h1>
+            <p className="mt-0.5 text-[13px] text-[#6B7280]">
+              Six steps for <span className="font-medium text-[#374151]">{orgName}</span>: basics, emergency
+              contact, reference, assets, documents, and address.
+            </p>
           </div>
         </div>
       </div>
 
       {/* Desktop: step list */}
-      <nav
-        className={`${stepPanelShell()} hidden lg:block`}
-        aria-label="Onboarding steps"
-      >
-        <ol className="flex flex-wrap items-center gap-6 text-sm lg:gap-10">
+      <nav className={`${stepPanelShell()} hidden lg:block`} aria-label="Onboarding steps">
+        <ol className="flex flex-wrap items-center gap-4 text-[13px] lg:gap-6">
           {ONBOARDING_STEP_NAV.map(({ key, n, label }) => {
             const order = [...ONBOARDING_STEPS_ORDER];
             const cur = order.indexOf(onboardingStep);
@@ -1070,16 +1094,16 @@ export default function EmployeOnboardingPage() {
             return (
               <li
                 key={key}
-                className={`flex items-center gap-2 font-semibold ${
-                  active ? "text-[#C99237]" : done ? "text-emerald-700" : "text-slate-400"
+                className={`flex items-center gap-1.5 font-medium ${
+                  active ? "text-[#008CD3]" : done ? "text-[#0F9D58]" : "text-[#9CA3AF]"
                 }`}
               >
                 {done ? (
-                  <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />
+                  <CheckCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
                 ) : (
                   <span
-                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs text-[#0C123A] ${
-                      active ? "bg-[#C99237]/25" : "bg-slate-100 text-slate-600"
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] ${
+                      active ? "bg-[#008CD3] text-white" : "bg-[#E4E7EC] text-[#6B7280]"
                     }`}
                   >
                     {n}
@@ -1094,13 +1118,13 @@ export default function EmployeOnboardingPage() {
 
       {onboardingStep === "basic" && (
         <div className={stepPanelShell()}>
-          <div className={`${stepSectionHeaderShell()} lg:hidden`}>
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#C99237]/15">
-              <UserPlus className="h-5 w-5 text-[#C99237]" aria-hidden />
+          <div className={stepSectionHeaderShell()}>
+            <span className={stepIconShellCls()}>
+              <UserPlus className="h-4 w-4" aria-hidden />
             </span>
             <div>
-              <h2 className="text-base font-bold text-[#0C123A]">Account basics</h2>
-              <p className="mt-0.5 text-xs text-slate-500">
+              <h2 className={stepTitleCls()}>Account basics</h2>
+              <p className={stepDescCls()}>
                 Step 1 — name, contact, role, and password for {orgName}.
               </p>
             </div>
@@ -1108,17 +1132,17 @@ export default function EmployeOnboardingPage() {
 
           {addressSuccess && (
             <div
-              className="mb-5 flex flex-col gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 max-lg:mb-4 sm:flex-row sm:items-center sm:justify-between"
+              className={`${alertSuccessCls()} flex-col gap-2 sm:flex-row sm:items-center sm:justify-between`}
               role="status"
             >
               <div className="flex items-start gap-2">
-                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#0F9D58]" aria-hidden />
                 <span>{addressSuccess}</span>
               </div>
               <button
                 type="button"
                 onClick={() => setAddressSuccess(null)}
-                className="shrink-0 rounded-lg border border-emerald-300/80 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-900 shadow-sm transition hover:bg-emerald-100/80"
+                className="shrink-0 rounded-lg border border-[#A8DAB5] bg-white px-3 py-1.5 text-[12px] font-medium text-[#1F2937] transition hover:bg-[#F9FAFB]"
               >
                 Dismiss
               </button>
@@ -1126,27 +1150,24 @@ export default function EmployeOnboardingPage() {
           )}
 
           {success && (
-            <div
-              className="mb-5 flex items-start gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 max-lg:mb-4"
-              role="status"
-            >
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
+            <div className={alertSuccessCls()} role="status">
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#0F9D58]" aria-hidden />
               <span>{success}</span>
             </div>
           )}
 
           {(formError || rolesError) && (
             <div
-              className="mb-5 flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 max-lg:mb-4"
+              className={alertErrorCls()}
               role="alert"
             >
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" aria-hidden />
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#D93025]" aria-hidden />
               <span>{formError || rolesError}</span>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="grid gap-5 sm:grid-cols-2">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
               <div className="sm:col-span-2">
                 <label htmlFor="emp-name" className={labelCls()}>
                   Full name <span className="text-red-500">*</span>
@@ -1203,7 +1224,7 @@ export default function EmployeOnboardingPage() {
                   Role <span className="text-red-500">*</span>
                 </label>
                 {rolesLoading ? (
-                  <div className="flex items-center gap-2 rounded-2xl bg-slate-100 px-3.5 py-3 text-sm text-slate-500 ring-1 ring-slate-200/80 lg:rounded-lg lg:border lg:border-slate-200 lg:bg-slate-50 lg:py-2.5 lg:ring-0">
+                  <div className="flex items-center gap-2 rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] px-3 py-2 text-[13px] text-[#6B7280]">
                     <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
                     Loading roles…
                   </div>
@@ -1251,7 +1272,7 @@ export default function EmployeOnboardingPage() {
                   />
                   <button
                     type="button"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-slate-500 outline-none transition hover:bg-slate-100"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-[#6B7280] outline-none transition hover:bg-[#F3F4F6]"
                     onClick={() => setShowPassword((v) => !v)}
                     aria-label={showPassword ? "Hide password" : "Show password"}
                   >
@@ -1279,7 +1300,7 @@ export default function EmployeOnboardingPage() {
                   />
                   <button
                     type="button"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-slate-500 outline-none transition hover:bg-slate-100"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-[#6B7280] outline-none transition hover:bg-[#F3F4F6]"
                     onClick={() => setShowConfirmPassword((v) => !v)}
                     aria-label={showConfirmPassword ? "Hide" : "Show"}
                   >
@@ -1324,16 +1345,16 @@ export default function EmployeOnboardingPage() {
       {onboardingStep === "external" && createdEmployeeId && (
         <div className={stepPanelShell()}>
           <div className={stepSectionHeaderShell()}>
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#C99237]/15 lg:h-12 lg:w-12 lg:rounded-xl lg:bg-[#C99237]/12">
-              <ShieldCheck className="h-5 w-5 text-[#C99237] lg:h-6 lg:w-6" aria-hidden />
+            <span className={stepIconShellCls()}>
+              <ShieldCheck className="h-4 w-4" aria-hidden />
             </span>
             <div>
-              <h2 className="text-base font-bold text-[#0C123A] lg:text-2xl">
+              <h2 className={stepTitleCls()}>
                 Emergency contact
               </h2>
-              <p className="mt-1 text-xs text-slate-500 max-lg:line-clamp-2 lg:text-sm">
+              <p className={stepDescCls()}>
                 For{" "}
-                <span className="font-medium text-slate-700">{createdEmployeeName}</span>.
+                <span className="font-medium text-[#374151]">{createdEmployeeName}</span>.
                 Saved to organizational records (step&nbsp;2 of&nbsp;6).
               </p>
             </div>
@@ -1341,16 +1362,16 @@ export default function EmployeOnboardingPage() {
 
           {externalError && (
             <div
-              className="mb-5 flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 max-lg:mb-4"
+              className={alertErrorCls()}
               role="alert"
             >
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" aria-hidden />
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#D93025]" aria-hidden />
               <span>{externalError}</span>
             </div>
           )}
 
-          <form onSubmit={handleExternalSubmit} className="space-y-5">
-            <div className="grid gap-5 sm:grid-cols-2">
+          <form onSubmit={handleExternalSubmit} className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
               <div className="sm:col-span-2">
                 <label htmlFor="emergency-name" className={labelCls()}>
                   Emergency contact full name <span className="text-red-500">*</span>
@@ -1434,14 +1455,14 @@ export default function EmployeOnboardingPage() {
       {onboardingStep === "reference" && createdEmployeeId && (
         <div className={stepPanelShell()}>
           <div className={stepSectionHeaderShell()}>
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#C99237]/15 lg:h-12 lg:w-12 lg:rounded-xl lg:bg-[#C99237]/12">
-              <Users className="h-5 w-5 text-[#C99237] lg:h-6 lg:w-6" aria-hidden />
+            <span className={stepIconShellCls()}>
+              <Users className="h-4 w-4" aria-hidden />
             </span>
             <div>
-              <h2 className="text-base font-bold text-[#0C123A] lg:text-2xl">Internal reference</h2>
-              <p className="mt-1 text-xs text-slate-500 max-lg:line-clamp-2 lg:text-sm">
+              <h2 className={stepTitleCls()}>Internal reference</h2>
+              <p className={stepDescCls()}>
                 Who referred{" "}
-                <span className="font-medium text-slate-700">{createdEmployeeName}</span>? Choose an
+                <span className="font-medium text-[#374151]">{createdEmployeeName}</span>? Choose an
                 existing org member — their user id is sent to HR records (step&nbsp;3 of&nbsp;6).
               </p>
             </div>
@@ -1449,15 +1470,15 @@ export default function EmployeOnboardingPage() {
 
           {referenceError && (
             <div
-              className="mb-5 flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 max-lg:mb-4"
+              className={alertErrorCls()}
               role="alert"
             >
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" aria-hidden />
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#D93025]" aria-hidden />
               <span>{referenceError}</span>
             </div>
           )}
 
-          <form onSubmit={handleReferenceSubmit} className="space-y-5">
+          <form onSubmit={handleReferenceSubmit} className="space-y-4">
             <div>
               <label htmlFor="referred-by" className={labelCls()}>
                 Referred by (org member) <span className="text-red-500">*</span>
@@ -1488,7 +1509,7 @@ export default function EmployeOnboardingPage() {
                 ))}
               </select>
               {!referrersLoading && referrerOptions.length === 0 && (
-                <p className="mt-2 text-xs text-amber-800">
+                <p className="mt-2 text-[11px] text-[#E8710A]">
                   No other members loaded. Ensure people exist in this org or check permissions.
                 </p>
               )}
@@ -1496,7 +1517,7 @@ export default function EmployeOnboardingPage() {
 
             <div>
               <label htmlFor="referrer-display-name" className={labelCls()}>
-                Referrer display name <span className="text-xs font-normal text-slate-400">(optional)</span>
+                Referrer display name <span className="text-[11px] font-normal text-[#9CA3AF]">(optional)</span>
               </label>
               <input
                 id="referrer-display-name"
@@ -1511,7 +1532,7 @@ export default function EmployeOnboardingPage() {
             <div>
               <label htmlFor="referrer-designation" className={labelCls()}>
                 Referrer designation (organization role)&nbsp;
-                <span className="text-xs font-normal text-slate-400">(optional)</span>
+                <span className="text-[11px] font-normal text-[#9CA3AF]">(optional)</span>
               </label>
               <select
                 id="referrer-designation"
@@ -1575,43 +1596,43 @@ export default function EmployeOnboardingPage() {
       {onboardingStep === "assets" && createdEmployeeId && (
         <div className={stepPanelShell()}>
           <div className={stepSectionHeaderShell()}>
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#C99237]/15 lg:h-12 lg:w-12 lg:rounded-xl lg:bg-[#C99237]/12">
-              <Package className="h-5 w-5 text-[#C99237] lg:h-6 lg:w-6" aria-hidden />
+            <span className={stepIconShellCls()}>
+              <Package className="h-4 w-4" aria-hidden />
             </span>
             <div>
-              <h2 className="text-base font-bold text-[#0C123A] lg:text-2xl">Assign assets</h2>
-              <p className="mt-1 text-xs text-slate-500 max-lg:line-clamp-2 lg:text-sm">
+              <h2 className={stepTitleCls()}>Assign assets</h2>
+              <p className={stepDescCls()}>
                 Optional — allocate laptops, badges, SIMs, etc. for{" "}
-                <span className="font-medium text-slate-700">{createdEmployeeName}</span>. Add rows with
-                <span className="font-semibold text-slate-600"> Add asset</span>, or skip (step&nbsp;4 of&nbsp;6).
+                <span className="font-medium text-[#374151]">{createdEmployeeName}</span>. Add rows with
+                <span className="font-medium text-[#374151]"> Add asset</span>, or skip (step&nbsp;4 of&nbsp;6).
               </p>
             </div>
           </div>
 
           {assetsError && (
             <div
-              className="mb-5 flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 max-lg:mb-4"
+              className={alertErrorCls()}
               role="alert"
             >
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" aria-hidden />
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#D93025]" aria-hidden />
               <span>{assetsError}</span>
             </div>
           )}
 
-          <form onSubmit={handleAssetsSubmit} className="space-y-6">
-            <div className="space-y-6">
+          <form onSubmit={handleAssetsSubmit} className="space-y-4">
+            <div className="space-y-3">
               {assetDraftRows.length === 0 && (
-                <p className="text-sm text-slate-500">
+                <p className="text-[13px] text-[#6B7280]">
                   No rows yet. Click <strong>Add asset</strong> to attach one or more assignments, or skip.
                 </p>
               )}
               {assetDraftRows.map((row, idx) => (
                 <div
                   key={row.key}
-                  className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 sm:p-5"
+                  className="rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] p-3 sm:p-4"
                 >
                   <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-sm font-bold text-[#0C123A]">Asset {idx + 1}</span>
+                    <span className="text-[13px] font-semibold text-[#1F2937]">Asset {idx + 1}</span>
                     <button
                       type="button"
                       disabled={assetsSubmitting}
@@ -1670,7 +1691,7 @@ export default function EmployeOnboardingPage() {
                     <div>
                       <label className={labelCls()} htmlFor={`asset-handover-${row.key}`}>
                         Handover date/time{" "}
-                        <span className="text-xs font-normal text-slate-400">(optional)</span>
+                        <span className="text-[11px] font-normal text-[#9CA3AF]">(optional)</span>
                       </label>
                       <input
                         id={`asset-handover-${row.key}`}
@@ -1691,7 +1712,7 @@ export default function EmployeOnboardingPage() {
                     <div className="sm:col-span-2">
                       <label className={labelCls()} htmlFor={`asset-summary-${row.key}`}>
                         Summary{" "}
-                        <span className="text-xs font-normal text-slate-400">(optional)</span>
+                        <span className="text-[11px] font-normal text-[#9CA3AF]">(optional)</span>
                       </label>
                       <input
                         id={`asset-summary-${row.key}`}
@@ -1711,7 +1732,7 @@ export default function EmployeOnboardingPage() {
                     <div className="sm:col-span-2">
                       <label className={labelCls()} htmlFor={`asset-file-${row.key}`}>
                         Photo / receipt (PNG, JPG, WebP, PDF, max 5&nbsp;MB){" "}
-                        <span className="text-xs font-normal text-slate-400">(optional)</span>
+                        <span className="text-[11px] font-normal text-[#9CA3AF]">(optional)</span>
                       </label>
                       <input
                         id={`asset-file-${row.key}`}
@@ -1755,7 +1776,7 @@ export default function EmployeOnboardingPage() {
                 type="button"
                 disabled={assetsSubmitting}
                 onClick={() => setAssetDraftRows((prev) => [...prev, createEmptyAssetDraft()])}
-                className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-[#C99237]/60 bg-[#C99237]/5 px-4 py-2.5 text-sm font-semibold text-[#0C123A] transition active:scale-[0.98] hover:bg-[#C99237]/15 disabled:opacity-60 lg:w-auto lg:rounded-lg"
+                className={btnAddCls()}
               >
                 <PlusCircle className="h-4 w-4" aria-hidden />
                 Add asset
@@ -1765,7 +1786,7 @@ export default function EmployeOnboardingPage() {
                   type="button"
                   disabled={assetsSubmitting}
                   onClick={() => handleAssetsSkip()}
-                  className="inline-flex min-h-[44px] w-full items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-5 py-2.5 text-sm font-semibold text-slate-700 transition active:scale-[0.98] hover:border-slate-400 hover:bg-white disabled:opacity-60 lg:w-auto lg:rounded-lg"
+                  className={btnSkipCls()}
                 >
                   Skip assets — documents next
                 </button>
@@ -1783,7 +1804,7 @@ export default function EmployeOnboardingPage() {
                 <button
                   type="submit"
                   disabled={assetsSubmitting}
-                className={btnPrimaryCls()}
+                  className={btnPrimaryCls()}
                 >
                   {assetsSubmitting ? (
                     <>
@@ -1806,14 +1827,14 @@ export default function EmployeOnboardingPage() {
       {onboardingStep === "documents" && createdEmployeeId && (
         <div className={stepPanelShell()}>
           <div className={stepSectionHeaderShell()}>
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#C99237]/15 lg:h-12 lg:w-12 lg:rounded-xl lg:bg-[#C99237]/12">
-              <FileText className="h-5 w-5 text-[#C99237] lg:h-6 lg:w-6" aria-hidden />
+            <span className={stepIconShellCls()}>
+              <FileText className="h-4 w-4" aria-hidden />
             </span>
             <div>
-              <h2 className="text-base font-bold text-[#0C123A] lg:text-2xl">Employee documents</h2>
-              <p className="mt-1 text-xs text-slate-500 max-lg:line-clamp-2 lg:text-sm">
+              <h2 className={stepTitleCls()}>Employee documents</h2>
+              <p className={stepDescCls()}>
                 Step&nbsp;5 of&nbsp;6 — tap a frame for full screen preview. Wrong file? Use{" "}
-                <span className="font-semibold text-slate-600">Change file</span>. PNG/JPG/WebP/PDF · max{" "}
+                <span className="font-medium text-[#374151]">Change file</span>. PNG/JPG/WebP/PDF · max{" "}
                 5&nbsp;MB each.
               </p>
             </div>
@@ -1821,10 +1842,10 @@ export default function EmployeOnboardingPage() {
 
           {documentsError && (
             <div
-              className="mb-5 flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 max-lg:mb-4"
+              className={alertErrorCls()}
               role="alert"
             >
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" aria-hidden />
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#D93025]" aria-hidden />
               <span>{documentsError}</span>
             </div>
           )}
@@ -1846,10 +1867,10 @@ export default function EmployeOnboardingPage() {
                         )}
                         {required && <span className="text-red-500">*</span>}
                       </label>
-                      <p className="mb-3 text-xs text-slate-500">{hint}</p>
+                      <p className="mb-2 text-[11px] text-[#6B7280]">{hint}</p>
 
                       <div
-                        className={`relative mx-auto flex w-full items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-slate-200 bg-gradient-to-br from-slate-50 to-slate-100/80 shadow-inner ring-1 ring-slate-900/5 ${skeletonFrameClass(skeleton)}`}
+                        className={`relative mx-auto flex w-full items-center justify-center overflow-hidden rounded-lg border border-dashed border-[#E4E7EC] bg-[#F9FAFB] ${skeletonFrameClass(skeleton)}`}
                       >
                         <input
                           ref={(el) => {
@@ -1868,13 +1889,13 @@ export default function EmployeOnboardingPage() {
                           <button
                             type="button"
                             onClick={() => docInputRefs.current[field]?.click()}
-                            className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-4 text-center text-slate-500 transition hover:bg-white/50"
+                            className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 px-3 text-center text-[#6B7280] transition hover:bg-white/60"
                           >
-                            <IconCmp className="h-10 w-10 text-slate-300" aria-hidden />
-                            <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                              Skeleton
+                            <IconCmp className="h-8 w-8 text-[#D1D5DB]" aria-hidden />
+                            <span className="text-[10px] font-medium uppercase tracking-wide text-[#9CA3AF]">
+                              Upload
                             </span>
-                            <span className="text-xs text-slate-500">Click to attach</span>
+                            <span className="text-[11px] text-[#6B7280]">Tap to attach</span>
                           </button>
                         )}
 
@@ -1882,13 +1903,13 @@ export default function EmployeOnboardingPage() {
                           <button
                             type="button"
                             onClick={() => setPreviewModalField(field)}
-                            className="group relative flex h-full w-full items-center justify-center overflow-hidden bg-black/5 outline-none ring-[#C99237] ring-offset-2 focus-visible:ring-2"
+                            className="group relative flex h-full w-full items-center justify-center overflow-hidden bg-black/5 outline-none ring-[#008CD3] ring-offset-2 focus-visible:ring-2"
                             aria-label={`Open preview for ${label}`}
                           >
                             {isPdfFile(file) ? (
                               <div className="flex flex-col items-center gap-2 p-6 text-center">
-                                <FileText className="h-14 w-14 text-teal-600" aria-hidden />
-                                <span className="text-xs font-medium text-[#0C123A]">PDF</span>
+                                <FileText className="h-14 w-14 text-[#008CD3]" aria-hidden />
+                                <span className="text-xs font-medium text-[#1F2937]">PDF</span>
                                 <span className="truncate px-2 text-[10px] text-slate-500">
                                   {file.name}
                                 </span>
@@ -1901,7 +1922,7 @@ export default function EmployeOnboardingPage() {
                                 className="h-full w-full object-contain"
                               />
                             )}
-                            <span className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full bg-[#0C123A]/80 px-2 py-1 text-[10px] font-semibold text-white opacity-0 transition group-hover:opacity-100">
+                            <span className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full bg-[#1F2937]/80 px-2 py-1 text-[10px] font-semibold text-white opacity-0 transition group-hover:opacity-100">
                               <Maximize2 className="h-3 w-3" aria-hidden />
                               Enlarge
                             </span>
@@ -1914,7 +1935,7 @@ export default function EmployeOnboardingPage() {
                           type="button"
                           disabled={documentsSubmitting}
                           onClick={() => docInputRefs.current[field]?.click()}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-[#C99237]/50 bg-[#C99237]/10 px-3 py-1.5 text-xs font-semibold text-[#0C123A] transition hover:bg-[#C99237]/20 disabled:opacity-50"
+                          className="inline-flex min-h-[32px] items-center gap-1.5 rounded-lg border border-[#008CD3]/40 bg-[#E8F4FB] px-2.5 py-1 text-[12px] font-medium text-[#008CD3] transition hover:bg-[#008CD3]/10 disabled:opacity-50"
                         >
                           {file ? (
                             <>
@@ -1985,12 +2006,12 @@ export default function EmployeOnboardingPage() {
           onClick={() => setPreviewModalField(null)}
         >
           <div
-            className="relative max-h-[92vh] w-full max-w-4xl overflow-hidden rounded-t-3xl border border-white/10 bg-white shadow-2xl sm:rounded-2xl"
+            className="relative max-h-[92vh] w-full max-w-4xl overflow-hidden rounded-t-xl border border-[#E4E7EC] bg-white shadow-xl sm:rounded-lg"
             onClick={(ev) => ev.stopPropagation()}
           >
-            <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-4 py-3 sm:px-5">
+            <div className="flex items-start justify-between gap-3 border-b border-[#E4E7EC] px-3 py-2.5 sm:px-4">
               <div>
-                <h3 id="doc-preview-title" className="text-sm font-bold text-[#0C123A]">
+                <h3 id="doc-preview-title" className="text-sm font-bold text-[#1F2937]">
                   {ONBOARDING_DOC_SLOTS.find((s) => s.field === previewModalField)?.label ??
                     "Preview"}
                 </h3>
@@ -1999,7 +2020,7 @@ export default function EmployeOnboardingPage() {
               <div className="flex shrink-0 gap-2">
                 <button
                   type="button"
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-[#0C123A] hover:bg-slate-50"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-[#1F2937] hover:bg-slate-50"
                   onClick={() => docInputRefs.current[previewModalField]?.click()}
                 >
                   <RefreshCw className="h-3.5 w-3.5" aria-hidden />
@@ -2007,7 +2028,7 @@ export default function EmployeOnboardingPage() {
                 </button>
                 <button
                   type="button"
-                  className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-[#0C123A]"
+                  className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-[#1F2937]"
                   onClick={() => setPreviewModalField(null)}
                   aria-label="Close preview"
                 >
@@ -2020,7 +2041,7 @@ export default function EmployeOnboardingPage() {
                 <object data={modalUrl} type="application/pdf" className="h-[72vh] w-full rounded-lg bg-white">
                   <p className="p-8 text-center text-sm text-slate-600">
                     PDF preview not supported in this browser.{" "}
-                    <a href={modalUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-teal-700 underline">
+                    <a href={modalUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-[#008CD3] underline">
                       Open in new tab
                     </a>
                   </p>
@@ -2041,29 +2062,29 @@ export default function EmployeOnboardingPage() {
       {onboardingStep === "address" && createdEmployeeId && (
         <div className={stepPanelShell()}>
           <div className={stepSectionHeaderShell()}>
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#C99237]/15 lg:h-12 lg:w-12 lg:rounded-xl lg:bg-[#C99237]/12">
-              <MapPin className="h-5 w-5 text-[#C99237] lg:h-6 lg:w-6" aria-hidden />
+            <span className={stepIconShellCls()}>
+              <MapPin className="h-4 w-4" aria-hidden />
             </span>
             <div>
-              <h2 className="text-base font-bold text-[#0C123A] lg:text-2xl">Employee address</h2>
-              <p className="mt-1 text-xs text-slate-500 max-lg:line-clamp-2 lg:text-sm">
+              <h2 className={stepTitleCls()}>Employee address</h2>
+              <p className={stepDescCls()}>
                 Optional — skip if you&apos;ll capture this later for{" "}
-                <span className="font-medium text-slate-700">{createdEmployeeName}</span>.
+                <span className="font-medium text-[#374151]">{createdEmployeeName}</span>.
               </p>
             </div>
           </div>
 
           {addressError && (
             <div
-              className="mb-5 flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 max-lg:mb-4"
+              className={alertErrorCls()}
               role="alert"
             >
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" aria-hidden />
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#D93025]" aria-hidden />
               <span>{addressError}</span>
             </div>
           )}
 
-          <form onSubmit={handleAddressSubmit} className="space-y-5">
+          <form onSubmit={handleAddressSubmit} className="space-y-4">
               <div className="grid gap-5 sm:grid-cols-2">
                 <div>
                   <label htmlFor="addr-country" className={labelCls()}>
@@ -2118,7 +2139,7 @@ export default function EmployeOnboardingPage() {
                 </div>
 
                 <div className="sm:col-span-2">
-                  <label className="flex items-center gap-2 text-sm font-medium text-[#0C123A]">
+                  <label className="flex items-center gap-2 text-[13px] font-medium text-[#1F2937]">
                     <input
                       type="checkbox"
                       checked={addressIsFromVillage}
@@ -2126,7 +2147,7 @@ export default function EmployeOnboardingPage() {
                         setAddressIsFromVillage(e.target.checked);
                         if (!e.target.checked) setAddressVillage("");
                       }}
-                      className="h-4 w-4 rounded border-slate-300 text-[#C99237] focus:ring-[#C99237]/30"
+                      className="h-4 w-4 rounded border-[#E4E7EC] text-[#008CD3] focus:ring-[#008CD3]/30"
                     />
                     Employee is from a village
                   </label>
@@ -2192,7 +2213,7 @@ export default function EmployeOnboardingPage() {
                   type="button"
                   disabled={addressSubmitting}
                   onClick={() => handleAddressSkip()}
-                  className="inline-flex min-h-[44px] w-full items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-5 py-2.5 text-sm font-semibold text-slate-700 transition active:scale-[0.98] hover:border-slate-400 hover:bg-white disabled:opacity-60 lg:w-auto lg:rounded-lg"
+                  className={btnSkipCls()}
                 >
                   Skip address — finish onboarding
                 </button>
@@ -2227,6 +2248,7 @@ export default function EmployeOnboardingPage() {
             </form>
         </div>
       )}
+      </div>
     </div>
   );
 }

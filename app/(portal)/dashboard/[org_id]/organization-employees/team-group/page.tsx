@@ -514,6 +514,7 @@ function TeamGroupPageContent() {
   );
   const [attResolveModal, setAttResolveModal] = useState<{
     id: number;
+    employee_id: number;
     action: "approved" | "rejected";
   } | null>(null);
   const [attResolveNote, setAttResolveNote] = useState("");
@@ -846,8 +847,12 @@ function TeamGroupPageContent() {
     }
   }
 
-  function openAttResolveModal(queryId: number, action: "approved" | "rejected") {
-    setAttResolveModal({ id: queryId, action });
+  function openAttResolveModal(
+    queryId: number,
+    employeeId: number,
+    action: "approved" | "rejected",
+  ) {
+    setAttResolveModal({ id: queryId, employee_id: employeeId, action });
     setAttResolveNote("");
     setBanner(null);
   }
@@ -876,8 +881,9 @@ function TeamGroupPageContent() {
     try {
       await updateAttendanceQueryStatus(t, {
         org_id: orgIdNum,
+        employee_id: attResolveModal.employee_id,
         query_id: attResolveModal.id,
-        query_status: attResolveModal.action === "approved" ? "approved" : "rejected",
+        updated_query_status: attResolveModal.action,
         admin_response: note,
       });
       setBanner({
@@ -1599,7 +1605,11 @@ function TeamGroupPageContent() {
                                   <button
                                     type="button"
                                     onClick={() =>
-                                      openAttResolveModal(row.id, "rejected")
+                                      openAttResolveModal(
+                                        row.id,
+                                        row.user_id,
+                                        "rejected",
+                                      )
                                     }
                                     className="flex-1 rounded-md border border-[#FFCDD2] py-2 text-[12px] font-semibold text-[#C62828] active:scale-[0.98]"
                                   >
@@ -1608,7 +1618,11 @@ function TeamGroupPageContent() {
                                   <button
                                     type="button"
                                     onClick={() =>
-                                      openAttResolveModal(row.id, "approved")
+                                      openAttResolveModal(
+                                        row.id,
+                                        row.user_id,
+                                        "approved",
+                                      )
                                     }
                                     className="flex-1 rounded-md bg-[#008CD3] py-2 text-[12px] font-semibold text-white active:scale-[0.98]"
                                   >
@@ -2536,7 +2550,11 @@ function TeamGroupPageContent() {
                                     attResolveModal?.id === row.id
                                   }
                                   onClick={() =>
-                                    openAttResolveModal(row.id, "rejected")
+                                    openAttResolveModal(
+                                      row.id,
+                                      row.user_id,
+                                      "rejected",
+                                    )
                                   }
                                   className="inline-flex flex-1 items-center justify-center gap-1 rounded-lg border border-rose-200 bg-white px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-50 disabled:opacity-50 sm:flex-initial"
                                 >
@@ -2550,7 +2568,11 @@ function TeamGroupPageContent() {
                                     attResolveModal?.id === row.id
                                   }
                                   onClick={() =>
-                                    openAttResolveModal(row.id, "approved")
+                                    openAttResolveModal(
+                                      row.id,
+                                      row.user_id,
+                                      "approved",
+                                    )
                                   }
                                   className="inline-flex flex-1 items-center justify-center gap-1 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-50 sm:flex-initial"
                                 >

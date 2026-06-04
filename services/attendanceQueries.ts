@@ -145,26 +145,25 @@ export async function updateAttendanceQueryStatus(
   token: string,
   payload: {
     org_id: number;
+    employee_id: number;
     query_id: number;
-    query_status: "approved" | "rejected";
-    admin_response?: string | null;
+    updated_query_status: "approved" | "rejected";
+    admin_response: string;
   },
 ): Promise<{ message?: string }> {
-  const body: Record<string, unknown> = {
-    org_id: payload.org_id,
-    query_id: payload.query_id,
-    query_status: payload.query_status,
-  };
-  if (payload.admin_response != null && String(payload.admin_response).trim() !== "") {
-    body.admin_response = String(payload.admin_response).trim();
-  }
   const res = await fetch(`${API_URL}/api/user/update-attendance-query-status`, {
-    method: "PATCH",
+    method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      org_id: payload.org_id,
+      employee_id: payload.employee_id,
+      query_id: payload.query_id,
+      updated_query_status: payload.updated_query_status,
+      admin_response: payload.admin_response.trim(),
+    }),
   });
   const json = await parseJson(res);
   if (!res.ok) {
