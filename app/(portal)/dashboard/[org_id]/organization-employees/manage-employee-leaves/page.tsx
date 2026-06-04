@@ -171,6 +171,7 @@ function ManageEmployeeLeavesPage() {
   const [attError, setAttError] = useState<string | null>(null);
   const [attModal, setAttModal] = useState<{
     id: number;
+    employee_id: number;
     action: "approved" | "rejected";
   } | null>(null);
   const [attModalReason, setAttModalReason] = useState("");
@@ -353,8 +354,12 @@ function ManageEmployeeLeavesPage() {
     }
   };
 
-  const openAttModal = (id: number, action: "approved" | "rejected") => {
-    setAttModal({ id, action });
+  const openAttModal = (
+    id: number,
+    employeeId: number,
+    action: "approved" | "rejected",
+  ) => {
+    setAttModal({ id, employee_id: employeeId, action });
     setAttModalReason("");
   };
 
@@ -378,8 +383,9 @@ function ManageEmployeeLeavesPage() {
     try {
       await updateAttendanceQueryStatus(token, {
         org_id: orgIdNum,
+        employee_id: attModal.employee_id,
         query_id: attModal.id,
-        query_status: attModal.action === "approved" ? "approved" : "rejected",
+        updated_query_status: attModal.action,
         admin_response: reason,
       });
       setNotice({
@@ -1040,8 +1046,12 @@ function ManageEmployeeLeavesPage() {
                         employeeEmail={emp.email}
                         pending={pending}
                         modalBusy={attModalSubmitting && attModal?.id === row.id}
-                        onApprove={() => openAttModal(row.id, "approved")}
-                        onReject={() => openAttModal(row.id, "rejected")}
+                        onApprove={() =>
+                          openAttModal(row.id, row.user_id, "approved")
+                        }
+                        onReject={() =>
+                          openAttModal(row.id, row.user_id, "rejected")
+                        }
                       />
                     );
                   })
@@ -1116,7 +1126,9 @@ function ManageEmployeeLeavesPage() {
                                     disabled={
                                       attModalSubmitting && attModal?.id === row.id
                                     }
-                                    onClick={() => openAttModal(row.id, "approved")}
+                                    onClick={() =>
+                                      openAttModal(row.id, row.user_id, "approved")
+                                    }
                                     className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-xs font-semibold text-emerald-900 transition hover:bg-emerald-100 disabled:opacity-40"
                                   >
                                     <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
@@ -1127,7 +1139,9 @@ function ManageEmployeeLeavesPage() {
                                     disabled={
                                       attModalSubmitting && attModal?.id === row.id
                                     }
-                                    onClick={() => openAttModal(row.id, "rejected")}
+                                    onClick={() =>
+                                      openAttModal(row.id, row.user_id, "rejected")
+                                    }
                                     className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2 py-1.5 text-xs font-semibold text-rose-900 transition hover:bg-rose-100 disabled:opacity-40"
                                   >
                                     <XCircle className="h-3.5 w-3.5" aria-hidden />
