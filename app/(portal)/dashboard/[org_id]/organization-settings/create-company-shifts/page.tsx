@@ -17,22 +17,26 @@ const DAYS = [
   "SUNDAY",
 ] as const;
 
-function labelCls(mobile = false) {
-  return mobile
-    ? "mb-1.5 block text-[13px] font-medium text-[#6B7280]"
-    : "mb-1.5 block text-sm font-medium text-[#0C123A]";
+const mobileCaptionCls = "text-[11px] leading-snug text-[#6B7280]";
+
+function labelCls() {
+  return "mb-1 block text-[12px] font-medium text-[#374151]";
 }
 
 function inputCls() {
-  return "w-full rounded-lg border border-[#E4E7EC] bg-white px-3.5 py-3 text-[15px] text-[#1F2937] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15 lg:border-slate-200 lg:py-2.5 lg:text-sm lg:text-[#0C123A] lg:shadow-sm lg:focus:border-[#C99237] lg:focus:ring-[#C99237]/20";
+  return "w-full rounded-md border border-[#E4E7EC] bg-white px-2.5 py-2 text-[13px] text-[#1F2937] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15";
 }
 
 function zohoPrimaryBtnCls(full = false) {
-  return `inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-[#008CD3] px-5 py-2.5 text-[15px] font-medium text-white transition active:scale-[0.98] hover:bg-[#0070AA] disabled:pointer-events-none disabled:opacity-50 lg:bg-[#C99237] lg:text-sm lg:font-bold lg:text-[#0C123A] lg:hover:bg-[#b87d2e] ${full ? "w-full" : ""}`;
+  return `inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg bg-[#008CD3] px-4 py-2 text-[14px] font-medium text-white transition active:scale-[0.98] hover:bg-[#0070AA] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full" : ""}`;
 }
 
 function zohoSecondaryBtnCls(full = false) {
-  return `inline-flex min-h-[44px] items-center justify-center rounded-lg border border-[#E4E7EC] bg-white px-4 py-2.5 text-[15px] font-medium text-[#1F2937] transition active:scale-[0.98] hover:bg-[#F5F7FA] lg:border-slate-200 lg:text-sm lg:font-semibold lg:text-[#0C123A] lg:shadow-sm lg:hover:bg-slate-50 ${full ? "w-full" : ""}`;
+  return `inline-flex min-h-[40px] items-center justify-center rounded-lg border border-[#E4E7EC] bg-white px-3 py-2 text-[13px] font-medium text-[#374151] transition active:scale-[0.98] hover:bg-[#F9FAFB] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full" : ""}`;
+}
+
+function formPanelCls() {
+  return "rounded-lg border border-[#E4E7EC] bg-white p-3 shadow-sm";
 }
 
 function withSeconds(time: string) {
@@ -157,39 +161,39 @@ export default function CreateCompanyShiftsPage() {
 
   const statusBanner = success ? (
     <div
-      className="flex flex-col gap-2 rounded-lg border border-[#A8DAB5] bg-[#E6F4EA] px-4 py-3 text-[14px] text-[#0F9D58] lg:flex-row lg:items-center lg:justify-between lg:border-emerald-200 lg:bg-emerald-50 lg:text-sm lg:text-emerald-900"
+      className="flex flex-col gap-1.5 rounded-lg border border-[#A8DAB5] bg-[#E6F4EA] px-3 py-2 text-[12px] text-[#0F9D58] sm:flex-row sm:items-center sm:justify-between"
       role="status"
     >
       <div className="flex items-start gap-2">
-        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 lg:text-emerald-600" aria-hidden />
+        <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
         <span>{success}</span>
       </div>
       <Link
         href={`${basePath}/manage-company-shifts`}
-        className="font-semibold text-[#0F9D58] underline decoration-[#A8DAB5] underline-offset-2 lg:text-emerald-800 lg:decoration-emerald-300 lg:hover:text-emerald-950"
+        className="shrink-0 font-medium text-[#008CD3] hover:underline"
       >
         View shifts →
       </Link>
     </div>
   ) : formError ? (
     <div
-      className="flex items-start gap-2 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-4 py-3 text-[14px] text-[#D93025] lg:border-red-200 lg:bg-red-50 lg:text-sm lg:text-red-900"
+      className="flex items-start gap-2 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2 text-[12px] text-[#D93025]"
       role="alert"
     >
-      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 lg:text-red-600" aria-hidden />
+      <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
       <span>{formError}</span>
     </div>
   ) : null;
 
-  const orgField = (mobile: boolean) => (
+  const orgField = (idSuffix: string) => (
     <div>
-      <label htmlFor={mobile ? "org-context-shift-mobile" : "org-context-shift"} className={labelCls(mobile)}>
+      <label htmlFor={`org-context-shift-${idSuffix}`} className={labelCls()}>
         Organization
       </label>
       <input
-        id={mobile ? "org-context-shift-mobile" : "org-context-shift"}
+        id={`org-context-shift-${idSuffix}`}
         type="text"
-        className={`${inputCls()} bg-[#F5F7FA] text-[#6B7280] lg:bg-slate-50`}
+        className={`${inputCls()} bg-[#F9FAFB] text-[#6B7280]`}
         value={orgMissing ? "—" : `${orgName} (ID: ${organizationIdNum})`}
         readOnly
         tabIndex={-1}
@@ -198,15 +202,15 @@ export default function CreateCompanyShiftsPage() {
     </div>
   );
 
-  const basicFields = (mobile: boolean) => (
+  const basicFields = (idSuffix: string) => (
     <>
-      {orgField(mobile)}
+      {orgField(idSuffix)}
       <div>
-        <label htmlFor={mobile ? "shift-name-mobile" : "shift-name"} className={labelCls(mobile)}>
-          Shift name <span className="text-[#D93025] lg:text-red-500">*</span>
+        <label htmlFor={`shift-name-${idSuffix}`} className={labelCls()}>
+          Shift name <span className="text-[#D93025]">*</span>
         </label>
         <input
-          id={mobile ? "shift-name-mobile" : "shift-name"}
+          id={`shift-name-${idSuffix}`}
           type="text"
           className={inputCls()}
           value={shiftName}
@@ -216,13 +220,13 @@ export default function CreateCompanyShiftsPage() {
           required
         />
       </div>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-2.5 sm:grid-cols-2">
         <div>
-          <label htmlFor={mobile ? "start-time-mobile" : "start-time"} className={labelCls(mobile)}>
-            Start time <span className="text-[#D93025] lg:text-red-500">*</span>
+          <label htmlFor={`start-time-${idSuffix}`} className={labelCls()}>
+            Start time <span className="text-[#D93025]">*</span>
           </label>
           <input
-            id={mobile ? "start-time-mobile" : "start-time"}
+            id={`start-time-${idSuffix}`}
             type="time"
             className={inputCls()}
             value={startTime}
@@ -232,11 +236,11 @@ export default function CreateCompanyShiftsPage() {
           />
         </div>
         <div>
-          <label htmlFor={mobile ? "end-time-mobile" : "end-time"} className={labelCls(mobile)}>
-            End time <span className="text-[#D93025] lg:text-red-500">*</span>
+          <label htmlFor={`end-time-${idSuffix}`} className={labelCls()}>
+            End time <span className="text-[#D93025]">*</span>
           </label>
           <input
-            id={mobile ? "end-time-mobile" : "end-time"}
+            id={`end-time-${idSuffix}`}
             type="time"
             className={inputCls()}
             value={endTime}
@@ -246,31 +250,32 @@ export default function CreateCompanyShiftsPage() {
           />
         </div>
       </div>
-      <label className="flex items-start gap-3 rounded-xl border border-[#E4E7EC] bg-white px-4 py-3 text-[14px] text-[#4B5563] lg:border-slate-200 lg:text-sm lg:text-slate-700">
+      <label className="flex items-start gap-2 rounded-md border border-[#E4E7EC] bg-[#F9FAFB] px-2.5 py-2 text-[12px] text-[#4B5563]">
         <input
           type="checkbox"
           checked={isNightShift}
           onChange={(e) => setIsNightShift(e.target.checked)}
-          className="mt-0.5 h-4 w-4 rounded border-[#E4E7EC] text-[#008CD3] focus:ring-[#008CD3] lg:border-slate-300 lg:text-[#C99237] lg:focus:ring-[#C99237]"
+          className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded border-[#E4E7EC] text-[#008CD3] focus:ring-[#008CD3]"
           disabled={orgMissing}
         />
         <span>
-          <span className="font-medium text-[#1F2937] lg:text-[#0C123A]">Night shift</span>
-          <br />
-          Mark when the shift crosses midnight (e.g. 10:00 PM to 06:00 AM).
+          <span className="font-medium text-[#1F2937]">Night shift</span>
+          <span className={`block ${mobileCaptionCls}`}>
+            Crosses midnight (e.g. 10 PM – 6 AM).
+          </span>
         </span>
       </label>
     </>
   );
 
-  const rulesFields = (mobile: boolean) => (
-    <div className="grid gap-4 sm:grid-cols-2">
+  const rulesFields = (idSuffix: string) => (
+    <div className="grid gap-2.5 sm:grid-cols-2">
       <div>
-        <label htmlFor={mobile ? "late-after-mobile" : "late-after"} className={labelCls(mobile)}>
-          Late after <span className="text-[#D93025] lg:text-red-500">*</span>
+        <label htmlFor={`late-after-${idSuffix}`} className={labelCls()}>
+          Late after <span className="text-[#D93025]">*</span>
         </label>
         <input
-          id={mobile ? "late-after-mobile" : "late-after"}
+          id={`late-after-${idSuffix}`}
           type="time"
           className={inputCls()}
           value={lateAfter}
@@ -278,16 +283,14 @@ export default function CreateCompanyShiftsPage() {
           disabled={orgMissing}
           required
         />
-        <p className="mt-1 text-[12px] text-[#9CA3AF] lg:text-xs lg:text-slate-500">
-          Grace period before marking late.
-        </p>
+        <p className={`mt-0.5 ${mobileCaptionCls}`}>Grace before marking late.</p>
       </div>
       <div>
-        <label htmlFor={mobile ? "half-day-hours-mobile" : "half-day-hours"} className={labelCls(mobile)}>
-          Half-day hours <span className="text-[#D93025] lg:text-red-500">*</span>
+        <label htmlFor={`half-day-hours-${idSuffix}`} className={labelCls()}>
+          Half-day hours <span className="text-[#D93025]">*</span>
         </label>
         <input
-          id={mobile ? "half-day-hours-mobile" : "half-day-hours"}
+          id={`half-day-hours-${idSuffix}`}
           type="time"
           className={inputCls()}
           value={halfDayHours}
@@ -297,11 +300,11 @@ export default function CreateCompanyShiftsPage() {
         />
       </div>
       <div className="sm:col-span-2">
-        <label htmlFor={mobile ? "short-leave-hours-mobile" : "short-leave-hours"} className={labelCls(mobile)}>
-          Short-leave hours <span className="text-[#D93025] lg:text-red-500">*</span>
+        <label htmlFor={`short-leave-hours-${idSuffix}`} className={labelCls()}>
+          Short-leave hours <span className="text-[#D93025]">*</span>
         </label>
         <input
-          id={mobile ? "short-leave-hours-mobile" : "short-leave-hours"}
+          id={`short-leave-hours-${idSuffix}`}
           type="time"
           className={inputCls()}
           value={shortLeaveHours}
@@ -313,15 +316,15 @@ export default function CreateCompanyShiftsPage() {
     </div>
   );
 
-  const scheduleFields = (mobile: boolean) => (
-    <div className="rounded-xl border border-[#E4E7EC] bg-[#F5F7FA] p-4 lg:border-slate-200 lg:bg-slate-50/50">
-      <div className="mb-3 flex items-center gap-2">
-        <CalendarDays className="h-4 w-4 text-[#008CD3] lg:text-[#C99237]" aria-hidden />
-        <h2 className="text-[14px] font-semibold text-[#1F2937] lg:text-sm lg:text-[#0C123A]">
-          Working days <span className="text-[#D93025] lg:text-red-500">*</span>
+  const scheduleFields = (showHint: boolean) => (
+    <div className="rounded-md border border-[#E4E7EC] bg-[#F9FAFB] p-2.5">
+      <div className="mb-2 flex items-center gap-1.5">
+        <CalendarDays className="h-3.5 w-3.5 text-[#008CD3]" aria-hidden />
+        <h2 className="text-[12px] font-semibold text-[#1F2937]">
+          Working days <span className="text-[#D93025]">*</span>
         </h2>
       </div>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-1.5">
         {DAYS.map((day) => {
           const selected = workingDays.has(day);
           return (
@@ -330,10 +333,10 @@ export default function CreateCompanyShiftsPage() {
               type="button"
               onClick={() => toggleWorkingDay(day)}
               disabled={orgMissing}
-              className={`min-w-[44px] rounded-lg px-3 py-2 text-[13px] font-semibold transition lg:py-1.5 lg:text-xs lg:sm:text-sm ${
+              className={`min-h-[32px] min-w-[2.5rem] rounded-md px-2 py-1 text-[11px] font-semibold transition active:scale-[0.98] ${
                 selected
-                  ? "bg-[#008CD3] text-white lg:bg-[#C99237] lg:text-[#0C123A]"
-                  : "border border-[#E4E7EC] bg-white text-[#6B7280] active:bg-[#F5F7FA] lg:border-slate-200 lg:text-slate-600 lg:hover:bg-slate-50"
+                  ? "bg-[#008CD3] text-white"
+                  : "border border-[#E4E7EC] bg-white text-[#6B7280] hover:bg-[#F5F7FA]"
               }`}
             >
               {day.slice(0, 3)}
@@ -341,43 +344,41 @@ export default function CreateCompanyShiftsPage() {
           );
         })}
       </div>
-      <p className="mt-3 text-[12px] text-[#6B7280] lg:text-xs lg:text-slate-500">
+      <p className={`mt-2 ${mobileCaptionCls}`}>
         Selected: {workingDays.size > 0 ? Array.from(workingDays).join(", ") : "None"}
       </p>
-      {mobile ? (
-        <div className="mt-4 flex gap-3 rounded-lg border border-[#E8F4FB] bg-[#E8F4FB]/60 p-3">
-          <Info className="h-5 w-5 shrink-0 text-[#008CD3]" />
-          <p className="text-[13px] leading-relaxed text-[#4B5563]">
-            Tap days to include or exclude them from this shift schedule.
-          </p>
+      {showHint ? (
+        <div className="mt-2 flex gap-2 rounded-md border border-[#E8F4FB] bg-[#E8F4FB]/50 px-2 py-1.5">
+          <Info className="h-3.5 w-3.5 shrink-0 text-[#008CD3]" aria-hidden />
+          <p className={mobileCaptionCls}>Tap days to include or exclude from this shift.</p>
         </div>
       ) : null}
     </div>
   );
 
   return (
-    <div className="min-h-full bg-[#F5F7FA] pb-28 lg:bg-transparent lg:space-y-6 lg:pb-0">
-      {/* Mobile & tablet: Zoho admin portal style */}
+    <div className="min-h-full bg-[#F5F7FA] pb-24 [font-family:var(--font-inter),system-ui,sans-serif] max-lg:-mx-1 sm:max-lg:-mx-2 lg:pb-8">
+      {/* Mobile & tablet */}
       <div className="lg:hidden">
         <div className="sticky top-0 z-20 border-b border-[#E4E7EC] bg-white shadow-sm">
-          <div className="flex items-center gap-3 px-4 py-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#E8F4FB] text-[#008CD3]">
-              <Clock3 className="h-5 w-5" aria-hidden />
+          <div className="flex items-center gap-2 px-3 py-2.5">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#E8F4FB] text-[#008CD3]">
+              <Clock3 className="h-4 w-4" aria-hidden />
             </span>
             <div className="min-w-0 flex-1">
-              <h1 className="truncate text-[17px] font-semibold text-[#1F2937]">Create shift</h1>
-              <p className="truncate text-[13px] text-[#6B7280]">{orgName}</p>
+              <h1 className="truncate text-[15px] font-semibold text-[#1F2937]">Create shift</h1>
+              <p className={`truncate ${mobileCaptionCls}`}>{orgName}</p>
             </div>
           </div>
 
-          <div className="px-4 pb-3">
-            <div className="flex rounded-lg bg-[#F5F7FA] p-1">
+          <div className="px-3 pb-2.5">
+            <div className="flex gap-0.5 rounded-md bg-[#F5F7FA] p-0.5">
               {mobileTabs.map((tab) => (
                 <button
                   key={tab.id}
                   type="button"
                   onClick={() => setMobileMainTab(tab.id)}
-                  className={`relative flex flex-1 items-center justify-center gap-1 rounded-md py-2 text-[13px] font-medium transition ${
+                  className={`flex min-w-0 flex-1 items-center justify-center gap-0.5 rounded-[5px] px-1.5 py-1.5 text-[12px] font-medium transition active:scale-[0.98] ${
                     mobileMainTab === tab.id
                       ? "bg-white text-[#008CD3] shadow-sm"
                       : "text-[#6B7280]"
@@ -386,7 +387,7 @@ export default function CreateCompanyShiftsPage() {
                   {tab.label}
                   {tab.badge != null && tab.badge > 0 ? (
                     <span
-                      className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] ${
+                      className={`inline-flex h-4 min-w-4 items-center justify-center rounded-full px-0.5 text-[10px] ${
                         mobileMainTab === tab.id
                           ? "bg-[#E8F4FB] text-[#008CD3]"
                           : "bg-[#E4E7EC] text-[#6B7280]"
@@ -401,38 +402,32 @@ export default function CreateCompanyShiftsPage() {
           </div>
         </div>
 
-        <div className="p-4">
-          {statusBanner ? <div className="mb-4">{statusBanner}</div> : null}
+        <div className="px-3 py-3">
+          {statusBanner ? <div className="mb-3">{statusBanner}</div> : null}
 
-          <form id="create-shift-mobile-form" onSubmit={handleSubmit} className="space-y-4">
+          <form id="create-shift-mobile-form" onSubmit={handleSubmit} className="space-y-3">
             {mobileMainTab === "basic" ? (
-              <div className="space-y-4 rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
-                {basicFields(true)}
-              </div>
+              <div className={`${formPanelCls()} space-y-2.5`}>{basicFields("mobile")}</div>
             ) : null}
 
             {mobileMainTab === "rules" ? (
-              <div className="space-y-4 rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
-                {rulesFields(true)}
-              </div>
+              <div className={formPanelCls()}>{rulesFields("mobile")}</div>
             ) : null}
 
             {mobileMainTab === "schedule" ? (
-              <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
-                {scheduleFields(true)}
-              </div>
+              <div className={formPanelCls()}>{scheduleFields(true)}</div>
             ) : null}
           </form>
 
           <Link
             href={`${basePath}/manage-company-shifts`}
-            className="mt-4 block text-center text-[14px] font-medium text-[#008CD3]"
+            className="mt-3 block text-center text-[13px] font-medium text-[#008CD3]"
           >
             View existing shifts
           </Link>
         </div>
 
-        <div className="fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-30 border-t border-[#E4E7EC] bg-white px-4 py-3 shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
+        <div className="fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-30 border-t border-[#E4E7EC] bg-white px-3 py-2 shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
           <div className="flex gap-2">
             <button type="button" onClick={clearForm} className={zohoSecondaryBtnCls(true)}>
               Clear
@@ -445,12 +440,12 @@ export default function CreateCompanyShiftsPage() {
             >
               {submitting ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
                   Creating…
                 </>
               ) : (
                 <>
-                  <Clock3 className="h-4 w-4" aria-hidden />
+                  <Clock3 className="h-3.5 w-3.5" aria-hidden />
                   Create shift
                 </>
               )}
@@ -459,40 +454,37 @@ export default function CreateCompanyShiftsPage() {
         </div>
       </div>
 
-      {/* Desktop layout (unchanged) */}
-      <div className="hidden space-y-6 lg:block">
-        <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm sm:p-8">
-          <div className="flex gap-3">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#C99237]/12">
-              <Clock3 className="h-6 w-6 text-[#C99237]" aria-hidden />
-            </span>
-            <div>
-              <h1 className="text-xl font-bold text-[#0C123A] sm:text-2xl">Create company shift</h1>
-              <p className="mt-1 text-sm text-slate-500">
-                Define attendance rules for{" "}
-                <span className="font-medium text-slate-700">{orgName}</span> including timings,
-                grace period and working days.
-              </p>
-            </div>
+      {/* Desktop: compact single-column form */}
+      <div className="mx-auto hidden max-w-xl space-y-4 px-0 lg:block lg:pt-6">
+        <div className="flex items-start gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#E8F4FB] text-[#008CD3]">
+            <Clock3 className="h-5 w-5" aria-hidden />
+          </span>
+          <div>
+            <h1 className="text-[18px] font-semibold text-[#1F2937]">Create company shift</h1>
+            <p className="text-[13px] text-[#6B7280]">
+              Timings, grace period and working days for{" "}
+              <span className="font-medium text-[#374151]">{orgName}</span>.
+            </p>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm sm:p-8">
-          {statusBanner ? <div className="mb-6">{statusBanner}</div> : null}
+        <div className={formPanelCls()}>
+          {statusBanner ? <div className="mb-3">{statusBanner}</div> : null}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {basicFields(false)}
-            {rulesFields(false)}
-            {scheduleFields(false)}
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <div className="space-y-2.5">{basicFields("desktop")}</div>
+            <div className="border-t border-[#E4E7EC] pt-3">{rulesFields("desktop")}</div>
+            <div className="border-t border-[#E4E7EC] pt-3">{scheduleFields(false)}</div>
 
-            <div className="flex flex-col gap-3 border-t border-slate-100 pt-6 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#E4E7EC] pt-3">
               <Link
                 href={`${basePath}/manage-company-shifts`}
-                className="text-sm font-semibold text-slate-600 underline decoration-slate-300 underline-offset-2 hover:text-[#0C123A]"
+                className="text-[13px] font-medium text-[#008CD3] hover:underline"
               >
                 Back to manage shifts
               </Link>
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="flex gap-2">
                 <button type="button" onClick={clearForm} className={zohoSecondaryBtnCls()}>
                   Clear
                 </button>
@@ -503,12 +495,12 @@ export default function CreateCompanyShiftsPage() {
                 >
                   {submitting ? (
                     <>
-                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
                       Creating…
                     </>
                   ) : (
                     <>
-                      <Clock3 className="h-4 w-4" aria-hidden />
+                      <Clock3 className="h-3.5 w-3.5" aria-hidden />
                       Create shift
                     </>
                   )}
