@@ -17,8 +17,61 @@ import {
   MdChevronRight,
   MdVpnKey,
   MdWifi,
+  MdPayments,
+  MdOutlineEventNote,
+  MdOutlineManageAccounts,
 } from "react-icons/md";
-import { MdOutlineManageAccounts } from "react-icons/md";
+
+/** Desktop (lg+) nav icons — mobile keeps `NavItem.icon` unchanged. */
+const LG_ICON = "shrink-0 text-[17px] leading-none";
+
+function desktopNavIcon(id: string, fallback: React.ReactNode): React.ReactNode {
+  switch (id) {
+    case "home":
+      return <MdHome className={LG_ICON} aria-hidden />;
+    case "manage-organization-information":
+      return <MdOutlineManageAccounts className={LG_ICON} aria-hidden />;
+    case "employee-management":
+      return <BiSolidUserPlus className={LG_ICON} aria-hidden />;
+    case "employees-roles-management":
+      return <MdAdminPanelSettings className={LG_ICON} aria-hidden />;
+    case "employees-features-management":
+      return <MdVpnKey className={LG_ICON} aria-hidden />;
+    case "company-ip-addresses-management":
+      return <MdWifi className={LG_ICON} aria-hidden />;
+    case "company-shift-management":
+      return <MdSchedule className={LG_ICON} aria-hidden />;
+    case "company-holiday-management":
+      return <MdEvent className={LG_ICON} aria-hidden />;
+    case "company-attendance-management":
+      return <MdFactCheck className={LG_ICON} aria-hidden />;
+    case "company-leave-management":
+      return <MdOutlineEventNote className={LG_ICON} aria-hidden />;
+    case "payroll-management":
+      return <MdPayments className={LG_ICON} aria-hidden />;
+    default:
+      return fallback;
+  }
+}
+
+const LG_SIDEBAR_STYLES = `
+@media (min-width: 1024px) {
+  @keyframes lgSidebarSubIn {
+    from { opacity: 0; transform: translateX(-8px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes lgSidebarRailIn {
+    from { opacity: 0; transform: translateX(-4px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  .lg-sidebar-sub-in {
+    animation: lgSidebarSubIn 0.22s cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
+  .lg-sidebar-rail-in {
+    animation: lgSidebarRailIn 0.18s ease-out both;
+  }
+}
+`;
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
@@ -222,15 +275,7 @@ function LeftSideBar({
         path: `${base}/home`,
         requiredFeature: "get-organization-info",
       },
-      {
-          id: "manage-organization-information",
-          name: "Manage Organization Information",
-          value: "manage-organization-information",
-          icon: <MdOutlineManageAccounts />,
-          children: [],
-          path: `${base}/organization-settings/manage-organization-information`,
-          requiredFeature: "manage-organization-information",
-      },
+    
       {
         id: "employee-management",
         name: "Employee Management",
@@ -244,22 +289,22 @@ function LeftSideBar({
             path: `${base}/organization-employees/manage-employees`,
           },
           {
-            id: "new-hires",
+            id: "employee-onboarding",
             name: "New Hires",
             path: `${base}/organization-employees/employee-onboarding`,
           },
           {
-            id: "employee-leaves",
+            id: "manage-employee-leaves",
             name: "Manage Employee Leaves",
             path: `${base}/organization-employees/manage-employee-leaves`,
           },
           {
-            id: "team-creation",
+            id: "create-team",
             name: "Team creation",
             path: `${base}/organization-employees/create-team`,
           },
           {
-            id: "team-management",
+            id: "manage-teams",
             name: "Team management",
             path: `${base}/organization-employees/manage-teams`,
           },
@@ -347,12 +392,12 @@ function LeftSideBar({
         path: `${base}/organization-settings/manage-company-shifts`,
         children: [
           {
-            id: "manage-shifts",
+            id: "manage-company-shifts",
             name: "Manage Shifts",
             path: `${base}/organization-settings/manage-company-shifts`,
           },
           {
-            id: "create-new-shift",
+            id: "create-company-shifts",
             name: "Create New Shift",
             path: `${base}/organization-settings/create-company-shifts`,
           },
@@ -369,7 +414,7 @@ function LeftSideBar({
         path: `${base}/organization-settings/organization-holidays`,
         children: [
           {
-            id: "manage-holidays",
+            id: "organization-holidays",
             name: "Manage Holidays",
             path: `${base}/organization-settings/organization-holidays`,
           },    
@@ -426,6 +471,15 @@ function LeftSideBar({
       ],
       requiredFeature: "payroll-management",
       },
+      {
+        id: "manage-organization-information",
+        name: "Manage Organization Information",
+        value: "manage-organization-information",
+        icon: <MdOutlineManageAccounts />,
+        children: [],
+        path: `${base}/organization-settings/manage-organization-information`,
+        requiredFeature: "manage-organization-information",
+    }
     ],
     [base],
   );
@@ -656,14 +710,12 @@ function LeftSideBar({
 
   return (
     <>
-      {/* Desktop / large screens — existing dark rail + sub column */}
+      {/* Desktop (lg+): Zoho-style light icon rail + animated sub panel */}
       <div className="relative hidden h-screen shrink-0 lg:flex lg:sticky lg:top-0">
+        <style dangerouslySetInnerHTML={{ __html: LG_SIDEBAR_STYLES }} />
         {/* ── LEFT RAIL ── */}
-        <div
-          className="flex w-[72px] flex-shrink-0 flex-col items-center overflow-y-auto overflow-x-hidden py-3 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
-          style={{ backgroundColor: "#131C23" }}
-        >
-        <div className="flex flex-col items-center w-full flex-1">
+        <div className="lg-sidebar-rail-in flex w-[58px] flex-shrink-0 flex-col items-center overflow-y-auto overflow-x-hidden border-r border-[#E4E7EC] bg-white py-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex w-full flex-1 flex-col items-center">
           {filteredNavItems.map((item) => {
             const isActive = activeMain === item.id;
             return (
@@ -671,32 +723,25 @@ function LeftSideBar({
                 key={item.id}
                 type="button"
                 onClick={() => handleMainClick(item)}
+                title={item.name}
                 className={`
-                  relative flex flex-col items-center justify-center w-full px-1 py-[10px] gap-[5px]
-                  cursor-pointer transition-all duration-150 border-0 bg-transparent outline-none
+                  relative flex w-full cursor-pointer flex-col items-center justify-center gap-0.5 border-0 bg-transparent px-0.5 py-1.5 outline-none transition-colors duration-150
                   ${
                     isActive
-                      ? "text-white bg-white/[0.06]"
-                      : "text-[#8A9BAD] hover:text-[#CBD5DF] hover:bg-white/[0.04]"
+                      ? "text-[#008CD3] bg-[#E8F4FB]"
+                      : "text-[#6B7280] hover:bg-[#F9FAFB] hover:text-[#374151]"
                   }
                 `}
               >
                 {isActive && (
-                  <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[55%] bg-[#C99237] rounded-r-[2px]" />
+                  <span className="absolute left-0 top-1/2 h-[50%] w-[3px] -translate-y-1/2 rounded-r-sm bg-[#008CD3]" />
                 )}
 
-                <span className="text-[20px] leading-none flex items-center justify-center">
-                  {item.icon}
+                <span className="flex h-[26px] w-[26px] items-center justify-center">
+                  {desktopNavIcon(item.id, item.icon)}
                 </span>
 
-                <span
-                  className="text-[10px] font-medium text-center leading-[1.25] w-full px-1"
-                  style={{
-                    letterSpacing: "0.01em",
-                    wordBreak: "break-word",
-                    hyphens: "auto",
-                  }}
-                >
+                <span className="line-clamp-2 w-full px-0.5 text-center text-[8.5px] font-medium leading-[1.15] tracking-tight">
                   {item.name}
                 </span>
               </button>
@@ -704,7 +749,7 @@ function LeftSideBar({
           })}
         </div>
 
-        <div className="flex flex-col items-center w-full">
+        <div className="mt-1 flex w-full flex-col items-center border-t border-[#E4E7EC] pt-1">
           {isAdmin ? (
             <>
               {/* <button
@@ -772,30 +817,22 @@ function LeftSideBar({
               type="button"
               onClick={() => router.push(`${base}/my-attendance-history`)}
               className={`
-              relative flex flex-col items-center justify-center w-full px-1 py-[10px] gap-[5px]
-              cursor-pointer transition-all duration-150 border-0 bg-transparent outline-none
+              relative flex w-full cursor-pointer flex-col items-center justify-center gap-0.5 border-0 bg-transparent px-0.5 py-1.5 outline-none transition-colors duration-150
               ${
                 myHistoryActive
-                  ? "text-white bg-white/[0.06]"
-                  : "text-[#8A9BAD] hover:text-[#CBD5DF] hover:bg-white/[0.04]"
+                  ? "bg-[#E8F4FB] text-[#008CD3]"
+                  : "text-[#6B7280] hover:bg-[#F9FAFB] hover:text-[#374151]"
               }
             `}
               title="View your own attendance history (read-only)"
             >
               {myHistoryActive && (
-                <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[55%] bg-[#C99237] rounded-r-[2px]" />
+                <span className="absolute left-0 top-1/2 h-[50%] w-[3px] -translate-y-1/2 rounded-r-sm bg-[#008CD3]" />
               )}
-              <span className="text-[20px] leading-none flex items-center justify-center">
-                <MdHistory />
+              <span className="flex h-[26px] w-[26px] items-center justify-center">
+                <MdHistory className={LG_ICON} aria-hidden />
               </span>
-              <span
-                className="text-[10px] font-medium text-center leading-[1.25] w-full px-1"
-                style={{
-                  letterSpacing: "0.01em",
-                  wordBreak: "break-word",
-                  hyphens: "auto",
-                }}
-              >
+              <span className="line-clamp-2 w-full px-0.5 text-center text-[8.5px] font-medium leading-[1.15]">
                 My attendance
               </span>
             </button>
@@ -804,22 +841,13 @@ function LeftSideBar({
           <button
             type="button"
             onClick={() => setShowLogoutConfirm(true)}
-            className="flex flex-col items-center justify-center w-full px-1 py-[10px] gap-[5px]
-              cursor-pointer transition-all duration-150 border-0 bg-transparent outline-none
-              text-[#8A9BAD] hover:text-rose-300 hover:bg-white/[0.04]"
+            className="flex w-full cursor-pointer flex-col items-center justify-center gap-0.5 border-0 bg-transparent px-0.5 py-1.5 text-[#6B7280] outline-none transition-colors duration-150 hover:bg-[#FCE8E6] hover:text-[#D93025]"
             title="Sign out"
           >
-            <span className="text-[20px] leading-none flex items-center justify-center">
-              <MdLogout />
+            <span className="flex h-[26px] w-[26px] items-center justify-center">
+              <MdLogout className={LG_ICON} aria-hidden />
             </span>
-            <span
-              className="text-[10px] font-medium text-center leading-[1.25] w-full px-1"
-              style={{
-                letterSpacing: "0.01em",
-                wordBreak: "break-word",
-                hyphens: "auto",
-              }}
-            >
+            <span className="line-clamp-2 w-full px-0.5 text-center text-[8.5px] font-medium leading-[1.15]">
               Log out
             </span>
           </button>
@@ -827,10 +855,16 @@ function LeftSideBar({
       </div>
 
       {subItems.length > 0 && (
-        <div
-          className="flex w-48 flex-shrink-0 flex-col overflow-y-auto py-4 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
-          style={{ backgroundColor: "#1E2C39" }}
+        <aside
+          key={activeMain}
+          className="lg-sidebar-sub-in flex w-[11rem] flex-shrink-0 flex-col overflow-y-auto border-r border-[#E4E7EC] bg-[#F9FAFB] py-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+          aria-label={activeItem ? `${activeItem.name} submenu` : "Submenu"}
         >
+          {activeItem && (
+            <p className="mb-1 truncate px-3 text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
+              {activeItem.name}
+            </p>
+          )}
           {subItems.map((sub) => {
             const isSubActive = activeSub === sub.id;
             return (
@@ -839,19 +873,19 @@ function LeftSideBar({
                 type="button"
                 onClick={() => handleSubClick(sub)}
                 className={`
-                  w-full cursor-pointer border-0 bg-transparent px-5 py-[10px] text-left text-[13.5px] font-medium outline-none transition-all duration-150
+                  mx-1.5 w-[calc(100%-0.75rem)] cursor-pointer rounded-md border-0 px-2.5 py-1.5 text-left text-[12px] font-medium outline-none transition-colors duration-150
                   ${
                     isSubActive
-                      ? "bg-white/[0.05] text-[#C99237]"
-                      : "text-[#8A9BAD] hover:bg-white/[0.04] hover:text-[#CBD5DF]"
+                      ? "bg-[#E8F4FB] text-[#008CD3]"
+                      : "bg-transparent text-[#374151] hover:bg-white hover:text-[#008CD3]"
                   }
                 `}
               >
-                {sub.name}
+                <span className="line-clamp-2 leading-snug">{sub.name}</span>
               </button>
             );
           })}
-        </div>
+        </aside>
       )}
       </div>
 

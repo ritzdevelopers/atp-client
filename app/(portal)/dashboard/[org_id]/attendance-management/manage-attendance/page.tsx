@@ -75,15 +75,34 @@ function formatMonthYearLabel(ym: string): string {
 }
 
 function zohoSearchCls() {
-  return "w-full rounded-lg border border-[#E4E7EC] bg-white py-2.5 pl-10 pr-4 text-[15px] text-[#1F2937] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15 lg:text-sm";
+  return "w-full rounded-lg border border-[#E4E7EC] bg-white py-2 pl-9 pr-3 text-[14px] text-[#1F2937] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15";
 }
 
 function zohoSelectCls() {
-  return "w-full rounded-lg border border-[#E4E7EC] bg-white px-3 py-2.5 text-[15px] text-[#1F2937] outline-none transition focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15 lg:text-sm";
+  return "w-full rounded-lg border border-[#E4E7EC] bg-white px-3 py-2 text-[14px] text-[#1F2937] outline-none transition focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15";
 }
 
 function zohoPrimaryBtnCls(full = false) {
   return `inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg bg-[#008CD3] px-4 py-2 text-[14px] font-medium text-white transition active:scale-[0.98] hover:bg-[#0070AA] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full" : ""}`;
+}
+
+function zohoSecondaryBtnCls() {
+  return "inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg border border-[#E4E7EC] bg-white px-3 py-2 text-[14px] font-medium text-[#374151] transition hover:bg-[#F9FAFB] disabled:pointer-events-none disabled:opacity-50";
+}
+
+function zohoPanelCls() {
+  return "overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-sm";
+}
+
+function statChipCls(tone: "present" | "late" | "leave" | "half" | "short") {
+  const map = {
+    present: "bg-[#E6F4EA] text-[#0F9D58]",
+    late: "bg-[#FEF3E6] text-[#E8710A]",
+    leave: "bg-[#FCE8E6] text-[#D93025]",
+    half: "bg-[#E8F4FB] text-[#008CD3]",
+    short: "bg-[#FFF8E1] text-[#F9A825]",
+  };
+  return `rounded-md px-2 py-1 text-[11px] font-medium ${map[tone]}`;
 }
 
 const USER_ICON_COLORS = [
@@ -120,16 +139,16 @@ function MobileUserAttendanceRow({ user, orgId }: MobileUserRowProps) {
 
   return (
     <li>
-      <Link href={href} className="flex items-center gap-3 px-4 py-3.5 active:bg-[#F5F7FA]">
+      <Link href={href} className="flex items-center gap-2.5 px-3 py-3 active:bg-[#F5F7FA] sm:px-4">
         <span
-          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-sm font-semibold ${userColorClass(user.userName)}`}
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[11px] font-semibold ${userColorClass(user.userName)}`}
         >
           {userInitials(user.userName)}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[16px] font-medium text-[#1F2937]">{user.userName}</p>
-          <p className="truncate text-[13px] text-[#6B7280]">{user.userEmail}</p>
-          <div className="mt-2 flex flex-wrap gap-1.5">
+          <p className="truncate text-[15px] font-medium text-[#1F2937]">{user.userName}</p>
+          <p className="truncate text-[12px] text-[#6B7280]">{user.userEmail}</p>
+          <div className="mt-1.5 flex flex-wrap gap-1">
             <span className="rounded-full bg-[#E6F4EA] px-2 py-0.5 text-[11px] font-medium text-[#0F9D58]">
               P {user.present}
             </span>
@@ -147,7 +166,7 @@ function MobileUserAttendanceRow({ user, orgId }: MobileUserRowProps) {
             </span>
           </div>
         </div>
-        <ChevronRight className="h-5 w-5 shrink-0 text-[#9CA3AF]" aria-hidden />
+        <ChevronRight className="h-4 w-4 shrink-0 text-[#9CA3AF]" aria-hidden />
       </Link>
     </li>
   );
@@ -290,13 +309,13 @@ function ManageAttendanceListPage() {
       {/* Mobile & tablet: Zoho admin portal style */}
       <div className="lg:hidden">
         <div className="sticky top-0 z-20 border-b border-[#E4E7EC] bg-white shadow-sm">
-          <div className="flex items-center gap-2 px-4 py-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#E8F4FB] text-[#008CD3]">
-              <ClipboardList className="h-5 w-5" />
+          <div className="flex items-center gap-2 px-3 py-2.5 sm:px-4">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#E8F4FB] text-[#008CD3]">
+              <ClipboardList className="h-4 w-4" />
             </span>
             <div className="min-w-0 flex-1">
-              <h1 className="truncate text-[17px] font-semibold text-[#1F2937]">Team attendance</h1>
-              <p className="truncate text-[13px] text-[#6B7280]">
+              <h1 className="truncate text-[16px] font-semibold text-[#1F2937]">Team attendance</h1>
+              <p className="truncate text-[12px] text-[#6B7280]">
                 {loading
                   ? "Loading…"
                   : `${monthlySummary.length} user${monthlySummary.length === 1 ? "" : "s"} · ${formatMonthYearLabel(selectedMonth)}`}
@@ -306,21 +325,21 @@ function ManageAttendanceListPage() {
               type="button"
               onClick={() => void loadAttendanceRows(true)}
               disabled={loading || refreshing}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#008CD3] active:bg-[#F5F7FA] disabled:opacity-50"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#008CD3] active:bg-[#F5F7FA] disabled:opacity-50"
               aria-label="Refresh attendance"
             >
-              <RefreshCw className={`h-5 w-5 ${refreshing ? "animate-spin" : ""}`} />
+              <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
             </button>
           </div>
 
-          <div className="px-4 pb-3">
-            <div className="flex rounded-lg bg-[#F5F7FA] p-1">
+          <div className="px-3 pb-2.5 sm:px-4">
+            <div className="flex rounded-lg bg-[#F5F7FA] p-0.5">
               {mobileTabs.map((tab) => (
                 <button
                   key={tab.id}
                   type="button"
                   onClick={() => setMobileMainTab(tab.id)}
-                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-md py-2 text-[13px] font-medium transition ${
+                  className={`flex min-h-[36px] flex-1 items-center justify-center gap-1 rounded-md py-1.5 text-[12px] font-medium transition ${
                     mobileMainTab === tab.id
                       ? "bg-white text-[#008CD3] shadow-sm"
                       : "text-[#6B7280]"
@@ -344,7 +363,7 @@ function ManageAttendanceListPage() {
           </div>
 
           {mobileMainTab === "team" ? (
-            <div className="space-y-2.5 border-t border-[#E4E7EC] px-4 py-2.5">
+            <div className="space-y-2 border-t border-[#E4E7EC] px-3 py-2 sm:px-4">
               <input
                 type="month"
                 value={selectedMonth}
@@ -367,56 +386,56 @@ function ManageAttendanceListPage() {
         </div>
 
         {error ? (
-          <div className="mx-4 mt-3 flex items-start gap-2 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-4 py-3 text-[14px] text-[#D93025]">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div className="mx-3 mt-2 flex items-start gap-2 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2.5 text-[13px] text-[#1F2937] sm:mx-4">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#D93025]" aria-hidden />
             <span>{error}</span>
           </div>
         ) : null}
 
         {loading ? (
-          <div className="flex flex-col items-center justify-center gap-3 py-24 text-[#6B7280]">
-            <Loader2 className="h-9 w-9 animate-spin text-[#008CD3]" />
-            <p className="text-[15px]">Loading attendance summary…</p>
+          <div className="flex flex-col items-center justify-center gap-2 py-20 text-[#6B7280]">
+            <Loader2 className="h-8 w-8 animate-spin text-[#008CD3]" aria-hidden />
+            <p className="text-[14px]">Loading attendance summary…</p>
           </div>
         ) : null}
 
         {!loading && !error && mobileMainTab === "overview" ? (
-          <div className="space-y-3 p-4">
-            <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
-              <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">
+          <div className="space-y-2.5 p-3 sm:p-4">
+            <div className={`${zohoPanelCls()} p-3`}>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
                 Team members
               </p>
-              <p className="mt-1 text-3xl font-semibold text-[#1F2937]">{monthlySummary.length}</p>
-              <p className="mt-1 text-[14px] text-[#6B7280]">{formatMonthYearLabel(selectedMonth)}</p>
+              <p className="mt-0.5 text-2xl font-semibold text-[#1F2937]">{monthlySummary.length}</p>
+              <p className="mt-0.5 text-[13px] text-[#6B7280]">{formatMonthYearLabel(selectedMonth)}</p>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
-                <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">Present</p>
-                <p className="mt-1 text-2xl font-semibold text-[#0F9D58]">{overviewStats.present}</p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className={`${zohoPanelCls()} p-3`}>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">Present</p>
+                <p className="mt-0.5 text-xl font-semibold text-[#0F9D58]">{overviewStats.present}</p>
               </div>
-              <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
-                <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">Late</p>
-                <p className="mt-1 text-2xl font-semibold text-[#E8710A]">{overviewStats.late}</p>
+              <div className={`${zohoPanelCls()} p-3`}>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">Late</p>
+                <p className="mt-0.5 text-xl font-semibold text-[#E8710A]">{overviewStats.late}</p>
               </div>
-              <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
-                <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">Leaves</p>
-                <p className="mt-1 text-2xl font-semibold text-[#D93025]">{overviewStats.leave}</p>
+              <div className={`${zohoPanelCls()} p-3`}>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">Leaves</p>
+                <p className="mt-0.5 text-xl font-semibold text-[#D93025]">{overviewStats.leave}</p>
               </div>
-              <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
-                <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">Half days</p>
-                <p className="mt-1 text-2xl font-semibold text-[#008CD3]">{overviewStats.halfDay}</p>
+              <div className={`${zohoPanelCls()} p-3`}>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">Half days</p>
+                <p className="mt-0.5 text-xl font-semibold text-[#008CD3]">{overviewStats.halfDay}</p>
               </div>
             </div>
-            <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
-              <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">
+            <div className={`${zohoPanelCls()} p-3`}>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
                 Short leaves
               </p>
-              <p className="mt-1 text-2xl font-semibold text-[#F9A825]">{overviewStats.shortLeave}</p>
+              <p className="mt-0.5 text-xl font-semibold text-[#F9A825]">{overviewStats.shortLeave}</p>
             </div>
-            <div className="rounded-xl border border-[#E4E7EC] bg-[#E8F4FB] p-4">
-              <div className="flex gap-3">
-                <Info className="h-5 w-5 shrink-0 text-[#008CD3]" />
-                <p className="text-[14px] leading-relaxed text-[#4B5563]">
+            <div className="rounded-lg border border-[#E4E7EC] bg-[#E8F4FB] p-3">
+              <div className="flex gap-2.5">
+                <Info className="h-4 w-4 shrink-0 text-[#008CD3]" />
+                <p className="text-[13px] leading-relaxed text-[#4B5563]">
                   Totals are aggregated across all team members for the selected month. Tap a person
                   in the Team tab to open their full attendance history.
                 </p>
@@ -433,10 +452,10 @@ function ManageAttendanceListPage() {
         ) : null}
 
         {!loading && !error && mobileMainTab === "team" && monthlySummary.length === 0 ? (
-          <div className="mx-4 mt-4 rounded-xl border border-dashed border-[#E4E7EC] bg-white px-6 py-16 text-center">
-            <Users className="mx-auto h-10 w-10 text-[#9CA3AF]" />
-            <p className="mt-4 text-[17px] font-semibold text-[#1F2937]">No records this month</p>
-            <p className="mt-2 text-[14px] text-[#6B7280]">
+          <div className="mx-3 mt-3 rounded-lg border border-dashed border-[#E4E7EC] bg-white px-4 py-12 text-center sm:mx-4">
+            <Users className="mx-auto h-9 w-9 text-[#9CA3AF]" />
+            <p className="mt-3 text-[15px] font-semibold text-[#1F2937]">No records this month</p>
+            <p className="mt-1.5 text-[13px] text-[#6B7280]">
               Try selecting a different month.
             </p>
           </div>
@@ -445,7 +464,7 @@ function ManageAttendanceListPage() {
         {!loading && !error && mobileMainTab === "team" && monthlySummary.length > 0 ? (
           <ul className="mt-1 divide-y divide-[#E4E7EC] border-t border-[#E4E7EC] bg-white">
             {filteredSummary.length === 0 ? (
-              <li className="px-4 py-12 text-center text-[15px] text-[#6B7280]">
+              <li className="px-3 py-10 text-center text-[14px] text-[#6B7280] sm:px-4">
                 No team members match your search.
               </li>
             ) : (
@@ -457,91 +476,170 @@ function ManageAttendanceListPage() {
         ) : null}
       </div>
 
-      {/* Desktop layout (unchanged) */}
-      <section className="hidden space-y-6 p-4 sm:p-6 lg:block">
-      <header className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-slate-500">
-          Attendance Management
-        </p>
-        <h1 className="mt-1 text-2xl font-bold tracking-tight text-[#0C123A] sm:text-3xl">
-          Team Attendance Analytics
-        </h1>
-        <p className="mt-2 text-sm text-slate-600">
-          Review monthly attendance KPIs for all users and drill into full attendance history.
-        </p>
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <label className="text-xs font-semibold uppercase tracking-wider text-slate-500" htmlFor="month-filter">
-            Month
-          </label>
-          <input
-            id="month-filter"
-            type="month"
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none ring-indigo-200 focus:ring-2"
-          />
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-            {monthlySummary.length} User{monthlySummary.length === 1 ? "" : "s"}
-          </span>
-          <button
-            type="button"
-            onClick={() => void loadAttendanceRows(true)}
-            disabled={loading || refreshing}
-            className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {refreshing ? "Refreshing..." : "Refresh"}
-          </button>
-        </div>
-      </header>
-
-      {loading ? (
-        <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
-          Loading attendance summary...
-        </div>
-      ) : null}
-
-      {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div> : null}
-
-      {!loading && !error && monthlySummary.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-500">
-          No attendance records found for the selected month.
-        </div>
-      ) : null}
-
-      {!loading && !error && monthlySummary.length > 0 ? (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {monthlySummary.map((user) => (
-            <article key={user.userId} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="mb-4">
-                <h2 className="truncate text-lg font-semibold text-[#0C123A]">{user.userName}</h2>
-                <p className="truncate text-xs text-slate-500">{user.userEmail}</p>
-                <span className="mt-2 inline-flex rounded-full bg-indigo-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-indigo-700">
-                  {user.userRole}
+      {/* Desktop (lg+): Zoho-style */}
+      <section className="hidden lg:block">
+        <div className="mx-auto max-w-6xl space-y-4 px-6 py-6">
+          <header className={`${zohoPanelCls()} p-4`}>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex min-w-0 items-start gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#E8F4FB] text-[#008CD3]">
+                  <ClipboardList className="h-5 w-5" aria-hidden />
                 </span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="rounded-lg bg-emerald-50 px-3 py-2 text-emerald-700">Present: {user.present}</div>
-                <div className="rounded-lg bg-amber-50 px-3 py-2 text-amber-700">Late: {user.late}</div>
-                <div className="rounded-lg bg-rose-50 px-3 py-2 text-rose-700">Leaves: {user.leave}</div>
-                <div className="rounded-lg bg-violet-50 px-3 py-2 text-violet-700">Half Days: {user.halfDay}</div>
-                <div className="col-span-2 rounded-lg bg-sky-50 px-3 py-2 text-sky-700">
-                  Short Leaves: {user.shortLeave}
+                <div className="min-w-0">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                    Attendance management
+                  </p>
+                  <h1 className="text-[18px] font-semibold text-[#1F2937]">Team attendance</h1>
+                  <p className="mt-0.5 text-[13px] text-[#6B7280]">
+                    Monthly KPIs for all users · {formatMonthYearLabel(selectedMonth)}
+                  </p>
                 </div>
               </div>
-
-              <Link
-                href={`/dashboard/${orgId}/attendance-management/manage-attendance/0?employee_id=${encodeURIComponent(user.userId)}`}
-                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#0C123A] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#151e59]"
+              <button
+                type="button"
+                onClick={() => void loadAttendanceRows(true)}
+                disabled={loading || refreshing}
+                className={zohoSecondaryBtnCls()}
               >
-                <MdOpenInNew className="text-base" />
-                View Full History
-              </Link>
-            </article>
-          ))}
+                <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} aria-hidden />
+                {refreshing ? "Refreshing…" : "Refresh"}
+              </button>
+            </div>
+          </header>
+
+          {!loading && !error && monthlySummary.length > 0 ? (
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+              <div className={`${zohoPanelCls()} px-3 py-2.5`}>
+                <p className="text-[10px] font-semibold uppercase text-[#6B7280]">Members</p>
+                <p className="text-[18px] font-semibold text-[#1F2937]">{monthlySummary.length}</p>
+              </div>
+              <div className={`${zohoPanelCls()} px-3 py-2.5`}>
+                <p className="text-[10px] font-semibold uppercase text-[#6B7280]">Present</p>
+                <p className="text-[18px] font-semibold text-[#0F9D58]">{overviewStats.present}</p>
+              </div>
+              <div className={`${zohoPanelCls()} px-3 py-2.5`}>
+                <p className="text-[10px] font-semibold uppercase text-[#6B7280]">Late</p>
+                <p className="text-[18px] font-semibold text-[#E8710A]">{overviewStats.late}</p>
+              </div>
+              <div className={`${zohoPanelCls()} px-3 py-2.5`}>
+                <p className="text-[10px] font-semibold uppercase text-[#6B7280]">Leaves</p>
+                <p className="text-[18px] font-semibold text-[#D93025]">{overviewStats.leave}</p>
+              </div>
+              <div className={`${zohoPanelCls()} px-3 py-2.5`}>
+                <p className="text-[10px] font-semibold uppercase text-[#6B7280]">Half days</p>
+                <p className="text-[18px] font-semibold text-[#008CD3]">{overviewStats.halfDay}</p>
+              </div>
+              <div className={`${zohoPanelCls()} px-3 py-2.5`}>
+                <p className="text-[10px] font-semibold uppercase text-[#6B7280]">Short leave</p>
+                <p className="text-[18px] font-semibold text-[#F9A825]">{overviewStats.shortLeave}</p>
+              </div>
+            </div>
+          ) : null}
+
+          <div className={`${zohoPanelCls()} p-3`}>
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+              <div className="min-w-[10rem] flex-1 sm:max-w-[12rem]">
+                <label htmlFor="month-filter" className="mb-1 block text-[12px] font-medium text-[#374151]">
+                  Month
+                </label>
+                <input
+                  id="month-filter"
+                  type="month"
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  className={zohoSelectCls()}
+                />
+              </div>
+              <div className="min-w-0 flex-[2] sm:min-w-[14rem]">
+                <label htmlFor="user-search" className="mb-1 block text-[12px] font-medium text-[#374151]">
+                  Search
+                </label>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF]" aria-hidden />
+                  <input
+                    id="user-search"
+                    type="search"
+                    value={userSearchQuery}
+                    onChange={(e) => setUserSearchQuery(e.target.value)}
+                    placeholder="Name, email, or role"
+                    className={zohoSearchCls()}
+                  />
+                </div>
+              </div>
+              <span className="inline-flex min-h-[40px] items-center rounded-lg bg-[#F5F7FA] px-3 text-[13px] font-medium text-[#374151]">
+                {filteredSummary.length} of {monthlySummary.length} shown
+              </span>
+            </div>
+          </div>
+
+          {loading ? (
+            <div className={`${zohoPanelCls()} flex flex-col items-center gap-2 py-12 text-[#6B7280]`}>
+              <Loader2 className="h-8 w-8 animate-spin text-[#008CD3]" aria-hidden />
+              <p className="text-[14px]">Loading attendance summary…</p>
+            </div>
+          ) : null}
+
+          {error ? (
+            <div className="flex items-start gap-2 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2.5 text-[13px] text-[#1F2937]">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#D93025]" aria-hidden />
+              <span>{error}</span>
+            </div>
+          ) : null}
+
+          {!loading && !error && monthlySummary.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-[#E4E7EC] bg-white px-6 py-12 text-center">
+              <Users className="mx-auto h-9 w-9 text-[#9CA3AF]" aria-hidden />
+              <p className="mt-3 text-[15px] font-semibold text-[#1F2937]">No records this month</p>
+              <p className="mt-1 text-[13px] text-[#6B7280]">Try selecting a different month.</p>
+            </div>
+          ) : null}
+
+          {!loading && !error && monthlySummary.length > 0 ? (
+            filteredSummary.length === 0 ? (
+              <div className={`${zohoPanelCls()} px-4 py-10 text-center text-[14px] text-[#6B7280]`}>
+                No team members match your search.
+              </div>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {filteredSummary.map((user) => (
+                  <article key={user.userId} className={`${zohoPanelCls()} flex flex-col p-3`}>
+                    <div className="flex items-start gap-2.5">
+                      <span
+                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[11px] font-semibold ${userColorClass(user.userName)}`}
+                      >
+                        {userInitials(user.userName)}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <h2 className="truncate text-[14px] font-semibold text-[#1F2937]">{user.userName}</h2>
+                        <p className="truncate text-[12px] text-[#6B7280]">{user.userEmail}</p>
+                        <span className="mt-1 inline-flex max-w-full truncate rounded-md bg-[#F5F7FA] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[#6B7280]">
+                          {user.userRole}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-2 gap-1.5">
+                      <span className={statChipCls("present")}>Present {user.present}</span>
+                      <span className={statChipCls("late")}>Late {user.late}</span>
+                      <span className={statChipCls("leave")}>Leave {user.leave}</span>
+                      <span className={statChipCls("half")}>Half {user.halfDay}</span>
+                      <span className={`col-span-2 ${statChipCls("short")}`}>Short {user.shortLeave}</span>
+                    </div>
+
+                    <Link
+                      href={`/dashboard/${orgId}/attendance-management/manage-attendance/0?employee_id=${encodeURIComponent(user.userId)}`}
+                      className={`${zohoPrimaryBtnCls(true)} mt-3`}
+                    >
+                      <MdOpenInNew className="text-[16px]" aria-hidden />
+                      View history
+                    </Link>
+                  </article>
+                ))}
+              </div>
+            )
+          ) : null}
         </div>
-      ) : null}
-    </section>
+      </section>
     </div>
   );
 }
@@ -561,9 +659,9 @@ export default function ManageAttendancePage() {
   return (
     <Suspense
       fallback={
-        <div className="flex flex-col items-center justify-center gap-3 py-24 text-[#6B7280]">
-          <Loader2 className="h-9 w-9 animate-spin text-[#008CD3]" />
-          <p className="text-[15px]">Loading attendance…</p>
+        <div className="flex flex-col items-center justify-center gap-2 bg-[#F5F7FA] py-20 text-[#6B7280]">
+          <Loader2 className="h-8 w-8 animate-spin text-[#008CD3]" aria-hidden />
+          <p className="text-[14px]">Loading attendance…</p>
         </div>
       }
     >

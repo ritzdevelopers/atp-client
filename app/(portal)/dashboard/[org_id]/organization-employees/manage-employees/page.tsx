@@ -94,8 +94,8 @@ type AddressDraft = {
   zip_code: string;
 };
 
-const ACCENT = "#0d9488";
-const ACCENT_SOFT = "rgba(13, 148, 136, 0.12)";
+const ACCENT = "#008CD3";
+const ACCENT_SOFT = "#E8F4FB";
 const PASSWORD_MIN = 8;
 const emptyAddressDraft: AddressDraft = {
   country: "",
@@ -153,7 +153,7 @@ function ProfilePhotoZoomModal({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-[#111B21]/80 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[10060] flex items-center justify-center bg-[#111B21]/80 p-4 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-labelledby="employee-photo-zoom-title"
@@ -264,7 +264,7 @@ function MobileEmployeeMenuSheet({
 
   return (
     <div
-      className="fixed inset-0 z-[10050] flex flex-col justify-end lg:hidden"
+      className="fixed inset-0 z-[20050] flex flex-col justify-end lg:hidden"
       role="dialog"
       aria-modal="true"
       aria-labelledby="employee-actions-sheet-title"
@@ -341,7 +341,7 @@ function EmployeeActionsMenuList({
   const itemCls =
     variant === "sheet"
       ? "flex w-full touch-manipulation items-center gap-2.5 px-4 py-3 text-left text-[14px] text-[#1F2937] active:bg-[#F5F7FA]"
-      : "flex w-full touch-manipulation items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-700 active:bg-slate-50";
+      : "flex w-full touch-manipulation items-center gap-2 px-3 py-2 text-left text-[13px] text-[#374151] active:bg-[#F9FAFB]";
 
   return (
     <>
@@ -559,8 +559,24 @@ function findRow(rows: OrgUserRow[], userId: string) {
   return rows.find((r) => String(r.id) === userId);
 }
 
+function labelCls() {
+  return "mb-1 block text-[12px] font-medium text-[#374151]";
+}
+
 function inputCls() {
-  return "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20";
+  return "w-full rounded-lg border border-[#E4E7EC] bg-white px-3 py-2 text-[14px] text-[#1F2937] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15";
+}
+
+function zohoPrimaryBtnCls() {
+  return "inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg bg-[#008CD3] px-4 py-2 text-[14px] font-medium text-white transition hover:bg-[#0070AA] disabled:pointer-events-none disabled:opacity-50";
+}
+
+function zohoSecondaryBtnCls() {
+  return "inline-flex min-h-[40px] items-center justify-center rounded-lg border border-[#E4E7EC] bg-white px-4 py-2 text-[14px] font-medium text-[#374151] transition hover:bg-[#F9FAFB] disabled:pointer-events-none disabled:opacity-50";
+}
+
+function zohoModalShellCls(wide = false) {
+  return `relative z-10 max-h-[90vh] w-full overflow-y-auto rounded-lg border border-[#E4E7EC] bg-white p-4 shadow-xl ${wide ? "max-w-3xl" : "max-w-md"}`;
 }
 
 /** Same field names as employee onboarding / `uploadEmployeeDocuments` API. */
@@ -603,11 +619,11 @@ const EMPLOYEE_DOC_FIELDS: {
 ];
 
 function docFileInputCls() {
-  return "block w-full cursor-pointer rounded-lg border border-dashed border-slate-200 bg-slate-50/80 px-3 py-2 text-sm text-slate-800 shadow-sm outline-none transition file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-teal-600/15 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-teal-900 hover:border-teal-500/50 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20";
+  return "block w-full cursor-pointer rounded-lg border border-dashed border-[#E4E7EC] bg-[#F9FAFB] px-3 py-2 text-[13px] text-[#1F2937] outline-none transition file:mr-2 file:cursor-pointer file:rounded-md file:border-0 file:bg-[#E8F4FB] file:px-2.5 file:py-1 file:text-[12px] file:font-medium file:text-[#008CD3] hover:border-[#008CD3]/40 focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15";
 }
 
 function docLabelCls() {
-  return "mb-1 block text-sm font-medium text-slate-700";
+  return labelCls();
 }
 
 function normalizeBool(value: unknown): boolean {
@@ -1131,7 +1147,7 @@ export default function ManageEmployeesPage() {
     return (
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-600">Country</label>
+          <label className={labelCls()}>Country</label>
           <input
             className={inputCls()}
             value={draft.country}
@@ -1140,7 +1156,7 @@ export default function ManageEmployeesPage() {
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-600">State</label>
+          <label className={labelCls()}>State</label>
           <input
             className={inputCls()}
             value={draft.state}
@@ -1149,7 +1165,7 @@ export default function ManageEmployeesPage() {
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-600">District</label>
+          <label className={labelCls()}>District</label>
           <input
             className={inputCls()}
             value={draft.district}
@@ -1158,7 +1174,7 @@ export default function ManageEmployeesPage() {
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-600">City</label>
+          <label className={labelCls()}>City</label>
           <input
             className={inputCls()}
             value={draft.city}
@@ -1166,18 +1182,18 @@ export default function ManageEmployeesPage() {
             required
           />
         </div>
-        <label className="flex items-center gap-2 text-sm font-medium text-slate-700 sm:col-span-2">
+        <label className="flex items-center gap-2 text-[13px] font-medium text-[#374151] sm:col-span-2">
           <input
             type="checkbox"
             checked={draft.is_from_village}
             onChange={(e) => updateAddressDraft(key, "is_from_village", e.target.checked)}
-            className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500/30"
+            className="h-4 w-4 rounded border-[#E4E7EC] text-[#008CD3] focus:ring-[#008CD3]/30"
           />
           Employee is from a village
         </label>
         {draft.is_from_village ? (
           <div className="sm:col-span-2">
-            <label className="mb-1 block text-xs font-medium text-slate-600">Village name</label>
+            <label className={labelCls()}>Village name</label>
             <input
               className={inputCls()}
               value={draft.village_name}
@@ -1187,7 +1203,7 @@ export default function ManageEmployeesPage() {
           </div>
         ) : null}
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-600">Street</label>
+          <label className={labelCls()}>Street</label>
           <input
             className={inputCls()}
             value={draft.street}
@@ -1196,7 +1212,7 @@ export default function ManageEmployeesPage() {
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-600">House number</label>
+          <label className={labelCls()}>House number</label>
           <input
             className={inputCls()}
             value={draft.house_number}
@@ -1205,7 +1221,7 @@ export default function ManageEmployeesPage() {
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-600">ZIP / PIN code</label>
+          <label className={labelCls()}>ZIP / PIN code</label>
           <input
             className={inputCls()}
             value={draft.zip_code}
@@ -1393,16 +1409,16 @@ export default function ManageEmployeesPage() {
   }, []);
 
   return (
-    <div className="min-h-full bg-[#F5F7FA] pb-3 [font-family:var(--font-inter),system-ui,sans-serif] max-lg:-mx-1 sm:max-lg:-mx-2 lg:bg-slate-100/90 lg:pb-10">
+    <div className="min-h-full bg-[#F5F7FA] pb-3 [font-family:var(--font-inter),system-ui,sans-serif] max-lg:-mx-1 sm:max-lg:-mx-2 lg:pb-8">
       <div className="mx-auto max-w-6xl max-lg:max-w-none lg:px-4 lg:pt-6 md:max-w-7xl md:px-6">
         {terminateSuccess ? (
-          <div className="mb-3 flex items-start gap-2 rounded-md border border-[#C8E6C9] bg-[#E6F4EA] px-3 py-2 text-[12px] text-[#0F9D58] max-lg:mx-3 max-lg:mt-2 lg:mb-4 lg:rounded-lg lg:border-emerald-200 lg:bg-emerald-50 lg:px-4 lg:py-3 lg:text-sm lg:text-emerald-900">
-            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
+          <div className="mb-3 flex items-start gap-2 rounded-lg border border-[#A8DAB5] bg-[#E6F4EA] px-3 py-2 text-[12px] text-[#0F9D58] max-lg:mx-3 max-lg:mt-2 lg:mb-4 lg:px-4 lg:py-2.5 lg:text-[13px]">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
             <span className="flex-1">{terminateSuccess}</span>
             <button
               type="button"
               onClick={() => setTerminateSuccess(null)}
-              className="shrink-0 rounded-lg p-1 text-emerald-800 hover:bg-emerald-100"
+              className="shrink-0 rounded-lg p-1 text-[#0F9D58] hover:bg-[#E6F4EA]/80"
               aria-label="Dismiss"
             >
               <X className="h-4 w-4" />
@@ -1411,13 +1427,13 @@ export default function ManageEmployeesPage() {
         ) : null}
 
         {assetsSuccess ? (
-          <div className="mb-3 flex items-start gap-2 rounded-md border border-[#C8E6C9] bg-[#E6F4EA] px-3 py-2 text-[12px] text-[#0F9D58] max-lg:mx-3 max-lg:mt-2 lg:mb-4 lg:rounded-lg lg:border-emerald-200 lg:bg-emerald-50 lg:px-4 lg:py-3 lg:text-sm lg:text-emerald-900">
-            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
+          <div className="mb-3 flex items-start gap-2 rounded-lg border border-[#A8DAB5] bg-[#E6F4EA] px-3 py-2 text-[12px] text-[#0F9D58] max-lg:mx-3 max-lg:mt-2 lg:mb-4 lg:px-4 lg:py-2.5 lg:text-[13px]">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
             <span className="flex-1">{assetsSuccess}</span>
             <button
               type="button"
               onClick={() => setAssetsSuccess(null)}
-              className="shrink-0 rounded-lg p-1 text-emerald-800 hover:bg-emerald-100"
+              className="shrink-0 rounded-lg p-1 text-[#0F9D58] hover:bg-[#E6F4EA]/80"
               aria-label="Dismiss"
             >
               <X className="h-4 w-4" />
@@ -1426,14 +1442,14 @@ export default function ManageEmployeesPage() {
         ) : null}
 
         {listError && (
-          <div className="mb-3 flex items-start gap-2 rounded-md border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2 text-[12px] text-[#D93025] max-lg:mx-3 max-lg:mt-2 lg:mb-4 lg:rounded-lg lg:border-red-200 lg:bg-red-50 lg:px-4 lg:py-3 lg:text-sm lg:text-red-900">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" aria-hidden />
+          <div className="mb-3 flex items-start gap-2 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2 text-[12px] text-[#1F2937] max-lg:mx-3 max-lg:mt-2 lg:mb-4 lg:px-4 lg:py-2.5 lg:text-[13px]">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#D93025]" aria-hidden />
             <div className="flex flex-1 flex-wrap items-center justify-between gap-2">
               <span>{listError}</span>
               <button
                 type="button"
                 onClick={() => void loadUsers()}
-                className="rounded-xl border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-800 active:scale-[0.98] hover:bg-red-100/80"
+                className="rounded-lg border border-[#F5C6C2] bg-white px-2.5 py-1 text-[12px] font-medium text-[#D93025] active:scale-[0.98] hover:bg-[#FCE8E6]"
               >
                 Retry
               </button>
@@ -1499,76 +1515,79 @@ export default function ManageEmployeesPage() {
           </div>
         </div>
 
-        {/* Desktop: underline tabs */}
-        <div className="hidden gap-8 border-b border-slate-200/80 bg-white/60 px-1 lg:flex">
-          {tabOptions.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => {
-                setTab(t.id);
-                setSearch("");
-              }}
-              className="relative pb-3 pt-2 text-sm font-semibold transition-colors"
-              style={{ color: tab === t.id ? ACCENT : "#64748b" }}
-            >
-              {t.label}
-              {tab === t.id && (
-                <span
-                  className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full"
-                  style={{ backgroundColor: ACCENT }}
-                />
-              )}
-            </button>
-          ))}
+        {/* Desktop: page intro + tabs */}
+        <div className="hidden lg:block">
+          <div className="mb-3 flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#E8F4FB] text-[#008CD3]">
+              <Users className="h-5 w-5" aria-hidden />
+            </span>
+            <div>
+              <h1 className="text-[18px] font-semibold text-[#1F2937]">Team members</h1>
+              <p className="text-[13px] text-[#6B7280]">{tabSubtitle}</p>
+            </div>
+          </div>
+          <div className="flex gap-6 border-b border-[#E4E7EC]">
+            {tabOptions.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => {
+                  setTab(t.id);
+                  setSearch("");
+                }}
+                className={`relative pb-2.5 pt-1 text-[13px] font-medium transition-colors ${
+                  tab === t.id ? "text-[#008CD3]" : "text-[#6B7280] hover:text-[#374151]"
+                }`}
+              >
+                {t.label}
+                {tab === t.id ? (
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-[#008CD3]" />
+                ) : null}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className="mt-5 hidden flex-col gap-4 sm:flex-row sm:items-center sm:justify-between lg:flex">
-          <div className="flex flex-wrap items-center gap-3">
-            <p className="text-sm text-slate-600">
+        <div className="mt-4 hidden flex-col gap-3 sm:flex-row sm:items-center sm:justify-between lg:flex">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-[13px] text-[#6B7280]">
               Found{" "}
-              <span className="font-semibold text-slate-900">
+              <span className="font-semibold text-[#1F2937]">
                 {listLoading ? "…" : filtered.length}
               </span>{" "}
-              Matching Member(s)
+              matching member{filtered.length === 1 ? "" : "s"}
             </p>
-            {activeFilterLabel && (
-              <span className="text-xs text-slate-500">
-                Search term:
-                <span
-                  className="ml-2 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 font-medium text-teal-800"
-                  style={{ backgroundColor: ACCENT_SOFT }}
+            {activeFilterLabel ? (
+              <span className="inline-flex items-center gap-1 rounded-lg bg-[#E8F4FB] px-2 py-0.5 text-[12px] font-medium text-[#008CD3]">
+                {activeFilterLabel}
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  className="rounded-full p-0.5 hover:bg-[#008CD3]/10"
+                  aria-label="Clear search"
                 >
-                  {activeFilterLabel}
-                  <button
-                    type="button"
-                    onClick={() => setSearch("")}
-                    className="rounded-full p-0.5 hover:bg-teal-200/50"
-                    aria-label="Clear search"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </span>
+                  <X className="h-3 w-3" />
+                </button>
               </span>
-            )}
+            ) : null}
           </div>
 
           <div className="relative w-full sm:max-w-xs">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF]" aria-hidden />
             <input
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search name, email, role…"
               disabled={listLoading || !!listError}
-              className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-800 shadow-sm outline-none placeholder:text-slate-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 disabled:opacity-60"
+              className="w-full rounded-lg border border-[#E4E7EC] bg-white py-2 pl-9 pr-3 text-[14px] text-[#1F2937] outline-none placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15 disabled:opacity-60"
             />
           </div>
         </div>
 
         {listLoading ? (
-          <div className="mt-12 flex flex-col items-center justify-center gap-2 px-4 text-[#6B7280] max-lg:mt-8 lg:mt-16 lg:gap-3">
-            <Loader2 className="h-7 w-7 animate-spin text-[#008CD3] lg:h-8 lg:w-8 lg:text-teal-600" aria-hidden />
+          <div className="mt-12 flex flex-col items-center justify-center gap-2 px-4 text-[#6B7280] max-lg:mt-8 lg:mt-10 lg:gap-3">
+            <Loader2 className="h-7 w-7 animate-spin text-[#008CD3]" aria-hidden />
             <p className="text-[13px] lg:text-sm">Loading team members…</p>
           </div>
         ) : (
@@ -1624,7 +1643,7 @@ export default function ManageEmployeesPage() {
                 return (
                   <article
                     key={listKey}
-                    className={`rounded-lg border border-[#E4E7EC] bg-white shadow-sm transition-shadow active:scale-[0.995] lg:overflow-visible lg:rounded-xl lg:border-slate-200/90 lg:shadow-sm lg:ring-0 lg:hover:shadow-md${menuOpen ? " lg:relative lg:z-[100]" : ""}`}
+                    className={`rounded-lg border border-[#E4E7EC] bg-white shadow-sm transition-shadow active:scale-[0.995] lg:overflow-visible lg:hover:border-[#008CD3]/20${menuOpen ? " lg:relative lg:z-[100]" : ""}`}
                   >
                     {/* Mobile & tablet: Zoho-style list card */}
                     <div className="relative flex gap-2.5 p-2.5 lg:hidden">
@@ -1717,48 +1736,48 @@ export default function ManageEmployeesPage() {
 
                     {/* Desktop: profile card */}
                     <div className="hidden lg:block">
-                    <div className="relative px-4 pb-3 pt-3">
+                    <div className="relative px-3 pb-2 pt-2.5">
                       <div className="flex items-start justify-between">
-                        <div className="flex gap-2">
+                        <div className="flex gap-0.5">
                           <Link
                             href={`/dashboard/${orgIdParam}/organization-employees/manage-employees/get-employee?user_id=${encodeURIComponent(emp.id)}`}
-                            className="rounded-md p-1 text-teal-600 transition hover:bg-teal-50"
+                            className="rounded-md p-1.5 text-[#008CD3] transition hover:bg-[#E8F4FB]"
                             aria-label="View employee profile"
                           >
-                            <Eye className="h-4 w-4" />
+                            <Eye className="h-3.5 w-3.5" aria-hidden />
                           </Link>
                           <button
                             type="button"
                             onClick={() => toggleFavorite(emp.id)}
-                            className="rounded-md p-1 text-slate-400 transition hover:bg-slate-50"
+                            className="rounded-md p-1.5 text-[#9CA3AF] transition hover:bg-[#F5F7FA]"
                             aria-label={fav ? "Remove favorite" : "Add favorite"}
                           >
                             <Star
-                              className="h-4 w-4"
+                              className="h-3.5 w-3.5"
                               style={{
-                                color: fav ? "#ea580c" : undefined,
-                                fill: fav ? "#ea580c" : "none",
+                                color: fav ? "#E8710A" : undefined,
+                                fill: fav ? "#E8710A" : "none",
                               }}
                             />
                           </button>
                           <button
                             type="button"
-                            className="rounded-md p-1 text-sky-600 transition hover:bg-sky-50"
+                            className="rounded-md p-1.5 text-[#6B7280] transition hover:bg-[#F5F7FA]"
                             aria-label="Message"
                           >
-                            <MessageCircle className="h-4 w-4" />
+                            <MessageCircle className="h-3.5 w-3.5" aria-hidden />
                           </button>
                         </div>
                         <div className="relative" data-employee-menu>
                           <button
                             type="button"
                             onClick={() => setMenuUserId(menuOpen ? null : emp.id)}
-                            className="rounded-md p-1 text-slate-400 hover:bg-slate-50"
+                            className="rounded-md p-1.5 text-[#6B7280] hover:bg-[#F5F7FA]"
                             aria-expanded={menuOpen}
                             aria-haspopup="menu"
                             aria-label="More options"
                           >
-                            <MoreHorizontal className="h-4 w-4" />
+                            <MoreHorizontal className="h-4 w-4" aria-hidden />
                           </button>
                           {menuPanel}
                         </div>
@@ -1769,15 +1788,15 @@ export default function ManageEmployeesPage() {
                           <button
                             type="button"
                             onClick={() => openPhotoZoom(emp.profileImageUrl!, emp.name)}
-                            className="relative h-24 w-24 overflow-hidden rounded-full border-2 border-slate-100 bg-slate-50 transition hover:ring-2 hover:ring-teal-500/30"
+                            className="relative h-[4.5rem] w-[4.5rem] overflow-hidden rounded-full border-2 border-[#E4E7EC] bg-[#F9FAFB] transition hover:ring-2 hover:ring-[#008CD3]/25"
                             aria-label={`View ${emp.name} profile photo`}
                           >
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
                               src={emp.avatarSrc}
                               alt=""
-                              width={96}
-                              height={96}
+                              width={72}
+                              height={72}
                               className="h-full w-full object-cover object-top"
                               onError={(e) => {
                                 e.currentTarget.src = avatarUrl(emp.avatarSeed);
@@ -1785,13 +1804,13 @@ export default function ManageEmployeesPage() {
                             />
                           </button>
                         ) : (
-                          <div className="relative h-24 w-24 overflow-hidden rounded-full border-2 border-slate-100 bg-slate-50">
+                          <div className="relative h-[4.5rem] w-[4.5rem] overflow-hidden rounded-full border-2 border-[#E4E7EC] bg-[#F9FAFB]">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
                               src={emp.avatarSrc}
                               alt=""
-                              width={96}
-                              height={96}
+                              width={72}
+                              height={72}
                               className="h-full w-full object-cover object-top"
                               onError={(e) => {
                                 e.currentTarget.src = avatarUrl(emp.avatarSeed);
@@ -1799,14 +1818,14 @@ export default function ManageEmployeesPage() {
                             />
                           </div>
                         )}
-                        <div className="mt-3 flex w-full items-start justify-center gap-2 px-1">
-                          <p className="text-center text-sm text-slate-600">
+                        <div className="mt-2 flex w-full items-start justify-center gap-2 px-1">
+                          <p className="text-center text-[12px] text-[#6B7280]">
                             {emp.empCode} –{" "}
-                            <span className="font-bold text-slate-900">{emp.name}</span>
+                            <span className="font-semibold text-[#1F2937]">{emp.name}</span>
                           </p>
                           <span
-                            className={`shrink-0 text-xs font-semibold ${
-                              emp.status === "in" ? "text-emerald-600" : "text-red-600"
+                            className={`shrink-0 text-[11px] font-semibold ${
+                              emp.status === "in" ? "text-[#0F9D58]" : "text-[#D93025]"
                             }`}
                           >
                             {emp.status === "in" ? "In" : "Out"}
@@ -1815,52 +1834,52 @@ export default function ManageEmployeesPage() {
                       </div>
                     </div>
 
-                    <div className="space-y-2.5 rounded-b-xl border-t border-slate-100 bg-slate-50/50 px-4 py-3">
-                      <div className="flex flex-wrap items-center gap-2 text-sm">
-                        <Users className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
-                        <span className="min-w-0 font-medium" style={{ color: ACCENT }}>
+                    <div className="space-y-2 rounded-b-lg border-t border-[#E4E7EC] bg-[#F9FAFB] px-3 py-2.5">
+                      <div className="flex flex-wrap items-center gap-1.5 text-[12px]">
+                        <Users className="h-3.5 w-3.5 shrink-0 text-[#9CA3AF]" aria-hidden />
+                        <span className="min-w-0 font-medium text-[#008CD3]">
                           {emp.roleLabel}
                         </span>
                         {isInactiveTab ? (
-                          <span className="rounded-md bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-700 ring-1 ring-red-200/80">
+                          <span className="rounded-md bg-[#FCE8E6] px-1.5 py-0.5 text-[10px] font-semibold text-[#D93025]">
                             Inactive
                           </span>
                         ) : null}
                         {isExitProcessTab ? (
-                          <span className="rounded-md bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800 ring-1 ring-amber-200/80">
+                          <span className="rounded-md bg-[#FFF8E1] px-1.5 py-0.5 text-[10px] font-semibold text-[#F9A825]">
                             Exit process
                           </span>
                         ) : null}
                       </div>
                       {(isInactiveTab || isExitProcessTab) && exitDetailLine ? (
-                        <p className="text-sm text-slate-600">
-                          <span className="font-medium text-slate-800">Exit: </span>
+                        <p className="text-[12px] text-[#6B7280]">
+                          <span className="font-medium text-[#374151]">Exit: </span>
                           {exitDetailLine}
                         </p>
                       ) : null}
-                      <div className="flex items-center gap-2 text-sm text-slate-600">
-                        <CalendarDays className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
+                      <div className="flex items-center gap-1.5 text-[12px] text-[#6B7280]">
+                        <CalendarDays className="h-3.5 w-3.5 shrink-0 text-[#9CA3AF]" aria-hidden />
                         <span>
                           Member since{" "}
-                          <span className="font-medium text-slate-700">{emp.memberSince}</span>
+                          <span className="font-medium text-[#374151]">{emp.memberSince}</span>
                         </span>
                       </div>
-                      <div className="flex items-center gap-2 text-sm">
-                        <AtSign className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
+                      <div className="flex items-center gap-1.5 text-[12px]">
+                        <AtSign className="h-3.5 w-3.5 shrink-0 text-[#9CA3AF]" aria-hidden />
                         {emp.email ? (
                           <a
                             href={`mailto:${emp.email}`}
-                            className="truncate text-sky-600 hover:underline"
+                            className="truncate text-[#008CD3] hover:underline"
                           >
                             {emp.email}
                           </a>
                         ) : (
-                          <span className="text-slate-500">—</span>
+                          <span className="text-[#9CA3AF]">—</span>
                         )}
                       </div>
-                      <div className="flex items-center gap-2 text-sm text-slate-600">
-                        <Phone className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
-                        <span>{emp.phone}</span>
+                      <div className="flex items-center gap-1.5 text-[12px] text-[#6B7280]">
+                        <Phone className="h-3.5 w-3.5 shrink-0 text-[#9CA3AF]" aria-hidden />
+                        <span className="truncate">{emp.phone}</span>
                       </div>
                     </div>
                     </div>
@@ -1870,7 +1889,7 @@ export default function ManageEmployeesPage() {
             </div>
 
             {!listError && filtered.length === 0 && (
-              <p className={`mt-10 px-4 text-center max-lg:mt-6 ${mobileCaptionCls} lg:mt-12 lg:text-sm lg:text-slate-500`}>
+              <p className={`mt-10 px-4 text-center max-lg:mt-6 ${mobileCaptionCls} lg:mt-10 lg:text-[13px] lg:text-[#6B7280]`}>
                 {tab === "inactive"
                   ? `No inactive members${search.trim() ? " match your search" : ""}.`
                   : tab === "exit_process"
@@ -1892,33 +1911,33 @@ export default function ManageEmployeesPage() {
         >
           <button
             type="button"
-            className="absolute inset-0 bg-slate-900/40 backdrop-blur-[1px]"
+            className="absolute inset-0 bg-black/50"
             aria-label="Close"
             onClick={() => !editSaving && setEditRow(null)}
           />
-          <div className="relative z-10 max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
+          <div className={zohoModalShellCls()}>
             <div className="mb-4 flex items-start justify-between gap-2">
-              <h2 id="edit-user-title" className="text-lg font-bold text-slate-900">
+              <h2 id="edit-user-title" className="text-[16px] font-semibold text-[#1F2937]">
                 Edit user
               </h2>
               <button
                 type="button"
                 disabled={editSaving}
                 onClick={() => setEditRow(null)}
-                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100"
+                className="rounded-lg p-1.5 text-[#6B7280] hover:bg-[#F3F4F6]"
                 aria-label="Close"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
             {editError && (
-              <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+              <div className="mb-3 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2 text-[13px] text-[#1F2937]">
                 {editError}
               </div>
             )}
             <form onSubmit={submitEdit} className="space-y-3">
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">Name</label>
+                <label className={labelCls()}>Name</label>
                 <input
                   className={inputCls()}
                   value={editName}
@@ -1927,7 +1946,7 @@ export default function ManageEmployeesPage() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">Email</label>
+                <label className={labelCls()}>Email</label>
                 <input
                   type="email"
                   className={inputCls()}
@@ -1937,7 +1956,7 @@ export default function ManageEmployeesPage() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">Phone</label>
+                <label className={labelCls()}>Phone</label>
                 <input
                   type="tel"
                   className={inputCls()}
@@ -1946,7 +1965,7 @@ export default function ManageEmployeesPage() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">
+                <label className={labelCls()}>
                   New password (optional)
                 </label>
                 <input
@@ -1960,7 +1979,7 @@ export default function ManageEmployeesPage() {
               </div>
               {editPassword ? (
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600">
+                  <label className={labelCls()}>
                     Confirm password
                   </label>
                   <input
@@ -1977,14 +1996,14 @@ export default function ManageEmployeesPage() {
                   type="button"
                   disabled={editSaving}
                   onClick={() => setEditRow(null)}
-                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  className={zohoSecondaryBtnCls()}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={editSaving}
-                  className="inline-flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-bold text-white hover:bg-teal-700 disabled:opacity-60"
+                  className={zohoPrimaryBtnCls()}
                 >
                   {editSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                   Save
@@ -2005,42 +2024,42 @@ export default function ManageEmployeesPage() {
         >
           <button
             type="button"
-            className="absolute inset-0 bg-slate-900/40 backdrop-blur-[1px]"
+            className="absolute inset-0 bg-black/50"
             aria-label="Close"
             onClick={() => !roleSaving && setRoleRow(null)}
           />
-          <div className="relative z-10 w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
+          <div className={zohoModalShellCls()}>
             <div className="mb-4 flex items-start justify-between gap-2">
-              <h2 id="role-modal-title" className="text-lg font-bold text-slate-900">
+              <h2 id="role-modal-title" className="text-[16px] font-semibold text-[#1F2937]">
                 Update role
               </h2>
               <button
                 type="button"
                 disabled={roleSaving}
                 onClick={() => setRoleRow(null)}
-                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100"
+                className="rounded-lg p-1.5 text-[#6B7280] hover:bg-[#F3F4F6]"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <p className="mb-4 text-sm text-slate-600">
-              <span className="font-medium text-slate-900">{roleRow.user_name}</span> — current:{" "}
+            <p className="mb-4 text-[13px] text-[#6B7280]">
+              <span className="font-medium text-[#1F2937]">{roleRow.user_name}</span> — current:{" "}
               {formatRoleLabel(roleRow.role_name ?? roleRow.user_role_name)}
             </p>
             {roleError && (
-              <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+              <div className="mb-3 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2 text-[13px] text-[#1F2937]">
                 {roleError}
               </div>
             )}
             <form onSubmit={submitRoleChange} className="space-y-4">
               {roleLoading ? (
-                <div className="flex items-center gap-2 text-sm text-slate-500">
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                <div className="flex items-center gap-2 text-[13px] text-[#6B7280]">
+                  <Loader2 className="h-4 w-4 animate-spin text-[#008CD3]" aria-hidden />
                   Loading roles…
                 </div>
               ) : (
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600">New role</label>
+                  <label className={labelCls()}>New role</label>
                   <select
                     className={inputCls()}
                     value={roleSelectId}
@@ -2065,14 +2084,14 @@ export default function ManageEmployeesPage() {
                   type="button"
                   disabled={roleSaving}
                   onClick={() => setRoleRow(null)}
-                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  className={zohoSecondaryBtnCls()}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={roleSaving || roleLoading || roleOptions.length === 0}
-                  className="inline-flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-bold text-white hover:bg-teal-700 disabled:opacity-60"
+                  className={zohoPrimaryBtnCls()}
                 >
                   {roleSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                   Update role
@@ -2093,26 +2112,26 @@ export default function ManageEmployeesPage() {
         >
           <button
             type="button"
-            className="absolute inset-0 bg-slate-900/40 backdrop-blur-[1px]"
+            className="absolute inset-0 bg-black/50"
             aria-label="Close"
             onClick={() => !paidLeaveSaving && setPaidLeaveRow(null)}
           />
-          <div className="relative z-10 w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
+          <div className={zohoModalShellCls()}>
             <div className="mb-4 flex items-start justify-between gap-2">
               <div>
-                <h2 id="paid-leaves-title" className="text-lg font-bold text-slate-900">
+                <h2 id="paid-leaves-title" className="text-[16px] font-semibold text-[#1F2937]">
                   Assign paid leaves
                 </h2>
-                <p className="mt-1 text-sm text-slate-600">
+                <p className="mt-0.5 text-[13px] text-[#6B7280]">
                   Assign a leave balance to{" "}
-                  <span className="font-semibold text-slate-900">{paidLeaveRow.user_name}</span>.
+                  <span className="font-semibold text-[#1F2937]">{paidLeaveRow.user_name}</span>.
                 </p>
               </div>
               <button
                 type="button"
                 disabled={paidLeaveSaving}
                 onClick={() => setPaidLeaveRow(null)}
-                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100"
+                className="rounded-lg p-1.5 text-[#6B7280] hover:bg-[#F3F4F6]"
                 aria-label="Close"
               >
                 <X className="h-5 w-5" />
@@ -2126,30 +2145,30 @@ export default function ManageEmployeesPage() {
             </div>
 
             {paidLeaveError && (
-              <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+              <div className="mb-3 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2 text-[13px] text-[#1F2937]">
                 {paidLeaveError}
               </div>
             )}
             {paidLeaveSuccess && (
-              <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+              <div className="mb-3 rounded-lg border border-[#A8DAB5] bg-[#E6F4EA] px-3 py-2 text-[13px] text-[#1F2937]">
                 {paidLeaveSuccess}
               </div>
             )}
 
             {paidLeaveTypesLoading ? (
-              <div className="mb-4 flex items-center gap-2 text-sm text-slate-600">
-                <Loader2 className="h-4 w-4 animate-spin text-teal-600" />
+              <div className="mb-4 flex items-center gap-2 text-[13px] text-[#6B7280]">
+                <Loader2 className="h-4 w-4 animate-spin text-[#008CD3]" aria-hidden />
                 Loading leave types…
               </div>
             ) : null}
 
             {!paidLeaveTypesLoading && paidLeaveTypes.length === 0 && !paidLeaveError ? (
-              <div className="mb-4 rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-center text-sm text-slate-600">
-                <CalendarDays className="mx-auto mb-2 h-8 w-8 text-slate-300" aria-hidden />
+              <div className="mb-4 rounded-lg border border-dashed border-[#E4E7EC] bg-[#F9FAFB] px-3 py-4 text-center text-[13px] text-[#6B7280]">
+                <CalendarDays className="mx-auto mb-2 h-7 w-7 text-[#9CA3AF]" aria-hidden />
                 <p>No leave types defined yet.</p>
                 <Link
                   href={`/dashboard/${orgIdParam ?? ""}/organization-leave/manage-leave-types`}
-                  className="mt-2 inline-block font-semibold text-teal-700 underline-offset-2 hover:underline"
+                  className="mt-2 inline-block font-medium text-[#008CD3] underline-offset-2 hover:underline"
                   onClick={() => setPaidLeaveRow(null)}
                 >
                   Manage leave types
@@ -2159,7 +2178,7 @@ export default function ManageEmployeesPage() {
 
             <form onSubmit={submitPaidLeaves} className="space-y-4">
               <div>
-                <label htmlFor="paid-leave-type" className="mb-1 block text-xs font-medium text-slate-600">
+                <label htmlFor="paid-leave-type" className={labelCls()}>
                   Leave type <span className="text-red-500">*</span>
                 </label>
                 <select
@@ -2182,7 +2201,7 @@ export default function ManageEmployeesPage() {
               </div>
 
               <div>
-                <label htmlFor="paid-leave-total" className="mb-1 block text-xs font-medium text-slate-600">
+                <label htmlFor="paid-leave-total" className={labelCls()}>
                   Total leave days <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -2199,7 +2218,7 @@ export default function ManageEmployeesPage() {
                     paidLeaveSaving || paidLeaveTypesLoading || paidLeaveTypes.length === 0
                   }
                 />
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="mt-1 text-[12px] text-[#6B7280]">
                   Number of days allocated for the selected leave type (remaining starts equal to
                   total).
                 </p>
@@ -2210,7 +2229,7 @@ export default function ManageEmployeesPage() {
                   type="button"
                   disabled={paidLeaveSaving}
                   onClick={() => setPaidLeaveRow(null)}
-                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  className={zohoSecondaryBtnCls()}
                 >
                   Cancel
                 </button>
@@ -2221,7 +2240,7 @@ export default function ManageEmployeesPage() {
                     paidLeaveTypesLoading ||
                     paidLeaveTypes.length === 0
                   }
-                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-bold text-white hover:bg-teal-700 disabled:opacity-60"
+                  className={zohoPrimaryBtnCls()}
                 >
                   {paidLeaveSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                   Assign leave balance
@@ -2242,19 +2261,19 @@ export default function ManageEmployeesPage() {
         >
           <button
             type="button"
-            className="absolute inset-0 bg-slate-900/40 backdrop-blur-[1px]"
+            className="absolute inset-0 bg-black/50"
             aria-label="Close"
             onClick={() => !documentsSaving && setDocumentsRow(null)}
           />
-          <div className="relative z-10 max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
+          <div className={zohoModalShellCls(true)}>
             <div className="mb-4 flex items-start justify-between gap-2">
               <div>
-                <h2 id="documents-modal-title" className="text-lg font-bold text-slate-900">
+                <h2 id="documents-modal-title" className="text-[16px] font-semibold text-[#1F2937]">
                   Add documents
                 </h2>
-                <p className="mt-1 text-sm text-slate-600">
+                <p className="mt-0.5 text-[13px] text-[#6B7280]">
                   Upload KYC files for{" "}
-                  <span className="font-medium text-slate-900">{documentsRow.user_name}</span>. Each file
+                  <span className="font-medium text-[#1F2937]">{documentsRow.user_name}</span>. Each file
                   must be PNG, JPG, or PDF and under 5 MB.
                 </p>
               </div>
@@ -2262,7 +2281,7 @@ export default function ManageEmployeesPage() {
                 type="button"
                 disabled={documentsSaving}
                 onClick={() => setDocumentsRow(null)}
-                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 disabled:opacity-50"
+                className="rounded-lg p-1.5 text-[#6B7280] hover:bg-[#F3F4F6] disabled:opacity-50"
                 aria-label="Close"
               >
                 <X className="h-5 w-5" />
@@ -2270,13 +2289,13 @@ export default function ManageEmployeesPage() {
             </div>
 
             {documentsError ? (
-              <div className="mb-4 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+              <div className="mb-3 flex items-start gap-2 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2 text-[13px] text-[#1F2937]">
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
                 <span>{documentsError}</span>
               </div>
             ) : null}
             {documentsSuccess ? (
-              <div className="mb-4 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+              <div className="mb-3 flex items-start gap-2 rounded-lg border border-[#A8DAB5] bg-[#E6F4EA] px-3 py-2 text-[13px] text-[#1F2937]">
                 <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
                 <span>{documentsSuccess}</span>
               </div>
@@ -2306,12 +2325,12 @@ export default function ManageEmployeesPage() {
                         });
                       }}
                     />
-                    <p className="mt-1 text-xs text-slate-500">{hint}</p>
+                    <p className="mt-1 text-[12px] text-[#6B7280]">{hint}</p>
                   </div>
                 ))}
               </div>
 
-              <div className="flex flex-col-reverse gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end">
+              <div className="flex flex-col-reverse gap-2 border-t border-[#E4E7EC] pt-3 sm:flex-row sm:justify-end">
                 <button
                   type="button"
                   disabled={documentsSaving}
@@ -2319,7 +2338,7 @@ export default function ManageEmployeesPage() {
                     setDocFiles({});
                     setDocumentsError(null);
                   }}
-                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                  className={`${zohoSecondaryBtnCls()} disabled:opacity-60`}
                 >
                   Clear files
                 </button>
@@ -2327,14 +2346,14 @@ export default function ManageEmployeesPage() {
                   type="button"
                   disabled={documentsSaving}
                   onClick={() => setDocumentsRow(null)}
-                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                  className={`${zohoSecondaryBtnCls()} disabled:opacity-60`}
                 >
                   Close
                 </button>
                 <button
                   type="submit"
                   disabled={documentsSaving}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-bold text-white hover:bg-teal-700 disabled:opacity-60"
+                  className={zohoPrimaryBtnCls()}
                 >
                   {documentsSaving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
                   <Upload className="h-4 w-4" aria-hidden />
@@ -2356,18 +2375,18 @@ export default function ManageEmployeesPage() {
         >
           <button
             type="button"
-            className="absolute inset-0 bg-slate-900/40 backdrop-blur-[1px]"
+            className="absolute inset-0 bg-black/50"
             aria-label="Close"
             onClick={() => addressSavingKey == null && setAddressRow(null)}
           />
-          <div className="relative z-10 max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
+          <div className={zohoModalShellCls(true)}>
             <div className="mb-4 flex items-start justify-between gap-2">
               <div>
-                <h2 id="address-modal-title" className="text-lg font-bold text-slate-900">
+                <h2 id="address-modal-title" className="text-[16px] font-semibold text-[#1F2937]">
                   {addressMode === "add" ? "Add one more address" : "Update previous addresses"}
                 </h2>
-                <p className="mt-1 text-sm text-slate-600">
-                  <span className="font-medium text-slate-900">{addressRow.user_name}</span>
+                <p className="mt-0.5 text-[13px] text-[#6B7280]">
+                  <span className="font-medium text-[#1F2937]">{addressRow.user_name}</span>
                   {addressMode === "add"
                     ? " can have multiple saved addresses."
                     : " addresses are shown below in separate forms."}
@@ -2377,7 +2396,7 @@ export default function ManageEmployeesPage() {
                 type="button"
                 disabled={addressSavingKey != null}
                 onClick={() => setAddressRow(null)}
-                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100"
+                className="rounded-lg p-1.5 text-[#6B7280] hover:bg-[#F3F4F6]"
                 aria-label="Close"
               >
                 <X className="h-5 w-5" />
@@ -2385,12 +2404,12 @@ export default function ManageEmployeesPage() {
             </div>
 
             {addressError ? (
-              <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+              <div className="mb-3 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2 text-[13px] text-[#1F2937]">
                 {addressError}
               </div>
             ) : null}
             {addressSuccess ? (
-              <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+              <div className="mb-3 rounded-lg border border-[#A8DAB5] bg-[#E6F4EA] px-3 py-2 text-[13px] text-[#1F2937]">
                 {addressSuccess}
               </div>
             ) : null}
@@ -2403,14 +2422,14 @@ export default function ManageEmployeesPage() {
                     type="button"
                     disabled={addressSavingKey != null}
                     onClick={() => setAddressRow(null)}
-                    className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                    className={zohoSecondaryBtnCls()}
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={addressSavingKey === "new"}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-bold text-white hover:bg-teal-700 disabled:opacity-60"
+                    className={zohoPrimaryBtnCls()}
                   >
                     {addressSavingKey === "new" ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -2422,14 +2441,14 @@ export default function ManageEmployeesPage() {
             ) : (
               <div className="space-y-4">
                 {addressLoading ? (
-                  <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                  <div className="flex items-center gap-2 rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] px-4 py-3 text-[13px] text-[#6B7280]">
+                    <Loader2 className="h-4 w-4 animate-spin text-[#008CD3]" aria-hidden />
                     Loading addresses...
                   </div>
                 ) : null}
 
                 {!addressLoading && addressRows.length === 0 ? (
-                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                  <div className="rounded-lg border border-[#FEF3E6] bg-[#FEF3E6] px-3 py-2.5 text-[13px] text-[#E8710A]">
                     No saved addresses found. Use “Add one more address” to create one.
                   </div>
                 ) : null}
@@ -2445,14 +2464,14 @@ export default function ManageEmployeesPage() {
                         e.preventDefault();
                         void submitUpdateAddress(address);
                       }}
-                      className="rounded-xl border border-slate-200 bg-slate-50/50 p-4"
+                      className="rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] p-3"
                     >
                       <div className="mb-3 flex items-center justify-between gap-2">
-                        <h3 className="text-sm font-bold text-slate-800">
+                        <h3 className="text-[14px] font-semibold text-[#1F2937]">
                           Address {index + 1}
                         </h3>
                         {addressId != null ? (
-                          <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-slate-500">
+                          <span className="rounded-md bg-white px-2 py-0.5 text-[11px] font-medium text-[#6B7280]">
                             ID: {String(addressId)}
                           </span>
                         ) : null}
@@ -2462,7 +2481,7 @@ export default function ManageEmployeesPage() {
                         <button
                           type="submit"
                           disabled={addressSavingKey === key || addressId == null}
-                          className="inline-flex items-center justify-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-bold text-white hover:bg-teal-700 disabled:opacity-60"
+                          className={zohoPrimaryBtnCls()}
                         >
                           {addressSavingKey === key ? (
                             <Loader2 className="h-4 w-4 animate-spin" />

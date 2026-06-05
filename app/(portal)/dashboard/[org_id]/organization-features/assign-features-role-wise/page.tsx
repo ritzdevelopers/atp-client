@@ -50,23 +50,39 @@ function rolesVisibleInUi(rolesList: RoleRow[]): RoleRow[] {
   return rolesList.filter((r) => !isAdminRoleName(r.role_name));
 }
 
-const WA_AVATAR_COLORS = [
-  "bg-[#DFE5E7] text-[#54656F]",
-  "bg-[#FFD279] text-[#7A4F01]",
-  "bg-[#FEAA57] text-[#7A3E00]",
-  "bg-[#A5B337] text-[#3D4A0A]",
-  "bg-[#35CD96] text-[#0B5E44]",
-  "bg-[#53BDEB] text-[#0B4F6E]",
-  "bg-[#E67EAB] text-[#6B2348]",
-  "bg-[#7F66FF] text-[#2E1F7A]",
+const AVATAR_COLORS = [
+  "bg-[#E8F4FB] text-[#008CD3]",
+  "bg-[#E6F4EA] text-[#0F9D58]",
+  "bg-[#FEF3E6] text-[#E8710A]",
+  "bg-[#F3E8FD] text-[#7B1FA2]",
+  "bg-[#FCE8E6] text-[#D93025]",
+  "bg-[#E8EAF6] text-[#3F51B5]",
 ];
+
+const MODULE_ICON_COLORS = [
+  "bg-[#E8F4FB] text-[#008CD3]",
+  "bg-[#E6F4EA] text-[#0F9D58]",
+  "bg-[#FEF3E6] text-[#E8710A]",
+  "bg-[#F3E8FD] text-[#7B1FA2]",
+];
+
+const mobileCaptionCls = "text-[11px] leading-snug text-[#6B7280]";
+const mobileValueCls = "text-[13px] font-semibold text-[#1F2937]";
 
 function avatarColorClass(name: string) {
   let hash = 0;
   for (let i = 0; i < name.length; i += 1) {
     hash = name.charCodeAt(i) + ((hash << 5) - hash);
   }
-  return WA_AVATAR_COLORS[Math.abs(hash) % WA_AVATAR_COLORS.length];
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
+function moduleColorClass(name: string) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i += 1) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return MODULE_ICON_COLORS[Math.abs(hash) % MODULE_ICON_COLORS.length];
 }
 
 function roleInitials(name: string) {
@@ -82,16 +98,26 @@ function featureInitials(name: string) {
   return cleaned.slice(0, 2).toUpperCase();
 }
 
-function searchFieldCls() {
-  return "w-full rounded-lg border-0 bg-[#F0F2F5] py-2.5 pl-10 pr-4 text-[15px] text-[#111B21] outline-none transition placeholder:text-[#8696A0] focus:bg-white focus:ring-1 focus:ring-[#25D366]/40 lg:rounded-lg lg:border lg:border-slate-200 lg:bg-white lg:py-2 lg:pl-3 lg:text-sm lg:focus:ring-2 lg:focus:ring-indigo-200";
+function zohoSearchCls() {
+  return "w-full rounded-md border border-[#E4E7EC] bg-white py-2 pl-9 pr-3 text-[13px] text-[#1F2937] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15 lg:rounded-lg lg:text-[14px]";
 }
 
-function waPrimaryBtnCls() {
-  return "inline-flex min-h-[40px] shrink-0 items-center justify-center rounded-lg bg-[#25D366] px-4 py-2 text-[14px] font-medium text-white transition active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 lg:rounded-lg lg:bg-[#0C123A] lg:px-4 lg:py-2 lg:text-sm lg:font-semibold lg:hover:bg-[#151e59]";
+function zohoPrimaryBtnCls(full = false, compact = false) {
+  const size = compact
+    ? "min-h-[36px] px-3 py-1.5 text-[12px]"
+    : "min-h-[40px] px-4 py-2 text-[14px]";
+  return `inline-flex ${size} shrink-0 items-center justify-center rounded-lg bg-[#008CD3] font-medium text-white transition active:scale-[0.98] hover:bg-[#0070AA] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full" : ""}`;
 }
 
-function waDangerBtnCls() {
-  return "inline-flex min-h-[40px] shrink-0 items-center justify-center rounded-lg border border-[#FFCDD2] bg-[#FFECEC] px-4 py-2 text-[14px] font-medium text-[#C62828] transition active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 lg:rounded-lg lg:border-red-200 lg:bg-red-50 lg:text-sm lg:font-semibold lg:text-red-800 lg:hover:bg-red-100";
+function zohoSecondaryBtnCls(full = false) {
+  return `inline-flex min-h-[40px] items-center justify-center rounded-lg border border-[#E4E7EC] bg-white px-3 py-2 text-[13px] font-medium text-[#374151] transition hover:bg-[#F9FAFB] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full" : ""}`;
+}
+
+function zohoDangerBtnCls(compact = false) {
+  const size = compact
+    ? "min-h-[36px] px-3 py-1.5 text-[12px]"
+    : "min-h-[40px] px-4 py-2 text-[14px]";
+  return `inline-flex ${size} shrink-0 items-center justify-center rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] font-medium text-[#D93025] transition active:scale-[0.98] hover:bg-[#FCE8E6]/80 disabled:pointer-events-none disabled:opacity-50`;
 }
 
 function displayRoleName(role: RoleRow) {
@@ -371,7 +397,7 @@ export default function AssignFeaturesRoleWisePage() {
     },
   ];
 
-  function renderFeatureActions(feature: FeatureRow) {
+  function renderFeatureActions(feature: FeatureRow, compact = false) {
     const fid = Number(feature.id);
     const mapping = !Number.isNaN(fid) ? mappingByFeatureId.get(fid) : undefined;
     const updating =
@@ -384,7 +410,7 @@ export default function AssignFeaturesRoleWisePage() {
           type="button"
           disabled={updating || assigningFeatureId !== null}
           onClick={() => void removeFeatureAccessFromRole(feature.id)}
-          className={waDangerBtnCls()}
+          className={zohoDangerBtnCls(compact)}
         >
           {updating ? "Removing…" : "Remove"}
         </button>
@@ -396,7 +422,7 @@ export default function AssignFeaturesRoleWisePage() {
         type="button"
         disabled={assigningFeatureId !== null}
         onClick={() => void assignFeatureToRole(feature.id)}
-        className={waPrimaryBtnCls()}
+        className={zohoPrimaryBtnCls(false, compact)}
       >
         {assigningFeatureId !== null && String(assigningFeatureId) === String(feature.id)
           ? "Assigning…"
@@ -406,83 +432,95 @@ export default function AssignFeaturesRoleWisePage() {
   }
 
   return (
-    <section className="min-h-full bg-[#F0F2F5] lg:bg-transparent lg:space-y-6 lg:p-4 lg:sm:p-6">
-      {/* Mobile & tablet: WhatsApp-style shell */}
+    <section className="min-h-full bg-[#F5F7FA] pb-3 [font-family:var(--font-inter),system-ui,sans-serif] max-lg:-mx-1 sm:max-lg:-mx-2 lg:space-y-5 lg:p-6 lg:pb-8">
+      {/* Mobile & tablet: Zoho-style */}
       <div className="lg:hidden">
-        <div className="sticky top-0 z-20 bg-[#128C7E] text-white shadow-sm">
-          <div className="flex items-center gap-1 px-1 py-2">
-            <div className="min-w-0 flex-1 px-2 py-1">
-              <h1 className="truncate text-[17px] font-medium leading-tight">
-                Role features
+        <div className="sticky top-0 z-20 border-b border-[#E4E7EC] bg-white shadow-sm">
+          <div className="flex items-center gap-2 px-3 py-2.5">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#E8F4FB] text-[#008CD3]">
+              <Shield className="h-4 w-4" aria-hidden />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h1 className="truncate text-[15px] font-semibold text-[#1F2937]">
+                Role module access
               </h1>
-              <p className="truncate text-[13px] text-white/75">
+              <p className={`truncate ${mobileCaptionCls}`}>
                 {initialLoading
                   ? "Loading…"
                   : selectedRole
                     ? `${displayRoleName(selectedRole)} · ${assignedFeatureCount} assigned`
-                    : `${roles.length} roles · ${features.length} features`}
+                    : `${roles.length} roles · ${features.length} modules`}
               </p>
             </div>
             <button
               type="button"
               onClick={() => void refreshAll()}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full active:bg-white/10"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[#E4E7EC] text-[#008CD3] active:bg-[#F5F7FA]"
               aria-label="Refresh"
             >
               <RefreshCw
-                className={`h-5 w-5 ${initialLoading || mappingsLoading ? "animate-spin" : ""}`}
+                className={`h-4 w-4 ${initialLoading || mappingsLoading ? "animate-spin" : ""}`}
+                aria-hidden
               />
             </button>
           </div>
-          <div className="flex overflow-x-auto border-t border-white/10 [scrollbar-width:none]">
-            {mobileTabs.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setMobileMainTab(tab.id)}
-                className={`relative shrink-0 px-4 py-3 text-[13px] font-medium transition ${
-                  mobileMainTab === tab.id
-                    ? "border-b-2 border-white text-white"
-                    : "border-b-2 border-transparent text-white/70"
-                }`}
-              >
-                {tab.label}
-                {tab.badge != null && tab.badge > 0 ? (
-                  <span className="ml-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-white/20 px-1 text-[11px]">
-                    {tab.badge > 9 ? "9+" : tab.badge}
-                  </span>
-                ) : null}
-              </button>
-            ))}
+          <div className="px-3 pb-2.5">
+            <div className="flex w-full gap-0.5 rounded-md bg-[#F5F7FA] p-0.5">
+              {mobileTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setMobileMainTab(tab.id)}
+                  className={`flex min-w-0 flex-1 items-center justify-center gap-1 rounded-[5px] px-2 py-1.5 text-[12px] font-medium transition active:scale-[0.98] ${
+                    mobileMainTab === tab.id
+                      ? "bg-white text-[#008CD3] shadow-sm"
+                      : "text-[#6B7280]"
+                  }`}
+                >
+                  {tab.label}
+                  {tab.badge != null && tab.badge > 0 ? (
+                    <span
+                      className={`inline-flex h-4 min-w-4 items-center justify-center rounded-full px-0.5 text-[10px] ${
+                        mobileMainTab === tab.id
+                          ? "bg-[#E8F4FB] text-[#008CD3]"
+                          : "bg-[#E4E7EC] text-[#6B7280]"
+                      }`}
+                    >
+                      {tab.badge > 9 ? "9+" : tab.badge}
+                    </span>
+                  ) : null}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
         {pageError ? (
-          <div className="mx-3 mt-3 rounded-lg bg-[#FFECEC] px-4 py-3 text-[14px] text-[#8B1A1A]">
+          <div className="mx-3 mt-2 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2 text-[12px] text-[#D93025]">
             {pageError}
           </div>
         ) : null}
 
         {actionMessage ? (
-          <div className="mx-3 mt-3 rounded-lg bg-[#E7FCE3] px-4 py-3 text-[14px] text-[#0B5E44]">
+          <div className="mx-3 mt-2 rounded-lg border border-[#A8DAB5] bg-[#E6F4EA] px-3 py-2 text-[12px] text-[#0F9D58]">
             {actionMessage}
           </div>
         ) : null}
 
         {initialLoading ? (
-          <div className="flex flex-col items-center justify-center gap-3 py-24 text-[#667781]">
-            <Loader2 className="h-9 w-9 animate-spin text-[#128C7E]" />
-            <p className="text-[15px]">Loading roles and features…</p>
+          <div className="flex flex-col items-center justify-center gap-2 py-16 text-[#6B7280]">
+            <Loader2 className="h-7 w-7 animate-spin text-[#008CD3]" aria-hidden />
+            <p className="text-[13px]">Loading roles and modules…</p>
           </div>
         ) : null}
 
         {!initialLoading && !pageError && mobileMainTab === "roles" ? (
-          <ul className="mt-1 divide-y divide-[#E9EDEF] bg-white">
+          <ul className="divide-y divide-[#E4E7EC] bg-white">
             {roles.length === 0 ? (
-              <li className="px-4 py-16 text-center">
-                <Shield className="mx-auto h-10 w-10 text-[#8696A0]" />
-                <p className="mt-4 text-[17px] font-medium text-[#111B21]">No roles found</p>
-                <p className="mt-2 text-[14px] text-[#667781]">
+              <li className="px-3 py-12 text-center">
+                <Shield className="mx-auto h-8 w-8 text-[#9CA3AF]" aria-hidden />
+                <p className={`mt-3 ${mobileValueCls}`}>No roles found</p>
+                <p className={`mt-1 ${mobileCaptionCls}`}>
                   Create roles for this organization first.
                 </p>
               </li>
@@ -496,23 +534,23 @@ export default function AssignFeaturesRoleWisePage() {
                     <button
                       type="button"
                       onClick={() => selectRole(id)}
-                      className="flex w-full items-center gap-3 px-4 py-3.5 text-left active:bg-[#F0F2F5]"
+                      className="flex w-full items-center gap-2.5 px-3 py-3 text-left active:bg-[#F5F7FA]"
                     >
                       <span
-                        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-medium ${avatarColorClass(name)}`}
+                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${avatarColorClass(name)}`}
                       >
                         {roleInitials(name)}
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-[17px] text-[#111B21]">{name}</p>
-                        <p className="text-[14px] text-[#667781]">
-                          {active ? "Currently selected" : "Tap to manage features"}
+                        <p className={`truncate ${mobileValueCls}`}>{name}</p>
+                        <p className={mobileCaptionCls}>
+                          {active ? "Currently selected" : "Tap to manage modules"}
                         </p>
                       </div>
                       {active ? (
-                        <Check className="h-5 w-5 shrink-0 text-[#25D366]" />
+                        <Check className="h-4 w-4 shrink-0 text-[#008CD3]" aria-hidden />
                       ) : (
-                        <ChevronRight className="h-5 w-5 shrink-0 text-[#8696A0]" />
+                        <ChevronRight className="h-4 w-4 shrink-0 text-[#9CA3AF]" aria-hidden />
                       )}
                     </button>
                   </li>
@@ -525,69 +563,69 @@ export default function AssignFeaturesRoleWisePage() {
         {!initialLoading && !pageError && mobileMainTab === "features" ? (
           <div>
             {!selectedRole || roles.length === 0 ? (
-              <div className="mx-3 mt-4 rounded-lg bg-white px-6 py-16 text-center">
-                <Shield className="mx-auto h-10 w-10 text-[#8696A0]" />
-                <p className="mt-4 text-[17px] font-medium text-[#111B21]">Select a role first</p>
-                <p className="mt-2 text-[14px] text-[#667781]">
-                  Go to the Roles tab and pick a role to configure features.
+              <div className="mx-3 mt-3 rounded-lg border border-[#E4E7EC] bg-white px-4 py-12 text-center">
+                <Shield className="mx-auto h-8 w-8 text-[#9CA3AF]" aria-hidden />
+                <p className={`mt-3 ${mobileValueCls}`}>Select a role first</p>
+                <p className={`mt-1 ${mobileCaptionCls}`}>
+                  Go to Roles and pick a role to configure modules.
                 </p>
                 <button
                   type="button"
                   onClick={() => setMobileMainTab("roles")}
-                  className={`mt-6 ${waPrimaryBtnCls()}`}
+                  className={`mt-4 ${zohoPrimaryBtnCls(true)}`}
                 >
                   Choose role
                 </button>
               </div>
             ) : (
               <>
-                <div className="bg-[#128C7E]/10 px-4 py-3">
-                  <p className="text-[13px] text-[#667781]">Managing features for</p>
-                  <p className="text-[17px] font-medium text-[#111B21]">
-                    {displayRoleName(selectedRole)}
+                <div className="border-b border-[#E4E7EC] bg-[#E8F4FB]/50 px-3 py-2.5">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-[#008CD3]">
+                    Modules for role
                   </p>
+                  <p className={mobileValueCls}>{displayRoleName(selectedRole)}</p>
                 </div>
-                <div className="bg-white px-3 py-2">
+                <div className="border-b border-[#E4E7EC] bg-white px-3 py-2">
                   <div className="relative">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8696A0]" />
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#9CA3AF]" aria-hidden />
                     <input
                       type="search"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Search features"
-                      className={searchFieldCls()}
+                      placeholder="Search modules…"
+                      className={zohoSearchCls()}
                     />
                   </div>
                 </div>
 
                 {mappingsLoading ? (
-                  <div className="flex flex-col items-center justify-center gap-3 py-16 text-[#667781]">
-                    <Loader2 className="h-8 w-8 animate-spin text-[#128C7E]" />
-                    <p className="text-[15px]">Loading assignments…</p>
+                  <div className="flex flex-col items-center justify-center gap-2 py-14 text-[#6B7280]">
+                    <Loader2 className="h-7 w-7 animate-spin text-[#008CD3]" aria-hidden />
+                    <p className="text-[13px]">Loading assignments…</p>
                   </div>
                 ) : null}
 
                 {mappingsError ? (
-                  <div className="mx-3 mt-3 rounded-lg bg-[#FFECEC] px-4 py-3 text-[14px] text-[#8B1A1A]">
+                  <div className="mx-3 mt-2 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2 text-[12px] text-[#D93025]">
                     {mappingsError}
                   </div>
                 ) : null}
 
                 {!mappingsLoading && !mappingsError && features.length === 0 ? (
-                  <div className="mx-3 mt-4 rounded-lg bg-white px-6 py-16 text-center">
-                    <Puzzle className="mx-auto h-10 w-10 text-[#8696A0]" />
-                    <p className="mt-4 text-[17px] font-medium text-[#111B21]">No features yet</p>
-                    <p className="mt-2 text-[14px] text-[#667781]">
-                      Add organization features before assigning them to roles.
+                  <div className="mx-3 mt-3 rounded-lg border border-dashed border-[#E4E7EC] bg-white px-4 py-12 text-center">
+                    <Puzzle className="mx-auto h-8 w-8 text-[#9CA3AF]" aria-hidden />
+                    <p className={`mt-3 ${mobileValueCls}`}>No modules yet</p>
+                    <p className={`mt-1 ${mobileCaptionCls}`}>
+                      Add organization modules before assigning them to roles.
                     </p>
                   </div>
                 ) : null}
 
                 {!mappingsLoading && !mappingsError && features.length > 0 ? (
-                  <ul className="mt-1 divide-y divide-[#E9EDEF] bg-white">
+                  <ul className="divide-y divide-[#E4E7EC] bg-white">
                     {filteredFeatures.length === 0 ? (
-                      <li className="px-4 py-12 text-center text-[15px] text-[#667781]">
-                        No features match your search.
+                      <li className="px-3 py-10 text-center text-[13px] text-[#6B7280]">
+                        No modules match your search.
                       </li>
                     ) : (
                       filteredFeatures.map((feature) => {
@@ -599,32 +637,34 @@ export default function AssignFeaturesRoleWisePage() {
 
                         return (
                           <li key={String(feature.id)}>
-                            <div className="flex items-center gap-3 px-4 py-3.5">
+                            <div className="flex items-start gap-2 px-3 py-3">
                               <span
-                                className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-medium ${
+                                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-[11px] font-semibold ${
                                   mapping
-                                    ? "bg-[#E7FCE3] text-[#0B5E44]"
-                                    : avatarColorClass(title)
+                                    ? "bg-[#E6F4EA] text-[#0F9D58]"
+                                    : moduleColorClass(title)
                                 }`}
                               >
                                 {mapping ? (
-                                  <Check className="h-5 w-5" />
+                                  <Check className="h-4 w-4" aria-hidden />
                                 ) : (
                                   featureInitials(title)
                                 )}
                               </span>
                               <div className="min-w-0 flex-1">
-                                <p className="truncate text-[17px] text-[#111B21]">{title}</p>
-                                <p className="line-clamp-2 text-[14px] text-[#667781]">
+                                <p className={`truncate ${mobileValueCls}`}>{title}</p>
+                                <p className={`line-clamp-2 ${mobileCaptionCls}`}>
                                   {feature.feature_description || "No description."}
                                 </p>
                                 {mapping ? (
-                                  <p className="mt-0.5 text-[13px] font-medium text-[#25D366]">
+                                  <p className="mt-0.5 text-[11px] font-medium text-[#0F9D58]">
                                     Assigned to role
                                   </p>
                                 ) : null}
+                                <div className="mt-2">
+                                  {renderFeatureActions(feature, true)}
+                                </div>
                               </div>
-                              {renderFeatureActions(feature)}
                             </div>
                           </li>
                         );
@@ -638,186 +678,225 @@ export default function AssignFeaturesRoleWisePage() {
         ) : null}
       </div>
 
-      {/* Desktop layout (unchanged) */}
-      <div className="hidden space-y-6 lg:block">
-      <header className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-slate-500">
-          Organization Features
-        </p>
-        <h1 className="mt-1 text-2xl font-bold tracking-tight text-[#0C123A] sm:text-3xl">
-          Assign features by role
-        </h1>
-        <p className="mt-2 max-w-2xl text-sm text-slate-600">
-          Choose a role, then grant organization features to that role. Remove access to unlink a feature from the role.
-        </p>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-            {roles.length} Role{roles.length === 1 ? "" : "s"}
-          </span>
-          <span className="inline-flex rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-800">
-            {features.length} Org feature{features.length === 1 ? "" : "s"}
-          </span>
-        </div>
-      </header>
-
-      {pageError ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{pageError}</div>
-      ) : null}
-
-      {initialLoading ? (
-        <div className="rounded-xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-500">
-          Loading roles and features…
-        </div>
-      ) : null}
-
-      {!initialLoading && !pageError ? (
-        <div className="grid gap-6 lg:grid-cols-[minmax(260px,300px)_1fr]">
-          <aside className="h-fit rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Roles</p>
-            <p className="mt-1 text-xs text-slate-500">Select a role to manage its feature access.</p>
-            <ul className="mt-4 space-y-2">
-              {roles.length === 0 ? (
-                <li className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-center text-sm text-slate-500">
-                  No roles found for this organization.
-                </li>
-              ) : (
-                roles.map((role) => {
-                  const id = Number(role.id);
-                  const active = selectedRoleId !== null && id === selectedRoleId;
-                  return (
-                    <li key={String(role.id)}>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedRoleId(id)}
-                        className={`flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-left text-sm font-semibold transition ${
-                          active
-                            ? "border-[#0C123A] bg-[#0C123A] text-white shadow-sm"
-                            : "border-slate-200 bg-white text-[#0C123A] hover:border-slate-300 hover:bg-slate-50"
-                        }`}
-                      >
-                        <span className="truncate">{role.role_name || `Role #${role.id}`}</span>
-                        {active ? (
-                          <span className="ml-2 shrink-0 text-[10px] font-medium uppercase tracking-wide text-white/90">
-                            Active
-                          </span>
-                        ) : null}
-                      </button>
-                    </li>
-                  );
-                })
-              )}
-            </ul>
-          </aside>
-
-          <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
-            {!selectedRole || roles.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center text-sm text-slate-500">
-                Select a role from the list to configure features.
+      {/* Desktop: Zoho-style */}
+      <div className="mx-auto hidden max-w-6xl space-y-5 lg:block">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#E8F4FB] text-[#008CD3]">
+              <Shield className="h-5 w-5" aria-hidden />
+            </span>
+            <div>
+              <h1 className="text-[18px] font-semibold text-[#1F2937]">
+                Assign modules by role
+              </h1>
+              <p className="max-w-xl text-[13px] text-[#6B7280]">
+                Choose a role, then grant or remove organization module access for that role.
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <span className="inline-flex rounded-md bg-[#F5F7FA] px-2 py-0.5 text-[12px] font-medium text-[#374151]">
+                  {roles.length} role{roles.length === 1 ? "" : "s"}
+                </span>
+                <span className="inline-flex rounded-md bg-[#E8F4FB] px-2 py-0.5 text-[12px] font-medium text-[#008CD3]">
+                  {features.length} module{features.length === 1 ? "" : "s"}
+                </span>
               </div>
-            ) : (
-              <>
-                <div className="flex flex-col gap-2 border-b border-slate-100 pb-4 sm:flex-row sm:items-end sm:justify-between">
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                      Features for role
-                    </p>
-                    <h2 className="mt-1 text-lg font-bold text-[#0C123A]">
-                      {selectedRole.role_name || `Role #${selectedRole.id}`}
-                    </h2>
-                  </div>
-                  <input
-                    type="search"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search features…"
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none ring-indigo-200 focus:ring-2 sm:max-w-xs"
-                  />
-                </div>
-
-                {actionMessage ? (
-                  <p className="mt-3 text-sm text-slate-700">{actionMessage}</p>
-                ) : null}
-
-                {mappingsLoading ? (
-                  <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500">
-                    Loading role assignments…
-                  </div>
-                ) : null}
-
-                {mappingsError ? (
-                  <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-                    {mappingsError}
-                  </div>
-                ) : null}
-
-                {!mappingsLoading && !mappingsError && features.length === 0 ? (
-                  <div className="mt-6 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-500">
-                    No organization features available. Add features to the organization first.
-                  </div>
-                ) : null}
-
-                {!mappingsLoading && !mappingsError && features.length > 0 ? (
-                  <ul className="mt-6 space-y-3">
-                    {filteredFeatures.length === 0 ? (
-                      <li className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
-                        No features match your search.
-                      </li>
-                    ) : (
-                      filteredFeatures.map((feature) => {
-                        const fid = Number(feature.id);
-                        const mapping = !Number.isNaN(fid) ? mappingByFeatureId.get(fid) : undefined;
-                        const title =
-                          feature.feature_name || feature.feature_key || `Feature #${feature.id}`;
-                        const updating =
-                          updatingKey === `${selectedRoleId}:${feature.id}` ||
-                          updatingKey === `${selectedRoleId}:${fid}`;
-
-                        return (
-                          <li key={String(feature.id)}>
-                            <article className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-                              <div className="min-w-0 flex-1">
-                                <p className="text-sm font-semibold text-[#0C123A]">{title}</p>
-                                <p className="mt-1 line-clamp-2 text-xs text-slate-600">
-                                  {feature.feature_description || "No description."}
-                                </p>
-                              </div>
-
-                              <div className="flex shrink-0 flex-col items-stretch gap-2 sm:items-end">
-                                {mapping ? (
-                                  <button
-                                    type="button"
-                                    disabled={updating || assigningFeatureId !== null}
-                                    onClick={() => void removeFeatureAccessFromRole(feature.id)}
-                                    className="inline-flex items-center justify-center rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-800 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
-                                  >
-                                    {updating ? "Removing…" : "Remove feature access"}
-                                  </button>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    disabled={assigningFeatureId !== null}
-                                    onClick={() => void assignFeatureToRole(feature.id)}
-                                    className="inline-flex items-center justify-center rounded-lg bg-[#0C123A] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#151e59] disabled:cursor-not-allowed disabled:opacity-60"
-                                  >
-                                    {assigningFeatureId !== null &&
-                                    String(assigningFeatureId) === String(feature.id)
-                                      ? "Assigning…"
-                                      : "Assign to role"}
-                                  </button>
-                                )}
-                              </div>
-                            </article>
-                          </li>
-                        );
-                      })
-                    )}
-                  </ul>
-                ) : null}
-              </>
-            )}
+            </div>
           </div>
+          <button
+            type="button"
+            onClick={() => void refreshAll()}
+            disabled={initialLoading}
+            className={zohoSecondaryBtnCls()}
+            aria-label="Refresh"
+          >
+            <RefreshCw
+              className={`h-4 w-4 ${initialLoading || mappingsLoading ? "animate-spin" : ""}`}
+              aria-hidden
+            />
+            Refresh
+          </button>
         </div>
-      ) : null}
+
+        {pageError ? (
+          <div className="rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-4 py-3 text-[13px] text-[#D93025]">
+            {pageError}
+          </div>
+        ) : null}
+
+        {actionMessage ? (
+          <div className="rounded-lg border border-[#A8DAB5] bg-[#E6F4EA] px-4 py-3 text-[13px] text-[#0F9D58]">
+            {actionMessage}
+          </div>
+        ) : null}
+
+        {initialLoading ? (
+          <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-[#E4E7EC] bg-white py-16 text-[#6B7280]">
+            <Loader2 className="h-7 w-7 animate-spin text-[#008CD3]" aria-hidden />
+            <p className="text-[13px]">Loading roles and modules…</p>
+          </div>
+        ) : null}
+
+        {!initialLoading && !pageError ? (
+          <div className="grid gap-5 lg:grid-cols-[minmax(240px,280px)_1fr]">
+            <aside className="h-fit rounded-lg border border-[#E4E7EC] bg-white p-3 shadow-sm">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
+                Roles
+              </p>
+              <p className={`mt-0.5 ${mobileCaptionCls}`}>
+                Select a role to manage module access.
+              </p>
+              <ul className="mt-3 space-y-1.5">
+                {roles.length === 0 ? (
+                  <li className="rounded-md border border-dashed border-[#E4E7EC] bg-[#F9FAFB] px-3 py-4 text-center text-[12px] text-[#6B7280]">
+                    No roles found for this organization.
+                  </li>
+                ) : (
+                  roles.map((role) => {
+                    const id = Number(role.id);
+                    const active = selectedRoleId !== null && id === selectedRoleId;
+                    const name = displayRoleName(role);
+                    return (
+                      <li key={String(role.id)}>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedRoleId(id)}
+                          className={`flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left transition ${
+                            active
+                              ? "border-[#008CD3] bg-[#E8F4FB] text-[#008CD3]"
+                              : "border-[#E4E7EC] bg-white text-[#1F2937] hover:bg-[#F9FAFB]"
+                          }`}
+                        >
+                          <span
+                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${
+                              active ? "bg-white text-[#008CD3]" : avatarColorClass(name)
+                            }`}
+                          >
+                            {roleInitials(name)}
+                          </span>
+                          <span className="min-w-0 flex-1 truncate text-[13px] font-medium">
+                            {name}
+                          </span>
+                          {active ? (
+                            <Check className="h-4 w-4 shrink-0" aria-hidden />
+                          ) : null}
+                        </button>
+                      </li>
+                    );
+                  })
+                )}
+              </ul>
+            </aside>
+
+            <div className="min-w-0 rounded-lg border border-[#E4E7EC] bg-white p-4 shadow-sm">
+              {!selectedRole || roles.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-[#E4E7EC] bg-[#F9FAFB] px-4 py-12 text-center text-[13px] text-[#6B7280]">
+                  Select a role from the list to configure modules.
+                </div>
+              ) : (
+                <>
+                  <div className="flex flex-col gap-2 border-b border-[#E4E7EC] pb-3 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
+                        Modules for role
+                      </p>
+                      <h2 className="mt-0.5 text-[16px] font-semibold text-[#1F2937]">
+                        {displayRoleName(selectedRole)}
+                      </h2>
+                    </div>
+                    <div className="relative w-full sm:max-w-xs">
+                      <Search
+                        className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF]"
+                        aria-hidden
+                      />
+                      <input
+                        type="search"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search modules…"
+                        className={zohoSearchCls()}
+                      />
+                    </div>
+                  </div>
+
+                  {mappingsLoading ? (
+                    <div className="mt-4 flex flex-col items-center justify-center gap-2 rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] py-10 text-[#6B7280]">
+                      <Loader2 className="h-6 w-6 animate-spin text-[#008CD3]" aria-hidden />
+                      <p className="text-[13px]">Loading assignments…</p>
+                    </div>
+                  ) : null}
+
+                  {mappingsError ? (
+                    <div className="mt-3 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2 text-[13px] text-[#D93025]">
+                      {mappingsError}
+                    </div>
+                  ) : null}
+
+                  {!mappingsLoading && !mappingsError && features.length === 0 ? (
+                    <div className="mt-4 rounded-lg border border-dashed border-[#E4E7EC] bg-[#F9FAFB] px-4 py-10 text-center text-[13px] text-[#6B7280]">
+                      No organization modules available. Add modules to the organization first.
+                    </div>
+                  ) : null}
+
+                  {!mappingsLoading && !mappingsError && features.length > 0 ? (
+                    <ul className="mt-4 space-y-2">
+                      {filteredFeatures.length === 0 ? (
+                        <li className="rounded-lg border border-dashed border-[#E4E7EC] bg-[#F9FAFB] px-4 py-8 text-center text-[13px] text-[#6B7280]">
+                          No modules match your search.
+                        </li>
+                      ) : (
+                        filteredFeatures.map((feature) => {
+                          const fid = Number(feature.id);
+                          const mapping = !Number.isNaN(fid)
+                            ? mappingByFeatureId.get(fid)
+                            : undefined;
+                          const title = displayFeatureTitle(feature);
+
+                          return (
+                            <li key={String(feature.id)}>
+                              <article className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] p-3">
+                                <div className="flex min-w-0 flex-1 items-start gap-2.5">
+                                  <span
+                                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-[11px] font-semibold ${
+                                      mapping
+                                        ? "bg-[#E6F4EA] text-[#0F9D58]"
+                                        : moduleColorClass(title)
+                                    }`}
+                                  >
+                                    {mapping ? (
+                                      <Check className="h-4 w-4" aria-hidden />
+                                    ) : (
+                                      featureInitials(title)
+                                    )}
+                                  </span>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-[14px] font-medium text-[#1F2937]">
+                                      {title}
+                                    </p>
+                                    <p className="line-clamp-2 text-[12px] text-[#6B7280]">
+                                      {feature.feature_description || "No description."}
+                                    </p>
+                                    {mapping ? (
+                                      <p className="mt-0.5 text-[11px] font-medium text-[#0F9D58]">
+                                        Assigned to role
+                                      </p>
+                                    ) : null}
+                                  </div>
+                                </div>
+                                <div className="shrink-0">
+                                  {renderFeatureActions(feature, false)}
+                                </div>
+                              </article>
+                            </li>
+                          );
+                        })
+                      )}
+                    </ul>
+                  ) : null}
+                </>
+              )}
+            </div>
+          </div>
+        ) : null}
       </div>
     </section>
   );

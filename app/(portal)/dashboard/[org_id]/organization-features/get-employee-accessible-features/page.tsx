@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import {
   Check,
   ChevronRight,
+  KeyRound,
   Loader2,
   Puzzle,
   RefreshCw,
@@ -32,15 +33,20 @@ type UserRow = {
   features?: UserFeature[];
 };
 
-const WA_AVATAR_COLORS = [
-  "bg-[#DFE5E7] text-[#54656F]",
-  "bg-[#FFD279] text-[#7A4F01]",
-  "bg-[#FEAA57] text-[#7A3E00]",
-  "bg-[#A5B337] text-[#3D4A0A]",
-  "bg-[#35CD96] text-[#0B5E44]",
-  "bg-[#53BDEB] text-[#0B4F6E]",
-  "bg-[#E67EAB] text-[#6B2348]",
-  "bg-[#7F66FF] text-[#2E1F7A]",
+const AVATAR_COLORS = [
+  "bg-[#E8F4FB] text-[#008CD3]",
+  "bg-[#E6F4EA] text-[#0F9D58]",
+  "bg-[#FEF3E6] text-[#E8710A]",
+  "bg-[#F3E8FD] text-[#7B1FA2]",
+  "bg-[#FCE8E6] text-[#D93025]",
+  "bg-[#E8EAF6] text-[#3F51B5]",
+];
+
+const MODULE_ICON_COLORS = [
+  "bg-[#E8F4FB] text-[#008CD3]",
+  "bg-[#E6F4EA] text-[#0F9D58]",
+  "bg-[#FEF3E6] text-[#E8710A]",
+  "bg-[#F3E8FD] text-[#7B1FA2]",
 ];
 
 function avatarColorClass(name: string) {
@@ -48,8 +54,19 @@ function avatarColorClass(name: string) {
   for (let i = 0; i < name.length; i += 1) {
     hash = name.charCodeAt(i) + ((hash << 5) - hash);
   }
-  return WA_AVATAR_COLORS[Math.abs(hash) % WA_AVATAR_COLORS.length];
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
+
+function moduleColorClass(name: string) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i += 1) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return MODULE_ICON_COLORS[Math.abs(hash) % MODULE_ICON_COLORS.length];
+}
+
+const mobileCaptionCls = "text-[11px] leading-snug text-[#6B7280]";
+const mobileValueCls = "text-[13px] font-semibold text-[#1F2937]";
 
 function userInitials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -64,16 +81,23 @@ function featureInitials(name: string) {
   return cleaned.slice(0, 2).toUpperCase();
 }
 
-function searchFieldCls() {
-  return "w-full rounded-lg border-0 bg-[#F0F2F5] py-2.5 pl-10 pr-4 text-[15px] text-[#111B21] outline-none transition placeholder:text-[#8696A0] focus:bg-white focus:ring-1 focus:ring-[#25D366]/40 lg:rounded-lg lg:border lg:border-slate-200 lg:bg-white lg:py-2 lg:pl-3 lg:text-sm lg:focus:ring-2 lg:focus:ring-indigo-200";
+function zohoSearchCls() {
+  return "w-full rounded-md border border-[#E4E7EC] bg-white py-2 pl-9 pr-3 text-[13px] text-[#1F2937] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15 lg:rounded-lg lg:text-[14px]";
 }
 
-function waPrimaryBtnCls() {
-  return "inline-flex min-h-[40px] items-center justify-center rounded-lg bg-[#25D366] px-4 py-2 text-[14px] font-medium text-white transition active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50";
+function zohoPrimaryBtnCls(full = false) {
+  return `inline-flex min-h-[40px] items-center justify-center rounded-lg bg-[#008CD3] px-4 py-2 text-[14px] font-medium text-white transition active:scale-[0.98] hover:bg-[#0070AA] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full" : ""}`;
 }
 
-function waDangerBtnCls() {
-  return "inline-flex min-h-[36px] shrink-0 items-center justify-center rounded-lg border border-[#FFCDD2] bg-[#FFECEC] px-3 py-1.5 text-[13px] font-medium text-[#C62828] transition active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 lg:rounded-md lg:border-red-200 lg:bg-red-50 lg:text-[11px] lg:font-semibold lg:hover:bg-red-100";
+function zohoSecondaryBtnCls(full = false) {
+  return `inline-flex min-h-[40px] items-center justify-center rounded-lg border border-[#E4E7EC] bg-white px-3 py-2 text-[13px] font-medium text-[#374151] transition hover:bg-[#F9FAFB] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full" : ""}`;
+}
+
+function zohoDangerBtnCls(compact = false) {
+  const size = compact
+    ? "min-h-[32px] px-2 py-1 text-[11px]"
+    : "min-h-[36px] px-2.5 py-1 text-[12px]";
+  return `inline-flex ${size} shrink-0 items-center justify-center rounded-md border border-[#F5C6C2] bg-[#FCE8E6] font-medium text-[#D93025] transition active:scale-[0.98] hover:bg-[#FCE8E6]/80 disabled:pointer-events-none disabled:opacity-50`;
 }
 
 function displayUserName(user: UserRow) {
@@ -250,94 +274,105 @@ export default function GetEmployeeAccessibleFeaturesPage() {
   ];
 
   return (
-    <section className="min-h-full bg-[#F0F2F5] lg:bg-slate-50/60 lg:space-y-6 lg:p-4 lg:sm:p-6">
-      {/* Mobile & tablet: WhatsApp-style shell */}
+    <section className="min-h-full bg-[#F5F7FA] pb-3 [font-family:var(--font-inter),system-ui,sans-serif] max-lg:-mx-1 sm:max-lg:-mx-2 lg:space-y-5 lg:p-6 lg:pb-8">
+      {/* Mobile & tablet: Zoho-style */}
       <div className="lg:hidden">
-        <div className="sticky top-0 z-20 bg-[#128C7E] text-white shadow-sm">
-          <div className="flex items-center gap-1 px-1 py-2">
-            <div className="min-w-0 flex-1 px-2 py-1">
-              <h1 className="truncate text-[17px] font-medium leading-tight">
+        <div className="sticky top-0 z-20 border-b border-[#E4E7EC] bg-white shadow-sm">
+          <div className="flex items-center gap-2 px-3 py-2.5">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#E8F4FB] text-[#008CD3]">
+              <KeyRound className="h-4 w-4" aria-hidden />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h1 className="truncate text-[15px] font-semibold text-[#1F2937]">
                 Feature access
               </h1>
-              <p className="truncate text-[13px] text-white/75">
+              <p className={`truncate ${mobileCaptionCls}`}>
                 {loading
                   ? "Loading…"
                   : mobileSelectedUser
-                    ? `${displayUserName(mobileSelectedUser)} · ${mobileSelectedUser.features?.length ?? 0} features`
-                    : `${visibleUsers.length} members · ${totalFeatures} features`}
+                    ? `${displayUserName(mobileSelectedUser)} · ${mobileSelectedUser.features?.length ?? 0} modules`
+                    : `${visibleUsers.length} members · ${totalFeatures} modules`}
               </p>
             </div>
             <button
               type="button"
               onClick={() => void refreshAll()}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full active:bg-white/10"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[#E4E7EC] text-[#008CD3] active:bg-[#F5F7FA]"
               aria-label="Refresh"
             >
-              <RefreshCw className={`h-5 w-5 ${loading ? "animate-spin" : ""}`} />
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             </button>
           </div>
-          <div className="flex overflow-x-auto border-t border-white/10 [scrollbar-width:none]">
-            {mobileTabs.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setMobileMainTab(tab.id)}
-                className={`relative shrink-0 px-4 py-3 text-[13px] font-medium transition ${
-                  mobileMainTab === tab.id
-                    ? "border-b-2 border-white text-white"
-                    : "border-b-2 border-transparent text-white/70"
-                }`}
-              >
-                {tab.label}
-                {tab.badge != null && tab.badge > 0 ? (
-                  <span className="ml-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-white/20 px-1 text-[11px]">
-                    {tab.badge > 9 ? "9+" : tab.badge}
-                  </span>
-                ) : null}
-              </button>
-            ))}
+          <div className="flex gap-0.5 px-3 pb-2.5">
+            <div className="flex w-full rounded-md bg-[#F5F7FA] p-0.5">
+              {mobileTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setMobileMainTab(tab.id)}
+                  className={`flex min-w-0 flex-1 items-center justify-center gap-1 rounded-[5px] px-2 py-1.5 text-[12px] font-medium transition active:scale-[0.98] ${
+                    mobileMainTab === tab.id
+                      ? "bg-white text-[#008CD3] shadow-sm"
+                      : "text-[#6B7280]"
+                  }`}
+                >
+                  {tab.label}
+                  {tab.badge != null && tab.badge > 0 ? (
+                    <span
+                      className={`inline-flex h-4 min-w-4 items-center justify-center rounded-full px-0.5 text-[10px] ${
+                        mobileMainTab === tab.id
+                          ? "bg-[#E8F4FB] text-[#008CD3]"
+                          : "bg-[#E4E7EC] text-[#6B7280]"
+                      }`}
+                    >
+                      {tab.badge > 9 ? "9+" : tab.badge}
+                    </span>
+                  ) : null}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
         {error ? (
-          <div className="mx-3 mt-3 rounded-lg bg-[#FFECEC] px-4 py-3 text-[14px] text-[#8B1A1A]">
+          <div className="mx-3 mt-2 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2 text-[12px] text-[#D93025]">
             {error}
           </div>
         ) : null}
 
         {actionMessage ? (
-          <div className="mx-3 mt-3 rounded-lg bg-[#E7FCE3] px-4 py-3 text-[14px] text-[#0B5E44]">
+          <div className="mx-3 mt-2 rounded-lg border border-[#A8DAB5] bg-[#E6F4EA] px-3 py-2 text-[12px] text-[#0F9D58]">
             {actionMessage}
           </div>
         ) : null}
 
         {loading ? (
-          <div className="flex flex-col items-center justify-center gap-3 py-24 text-[#667781]">
-            <Loader2 className="h-9 w-9 animate-spin text-[#128C7E]" />
-            <p className="text-[15px]">Loading users…</p>
+          <div className="flex flex-col items-center justify-center gap-2 py-16 text-[#6B7280]">
+            <Loader2 className="h-7 w-7 animate-spin text-[#008CD3]" aria-hidden />
+            <p className="text-[13px]">Loading members…</p>
           </div>
         ) : null}
 
         {!loading && !error && mobileMainTab === "members" ? (
           <div>
-            <div className="bg-white px-3 py-2">
+            <div className="border-b border-[#E4E7EC] bg-white px-3 py-2">
               <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8696A0]" />
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#9CA3AF]" aria-hidden />
                 <input
                   type="search"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search members"
-                  className={searchFieldCls()}
+                  placeholder="Search members…"
+                  className={zohoSearchCls()}
                 />
               </div>
             </div>
-            <ul className="mt-1 divide-y divide-[#E9EDEF] bg-white">
+            <ul className="divide-y divide-[#E4E7EC] bg-white">
               {filteredUsers.length === 0 ? (
-                <li className="px-4 py-16 text-center">
-                  <Users className="mx-auto h-10 w-10 text-[#8696A0]" />
-                  <p className="mt-4 text-[17px] font-medium text-[#111B21]">No members found</p>
-                  <p className="mt-2 text-[14px] text-[#667781]">
+                <li className="px-3 py-12 text-center">
+                  <Users className="mx-auto h-8 w-8 text-[#9CA3AF]" aria-hidden />
+                  <p className={`mt-3 ${mobileValueCls}`}>No members found</p>
+                  <p className={`mt-1 ${mobileCaptionCls}`}>
                     Try another search or refresh the list.
                   </p>
                 </li>
@@ -353,27 +388,27 @@ export default function GetEmployeeAccessibleFeaturesPage() {
                       <button
                         type="button"
                         onClick={() => selectMobileUser(user.user_id)}
-                        className="flex w-full items-center gap-3 px-4 py-3.5 text-left active:bg-[#F0F2F5]"
+                        className="flex w-full items-center gap-2.5 px-3 py-3 text-left active:bg-[#F5F7FA]"
                       >
                         <span
-                          className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-medium ${avatarColorClass(name)}`}
+                          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${avatarColorClass(name)}`}
                         >
                           {userInitials(name)}
                         </span>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-[17px] text-[#111B21]">{name}</p>
-                          <p className="truncate text-[14px] text-[#667781]">
+                          <p className={`truncate ${mobileValueCls}`}>{name}</p>
+                          <p className={`truncate ${mobileCaptionCls}`}>
                             {String(user.user_email || "No email")}
                           </p>
-                          <p className="truncate text-[13px] text-[#8696A0]">
-                            {String(user.role_name || "employee")} · {featureCount} feature
+                          <p className="truncate text-[10px] text-[#9CA3AF]">
+                            {String(user.role_name || "employee")} · {featureCount} module
                             {featureCount === 1 ? "" : "s"}
                           </p>
                         </div>
                         {active ? (
-                          <Check className="h-5 w-5 shrink-0 text-[#25D366]" />
+                          <Check className="h-4 w-4 shrink-0 text-[#008CD3]" aria-hidden />
                         ) : (
-                          <ChevronRight className="h-5 w-5 shrink-0 text-[#8696A0]" />
+                          <ChevronRight className="h-4 w-4 shrink-0 text-[#9CA3AF]" aria-hidden />
                         )}
                       </button>
                     </li>
@@ -387,69 +422,74 @@ export default function GetEmployeeAccessibleFeaturesPage() {
         {!loading && !error && mobileMainTab === "access" ? (
           <div>
             {!mobileSelectedUser ? (
-              <div className="mx-3 mt-4 rounded-lg bg-white px-6 py-16 text-center">
-                <Users className="mx-auto h-10 w-10 text-[#8696A0]" />
-                <p className="mt-4 text-[17px] font-medium text-[#111B21]">Select a member first</p>
-                <p className="mt-2 text-[14px] text-[#667781]">
-                  Go to the Members tab and pick someone to view their feature access.
+              <div className="mx-3 mt-3 rounded-lg border border-[#E4E7EC] bg-white px-4 py-12 text-center">
+                <Users className="mx-auto h-8 w-8 text-[#9CA3AF]" aria-hidden />
+                <p className={`mt-3 ${mobileValueCls}`}>Select a member first</p>
+                <p className={`mt-1 ${mobileCaptionCls}`}>
+                  Go to Members and pick someone to view their module access.
                 </p>
                 <button
                   type="button"
                   onClick={() => setMobileMainTab("members")}
-                  className={`mt-6 ${waPrimaryBtnCls()}`}
+                  className={`mt-4 ${zohoPrimaryBtnCls(true)}`}
                 >
                   Choose member
                 </button>
               </div>
             ) : (
               <>
-                <div className="bg-[#128C7E]/10 px-4 py-3">
-                  <p className="text-[13px] text-[#667781]">Feature access for</p>
-                  <p className="text-[17px] font-medium text-[#111B21]">
-                    {displayUserName(mobileSelectedUser)}
+                <div className="border-b border-[#E4E7EC] bg-[#E8F4FB]/50 px-3 py-2.5">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-[#008CD3]">
+                    Module access for
                   </p>
-                  <p className="mt-0.5 truncate text-[14px] text-[#667781]">
+                  <p className={mobileValueCls}>{displayUserName(mobileSelectedUser)}</p>
+                  <p className={`mt-0.5 truncate ${mobileCaptionCls}`}>
                     {String(mobileSelectedUser.user_email || "No email")} ·{" "}
                     {String(mobileSelectedUser.role_name || "employee")}
                   </p>
                 </div>
 
                 {(mobileSelectedUser.features ?? []).length === 0 ? (
-                  <div className="mx-3 mt-4 rounded-lg bg-white px-6 py-16 text-center">
-                    <Puzzle className="mx-auto h-10 w-10 text-[#8696A0]" />
-                    <p className="mt-4 text-[17px] font-medium text-[#111B21]">No features assigned</p>
-                    <p className="mt-2 text-[14px] text-[#667781]">
-                      This member has no accessible organization features yet.
+                  <div className="mx-3 mt-3 rounded-lg border border-dashed border-[#E4E7EC] bg-white px-4 py-12 text-center">
+                    <Puzzle className="mx-auto h-8 w-8 text-[#9CA3AF]" aria-hidden />
+                    <p className={`mt-3 ${mobileValueCls}`}>No modules assigned</p>
+                    <p className={`mt-1 ${mobileCaptionCls}`}>
+                      This member has no accessible organization modules yet.
                     </p>
                   </div>
                 ) : (
-                  <ul className="mt-1 divide-y divide-[#E9EDEF] bg-white">
+                  <ul className="divide-y divide-[#E4E7EC] bg-white">
                     {(mobileSelectedUser.features ?? []).map((f) => {
                       const key = `${mobileSelectedUser.user_id}:${f.feature_id}`;
                       const removing = removingKey === key;
                       const title = displayFeatureName(f);
                       return (
                         <li key={String(f.feature_id)}>
-                          <div className="flex items-center gap-3 px-4 py-3.5">
-                            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#E7FCE3] text-sm font-medium text-[#0B5E44]">
+                          <div className="flex items-start gap-2 px-3 py-3">
+                            <span
+                              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-[11px] font-semibold ${moduleColorClass(title)}`}
+                            >
                               {featureInitials(title)}
                             </span>
                             <div className="min-w-0 flex-1">
-                              <p className="truncate text-[17px] text-[#111B21]">{title}</p>
-                              <p className="text-[13px] text-[#8696A0]">
+                              <p className={`truncate ${mobileValueCls}`}>{title}</p>
+                              <p className="text-[10px] text-[#9CA3AF]">
                                 ID {String(f.feature_id)}
                               </p>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void removeFeatureAccess(
+                                    mobileSelectedUser.user_id,
+                                    f.feature_id,
+                                  )
+                                }
+                                disabled={removing || removingKey !== null}
+                                className={`mt-2 ${zohoDangerBtnCls()}`}
+                              >
+                                {removing ? "Removing…" : "Remove access"}
+                              </button>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                void removeFeatureAccess(mobileSelectedUser.user_id, f.feature_id)
-                              }
-                              disabled={removing || removingKey !== null}
-                              className={waDangerBtnCls()}
-                            >
-                              {removing ? "Removing…" : "Remove"}
-                            </button>
                           </div>
                         </li>
                       );
@@ -462,69 +502,95 @@ export default function GetEmployeeAccessibleFeaturesPage() {
         ) : null}
       </div>
 
-      {/* Desktop layout (unchanged) */}
-      <div className="hidden space-y-6 lg:block">
-        <header className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-white to-indigo-50 p-5 shadow-sm sm:p-6">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-slate-500">
-            Organization Features
-          </p>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-[#0C123A] sm:text-3xl">
-            Employee Feature Access
-          </h1>
-          <p className="mt-2 text-sm text-slate-600">
-            View all organization users with their roles and feature access. Expand a user card to see feature
-            dropdown and remove access.
-          </p>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Members shown</p>
-              <p className="mt-1 text-2xl font-bold text-[#0C123A]">{visibleUsers.length}</p>
-              <p className="text-xs text-slate-500">Admin users are hidden for security.</p>
-            </div>
-            <div className="rounded-xl border border-indigo-100 bg-indigo-50/70 px-4 py-3 shadow-sm">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-indigo-700">
-                Accessible features
-              </p>
-              <p className="mt-1 text-2xl font-bold text-indigo-900">{totalFeatures}</p>
-              <p className="text-xs text-indigo-700">Across all visible users.</p>
-            </div>
-            <span className="hidden" aria-hidden>
-              {totalFeatures} Accessible Feature{totalFeatures === 1 ? "" : "s"}
+      {/* Desktop: Zoho-style */}
+      <div className="mx-auto hidden max-w-6xl space-y-5 lg:block">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#E8F4FB] text-[#008CD3]">
+              <KeyRound className="h-5 w-5" aria-hidden />
             </span>
+            <div>
+              <h1 className="text-[18px] font-semibold text-[#1F2937]">
+                Employee feature access
+              </h1>
+              <p className="text-[13px] text-[#6B7280]">
+                View roles and module access. Expand a member to remove access.
+              </p>
+            </div>
           </div>
-        </header>
+          <button
+            type="button"
+            onClick={() => void refreshAll()}
+            disabled={loading}
+            className={zohoSecondaryBtnCls()}
+            aria-label="Refresh"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} aria-hidden />
+            Refresh
+          </button>
+        </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <input
-              type="search"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by user, email, phone, role, feature..."
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none ring-indigo-200 focus:ring-2"
-            />
-            <span className="inline-flex shrink-0 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-              {filteredUsers.length} Result{filteredUsers.length === 1 ? "" : "s"}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="rounded-lg border border-[#E4E7EC] bg-white px-4 py-3 shadow-sm">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
+              Members shown
+            </p>
+            <p className="mt-0.5 text-2xl font-semibold text-[#1F2937]">{visibleUsers.length}</p>
+            <p className="text-[12px] text-[#6B7280]">Admin users are hidden.</p>
+          </div>
+          <div className="rounded-lg border border-[#E4E7EC] bg-white px-4 py-3 shadow-sm">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-[#008CD3]">
+              Accessible modules
+            </p>
+            <p className="mt-0.5 text-2xl font-semibold text-[#1F2937]">{totalFeatures}</p>
+            <p className="text-[12px] text-[#6B7280]">Across all visible members.</p>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-[#E4E7EC] bg-white p-4 shadow-sm">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="relative flex-1">
+              <Search
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF]"
+                aria-hidden
+              />
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search user, email, role, module…"
+                className={zohoSearchCls()}
+              />
+            </div>
+            <span className="inline-flex shrink-0 rounded-md bg-[#E8F4FB] px-2 py-1 text-[12px] font-medium text-[#008CD3]">
+              {filteredUsers.length} result{filteredUsers.length === 1 ? "" : "s"}
             </span>
           </div>
           {actionMessage ? (
-            <p className="mt-3 text-sm font-medium text-slate-700">{actionMessage}</p>
+            <p className="mt-2 rounded-lg border border-[#A8DAB5] bg-[#E6F4EA] px-3 py-2 text-[13px] text-[#0F9D58]">
+              {actionMessage}
+            </p>
           ) : null}
         </div>
 
         {loading ? (
-          <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
-            Loading users...
+          <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-[#E4E7EC] bg-white py-16 text-[#6B7280]">
+            <Loader2 className="h-7 w-7 animate-spin text-[#008CD3]" aria-hidden />
+            <p className="text-[13px]">Loading members…</p>
           </div>
         ) : null}
 
         {error ? (
-          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
+          <div className="rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-4 py-3 text-[13px] text-[#D93025]">
+            {error}
+          </div>
         ) : null}
 
         {!loading && !error && filteredUsers.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-500">
-            No users found.
+          <div className="rounded-lg border border-dashed border-[#E4E7EC] bg-white px-6 py-14 text-center">
+            <Users className="mx-auto h-9 w-9 text-[#9CA3AF]" aria-hidden />
+            <p className="mt-3 text-[15px] font-semibold text-[#1F2937]">No members found</p>
+            <p className="mt-1 text-[13px] text-[#6B7280]">Try a different search term.</p>
           </div>
         ) : null}
 
@@ -533,36 +599,35 @@ export default function GetEmployeeAccessibleFeaturesPage() {
             {filteredUsers.map((user) => {
               const userFeatures = user.features ?? [];
               const isOpen = String(openUserId) === String(user.user_id);
+              const name = displayUserName(user);
               return (
                 <article
                   key={String(user.user_id)}
-                  className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:shadow-md"
+                  className="rounded-lg border border-[#E4E7EC] bg-white p-3 shadow-sm transition hover:border-[#008CD3]/25"
                 >
-                  <div className="flex items-start gap-3">
-                    <img
-                      src={`https://i.pravatar.cc/120?u=${encodeURIComponent(String(user.user_id))}`}
-                      alt={String(user.user_name || "User")}
-                      className="h-12 w-12 rounded-full object-cover ring-1 ring-slate-200"
-                    />
+                  <div className="flex items-start gap-2.5">
+                    <span
+                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold ${avatarColorClass(name)}`}
+                    >
+                      {userInitials(name)}
+                    </span>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-[#0C123A]">
-                        {String(user.user_name || "Unknown User")}
-                      </p>
-                      <p className="truncate text-xs text-slate-500">
+                      <p className="truncate text-[14px] font-semibold text-[#1F2937]">{name}</p>
+                      <p className="truncate text-[12px] text-[#6B7280]">
                         {String(user.user_email || "No email")}
                       </p>
-                      <p className="mt-1 text-xs text-slate-500">
+                      <p className="truncate text-[12px] text-[#9CA3AF]">
                         {String(user.user_phone || "No phone")}
                       </p>
-                      <span className="mt-2 inline-flex rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-700">
+                      <span className="mt-1 inline-flex rounded-md bg-[#F5F7FA] px-1.5 py-0.5 text-[10px] font-medium uppercase text-[#6B7280]">
                         {String(user.role_name || "employee")}
                       </span>
                     </div>
                   </div>
 
-                  <div className="mt-3 flex items-center justify-between">
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                      Feature Access
+                  <div className="mt-3">
+                    <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
+                      Module access
                     </p>
                     <button
                       type="button"
@@ -572,41 +637,42 @@ export default function GetEmployeeAccessibleFeaturesPage() {
                           String(prev) === String(user.user_id) ? null : user.user_id,
                         )
                       }
-                      className="inline-flex w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      className={`${zohoSecondaryBtnCls(true)} disabled:opacity-50`}
                     >
                       {userFeatures.length === 0
-                        ? "No accessible features"
+                        ? "No modules assigned"
                         : isOpen
-                          ? `Hide features (${userFeatures.length})`
-                          : `Show features (${userFeatures.length})`}
+                          ? `Hide modules (${userFeatures.length})`
+                          : `View modules (${userFeatures.length})`}
                     </button>
                   </div>
 
                   {isOpen ? (
-                    <div className="mt-3 space-y-2 rounded-lg border border-slate-100 bg-slate-50 p-3">
+                    <div className="mt-2 space-y-1.5 rounded-md border border-[#E4E7EC] bg-[#F9FAFB] p-2.5">
                       {userFeatures.map((f) => {
                         const key = `${user.user_id}:${f.feature_id}`;
                         const removing = removingKey === key;
+                        const title = displayFeatureName(f);
                         return (
                           <div
                             key={String(f.feature_id)}
-                            className="flex items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-2"
+                            className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[#E4E7EC] bg-white px-2 py-1.5"
                           >
-                            <div className="min-w-0">
-                              <p className="truncate text-xs font-semibold text-[#0C123A]">
-                                {String(f.feature_name || f.feature_val || `Feature #${f.feature_id}`)}
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-[12px] font-medium text-[#1F2937]">
+                                {title}
                               </p>
-                              <p className="text-[11px] text-slate-500">
-                                Feature ID: {String(f.feature_id)}
+                              <p className="text-[10px] text-[#9CA3AF]">
+                                ID {String(f.feature_id)}
                               </p>
                             </div>
                             <button
                               type="button"
                               onClick={() => void removeFeatureAccess(user.user_id, f.feature_id)}
                               disabled={removing || removingKey !== null}
-                              className="shrink-0 rounded-md border border-red-200 bg-red-50 px-2.5 py-1.5 text-[11px] font-semibold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                              className={zohoDangerBtnCls(true)}
                             >
-                              {removing ? "Removing..." : "Remove access"}
+                              {removing ? "Removing…" : "Remove"}
                             </button>
                           </div>
                         );

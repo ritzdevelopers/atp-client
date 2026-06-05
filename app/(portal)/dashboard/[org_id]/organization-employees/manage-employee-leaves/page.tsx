@@ -105,26 +105,37 @@ function leaveTypeLabel(t: string): string {
 
 function statusBadgeClass(status: string): string {
   const s = String(status).toLowerCase();
-  if (s === "approved")
-    return "bg-emerald-50 text-emerald-800 ring-emerald-600/15";
-  if (s === "rejected") return "bg-rose-50 text-rose-800 ring-rose-600/15";
-  return "bg-amber-50 text-amber-900 ring-amber-600/15";
+  if (s === "approved") return "bg-[#E6F4EA] text-[#0F9D58]";
+  if (s === "rejected") return "bg-[#FCE8E6] text-[#D93025]";
+  return "bg-[#FEF3E6] text-[#E8710A]";
+}
+
+function labelCls() {
+  return "mb-1 block text-[12px] font-medium text-[#374151]";
 }
 
 function filterFieldCls() {
-  return "w-full rounded-2xl border-0 bg-slate-100 px-3 py-3 text-sm text-slate-800 outline-none ring-1 ring-slate-200/80 placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-indigo-500/25 lg:rounded-xl lg:border lg:border-slate-200 lg:bg-slate-50/50 lg:py-2.5 lg:focus:border-indigo-300 lg:focus:ring-indigo-500/20";
+  return "w-full rounded-lg border border-[#E4E7EC] bg-white px-3 py-2 text-[14px] text-[#1F2937] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15";
 }
 
-function mobilePanelCls() {
-  return "rounded-3xl bg-white p-4 shadow-md ring-1 ring-slate-200/70 lg:rounded-2xl lg:border lg:border-slate-200/80 lg:p-5 lg:shadow-sm lg:ring-0 sm:lg:p-6";
+function zohoPanelCls() {
+  return "overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-sm";
 }
 
-function mobilePrimaryBtnCls() {
-  return "inline-flex min-h-[44px] w-full items-center justify-center rounded-2xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition active:scale-[0.98] hover:bg-indigo-700 lg:min-h-0 lg:w-auto lg:rounded-xl";
+function zohoPrimaryBtnCls(full = false) {
+  return `inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg bg-[#008CD3] px-4 py-2 text-[14px] font-medium text-white transition active:scale-[0.98] hover:bg-[#0070AA] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full lg:w-auto" : ""}`;
 }
 
-function mobileSecondaryBtnCls() {
-  return "inline-flex min-h-[44px] w-full items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition active:scale-[0.98] hover:bg-slate-50 lg:min-h-0 lg:w-auto lg:rounded-xl";
+function zohoSecondaryBtnCls(full = false) {
+  return `inline-flex min-h-[40px] items-center justify-center rounded-lg border border-[#E4E7EC] bg-white px-4 py-2 text-[14px] font-medium text-[#374151] transition hover:bg-[#F9FAFB] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full lg:w-auto" : ""}`;
+}
+
+function zohoApproveBtnCls(full = false) {
+  return `inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg border border-[#A8DAB5] bg-[#E6F4EA] px-3 py-2 text-[13px] font-medium text-[#0F9D58] transition hover:bg-[#E6F4EA]/80 disabled:cursor-not-allowed disabled:opacity-40 ${full ? "w-full" : ""}`;
+}
+
+function zohoRejectBtnCls(full = false) {
+  return `inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2 text-[13px] font-medium text-[#D93025] transition hover:bg-[#FCE8E6]/80 disabled:cursor-not-allowed disabled:opacity-40 ${full ? "w-full" : ""}`;
 }
 
 function userDisplayName(
@@ -449,30 +460,35 @@ function ManageEmployeeLeavesPage() {
   const listTotal = activeCounts.total;
 
   return (
-    <section className="min-h-full space-y-4 bg-[#F5F5F3] p-0 max-lg:-mx-1 sm:max-lg:-mx-2 lg:space-y-6 lg:bg-gradient-to-b lg:from-slate-50/80 lg:to-white lg:p-4 lg:sm:p-6 lg:lg:p-8">
+    <section className="min-h-full space-y-3 bg-[#F5F7FA] p-0 max-lg:-mx-1 sm:max-lg:-mx-2 lg:mx-auto lg:max-w-6xl lg:space-y-4 lg:p-6">
       {/* Mobile & tablet: sticky app header */}
-      <div className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/95 px-3 pb-3 pt-3 backdrop-blur-md sm:px-4 lg:hidden">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-indigo-600/90">
-              Organization · Employees
-            </p>
-            <h1 className="mt-0.5 truncate text-lg font-bold text-[#0C123A]">
-              Leave &amp; attendance
-            </h1>
+      <div className="sticky top-0 z-20 border-b border-[#E4E7EC] bg-white shadow-sm px-3 pb-2.5 pt-2.5 sm:px-4 lg:hidden">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex min-w-0 flex-1 items-start gap-2">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#E8F4FB] text-[#008CD3]">
+              <ClipboardList className="h-4 w-4" aria-hidden />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                Organization · Employees
+              </p>
+              <h1 className="truncate text-[16px] font-semibold text-[#1F2937]">
+                Leave &amp; attendance
+              </h1>
+            </div>
           </div>
           <button
             type="button"
             onClick={refresh}
             disabled={isBusy}
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-700 active:scale-95 disabled:opacity-50"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#008CD3] active:bg-[#F5F7FA] disabled:opacity-50"
             aria-label="Refresh list"
           >
             <RefreshCw
               className={`h-4 w-4 ${
                 (mainTab === "leaves" && refreshing) ||
                 (mainTab === "attendance" && attRefreshing)
-                  ? "animate-spin text-indigo-600"
+                  ? "animate-spin"
                   : ""
               }`}
               aria-hidden
@@ -480,20 +496,106 @@ function ManageEmployeeLeavesPage() {
           </button>
         </div>
 
-        <div className="mt-3 flex rounded-2xl bg-slate-100 p-1 ring-1 ring-slate-200/60">
+        <div className="mt-2.5 flex rounded-lg bg-[#F5F7FA] p-0.5">
           <button
             type="button"
             onClick={() => {
               setMainTab("attendance");
               setMobileFiltersOpen(false);
             }}
-            className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold transition active:scale-[0.98] sm:text-sm ${
+            className={`flex min-h-[36px] flex-1 items-center justify-center gap-1 rounded-md px-1 py-1.5 text-[11px] font-medium transition sm:text-[12px] ${
               mainTab === "attendance"
-                ? "bg-white text-indigo-700 shadow-sm"
-                : "text-slate-600"
+                ? "bg-white text-[#008CD3] shadow-sm"
+                : "text-[#6B7280]"
             }`}
           >
-            <ClipboardList className="h-4 w-4 shrink-0" aria-hidden />
+            <ClipboardList className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" aria-hidden />
+            <span className="truncate">Attendance</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMainTab("leaves");
+              setMobileFiltersOpen(false);
+            }}
+            className={`flex min-h-[36px] flex-1 items-center justify-center gap-1 rounded-md px-1 py-1.5 text-[11px] font-medium transition sm:text-[12px] ${
+              mainTab === "leaves"
+                ? "bg-white text-[#008CD3] shadow-sm"
+                : "text-[#6B7280]"
+            }`}
+          >
+            <CalendarDays className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" aria-hidden />
+            <span className="truncate">Leave</span>
+          </button>
+        </div>
+
+        <div className="mt-2.5 grid grid-cols-3 gap-1.5">
+          <MobileStatTile label="Pending" value={activeCounts.pending} tone="amber" />
+          <MobileStatTile label="Approved" value={activeCounts.approved} tone="emerald" />
+          <MobileStatTile label="Rejected" value={activeCounts.rejected} tone="rose" />
+        </div>
+        <p className="mt-1.5 text-center text-[11px] text-[#6B7280]">
+          {listTotal} {mainTab === "leaves" ? "leave request" : "attendance quer"}
+          {listTotal === 1 ? (mainTab === "leaves" ? "" : "y") : mainTab === "leaves" ? "s" : "ies"}{" "}
+          in view
+        </p>
+      </div>
+
+      {/* Desktop: page header */}
+      <header className={`${zohoPanelCls()} hidden p-4 lg:block`}>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#E8F4FB] text-[#008CD3]">
+              <ClipboardList className="h-5 w-5" aria-hidden />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                Organization · Employees
+              </p>
+              <h1 className="text-[18px] font-semibold text-[#1F2937]">
+                Leave &amp; attendance requests
+              </h1>
+              <p className="mt-0.5 max-w-2xl text-[13px] text-[#6B7280]">
+                Approve leave and attendance correction queues. Attendance decisions require an
+                admin note.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={refresh}
+            disabled={isBusy}
+            className={zohoSecondaryBtnCls()}
+          >
+            <RefreshCw
+              className={`h-4 w-4 ${
+                (mainTab === "leaves" && refreshing) ||
+                (mainTab === "attendance" && attRefreshing)
+                  ? "animate-spin"
+                  : ""
+              }`}
+              aria-hidden
+            />
+            {isBusy && (mainTab === "leaves" ? refreshing : attRefreshing)
+              ? "Refreshing…"
+              : "Refresh"}
+          </button>
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2 border-t border-[#E4E7EC] pt-4">
+          <button
+            type="button"
+            onClick={() => {
+              setMainTab("attendance");
+              setMobileFiltersOpen(false);
+            }}
+            className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-medium transition ${
+              mainTab === "attendance"
+                ? "bg-[#008CD3] text-white"
+                : "border border-[#E4E7EC] bg-white text-[#374151] hover:bg-[#F9FAFB]"
+            }`}
+          >
+            <ClipboardList className="h-4 w-4" aria-hidden />
             Attendance queries
           </button>
           <button
@@ -502,122 +604,38 @@ function ManageEmployeeLeavesPage() {
               setMainTab("leaves");
               setMobileFiltersOpen(false);
             }}
-            className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold transition active:scale-[0.98] sm:text-sm ${
+            className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-medium transition ${
               mainTab === "leaves"
-                ? "bg-white text-indigo-700 shadow-sm"
-                : "text-slate-600"
+                ? "bg-[#008CD3] text-white"
+                : "border border-[#E4E7EC] bg-white text-[#374151] hover:bg-[#F9FAFB]"
             }`}
           >
-            <CalendarDays className="h-4 w-4 shrink-0" aria-hidden />
+            <CalendarDays className="h-4 w-4" aria-hidden />
             Leave queries
           </button>
         </div>
 
-        <div className="mt-3 grid grid-cols-3 gap-2">
-          <MobileStatTile label="Pending" value={activeCounts.pending} tone="amber" />
-          <MobileStatTile label="Approved" value={activeCounts.approved} tone="emerald" />
-          <MobileStatTile label="Rejected" value={activeCounts.rejected} tone="rose" />
-        </div>
-        <p className="mt-2 text-center text-[11px] text-slate-500">
-          {listTotal} {mainTab === "leaves" ? "leave request" : "attendance quer"}
-          {listTotal === 1 ? (mainTab === "leaves" ? "" : "y") : mainTab === "leaves" ? "s" : "ies"}{" "}
-          in view
-        </p>
-      </div>
-
-      {/* Desktop: page header */}
-      <header className="hidden overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm shadow-slate-200/40 lg:block">
-        <div className="border-b border-slate-100 bg-gradient-to-r from-indigo-600/5 via-white to-sky-600/5 px-5 py-6 sm:px-8 sm:py-8">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-indigo-600/90">
-            Organization · Employees
-          </p>
-          <div className="mt-2 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight text-[#0C123A] sm:text-3xl">
-                Leave &amp; attendance requests
-              </h1>
-              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600">
-                Switch between leave approvals and attendance correction queues. Approve or
-                reject attendance queries with a mandatory note for the record.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={refresh}
-              disabled={isBusy}
-              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-indigo-200 hover:bg-indigo-50/50 hover:text-indigo-900 disabled:cursor-not-allowed disabled:opacity-55"
-            >
-              <RefreshCw
-                className={`h-4 w-4 ${
-                  (mainTab === "leaves" && refreshing) ||
-                  (mainTab === "attendance" && attRefreshing)
-                    ? "animate-spin text-indigo-600"
-                    : ""
-                }`}
-                aria-hidden
-              />
-              {isBusy &&
-              (mainTab === "leaves" ? refreshing : attRefreshing)
-                ? "Refreshing…"
-                : "Refresh"}
-            </button>
-          </div>
-
-          <div className="mt-6 flex flex-wrap gap-2 border-t border-slate-100/80 pt-5">
-            <button
-              type="button"
-              onClick={() => {
-              setMainTab("attendance");
-              setMobileFiltersOpen(false);
-            }}
-              className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
-                mainTab === "attendance"
-                  ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/25"
-                  : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-              }`}
-            >
-              <ClipboardList className="h-4 w-4" aria-hidden />
-              Attendance queries
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-              setMainTab("leaves");
-              setMobileFiltersOpen(false);
-            }}
-              className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
-                mainTab === "leaves"
-                  ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/25"
-                  : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-              }`}
-            >
-              <CalendarDays className="h-4 w-4" aria-hidden />
-              Leave queries
-            </button>
-          </div>
-
-          <div className="mt-5 flex flex-wrap gap-3">
-            {mainTab === "leaves" ? (
-              <>
-                <StatPill label="Pending" value={counts.pending} tone="amber" />
-                <StatPill label="Approved" value={counts.approved} tone="emerald" />
-                <StatPill label="Rejected" value={counts.rejected} tone="rose" />
-                <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
-                  {counts.total} leave request{counts.total === 1 ? "" : "s"} in view
-                </span>
-              </>
-            ) : (
-              <>
-                <StatPill label="Pending" value={attCounts.pending} tone="amber" />
-                <StatPill label="Approved" value={attCounts.approved} tone="emerald" />
-                <StatPill label="Rejected" value={attCounts.rejected} tone="rose" />
-                <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
-                  {attCounts.total} attendance quer
-                  {attCounts.total === 1 ? "y" : "ies"} in view
-                </span>
-              </>
-            )}
-          </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {mainTab === "leaves" ? (
+            <>
+              <StatPill label="Pending" value={counts.pending} tone="amber" />
+              <StatPill label="Approved" value={counts.approved} tone="emerald" />
+              <StatPill label="Rejected" value={counts.rejected} tone="rose" />
+              <span className="inline-flex min-h-[32px] items-center rounded-lg bg-[#F5F7FA] px-2.5 text-[12px] font-medium text-[#6B7280]">
+                {counts.total} leave request{counts.total === 1 ? "" : "s"} in view
+              </span>
+            </>
+          ) : (
+            <>
+              <StatPill label="Pending" value={attCounts.pending} tone="amber" />
+              <StatPill label="Approved" value={attCounts.approved} tone="emerald" />
+              <StatPill label="Rejected" value={attCounts.rejected} tone="rose" />
+              <span className="inline-flex min-h-[32px] items-center rounded-lg bg-[#F5F7FA] px-2.5 text-[12px] font-medium text-[#6B7280]">
+                {attCounts.total} attendance quer
+                {attCounts.total === 1 ? "y" : "ies"} in view
+              </span>
+            </>
+          )}
         </div>
       </header>
 
@@ -626,8 +644,8 @@ function ManageEmployeeLeavesPage() {
           role="status"
           className={`mx-3 sm:mx-4 lg:mx-0 ${
             notice.type === "ok"
-              ? "rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
-              : "rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900"
+              ? "rounded-lg border border-[#A8DAB5] bg-[#E6F4EA] px-3 py-2.5 text-[13px] text-[#1F2937]"
+              : "rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2.5 text-[13px] text-[#1F2937]"
           }`}
         >
           {notice.text}
@@ -636,41 +654,41 @@ function ManageEmployeeLeavesPage() {
 
       {mainTab === "leaves" ? (
        <>
-      <div className={`${mobilePanelCls()} mx-3 sm:mx-4 lg:mx-0`}>
+      <div className={`${zohoPanelCls()} p-3 sm:p-4 lg:p-5 mx-3 sm:mx-4 lg:mx-0`}>
         <button
           type="button"
           onClick={() => setMobileFiltersOpen((v) => !v)}
           className="flex w-full items-center justify-between gap-2 text-left lg:hidden"
           aria-expanded={mobileFiltersOpen}
         >
-          <div className="flex items-center gap-2 text-slate-800">
-            <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-sm">
-              <Filter className="h-4 w-4" aria-hidden />
+          <div className="flex items-center gap-2 text-[#1F2937]">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#008CD3] text-white">
+              <Filter className="h-3.5 w-3.5" aria-hidden />
             </span>
             <div>
-              <h2 className="text-sm font-semibold text-[#0C123A]">Filters</h2>
-              <p className="text-[11px] text-slate-500">Tap to {mobileFiltersOpen ? "hide" : "show"}</p>
+              <h2 className="text-[14px] font-semibold text-[#1F2937]">Filters</h2>
+              <p className="text-[11px] text-[#6B7280]">Tap to {mobileFiltersOpen ? "hide" : "show"}</p>
             </div>
           </div>
           <ChevronDown
-            className={`h-5 w-5 shrink-0 text-slate-400 transition ${mobileFiltersOpen ? "rotate-180" : ""}`}
+            className={`h-4 w-4 shrink-0 text-[#9CA3AF] transition ${mobileFiltersOpen ? "rotate-180" : ""}`}
             aria-hidden
           />
         </button>
-        <div className="hidden items-center gap-2 text-slate-800 lg:flex">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600 text-white shadow-sm">
-            <Filter className="h-4 w-4" aria-hidden />
+        <div className="hidden items-center gap-2 text-[#1F2937] lg:flex">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#008CD3] text-white">
+            <Filter className="h-3.5 w-3.5" aria-hidden />
           </span>
           <div>
-            <h2 className="text-base font-semibold text-[#0C123A]">Filters</h2>
-            <p className="text-xs text-slate-500">Narrow the list, then apply to reload from the server.</p>
+            <h2 className="text-[15px] font-semibold text-[#1F2937]">Filters</h2>
+            <p className="text-[12px] text-[#6B7280]">Narrow the list, then apply to reload from the server.</p>
           </div>
         </div>
 
         <div className={`${mobileFiltersOpen ? "mt-4 block" : "hidden"} lg:mt-5 lg:block`}>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-12 lg:items-end">
           <label className="lg:col-span-2 block">
-            <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <span className={labelCls()}>
               Leave type
             </span>
             <select
@@ -690,7 +708,7 @@ function ManageEmployeeLeavesPage() {
             </select>
           </label>
           <label className="lg:col-span-2 block">
-            <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <span className={labelCls()}>
               Status
             </span>
             <select
@@ -707,7 +725,7 @@ function ManageEmployeeLeavesPage() {
             </select>
           </label>
           <label className="lg:col-span-3 block">
-            <span className="mb-1.5 flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <span className={`${labelCls()} flex items-center gap-1`}>
               <Search className="h-3 w-3" aria-hidden />
               Employee name
             </span>
@@ -720,7 +738,7 @@ function ManageEmployeeLeavesPage() {
             />
           </label>
           <label className="lg:col-span-2 block">
-            <span className="mb-1.5 flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <span className={`${labelCls()} flex items-center gap-1`}>
               <CalendarDays className="h-3 w-3" aria-hidden />
               Submitted on
             </span>
@@ -732,7 +750,7 @@ function ManageEmployeeLeavesPage() {
             />
           </label>
           <label className="lg:col-span-2 block">
-            <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <span className={labelCls()}>
               Sort by submitted
             </span>
             <select
@@ -753,14 +771,14 @@ function ManageEmployeeLeavesPage() {
             <button
               type="button"
               onClick={applyFilters}
-              className={mobilePrimaryBtnCls()}
+              className={zohoPrimaryBtnCls(true)}
             >
               Apply
             </button>
             <button
               type="button"
               onClick={resetFilters}
-              className={mobileSecondaryBtnCls()}
+              className={zohoSecondaryBtnCls(true)}
             >
               Reset
             </button>
@@ -770,26 +788,26 @@ function ManageEmployeeLeavesPage() {
       </div>
 
       {loading ? (
-        <div className={`${mobilePanelCls()} mx-3 p-10 text-center text-sm text-slate-500 sm:mx-4 lg:mx-0 lg:p-12`}>
-          <RefreshCw className="mx-auto mb-3 h-8 w-8 animate-spin text-indigo-500" aria-hidden />
+        <div className={`${zohoPanelCls()} mx-3 p-10 text-center text-[14px] text-[#6B7280] sm:mx-4 lg:mx-0`}>
+          <RefreshCw className="mx-auto mb-2 h-7 w-7 animate-spin text-[#008CD3]" aria-hidden />
           Loading leave requests…
         </div>
       ) : null}
 
       {error && !loading ? (
-        <div className="mx-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 sm:mx-4 lg:mx-0">
+        <div className="mx-3 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2.5 text-[13px] text-[#1F2937] sm:mx-4 lg:mx-0">
           {error}
         </div>
       ) : null}
 
       {!loading && !error ? (
-        <div className={`${mobilePanelCls()} mx-3 overflow-hidden sm:mx-4 lg:mx-0 lg:p-0`}>
+        <div className={`${zohoPanelCls()} p-3 sm:p-4 lg:p-5 mx-3 overflow-hidden sm:mx-4 lg:mx-0 lg:p-0`}>
           {/* Mobile & tablet: card list */}
           <div className="space-y-2.5 lg:hidden lg:p-0">
             {rows.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-12 text-center text-slate-500">
-                <p className="font-medium text-slate-700">No leave requests match your filters.</p>
-                <p className="mt-1 text-xs text-slate-500">
+              <div className="rounded-lg border border-dashed border-[#E4E7EC] bg-[#F9FAFB] px-4 py-10 text-center text-[#6B7280]">
+                <p className="font-medium text-[#374151]">No leave requests match your filters.</p>
+                <p className="mt-1 text-[12px] text-[#6B7280]">
                   Adjust filters or refresh to see new submissions.
                 </p>
               </div>
@@ -810,7 +828,7 @@ function ManageEmployeeLeavesPage() {
           <div className="hidden overflow-x-auto lg:block">
             <table className="min-w-[900px] w-full border-collapse text-left text-sm">
               <thead>
-                <tr className="border-b border-slate-200 bg-slate-50/90 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                <tr className="border-b border-[#E4E7EC] bg-[#F9FAFB] text-[10px] font-semibold uppercase tracking-wide text-[#6B7280]">
                   <th className="px-4 py-3.5 sm:px-5">Employee</th>
                   <th className="px-4 py-3.5 sm:px-5">Type</th>
                   <th className="px-4 py-3.5 sm:px-5">Dates</th>
@@ -820,12 +838,12 @@ function ManageEmployeeLeavesPage() {
                   <th className="px-4 py-3.5 text-right sm:px-5">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-[#E4E7EC]">
                 {rows.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-5 py-16 text-center text-slate-500">
-                      <p className="font-medium text-slate-700">No leave requests match your filters.</p>
-                      <p className="mt-1 text-xs text-slate-500">
+                    <td colSpan={7} className="px-4 py-12 text-center text-[#6B7280]">
+                      <p className="font-medium text-[#374151]">No leave requests match your filters.</p>
+                      <p className="mt-1 text-[12px] text-[#6B7280]">
                         Adjust filters or refresh to see new submissions.
                       </p>
                     </td>
@@ -834,34 +852,34 @@ function ManageEmployeeLeavesPage() {
                   rows.map((row) => (
                     <tr
                       key={row.id}
-                      className="bg-white transition hover:bg-slate-50/80"
+                      className="bg-white transition hover:bg-[#F9FAFB]"
                     >
                       <td className="px-4 py-4 sm:px-5">
-                        <div className="font-semibold text-slate-900">{row.user_name}</div>
-                        <div className="mt-0.5 text-xs text-slate-500">{row.user_email}</div>
+                        <div className="text-[14px] font-semibold text-[#1F2937]">{row.user_name}</div>
+                        <div className="mt-0.5 text-[12px] text-[#6B7280]">{row.user_email}</div>
                       </td>
-                      <td className="px-4 py-4 text-slate-700 sm:px-5">
+                      <td className="px-4 py-3 text-[13px] text-[#374151] sm:px-5">
                         {leaveTypeLabel(String(row.leave_type))}
                       </td>
-                      <td className="px-4 py-4 text-slate-700 sm:px-5">
+                      <td className="px-4 py-3 text-[13px] text-[#374151] sm:px-5">
                         <div>{formatDate(row.start_date)}</div>
                         {row.end_date ? (
-                          <div className="text-xs text-slate-500">to {formatDate(row.end_date)}</div>
+                          <div className="text-[12px] text-[#6B7280]">to {formatDate(row.end_date)}</div>
                         ) : null}
                       </td>
-                      <td className="max-w-[220px] px-4 py-4 text-slate-600 sm:px-5">
-                        <p className="line-clamp-2 text-xs sm:text-sm" title={row.reason || ""}>
+                      <td className="max-w-[220px] px-4 py-3 text-[13px] text-[#6B7280] sm:px-5">
+                        <p className="line-clamp-2" title={row.reason || ""}>
                           {row.reason?.trim() ? row.reason : "—"}
                         </p>
                       </td>
                       <td className="px-4 py-4 sm:px-5">
                         <span
-                          className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${statusBadgeClass(String(row.status))}`}
+                          className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium ${statusBadgeClass(String(row.status))}`}
                         >
                           {String(row.status)}
                         </span>
                       </td>
-                      <td className="whitespace-nowrap px-4 py-4 text-xs text-slate-600 sm:px-5">
+                      <td className="whitespace-nowrap px-4 py-3 text-[12px] text-[#6B7280] sm:px-5">
                         {formatDateTime(row.created_at)}
                       </td>
                       <td className="px-4 py-4 text-right sm:px-5">
@@ -883,34 +901,34 @@ function ManageEmployeeLeavesPage() {
       </>
       ) : (
         <>
-          <div className={`${mobilePanelCls()} mx-3 sm:mx-4 lg:mx-0`}>
+          <div className={`${zohoPanelCls()} p-3 sm:p-4 lg:p-5 mx-3 sm:mx-4 lg:mx-0`}>
             <button
               type="button"
               onClick={() => setMobileFiltersOpen((v) => !v)}
               className="flex w-full items-center justify-between gap-2 text-left lg:hidden"
               aria-expanded={mobileFiltersOpen}
             >
-              <div className="flex items-center gap-2 text-slate-800">
-                <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-sm">
-                  <Filter className="h-4 w-4" aria-hidden />
+              <div className="flex items-center gap-2 text-[#1F2937]">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#008CD3] text-white">
+                  <Filter className="h-3.5 w-3.5" aria-hidden />
                 </span>
                 <div>
-                  <h2 className="text-sm font-semibold text-[#0C123A]">Filters</h2>
-                  <p className="text-[11px] text-slate-500">Tap to {mobileFiltersOpen ? "hide" : "show"}</p>
+                  <h2 className="text-[14px] font-semibold text-[#1F2937]">Filters</h2>
+                  <p className="text-[11px] text-[#6B7280]">Tap to {mobileFiltersOpen ? "hide" : "show"}</p>
                 </div>
               </div>
               <ChevronDown
-                className={`h-5 w-5 shrink-0 text-slate-400 transition ${mobileFiltersOpen ? "rotate-180" : ""}`}
+                className={`h-4 w-4 shrink-0 text-[#9CA3AF] transition ${mobileFiltersOpen ? "rotate-180" : ""}`}
                 aria-hidden
               />
             </button>
-            <div className="hidden items-center gap-2 text-slate-800 lg:flex">
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600 text-white shadow-sm">
-                <Filter className="h-4 w-4" aria-hidden />
+            <div className="hidden items-center gap-2 text-[#1F2937] lg:flex">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#008CD3] text-white">
+                <Filter className="h-3.5 w-3.5" aria-hidden />
               </span>
               <div>
-                <h2 className="text-base font-semibold text-[#0C123A]">Filters</h2>
-                <p className="text-xs text-slate-500">
+                <h2 className="text-[15px] font-semibold text-[#1F2937]">Filters</h2>
+                <p className="text-[12px] text-[#6B7280]">
                   Scope attendance correction requests; results use the admin list API.
                 </p>
               </div>
@@ -919,7 +937,7 @@ function ManageEmployeeLeavesPage() {
             <div className={`${mobileFiltersOpen ? "mt-4 block" : "hidden"} lg:mt-5 lg:block`}>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-12 lg:items-end">
               <label className="lg:col-span-2 block">
-                <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <span className={labelCls()}>
                   Status
                 </span>
                 <select
@@ -939,7 +957,7 @@ function ManageEmployeeLeavesPage() {
                 </select>
               </label>
               <label className="lg:col-span-3 block">
-                <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <span className={labelCls()}>
                   Issue type
                 </span>
                 <select
@@ -959,7 +977,7 @@ function ManageEmployeeLeavesPage() {
                 </select>
               </label>
               <label className="lg:col-span-3 block">
-                <span className="mb-1.5 flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <span className={`${labelCls()} flex items-center gap-1`}>
                   <Search className="h-3 w-3" aria-hidden />
                   Message contains
                 </span>
@@ -974,7 +992,7 @@ function ManageEmployeeLeavesPage() {
                 />
               </label>
               <label className="lg:col-span-2 block">
-                <span className="mb-1.5 flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <span className={`${labelCls()} flex items-center gap-1`}>
                   <CalendarDays className="h-3 w-3" aria-hidden />
                   Attendance date
                 </span>
@@ -991,14 +1009,14 @@ function ManageEmployeeLeavesPage() {
                 <button
                   type="button"
                   onClick={applyAttFilters}
-                  className={mobilePrimaryBtnCls()}
+                  className={zohoPrimaryBtnCls(true)}
                 >
                   Apply
                 </button>
                 <button
                   type="button"
                   onClick={resetAttFilters}
-                  className={mobileSecondaryBtnCls()}
+                  className={zohoSecondaryBtnCls(true)}
                 >
                   Reset
                 </button>
@@ -1008,28 +1026,28 @@ function ManageEmployeeLeavesPage() {
           </div>
 
           {attLoading ? (
-            <div className={`${mobilePanelCls()} mx-3 p-10 text-center text-sm text-slate-500 sm:mx-4 lg:mx-0 lg:p-12`}>
-              <RefreshCw className="mx-auto mb-3 h-8 w-8 animate-spin text-indigo-500" aria-hidden />
+            <div className={`${zohoPanelCls()} mx-3 p-10 text-center text-[14px] text-[#6B7280] sm:mx-4 lg:mx-0`}>
+              <RefreshCw className="mx-auto mb-2 h-7 w-7 animate-spin text-[#008CD3]" aria-hidden />
               Loading attendance queries…
             </div>
           ) : null}
 
           {attError && !attLoading ? (
-            <div className="mx-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 sm:mx-4 lg:mx-0">
+            <div className="mx-3 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2.5 text-[13px] text-[#1F2937] sm:mx-4 lg:mx-0">
               {attError}
             </div>
           ) : null}
 
           {!attLoading && !attError ? (
-            <div className={`${mobilePanelCls()} mx-3 overflow-hidden sm:mx-4 lg:mx-0 lg:p-0`}>
+            <div className={`${zohoPanelCls()} p-3 sm:p-4 lg:p-5 mx-3 overflow-hidden sm:mx-4 lg:mx-0 lg:p-0`}>
               {/* Mobile & tablet: card list */}
               <div className="space-y-2.5 lg:hidden lg:p-0">
                 {attRows.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-12 text-center text-slate-500">
-                    <p className="font-medium text-slate-700">
+                  <div className="rounded-lg border border-dashed border-[#E4E7EC] bg-[#F9FAFB] px-4 py-10 text-center text-[#6B7280]">
+                    <p className="font-medium text-[#374151]">
                       No attendance queries match your filters.
                     </p>
-                    <p className="mt-1 text-xs text-slate-500">
+                    <p className="mt-1 text-[12px] text-[#6B7280]">
                       Adjust filters or refresh. New employee submissions appear here.
                     </p>
                   </div>
@@ -1062,7 +1080,7 @@ function ManageEmployeeLeavesPage() {
               <div className="hidden overflow-x-auto lg:block">
                 <table className="min-w-[960px] w-full border-collapse text-left text-sm">
                   <thead>
-                    <tr className="border-b border-slate-200 bg-slate-50/90 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                    <tr className="border-b border-[#E4E7EC] bg-[#F9FAFB] text-[10px] font-semibold uppercase tracking-wide text-[#6B7280]">
                       <th className="px-4 py-3.5 sm:px-5">Employee</th>
                       <th className="px-4 py-3.5 sm:px-5">Issue</th>
                       <th className="px-4 py-3.5 sm:px-5">Attendance date</th>
@@ -1072,14 +1090,14 @@ function ManageEmployeeLeavesPage() {
                       <th className="px-4 py-3.5 text-right sm:px-5">Actions / resolution</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-[#E4E7EC]">
                     {attRows.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="px-5 py-16 text-center text-slate-500">
-                          <p className="font-medium text-slate-700">
+                        <td colSpan={7} className="px-4 py-12 text-center text-[#6B7280]">
+                          <p className="font-medium text-[#374151]">
                             No attendance queries match your filters.
                           </p>
-                          <p className="mt-1 text-xs text-slate-500">
+                          <p className="mt-1 text-[12px] text-[#6B7280]">
                             Adjust filters or refresh. New employee submissions appear here.
                           </p>
                         </td>
@@ -1090,32 +1108,32 @@ function ManageEmployeeLeavesPage() {
                         const pending =
                           String(row.query_status).toLowerCase() === "pending";
                         return (
-                          <tr key={row.id} className="bg-white transition hover:bg-slate-50/80">
-                            <td className="px-4 py-4 sm:px-5">
-                              <div className="font-semibold text-slate-900">{emp.name}</div>
+                          <tr key={row.id} className="bg-white transition hover:bg-[#F9FAFB]">
+                            <td className="px-4 py-3 sm:px-5">
+                              <div className="text-[14px] font-semibold text-[#1F2937]">{emp.name}</div>
                               {emp.email ? (
-                                <div className="mt-0.5 text-xs text-slate-500">{emp.email}</div>
+                                <div className="mt-0.5 text-[12px] text-[#6B7280]">{emp.email}</div>
                               ) : null}
                             </td>
-                            <td className="px-4 py-4 text-slate-700 sm:px-5">
+                            <td className="px-4 py-3 text-[13px] text-[#374151] sm:px-5">
                               {attendanceCategoryLabel(row.category)}
                             </td>
                             <td className="whitespace-nowrap px-4 py-4 text-slate-700 sm:px-5">
                               {formatDate(row.attendance_date)}
                             </td>
-                            <td className="max-w-[240px] px-4 py-4 text-slate-600 sm:px-5">
-                              <p className="line-clamp-3 text-xs sm:text-sm" title={row.query_message}>
+                            <td className="max-w-[240px] px-4 py-3 text-[13px] text-[#6B7280] sm:px-5">
+                              <p className="line-clamp-3" title={row.query_message}>
                                 {row.query_message}
                               </p>
                             </td>
                             <td className="px-4 py-4 sm:px-5">
                               <span
-                                className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${statusBadgeClass(row.query_status)}`}
+                                className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium ${statusBadgeClass(row.query_status)}`}
                               >
                                 {row.query_status}
                               </span>
                             </td>
-                            <td className="whitespace-nowrap px-4 py-4 text-xs text-slate-600 sm:px-5">
+                            <td className="whitespace-nowrap px-4 py-3 text-[12px] text-[#6B7280] sm:px-5">
                               {formatDateTime(row.created_at)}
                             </td>
                             <td className="px-4 py-4 text-right sm:px-5">
@@ -1129,7 +1147,7 @@ function ManageEmployeeLeavesPage() {
                                     onClick={() =>
                                       openAttModal(row.id, row.user_id, "approved")
                                     }
-                                    className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-xs font-semibold text-emerald-900 transition hover:bg-emerald-100 disabled:opacity-40"
+                                    className={zohoApproveBtnCls()}
                                   >
                                     <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
                                     Approve
@@ -1142,29 +1160,29 @@ function ManageEmployeeLeavesPage() {
                                     onClick={() =>
                                       openAttModal(row.id, row.user_id, "rejected")
                                     }
-                                    className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2 py-1.5 text-xs font-semibold text-rose-900 transition hover:bg-rose-100 disabled:opacity-40"
+                                    className={zohoRejectBtnCls()}
                                   >
                                     <XCircle className="h-3.5 w-3.5" aria-hidden />
                                     Reject
                                   </button>
                                 </div>
                               ) : (
-                                <div className="max-w-[280px] text-left text-xs leading-relaxed text-slate-600 sm:ml-auto sm:text-right">
+                                <div className="max-w-[280px] text-left text-[12px] leading-relaxed text-[#6B7280] sm:ml-auto sm:text-right">
                                   {row.approved_by_name ? (
-                                    <p className="font-semibold text-slate-800">
+                                    <p className="font-semibold text-[#374151]">
                                       By {row.approved_by_name}
                                     </p>
                                   ) : null}
                                   {row.admin_response ? (
-                                    <p className="mt-1 text-slate-600">
-                                      <span className="font-medium text-slate-700">Note:</span>{" "}
+                                    <p className="mt-1">
+                                      <span className="font-medium text-[#374151]">Note:</span>{" "}
                                       {row.admin_response}
                                     </p>
                                   ) : (
-                                    <p className="mt-1 text-slate-400">No admin note on file.</p>
+                                    <p className="mt-1 text-[#9CA3AF]">No admin note on file.</p>
                                   )}
                                   {row.resolved_at ? (
-                                    <p className="mt-1 text-[10px] text-slate-400">
+                                    <p className="mt-1 text-[10px] text-[#9CA3AF]">
                                       Resolved {formatDateTime(row.resolved_at)}
                                     </p>
                                   ) : null}
@@ -1185,7 +1203,7 @@ function ManageEmployeeLeavesPage() {
 
       {attModal ? (
         <div
-          className="fixed inset-0 z-[1000] flex items-end justify-center bg-slate-950/50 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+          className="fixed inset-0 z-[1000] flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="att-modal-title"
@@ -1196,15 +1214,15 @@ function ManageEmployeeLeavesPage() {
             aria-label="Close"
             onClick={() => !attModalSubmitting && setAttModal(null)}
           />
-          <div className="relative w-full max-w-md overflow-hidden rounded-t-3xl border border-slate-200 bg-white shadow-2xl sm:rounded-2xl">
-            <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4">
+          <div className="relative w-full max-w-md overflow-hidden rounded-t-xl border border-[#E4E7EC] bg-white shadow-xl sm:rounded-lg">
+            <div className="flex items-start justify-between border-b border-[#E4E7EC] px-4 py-3">
               <div>
-                <h2 id="att-modal-title" className="text-lg font-semibold text-[#0C123A]">
+                <h2 id="att-modal-title" className="text-[16px] font-semibold text-[#1F2937]">
                   {attModal.action === "approved"
                     ? "Approve attendance query"
                     : "Reject attendance query"}
                 </h2>
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="mt-0.5 text-[12px] text-[#6B7280]">
                   This note is stored as the admin response and visible to the employee.
                 </p>
               </div>
@@ -1212,30 +1230,30 @@ function ManageEmployeeLeavesPage() {
                 type="button"
                 disabled={attModalSubmitting}
                 onClick={() => setAttModal(null)}
-                className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
+                className="rounded-lg p-1.5 text-[#6B7280] hover:bg-[#F3F4F6] hover:text-[#1F2937] disabled:opacity-50"
                 aria-label="Close dialog"
               >
-                <X className="h-5 w-5" />
+                <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="px-5 py-4">
+            <div className="px-4 py-3">
               <label className="block">
-                <span className="text-xs font-semibold text-slate-700">Reason / response</span>
+                <span className={labelCls()}>Reason / response</span>
                 <textarea
                   value={attModalReason}
                   onChange={(e) => setAttModalReason(e.target.value)}
                   rows={4}
                   placeholder="Explain the decision (required)…"
-                  className="mt-2 w-full rounded-2xl border-0 bg-slate-100 px-3 py-3 text-sm text-slate-800 outline-none ring-1 ring-slate-200/80 focus:bg-white focus:ring-2 focus:ring-indigo-500/25 sm:rounded-xl sm:border sm:border-slate-200 sm:py-2.5"
+                  className={filterFieldCls()}
                 />
               </label>
             </div>
-            <div className="flex flex-col gap-2 border-t border-slate-100 bg-slate-50/90 px-4 py-3 sm:flex-row sm:px-5">
+            <div className="flex flex-col gap-2 border-t border-[#E4E7EC] bg-[#F9FAFB] px-3 py-3 sm:flex-row sm:px-4">
               <button
                 type="button"
                 disabled={attModalSubmitting}
                 onClick={() => setAttModal(null)}
-                className={`${mobileSecondaryBtnCls()} sm:flex-1`}
+                className={`${zohoSecondaryBtnCls(true)} sm:flex-1`}
               >
                 Cancel
               </button>
@@ -1243,10 +1261,8 @@ function ManageEmployeeLeavesPage() {
                 type="button"
                 disabled={attModalSubmitting}
                 onClick={() => void submitAttModal()}
-                className={`min-h-[44px] w-full flex-1 rounded-2xl py-3 text-sm font-semibold text-white shadow-sm transition active:scale-[0.98] disabled:opacity-50 sm:rounded-xl sm:py-2.5 ${
-                  attModal.action === "approved"
-                    ? "bg-emerald-600 hover:bg-emerald-700"
-                    : "bg-rose-600 hover:bg-rose-700"
+                className={`${zohoPrimaryBtnCls(true)} sm:flex-1 ${
+                  attModal.action === "rejected" ? "!bg-[#D93025] hover:!bg-[#B71C1C]" : ""
                 }`}
               >
                 {attModalSubmitting
@@ -1273,14 +1289,14 @@ function MobileStatTile({
   tone: "amber" | "emerald" | "rose";
 }) {
   const tones = {
-    amber: "bg-amber-50 text-amber-950 ring-amber-200/80",
-    emerald: "bg-emerald-50 text-emerald-950 ring-emerald-200/80",
-    rose: "bg-rose-50 text-rose-950 ring-rose-200/80",
+    amber: "bg-[#FEF3E6] text-[#E8710A]",
+    emerald: "bg-[#E6F4EA] text-[#0F9D58]",
+    rose: "bg-[#FCE8E6] text-[#D93025]",
   };
   return (
-    <div className={`rounded-2xl px-2 py-2.5 text-center ring-1 ${tones[tone]}`}>
-      <p className="text-[10px] font-semibold uppercase tracking-wide opacity-80">{label}</p>
-      <p className="mt-0.5 text-lg font-bold tabular-nums">{value}</p>
+    <div className={`rounded-lg px-1.5 py-2 text-center ${tones[tone]}`}>
+      <p className="text-[9px] font-semibold uppercase tracking-wide">{label}</p>
+      <p className="mt-0.5 text-[16px] font-semibold tabular-nums">{value}</p>
     </div>
   );
 }
@@ -1295,16 +1311,16 @@ function StatPill({
   tone: "amber" | "emerald" | "rose";
 }) {
   const tones = {
-    amber: "border-amber-200/80 bg-amber-50 text-amber-950",
-    emerald: "border-emerald-200/80 bg-emerald-50 text-emerald-950",
-    rose: "border-rose-200/80 bg-rose-50 text-rose-950",
+    amber: "border-[#FEF3E6] bg-[#FEF3E6] text-[#E8710A]",
+    emerald: "border-[#E6F4EA] bg-[#E6F4EA] text-[#0F9D58]",
+    rose: "border-[#FCE8E6] bg-[#FCE8E6] text-[#D93025]",
   };
   return (
     <span
-      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${tones[tone]}`}
+      className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[12px] font-medium ${tones[tone]}`}
     >
       {label}
-      <span className="rounded-md bg-white/80 px-1.5 py-0.5 text-[11px] tabular-nums shadow-sm">
+      <span className="rounded bg-white/90 px-1.5 py-0.5 text-[11px] tabular-nums">
         {value}
       </span>
     </span>
@@ -1322,10 +1338,10 @@ function CardField({
 }) {
   return (
     <div className={className}>
-      <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+      <dt className="text-[10px] font-semibold uppercase tracking-wide text-[#6B7280]">
         {label}
       </dt>
-      <dd className="mt-0.5 text-sm text-slate-800">{children}</dd>
+      <dd className="mt-0.5 text-[13px] text-[#374151]">{children}</dd>
     </div>
   );
 }
@@ -1342,16 +1358,16 @@ function LeaveRowCard({
   onReject: () => void;
 }) {
   return (
-    <article className="rounded-2xl bg-white p-4 shadow-md ring-1 ring-slate-200/70 transition active:scale-[0.995]">
-      <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
+    <article className="rounded-lg border border-[#E4E7EC] bg-white p-3 transition active:bg-[#F9FAFB]">
+      <div className="flex items-start justify-between gap-2 border-b border-[#E4E7EC] pb-2.5">
         <div className="min-w-0 flex-1">
-          <h3 className="truncate font-semibold text-slate-900">{row.user_name}</h3>
+          <h3 className="truncate text-[15px] font-semibold text-[#1F2937]">{row.user_name}</h3>
           {row.user_email ? (
-            <p className="mt-0.5 truncate text-xs text-slate-500">{row.user_email}</p>
+            <p className="mt-0.5 truncate text-[12px] text-[#6B7280]">{row.user_email}</p>
           ) : null}
         </div>
         <span
-          className={`shrink-0 inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${statusBadgeClass(String(row.status))}`}
+          className={`inline-flex shrink-0 items-center rounded-md px-2 py-0.5 text-[11px] font-medium ${statusBadgeClass(String(row.status))}`}
         >
           {String(row.status)}
         </span>
@@ -1361,19 +1377,19 @@ function LeaveRowCard({
         <CardField label="Dates">
           <span className="block">{formatDate(row.start_date)}</span>
           {row.end_date ? (
-            <span className="text-xs text-slate-500">to {formatDate(row.end_date)}</span>
+            <span className="text-[12px] text-[#6B7280]">to {formatDate(row.end_date)}</span>
           ) : null}
         </CardField>
         <CardField label="Submitted" className="col-span-2 sm:col-span-1">
           {formatDateTime(row.created_at)}
         </CardField>
         <CardField label="Reason" className="col-span-2 sm:col-span-3">
-          <p className="text-sm text-slate-600">
+          <p className="text-[13px] text-[#6B7280]">
             {row.reason?.trim() ? row.reason : "—"}
           </p>
         </CardField>
       </dl>
-      <div className="mt-4 border-t border-slate-100 pt-3">
+      <div className="mt-3 border-t border-[#E4E7EC] pt-2.5">
         <LeaveActions
           layout="stacked"
           current={String(row.status).toLowerCase() as LeaveStatus}
@@ -1404,16 +1420,16 @@ function AttendanceQueryCard({
   onReject: () => void;
 }) {
   return (
-    <article className="rounded-2xl bg-white p-4 shadow-md ring-1 ring-slate-200/70 transition active:scale-[0.995]">
-      <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
+    <article className="rounded-lg border border-[#E4E7EC] bg-white p-3 transition active:bg-[#F9FAFB]">
+      <div className="flex items-start justify-between gap-2 border-b border-[#E4E7EC] pb-2.5">
         <div className="min-w-0 flex-1">
-          <h3 className="truncate font-semibold text-slate-900">{employeeName}</h3>
+          <h3 className="truncate text-[15px] font-semibold text-[#1F2937]">{employeeName}</h3>
           {employeeEmail ? (
-            <p className="mt-0.5 truncate text-xs text-slate-500">{employeeEmail}</p>
+            <p className="mt-0.5 truncate text-[12px] text-[#6B7280]">{employeeEmail}</p>
           ) : null}
         </div>
         <span
-          className={`shrink-0 inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${statusBadgeClass(row.query_status)}`}
+          className={`inline-flex shrink-0 items-center rounded-md px-2 py-0.5 text-[11px] font-medium ${statusBadgeClass(row.query_status)}`}
         >
           {row.query_status}
         </span>
@@ -1425,17 +1441,17 @@ function AttendanceQueryCard({
           {formatDateTime(row.created_at)}
         </CardField>
         <CardField label="Explanation" className="col-span-2">
-          <p className="text-sm leading-relaxed text-slate-600">{row.query_message}</p>
+          <p className="text-[13px] leading-relaxed text-[#6B7280]">{row.query_message}</p>
         </CardField>
       </dl>
-      <div className="mt-4 border-t border-slate-100 pt-3">
+      <div className="mt-3 border-t border-[#E4E7EC] pt-2.5">
         {pending ? (
           <div className="flex flex-col gap-2 sm:flex-row">
             <button
               type="button"
               disabled={modalBusy}
               onClick={onApprove}
-              className="inline-flex w-full min-h-[44px] items-center justify-center gap-1.5 rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm font-semibold text-emerald-900 transition active:scale-[0.98] hover:bg-emerald-100 disabled:opacity-40 lg:min-h-0 lg:rounded-lg"
+              className={zohoApproveBtnCls(true)}
             >
               <CheckCircle2 className="h-4 w-4" aria-hidden />
               Approve
@@ -1444,26 +1460,26 @@ function AttendanceQueryCard({
               type="button"
               disabled={modalBusy}
               onClick={onReject}
-              className="inline-flex w-full min-h-[44px] items-center justify-center gap-1.5 rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm font-semibold text-rose-900 transition active:scale-[0.98] hover:bg-rose-100 disabled:opacity-40 lg:min-h-0 lg:rounded-lg"
+              className={zohoRejectBtnCls(true)}
             >
               <XCircle className="h-4 w-4" aria-hidden />
               Reject
             </button>
           </div>
         ) : (
-          <div className="text-sm text-slate-600">
+          <div className="text-[13px] text-[#6B7280]">
             {row.approved_by_name ? (
-              <p className="font-semibold text-slate-800">By {row.approved_by_name}</p>
+              <p className="font-semibold text-[#374151]">By {row.approved_by_name}</p>
             ) : null}
             {row.admin_response ? (
               <p className="mt-1">
-                <span className="font-medium text-slate-700">Note:</span> {row.admin_response}
+                <span className="font-medium text-[#374151]">Note:</span> {row.admin_response}
               </p>
             ) : (
-              <p className="mt-1 text-slate-400">No admin note on file.</p>
+              <p className="mt-1 text-[#9CA3AF]">No admin note on file.</p>
             )}
             {row.resolved_at ? (
-              <p className="mt-2 text-xs text-slate-400">
+              <p className="mt-2 text-[12px] text-[#9CA3AF]">
                 Resolved {formatDateTime(row.resolved_at)}
               </p>
             ) : null}
@@ -1489,10 +1505,6 @@ function LeaveActions({
 }) {
   const isPending = current === "pending";
   const stacked = layout === "stacked";
-  const btnBase = stacked
-    ? "inline-flex w-full min-h-[44px] items-center justify-center gap-1.5 rounded-2xl px-3 py-2.5 text-sm font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 lg:min-h-0 lg:rounded-lg lg:py-1.5 lg:text-xs"
-    : "inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-40";
-
   return (
     <div
       className={
@@ -1506,7 +1518,7 @@ function LeaveActions({
         disabled={disabled || !isPending}
         onClick={onApprove}
         title={isPending ? "Approve" : "Only pending requests can be approved"}
-        className={`${btnBase} border border-emerald-200 bg-emerald-50 text-emerald-900 hover:bg-emerald-100`}
+        className={stacked ? zohoApproveBtnCls(true) : zohoApproveBtnCls()}
       >
         <CheckCircle2 className={stacked ? "h-4 w-4" : "h-3.5 w-3.5"} aria-hidden />
         Approve
@@ -1516,7 +1528,7 @@ function LeaveActions({
         disabled={disabled || !isPending}
         onClick={onReject}
         title={isPending ? "Reject" : "Only pending requests can be rejected"}
-        className={`${btnBase} border border-rose-200 bg-rose-50 text-rose-900 hover:bg-rose-100`}
+        className={stacked ? zohoRejectBtnCls(true) : zohoRejectBtnCls()}
       >
         <XCircle className={stacked ? "h-4 w-4" : "h-3.5 w-3.5"} aria-hidden />
         Reject
