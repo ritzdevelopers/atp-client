@@ -14,10 +14,13 @@ const baseNavLinks = [
   { label: "Contact Us", href: "/contact" },
 ];
 
+type DashboardType = "management" | "employee";
+
 type CachedNavbarAuth = {
   isAuthenticated: boolean;
   role: string;
   orgId: string | null;
+  dashboardType: DashboardType;
 };
 
 type Role = "admin" | "hr" | "manager" | "employee" | "";
@@ -46,12 +49,56 @@ function pickOrgId(result: any): string | null {
   return null;
 }
 
+function pickDashboardType(result: any, orgId: string | null): DashboardType {
+  const root = String(result?.dashboard_type || "").trim().toLowerCase();
+  if (root === "management" || root === "employee") {
+    return root;
+  }
+
+  if (orgId && Array.isArray(result?.org_details)) {
+    const match = result.org_details.find(
+      (org: { id?: string | number; dashboard_type?: string }) =>
+        String(org?.id) === orgId,
+    );
+    const fromOrg = String(match?.dashboard_type || "").trim().toLowerCase();
+    if (fromOrg === "management" || fromOrg === "employee") {
+      return fromOrg;
+    }
+  }
+
+  if (result?.org_details && !Array.isArray(result.org_details)) {
+    const fromSingle = String(result.org_details.dashboard_type || "")
+      .trim()
+      .toLowerCase();
+    if (fromSingle === "management" || fromSingle === "employee") {
+      return fromSingle;
+    }
+  }
+
+  return "employee";
+}
+
+function buildDashboardHref(
+  role: Role,
+  orgId: string | null,
+  dashboardType: DashboardType,
+): string {
+  if (role === "admin") {
+    return "/portal";
+  }
+  if (dashboardType === "management") {
+    return orgId ? `/dashboard/${orgId}/home` : "/dashboard";
+  }
+  return orgId ? `/user-dashboard/${orgId}/home` : "/dashboard";
+}
+
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [auth, setAuth] = useState<CachedNavbarAuth>({
     isAuthenticated: false,
     role: "",
     orgId: null,
+    dashboardType: "employee",
   });
   const [isAuthLoading, setIsAuthLoading] = useState(true);
 
@@ -64,7 +111,7 @@ export default function Navbar() {
         if (isMounted) {
           sessionStorage.removeItem(NAVBAR_AUTH_CACHE_KEY);
           sessionStorage.removeItem(ADMIN_ORGS_SESSION_KEY);
-          setAuth({ isAuthenticated: false, role: "", orgId: null });
+          setAuth({ isAuthenticated: false, role: "", orgId: null, dashboardType: "employee" });
           setIsAuthLoading(false);
         }
         return;
@@ -79,6 +126,8 @@ export default function Navbar() {
               isAuthenticated: Boolean(parsed?.isAuthenticated),
               role: toRole(parsed?.role),
               orgId: parsed?.orgId ? String(parsed.orgId) : null,
+              dashboardType:
+                parsed?.dashboardType === "management" ? "management" : "employee",
             });
             setIsAuthLoading(false);
           }
@@ -101,13 +150,16 @@ export default function Navbar() {
 
         const role = toRole(result?.role ?? result?.data?.user_role ?? result?.data?.role_name);
         const orgId = pickOrgId(result);
+        const dashboardType = pickDashboardType(result, orgId);
         if (orgId) {
           localStorage.setItem("org_id", orgId);
         }
+        localStorage.setItem("dashboard_type", dashboardType);
         const nextAuth: CachedNavbarAuth = {
           isAuthenticated: Boolean(result?.success) && Boolean(role),
           role,
           orgId,
+          dashboardType,
         };
         setAuth(nextAuth);
         sessionStorage.setItem(NAVBAR_AUTH_CACHE_KEY, JSON.stringify(nextAuth));
@@ -133,7 +185,8 @@ export default function Navbar() {
           localStorage.removeItem("user_id");
           sessionStorage.removeItem(ADMIN_ORGS_SESSION_KEY);
           sessionStorage.removeItem(NAVBAR_AUTH_CACHE_KEY);
-          setAuth({ isAuthenticated: false, role: "", orgId: null });
+          localStorage.removeItem("dashboard_type");
+          setAuth({ isAuthenticated: false, role: "", orgId: null, dashboardType: "employee" });
         }
         setIsAuthLoading(false);
       }
@@ -161,7 +214,10 @@ export default function Navbar() {
       return [...baseNavLinks, { label: "Admin Panel", href: "/portal" }];
     }
     if (auth.role === "hr" || auth.role === "manager" || auth.role === "employee") {
-      return [...baseNavLinks, { label: "Dashboard", href: "/dashboard" }];
+      const dashboardHref = buildDashboardHref(auth.role, auth.orgId, auth.dashboardType);
+      const dashboardLabel =
+        auth.dashboardType === "management" ? "Dashboard" : "My Dashboard";
+      return [...baseNavLinks, { label: dashboardLabel, href: dashboardHref }];
     }
     return [
       ...baseNavLinks,

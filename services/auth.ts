@@ -30,6 +30,8 @@ type LoginResponse = {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
+export type DashboardType = "management" | "employee";
+
 type GetMeResponse = {
   user?: {
     id?: string | number;
@@ -38,14 +40,25 @@ type GetMeResponse = {
     email?: string;
   };
   organization_id?: string | number | null;
+  dashboard_type?: DashboardType | null;
+  org_details?:
+    | {
+        id?: string | number;
+        dashboard_type?: DashboardType | null;
+      }
+    | Array<{
+        id?: string | number;
+        dashboard_type?: DashboardType | null;
+      }>;
   success?: boolean;
   data?: {
     user_role?: string;
     role_name?: string;
-    org_details?: Array<{ id?: string | number }>;
+    org_details?: Array<{ id?: string | number; dashboard_type?: DashboardType | null }>;
     org_id?: string | number;
     id?: string | number;
     user_id?: string | number;
+    dashboard_type?: DashboardType | null;
   };
   message?: string;
 };

@@ -24,12 +24,16 @@ type OrgInfo = {
   org_phone?: string;
   owner_id?: number | string;
   created_at?: string;
+  dashboard_type?: DashboardType;
 };
+
+type DashboardType = "management" | "employee";
 
 type DashboardPayload = {
   role: string;
   user: UserInfo | null;
   organizations: OrgInfo[];
+  dashboardType: DashboardType;
 };
 
 function normalizeOrganizations(orgDetails: unknown): OrgInfo[] {
@@ -48,6 +52,7 @@ export default function WebsiteDashboardPage() {
     role: "",
     user: null,
     organizations: [],
+    dashboardType: "employee",
   });
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
@@ -82,8 +87,12 @@ export default function WebsiteDashboardPage() {
         const role = String(result?.role || "").toLowerCase();
         const user = (result?.admin_details ?? result?.user_details ?? null) as UserInfo | null;
         const organizations = normalizeOrganizations(result?.org_details);
+        const rootDashboard = String(result?.dashboard_type || "").trim().toLowerCase();
+        const dashboardType: DashboardType =
+          rootDashboard === "management" ? "management" : "employee";
 
-        const nextPayload: DashboardPayload = { role, user, organizations };
+        const nextPayload: DashboardPayload = { role, user, organizations, dashboardType };
+        localStorage.setItem("dashboard_type", dashboardType);
         setPayload(nextPayload);
         sessionStorage.setItem(USER_DASHBOARD_CACHE_KEY, JSON.stringify(nextPayload));
         setIsLoading(false);
@@ -118,8 +127,6 @@ export default function WebsiteDashboardPage() {
     if (payload.role === "employee") return "Employee Dashboard";
     return "Dashboard";
   }, [payload.role]);
-
-  const isManagementRole = payload.role === "hr" || payload.role === "manager";
 
   if (isLoading) {
     return (
@@ -179,11 +186,17 @@ export default function WebsiteDashboardPage() {
                   <p className="mt-1 text-xs text-slate-500">{org.org_email || "No email"}</p>
                   <Link
                     href={
-                      isManagementRole
+                      (org.dashboard_type ?? payload.dashboardType) === "management"
                         ? `/dashboard/${org.id}/home`
                         : `/user-dashboard/${org.id}/home`
                     }
-                    onClick={() => localStorage.setItem("org_id", String(org.id))}
+                    onClick={() => {
+                      localStorage.setItem("org_id", String(org.id));
+                      localStorage.setItem(
+                        "dashboard_type",
+                        org.dashboard_type ?? payload.dashboardType,
+                      );
+                    }}
                     className="mt-3 inline-flex rounded-lg bg-[#0C123A] px-3 py-2 text-xs font-semibold text-white hover:bg-[#151e59]"
                   >
                     Enter Organization

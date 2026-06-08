@@ -1,13 +1,14 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Header from "@/components/portal-dashboard/Layout/Header";
 import LeftSideBar from "@/components/portal-dashboard/Layout/LeftSideBar";
 import RightMainSide from "@/components/portal-dashboard/Layout/RightMainSide";
 import { ManagementDashboardProvider } from "@/components/portal-dashboard/Layout/ManagementDashboardContext";
 import UserDashboard from "@/components/portal-dashboard/user-layout/Dashboard";
 import { useManagementDashboardData } from "@/components/portal-dashboard/Layout/useManagementDashboardData";
+import OrgFeatureRouteGuard from "@/components/portal-dashboard/Layout/OrgFeatureRouteGuard";
 
 function ManagementDashboardLayout({ children }: { children: React.ReactNode }) {
   const { organization, user, organizationAddresses, loading, accessableFeatures } =
@@ -42,14 +43,40 @@ function ManagementDashboardLayout({ children }: { children: React.ReactNode }) 
   );
 }
 
+function readStoredDashboardType(): "management" | "employee" {
+  if (typeof window === "undefined") return "employee";
+  try {
+    const cached = sessionStorage.getItem("navbar_auth_cache_v1");
+    if (cached) {
+      const parsed = JSON.parse(cached) as { dashboardType?: string };
+      if (parsed?.dashboardType === "management") return "management";
+    }
+  } catch {
+    /* ignore */
+  }
+  const stored = localStorage.getItem("dashboard_type");
+  return stored === "management" ? "management" : "employee";
+}
+
 export default function DashboardOrgClientLayout({ children }: { children: React.ReactNode }) {
   const params = useParams();
   const orgId = params?.org_id;
-  const isManagement = String(orgId) === "1";
+  const [dashboardType, setDashboardType] = useState<"management" | "employee">("employee");
 
-  if (isManagement) {
-    return <ManagementDashboardLayout>{children}</ManagementDashboardLayout>;
-  }
+  useEffect(() => {
+    setDashboardType(readStoredDashboardType());
+  }, [orgId]);
 
-  return <UserDashboard>{children}</UserDashboard>;
+  const isManagement = dashboardType === "management";
+
+  return (
+    <>
+      <OrgFeatureRouteGuard />
+      {isManagement ? (
+        <ManagementDashboardLayout>{children}</ManagementDashboardLayout>
+      ) : (
+        <UserDashboard>{children}</UserDashboard>
+      )}
+    </>
+  );
 }
