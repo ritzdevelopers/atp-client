@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import {
+  ArrowLeft,
   Calendar,
   ChevronRight,
   KeyRound,
@@ -14,7 +15,6 @@ import {
   Search,
   Shield,
   Users,
-  X,
 } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
@@ -69,6 +69,9 @@ const MODULE_ICON_COLORS = [
   "bg-[#E8EAF6] text-[#3F51B5]",
 ];
 
+const mobileCaptionCls = "text-[11px] leading-snug text-[#6B7280]";
+const mobileValueCls = "text-[13px] font-semibold text-[#1F2937]";
+
 function moduleColorClass(name: string) {
   let hash = 0;
   for (let i = 0; i < name.length; i += 1) {
@@ -107,7 +110,7 @@ function displayFeatureName(feature: FeatureAccess) {
 }
 
 function zohoSearchCls() {
-  return "w-full rounded-lg border border-[#E4E7EC] bg-white py-2 pl-9 pr-3 text-[13px] text-[#1F2937] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15";
+  return "w-full rounded-lg border border-[#E4E7EC] bg-white py-2.5 pl-9 pr-3 text-[13px] text-[#1F2937] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15";
 }
 
 export default function ManageOrganizationFeaturesPage() {
@@ -120,7 +123,7 @@ export default function ManageOrganizationFeaturesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | string | null>(null);
   const [expandedFeatureId, setExpandedFeatureId] = useState<number | string | null>(null);
-  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
+  const [mobileMainTab, setMobileMainTab] = useState<"members" | "access">("members");
 
   const loadEmployees = useCallback(async () => {
     if (!orgId || Number.isNaN(orgId)) {
@@ -217,7 +220,7 @@ export default function ManageOrganizationFeaturesPage() {
   function selectEmployee(emp: EmployeeRow) {
     setSelectedEmployeeId(emp.employee_id);
     setExpandedFeatureId(emp.features_access?.[0]?.feature_id ?? null);
-    setMobileDetailOpen(true);
+    setMobileMainTab("access");
   }
 
   function renderPermissionChips(permissions: string[]) {
@@ -227,11 +230,11 @@ export default function ManageOrganizationFeaturesPage() {
       );
     }
     return (
-      <div className="flex flex-wrap gap-1">
+      <div className="flex flex-wrap gap-1.5">
         {permissions.map((perm) => (
           <span
             key={perm}
-            className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
+            className={`rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
               PERMISSION_COLORS[perm] ?? "bg-[#F5F7FA] text-[#6B7280]"
             }`}
           >
@@ -242,8 +245,13 @@ export default function ManageOrganizationFeaturesPage() {
     );
   }
 
-  function renderEmployeeAvatar(emp: EmployeeRow, size: "sm" | "md" = "md") {
-    const dim = size === "sm" ? "h-9 w-9 text-[11px]" : "h-11 w-11 text-[12px]";
+  function renderEmployeeAvatar(emp: EmployeeRow, size: "sm" | "md" | "lg" = "md") {
+    const dim =
+      size === "sm"
+        ? "h-10 w-10 text-[11px]"
+        : size === "lg"
+          ? "h-14 w-14 text-[14px]"
+          : "h-11 w-11 text-[12px]";
     if (emp.employee_profile_image) {
       return (
         <img
@@ -262,7 +270,7 @@ export default function ManageOrganizationFeaturesPage() {
     );
   }
 
-  function renderFeatureDetailPanel(emp: EmployeeRow) {
+  function renderFeatureDetailPanel(emp: EmployeeRow, variant: "desktop" | "mobile" = "desktop") {
     const featureCount = emp.features_access?.length ?? 0;
     const subCount = countSubFeatures(emp);
 
@@ -270,44 +278,51 @@ export default function ManageOrganizationFeaturesPage() {
       <div className="flex h-full flex-col">
         <div className="shrink-0 border-b border-[#E4E7EC] bg-white px-4 py-4 sm:px-5">
           <div className="flex items-start gap-3">
-            {renderEmployeeAvatar(emp, "md")}
+            {variant === "mobile" ? (
+              <button
+                type="button"
+                className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#008CD3] active:bg-[#F5F7FA] lg:hidden"
+                onClick={() => setMobileMainTab("members")}
+                aria-label="Back to members"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </button>
+            ) : null}
+            {renderEmployeeAvatar(emp, variant === "mobile" ? "md" : "lg")}
             <div className="min-w-0 flex-1">
-              <h2 className="truncate text-[16px] font-semibold text-[#1F2937]">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#008CD3]">
+                Feature access profile
+              </p>
+              <h2 className="mt-0.5 truncate text-[16px] font-semibold text-[#1F2937] sm:text-[17px]">
                 {emp.employee_name}
               </h2>
-              <p className="mt-0.5 flex items-center gap-1 text-[12px] text-[#6B7280]">
+              <p className="mt-1 flex items-center gap-1 text-[12px] text-[#6B7280]">
                 <Calendar className="h-3.5 w-3.5 shrink-0" aria-hidden />
                 Joined {formatJoinDate(emp.employee_joining_date)}
               </p>
             </div>
-            <button
-              type="button"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[#E4E7EC] text-[#6B7280] lg:hidden"
-              onClick={() => setMobileDetailOpen(false)}
-              aria-label="Close details"
-            >
-              <X className="h-4 w-4" />
-            </button>
           </div>
 
           <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
-            <div className="rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] px-3 py-2.5">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
+            <div className="rounded-xl border border-[#E4E7EC] bg-[#F9FAFB] px-3 py-2.5">
+              <p className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
+                <Layers className="h-3 w-3" aria-hidden />
                 Features
               </p>
-              <p className="mt-0.5 text-xl font-semibold text-[#008CD3]">{featureCount}</p>
+              <p className="mt-1 text-xl font-semibold text-[#008CD3]">{featureCount}</p>
             </div>
-            <div className="rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] px-3 py-2.5">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
+            <div className="rounded-xl border border-[#E4E7EC] bg-[#F9FAFB] px-3 py-2.5">
+              <p className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
+                <Puzzle className="h-3 w-3" aria-hidden />
                 Sub features
               </p>
-              <p className="mt-0.5 text-xl font-semibold text-[#0F9D58]">{subCount}</p>
+              <p className="mt-1 text-xl font-semibold text-[#0F9D58]">{subCount}</p>
             </div>
-            <div className="col-span-2 rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] px-3 py-2.5 sm:col-span-1">
+            <div className="col-span-2 rounded-xl border border-[#E4E7EC] bg-[#F9FAFB] px-3 py-2.5 sm:col-span-1">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
                 Employee ID
               </p>
-              <p className="mt-0.5 truncate text-[14px] font-semibold text-[#1F2937]">
+              <p className="mt-1 truncate text-[13px] font-semibold text-[#1F2937]">
                 {String(emp.employee_id)}
               </p>
             </div>
@@ -316,18 +331,25 @@ export default function ManageOrganizationFeaturesPage() {
 
         <div className="min-h-0 flex-1 overflow-y-auto bg-[#F5F7FA] p-4 sm:p-5">
           {featureCount === 0 ? (
-            <div className="rounded-lg border border-dashed border-[#E4E7EC] bg-white px-4 py-12 text-center">
-              <Shield className="mx-auto h-8 w-8 text-[#9CA3AF]" aria-hidden />
-              <p className="mt-2 text-[14px] font-medium text-[#1F2937]">No features assigned</p>
+            <div className="rounded-xl border border-dashed border-[#E4E7EC] bg-white px-4 py-14 text-center">
+              <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#F5F7FA] text-[#9CA3AF]">
+                <Shield className="h-6 w-6" aria-hidden />
+              </span>
+              <p className="mt-3 text-[15px] font-semibold text-[#1F2937]">No features assigned</p>
               <p className="mt-1 text-[12px] text-[#6B7280]">
                 This employee has no accessible features yet.
               </p>
             </div>
           ) : (
             <div className="space-y-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
-                Feature access breakdown
-              </p>
+              <div className="flex items-center gap-2">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#008CD3] text-white">
+                  <LayoutGrid className="h-3.5 w-3.5" aria-hidden />
+                </span>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                  Feature access breakdown
+                </p>
+              </div>
               {emp.features_access.map((feature) => {
                 const isOpen = String(expandedFeatureId) === String(feature.feature_id);
                 const title = displayFeatureName(feature);
@@ -335,7 +357,11 @@ export default function ManageOrganizationFeaturesPage() {
                 return (
                   <article
                     key={String(feature.feature_id)}
-                    className="overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-sm"
+                    className={`overflow-hidden rounded-xl border bg-white transition ${
+                      isOpen
+                        ? "border-[#008CD3]/40 shadow-[0_0_0_1px_rgba(0,140,211,0.12)]"
+                        : "border-[#E4E7EC] shadow-sm"
+                    }`}
                   >
                     <button
                       type="button"
@@ -346,10 +372,10 @@ export default function ManageOrganizationFeaturesPage() {
                             : feature.feature_id,
                         )
                       }
-                      className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-[#F9FAFB]"
+                      className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition hover:bg-[#F9FAFB] active:bg-[#F5F7FA]"
                     >
                       <span
-                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[11px] font-semibold ${moduleColorClass(title)}`}
+                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[11px] font-semibold ${moduleColorClass(title)}`}
                       >
                         {title.slice(0, 2).toUpperCase()}
                       </span>
@@ -362,28 +388,28 @@ export default function ManageOrganizationFeaturesPage() {
                         </p>
                       </div>
                       <div className="shrink-0 text-right">
-                        <p className="text-[11px] font-medium text-[#008CD3]">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-[#E8F4FB] px-2 py-0.5 text-[10px] font-semibold text-[#008CD3]">
                           {subLen} sub{subLen === 1 ? "" : "s"}
-                        </p>
+                        </span>
                         <ChevronRight
-                          className={`ml-auto mt-0.5 h-4 w-4 text-[#9CA3AF] transition ${isOpen ? "rotate-90" : ""}`}
+                          className={`ml-auto mt-1 h-4 w-4 text-[#9CA3AF] transition ${isOpen ? "rotate-90 text-[#008CD3]" : ""}`}
                           aria-hidden
                         />
                       </div>
                     </button>
 
                     {isOpen ? (
-                      <div className="border-t border-[#E4E7EC] bg-[#F9FAFB] px-4 py-3">
+                      <div className="border-t border-[#E4E7EC] bg-[#FAFBFC] px-4 py-3">
                         {subLen === 0 ? (
                           <p className="text-[12px] text-[#6B7280]">
                             No sub-features under this module.
                           </p>
                         ) : (
-                          <ul className="space-y-2">
+                          <ul className="space-y-2.5">
                             {feature.sub_features.map((sub) => (
                               <li
                                 key={String(sub.sub_feature_id)}
-                                className="rounded-lg border border-[#E4E7EC] bg-white p-3"
+                                className="rounded-xl border border-[#E4E7EC] bg-white p-3.5 shadow-sm"
                               >
                                 <div className="flex flex-wrap items-start justify-between gap-2">
                                   <div className="min-w-0">
@@ -394,15 +420,15 @@ export default function ManageOrganizationFeaturesPage() {
                                       {sub.sub_feature_value}
                                     </p>
                                   </div>
-                                  <span className="inline-flex items-center gap-1 rounded-md bg-[#E8F4FB] px-2 py-0.5 text-[10px] font-medium text-[#008CD3]">
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-[#E8F4FB] px-2.5 py-1 text-[10px] font-semibold text-[#008CD3]">
                                     <KeyRound className="h-3 w-3" aria-hidden />
                                     {sub.sub_feature_permissions?.length ?? 0} permission
                                     {(sub.sub_feature_permissions?.length ?? 0) === 1 ? "" : "s"}
                                   </span>
                                 </div>
-                                <div className="mt-2 border-t border-[#E4E7EC] pt-2">
-                                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
-                                    Access
+                                <div className="mt-3 border-t border-[#E4E7EC] pt-3">
+                                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
+                                    Access permissions
                                   </p>
                                   {renderPermissionChips(sub.sub_feature_permissions ?? [])}
                                 </div>
@@ -422,86 +448,217 @@ export default function ManageOrganizationFeaturesPage() {
     );
   }
 
+  function renderEmployeeListItem(emp: EmployeeRow) {
+    const isSelected = String(selectedEmployeeId) === String(emp.employee_id);
+    const featCount = emp.features_access?.length ?? 0;
+    const subCount = countSubFeatures(emp);
+
+    return (
+      <li key={String(emp.employee_id)}>
+        <button
+          type="button"
+          onClick={() => selectEmployee(emp)}
+          className={`flex w-full items-center gap-3 px-3 py-3.5 text-left transition sm:px-4 ${
+            isSelected
+              ? "bg-[#E8F4FB] ring-1 ring-inset ring-[#008CD3]/25"
+              : "hover:bg-[#F9FAFB] active:bg-[#F5F7FA]"
+          }`}
+        >
+          {renderEmployeeAvatar(emp, "sm")}
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[14px] font-semibold text-[#1F2937]">
+              {emp.employee_name}
+            </p>
+            <p className="mt-0.5 text-[11px] text-[#6B7280]">
+              Joined {formatJoinDate(emp.employee_joining_date)}
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <span className="inline-flex items-center gap-1 rounded-full bg-[#E8F4FB] px-2 py-0.5 text-[10px] font-semibold text-[#008CD3]">
+                <Layers className="h-3 w-3" aria-hidden />
+                {featCount} feature{featCount === 1 ? "" : "s"}
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-[#E6F4EA] px-2 py-0.5 text-[10px] font-semibold text-[#0F9D58]">
+                <Puzzle className="h-3 w-3" aria-hidden />
+                {subCount} sub{subCount === 1 ? "" : "s"}
+              </span>
+            </div>
+          </div>
+          <ChevronRight
+            className={`h-4 w-4 shrink-0 lg:hidden ${isSelected ? "text-[#008CD3]" : "text-[#9CA3AF]"}`}
+            aria-hidden
+          />
+        </button>
+      </li>
+    );
+  }
+
+  const mobileTabs: Array<{
+    id: "members" | "access";
+    label: string;
+    badge?: number;
+  }> = [
+    { id: "members", label: "Members", badge: filteredEmployees.length },
+    {
+      id: "access",
+      label: "Access",
+      badge: selectedEmployee ? countSubFeatures(selectedEmployee) : undefined,
+    },
+  ];
+
+  const statCards = [
+    {
+      label: "Employees",
+      value: overviewStats.totalEmployees,
+      color: "text-[#1F2937]",
+      icon: Users,
+    },
+    {
+      label: "Features",
+      value: overviewStats.totalFeatures,
+      color: "text-[#008CD3]",
+      icon: Layers,
+    },
+    {
+      label: "Sub features",
+      value: overviewStats.totalSubFeatures,
+      color: "text-[#0F9D58]",
+      icon: Puzzle,
+    },
+  ];
+
   return (
     <section
-      className="min-h-full [font-family:var(--font-inter),system-ui,sans-serif] lg:p-6"
+      className="min-h-full pb-[calc(0.75rem+env(safe-area-inset-bottom))] [font-family:var(--font-inter),system-ui,sans-serif] lg:p-6"
       style={{ backgroundColor: ZOHO.bg }}
     >
       <div className="mx-auto max-w-7xl space-y-4 lg:space-y-5">
-        {/* Header */}
-        <div className="sticky top-0 z-10 border-b border-[#E4E7EC] bg-white px-3 py-3 shadow-sm lg:static lg:rounded-lg lg:border lg:px-5 lg:shadow-sm">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="flex items-start gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#E8F4FB] text-[#008CD3]">
-                <LayoutGrid className="h-5 w-5" aria-hidden />
-              </span>
-              <div>
-                <h1 className="text-[16px] font-semibold text-[#1F2937] lg:text-[18px]">
-                  Employee feature access
-                </h1>
-                <p className="text-[12px] text-[#6B7280] lg:text-[13px]">
-                  View team members and their assigned features & sub-features.
-                </p>
+        {/* Desktop header */}
+        <div className="hidden lg:block">
+          <div className="overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-sm">
+            <div className="h-[3px] bg-[#008CD3]" aria-hidden />
+            <div className="px-5 py-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#E8F4FB] text-[#008CD3]">
+                    <LayoutGrid className="h-5 w-5" aria-hidden />
+                  </span>
+                  <div>
+                    <h1 className="text-[18px] font-semibold text-[#1F2937]">
+                      Employee feature access
+                    </h1>
+                    <p className="text-[13px] text-[#6B7280]">
+                      View team members and their assigned features & sub-features.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void loadEmployees()}
+                  disabled={loading}
+                  className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border border-[#E4E7EC] bg-white px-3 py-1.5 text-[13px] font-medium text-[#374151] transition hover:bg-[#F9FAFB] disabled:opacity-50"
+                >
+                  <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} aria-hidden />
+                  Refresh
+                </button>
               </div>
+
+              <div className="mt-4 grid grid-cols-3 gap-2">
+                {statCards.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <div
+                      key={item.label}
+                      className="rounded-xl border border-[#E4E7EC] bg-[#F9FAFB] px-3 py-2.5"
+                    >
+                      <p className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
+                        <Icon className="h-3 w-3" aria-hidden />
+                        {item.label}
+                      </p>
+                      <p className={`mt-1 text-lg font-semibold ${item.color}`}>{item.value}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Mobile & tablet header */}
+        <div className="sticky top-0 z-20 border-b border-[#E4E7EC] bg-white shadow-sm lg:hidden">
+          <div className="flex items-center gap-2.5 px-3 py-2.5 sm:px-4">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#E8F4FB] text-[#008CD3]">
+              <LayoutGrid className="h-4 w-4" aria-hidden />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h1 className="truncate text-[15px] font-semibold text-[#1F2937] sm:text-[16px]">
+                Feature access
+              </h1>
+              <p className={`truncate ${mobileCaptionCls}`}>
+                {loading
+                  ? "Loading…"
+                  : selectedEmployee
+                    ? `${selectedEmployee.employee_name} · ${selectedEmployee.features_access?.length ?? 0} modules`
+                    : `${employees.length} members · ${overviewStats.totalSubFeatures} sub-features`}
+              </p>
             </div>
             <button
               type="button"
               onClick={() => void loadEmployees()}
               disabled={loading}
-              className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border border-[#E4E7EC] bg-white px-3 py-1.5 text-[13px] font-medium text-[#374151] transition hover:bg-[#F9FAFB] disabled:opacity-50"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#008CD3] transition active:bg-[#F5F7FA] disabled:opacity-50"
+              aria-label="Refresh"
             >
-              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} aria-hidden />
-              Refresh
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             </button>
           </div>
 
-          <div className="mt-3 grid grid-cols-3 gap-2 lg:mt-4">
-            <div className="rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] px-3 py-2">
-              <p className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
-                <Users className="h-3 w-3" aria-hidden />
-                Employees
-              </p>
-              <p className="mt-0.5 text-lg font-semibold text-[#1F2937]">
-                {overviewStats.totalEmployees}
-              </p>
-            </div>
-            <div className="rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] px-3 py-2">
-              <p className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
-                <Layers className="h-3 w-3" aria-hidden />
-                Features
-              </p>
-              <p className="mt-0.5 text-lg font-semibold text-[#008CD3]">
-                {overviewStats.totalFeatures}
-              </p>
-            </div>
-            <div className="rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] px-3 py-2">
-              <p className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
-                <Puzzle className="h-3 w-3" aria-hidden />
-                Sub features
-              </p>
-              <p className="mt-0.5 text-lg font-semibold text-[#0F9D58]">
-                {overviewStats.totalSubFeatures}
-              </p>
-            </div>
+          <div className="grid grid-cols-3 gap-2 px-3 pb-2 sm:px-4">
+            {statCards.map((item) => (
+              <div
+                key={item.label}
+                className="rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] px-2 py-1.5 text-center sm:px-2.5 sm:py-2"
+              >
+                <p className="truncate text-[9px] font-semibold uppercase tracking-wide text-[#9CA3AF] sm:text-[10px]">
+                  {item.label}
+                </p>
+                <p className={`text-base font-semibold sm:text-lg ${item.color}`}>{item.value}</p>
+              </div>
+            ))}
           </div>
 
-          <div className="relative mt-3">
-            <Search
-              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF]"
-              aria-hidden
-            />
-            <input
-              type="search"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search employees, features, or sub-features…"
-              className={zohoSearchCls()}
-            />
+          <div className="px-3 pb-2.5 sm:px-4">
+            <div className="flex w-full rounded-lg bg-[#F5F7FA] p-0.5">
+              {mobileTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setMobileMainTab(tab.id)}
+                  className={`flex min-w-0 flex-1 items-center justify-center gap-1 rounded-md px-2 py-2 text-[12px] font-semibold transition active:scale-[0.98] sm:text-[13px] ${
+                    mobileMainTab === tab.id
+                      ? "bg-white text-[#008CD3] shadow-sm"
+                      : "text-[#6B7280]"
+                  }`}
+                >
+                  {tab.label}
+                  {tab.badge != null && tab.badge > 0 ? (
+                    <span
+                      className={`inline-flex h-4 min-w-4 items-center justify-center rounded-full px-0.5 text-[10px] ${
+                        mobileMainTab === tab.id
+                          ? "bg-[#E8F4FB] text-[#008CD3]"
+                          : "bg-[#E4E7EC] text-[#6B7280]"
+                      }`}
+                    >
+                      {tab.badge > 99 ? "99+" : tab.badge}
+                    </span>
+                  ) : null}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
         {error ? (
-          <div className="mx-3 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2 text-[12px] text-[#D93025] lg:mx-0">
+          <div className="mx-3 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2.5 text-[12px] text-[#D93025] lg:mx-0">
             {error}
           </div>
         ) : null}
@@ -514,9 +671,11 @@ export default function ManageOrganizationFeaturesPage() {
         ) : null}
 
         {!loading && !error && filteredEmployees.length === 0 ? (
-          <div className="mx-3 rounded-lg border border-dashed border-[#E4E7EC] bg-white px-4 py-14 text-center lg:mx-0">
-            <Users className="mx-auto h-9 w-9 text-[#9CA3AF]" aria-hidden />
-            <p className="mt-2 text-[15px] font-semibold text-[#1F2937]">No employees found</p>
+          <div className="mx-3 rounded-xl border border-dashed border-[#E4E7EC] bg-white px-4 py-14 text-center lg:mx-0">
+            <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#F5F7FA] text-[#9CA3AF]">
+              <Users className="h-6 w-6" aria-hidden />
+            </span>
+            <p className="mt-3 text-[15px] font-semibold text-[#1F2937]">No employees found</p>
             <p className="mt-1 text-[13px] text-[#6B7280]">
               {employees.length === 0
                 ? "No active employees in this organization."
@@ -525,29 +684,98 @@ export default function ManageOrganizationFeaturesPage() {
           </div>
         ) : null}
 
+        {/* Mobile & tablet content */}
         {!loading && !error && filteredEmployees.length > 0 ? (
-          <div className="grid gap-0 lg:grid-cols-[minmax(280px,340px)_1fr] lg:gap-4 lg:px-0">
-            {/* Employee list */}
-            <div className="border-[#E4E7EC] bg-white lg:overflow-hidden lg:rounded-lg lg:border lg:shadow-sm">
-              <div className="hidden border-b border-[#E4E7EC] px-4 py-3 lg:block">
+          <div className="lg:hidden">
+            {mobileMainTab === "members" ? (
+              <div className="border-t border-[#E4E7EC] bg-white">
+                <div className="border-b border-[#E4E7EC] px-3 py-2.5 sm:px-4">
+                  <div className="relative">
+                    <Search
+                      className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#9CA3AF]"
+                      aria-hidden
+                    />
+                    <input
+                      type="search"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Search employees, features…"
+                      className={zohoSearchCls()}
+                    />
+                  </div>
+                </div>
+                <ul className="divide-y divide-[#E4E7EC]">
+                  {filteredEmployees.map((emp) => renderEmployeeListItem(emp))}
+                </ul>
+              </div>
+            ) : null}
+
+            {mobileMainTab === "access" ? (
+              <div className="min-h-[calc(100dvh-14rem)] border-t border-[#E4E7EC] bg-white">
+                {selectedEmployee ? (
+                  renderFeatureDetailPanel(selectedEmployee, "mobile")
+                ) : (
+                  <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+                    <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#E8F4FB] text-[#008CD3]">
+                      <Users className="h-6 w-6" aria-hidden />
+                    </span>
+                    <p className={`mt-3 ${mobileValueCls}`}>Select a member</p>
+                    <p className={`mt-1 max-w-xs ${mobileCaptionCls}`}>
+                      Choose a team member from the Members tab to view their feature access.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setMobileMainTab("members")}
+                      className="mt-4 inline-flex min-h-[40px] items-center gap-1.5 rounded-lg bg-[#008CD3] px-4 py-2 text-[13px] font-semibold text-white transition active:scale-[0.98] hover:bg-[#0070AA]"
+                    >
+                      <Users className="h-4 w-4" aria-hidden />
+                      Browse members
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {/* Desktop master-detail */}
+        {!loading && !error && filteredEmployees.length > 0 ? (
+          <div className="hidden gap-4 lg:grid lg:grid-cols-[minmax(300px,360px)_1fr]">
+            <div className="overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-sm">
+              <div className="border-b border-[#E4E7EC] px-4 py-3">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
                   Team members ({filteredEmployees.length})
                 </p>
+                <div className="relative mt-3">
+                  <Search
+                    className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF]"
+                    aria-hidden
+                  />
+                  <input
+                    type="search"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search employees, features, or sub-features…"
+                    className={zohoSearchCls()}
+                  />
+                </div>
               </div>
-              <ul className="divide-y divide-[#E4E7EC]">
+              <ul className="max-h-[calc(100vh-18rem)] divide-y divide-[#E4E7EC] overflow-y-auto">
                 {filteredEmployees.map((emp) => {
-                  const isSelected =
-                    String(selectedEmployeeId) === String(emp.employee_id);
+                  const isSelected = String(selectedEmployeeId) === String(emp.employee_id);
                   const featCount = emp.features_access?.length ?? 0;
                   const subCount = countSubFeatures(emp);
                   return (
                     <li key={String(emp.employee_id)}>
                       <button
                         type="button"
-                        onClick={() => selectEmployee(emp)}
-                        className={`flex w-full items-center gap-3 px-3 py-3 text-left transition sm:px-4 ${
+                        onClick={() => {
+                          setSelectedEmployeeId(emp.employee_id);
+                          setExpandedFeatureId(emp.features_access?.[0]?.feature_id ?? null);
+                        }}
+                        className={`flex w-full items-center gap-3 px-4 py-3.5 text-left transition ${
                           isSelected
-                            ? "bg-[#E8F4FB] ring-1 ring-inset ring-[#008CD3]/20"
+                            ? "bg-[#E8F4FB] ring-1 ring-inset ring-[#008CD3]/25"
                             : "hover:bg-[#F9FAFB]"
                         }`}
                       >
@@ -557,23 +785,20 @@ export default function ManageOrganizationFeaturesPage() {
                             {emp.employee_name}
                           </p>
                           <p className="mt-0.5 text-[11px] text-[#6B7280]">
-                            Joined {formatJoinDate(emp.employee_joining_date)}
+                            ID {String(emp.employee_id)} · Joined{" "}
+                            {formatJoinDate(emp.employee_joining_date)}
                           </p>
-                          <div className="mt-1.5 flex flex-wrap gap-1.5">
-                            <span className="inline-flex items-center gap-1 rounded-md bg-[#E8F4FB] px-1.5 py-0.5 text-[10px] font-medium text-[#008CD3]">
+                          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-[#E8F4FB] px-2 py-0.5 text-[10px] font-semibold text-[#008CD3]">
                               <Layers className="h-3 w-3" aria-hidden />
-                              {featCount} feature{featCount === 1 ? "" : "s"}
+                              {featCount}
                             </span>
-                            <span className="inline-flex items-center gap-1 rounded-md bg-[#E6F4EA] px-1.5 py-0.5 text-[10px] font-medium text-[#0F9D58]">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-[#E6F4EA] px-2 py-0.5 text-[10px] font-semibold text-[#0F9D58]">
                               <Puzzle className="h-3 w-3" aria-hidden />
-                              {subCount} sub{subCount === 1 ? "" : "s"}
+                              {subCount}
                             </span>
                           </div>
                         </div>
-                        <ChevronRight
-                          className={`h-4 w-4 shrink-0 text-[#9CA3AF] lg:hidden ${isSelected ? "text-[#008CD3]" : ""}`}
-                          aria-hidden
-                        />
                       </button>
                     </li>
                   );
@@ -581,17 +806,18 @@ export default function ManageOrganizationFeaturesPage() {
               </ul>
             </div>
 
-            {/* Desktop detail panel */}
-            <div className="hidden min-h-[32rem] overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-sm lg:block">
+            <div className="min-h-[36rem] overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-sm">
               {selectedEmployee ? (
-                renderFeatureDetailPanel(selectedEmployee)
+                renderFeatureDetailPanel(selectedEmployee, "desktop")
               ) : (
                 <div className="flex h-full flex-col items-center justify-center px-6 py-16 text-center">
-                  <Users className="h-10 w-10 text-[#9CA3AF]" aria-hidden />
-                  <p className="mt-3 text-[15px] font-semibold text-[#1F2937]">
+                  <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#E8F4FB] text-[#008CD3]">
+                    <LayoutGrid className="h-7 w-7" aria-hidden />
+                  </span>
+                  <p className="mt-4 text-[15px] font-semibold text-[#1F2937]">
                     Select an employee
                   </p>
-                  <p className="mt-1 text-[13px] text-[#6B7280]">
+                  <p className="mt-1 max-w-xs text-[13px] text-[#6B7280]">
                     Choose a team member to view their feature and sub-feature access.
                   </p>
                 </div>
@@ -601,20 +827,6 @@ export default function ManageOrganizationFeaturesPage() {
         ) : null}
       </div>
 
-      {/* Mobile detail sheet */}
-      {mobileDetailOpen && selectedEmployee ? (
-        <div className="fixed inset-0 z-[10060] flex flex-col justify-end lg:hidden">
-          <button
-            type="button"
-            aria-label="Close"
-            className="absolute inset-0 bg-black/50"
-            onClick={() => setMobileDetailOpen(false)}
-          />
-          <div className="relative z-10 flex max-h-[92dvh] flex-col overflow-hidden rounded-t-xl border border-[#E4E7EC] bg-white shadow-xl">
-            {renderFeatureDetailPanel(selectedEmployee)}
-          </div>
-        </div>
-      ) : null}
     </section>
   );
 }

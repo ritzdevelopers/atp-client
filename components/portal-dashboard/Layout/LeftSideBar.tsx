@@ -304,17 +304,17 @@ function LeftSideBar({
             name: "Manage Organization Features",
             path: `${base}/organization-features/manage-organization-features`,
           },
-          {
-            id: "get-employee-accessible-features",
-            name: "Get Employee Accessible Features",
-            path: `${base}/organization-features/get-employee-accessible-features`,
-          },
+          // {
+          //   id: "get-employee-accessible-features",
+          //   name: "Get Employee Accessible Features",
+          //   path: `${base}/organization-features/get-employee-accessible-features`,
+          // },
           //assign-features-role-wise
-          {
-            id: "assign-features-role-wise",
-            name: "Assign Features Role Wise",
-            path: `${base}/organization-features/assign-features-role-wise`,
-          },
+          // {
+          //   id: "assign-features-role-wise",
+          //   name: "Assign Features Role Wise",
+          //   path: `${base}/organization-features/assign-features-role-wise`,
+          // },
           {
             id: "assign-features-to-the-employee",
             name: "Assign Features To Employee",
