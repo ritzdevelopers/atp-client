@@ -239,23 +239,30 @@ export type CreateCompanyHolidayPayload = {
   org_id: number | string;
   holiday_name: string;
   holiday_date: string;
+  end_date?: string | null;
 };
 
 export async function createCompanyHoliday(
   token: string,
   payload: CreateCompanyHolidayPayload,
 ): Promise<{ message?: string }> {
+  const body: Record<string, unknown> = {
+    org_id: payload.org_id,
+    holiday_name: payload.holiday_name.trim(),
+    holiday_date: payload.holiday_date,
+  };
+  const endDate = payload.end_date?.trim();
+  if (endDate) {
+    body.end_date = endDate;
+  }
+
   const res = await fetch(`${API_URL}/api/organization-settings/create-company-holiday`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({
-      org_id: payload.org_id,
-      holiday_name: payload.holiday_name.trim(),
-      holiday_date: payload.holiday_date,
-    }),
+    body: JSON.stringify(body),
   });
 
   const result = (await res.json()) as { message?: string };

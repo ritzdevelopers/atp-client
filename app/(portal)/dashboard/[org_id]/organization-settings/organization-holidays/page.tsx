@@ -197,6 +197,7 @@ function OrganizationHolidaysPage() {
   const [addOpen, setAddOpen] = useState(false);
   const [addName, setAddName] = useState("");
   const [addDate, setAddDate] = useState("");
+  const [addEndDate, setAddEndDate] = useState("");
   const [addError, setAddError] = useState<string | null>(null);
   const [addSubmitting, setAddSubmitting] = useState(false);
 
@@ -351,6 +352,7 @@ function OrganizationHolidaysPage() {
     setAddOpen(true);
     setAddName("");
     setAddDate("");
+    setAddEndDate("");
     setAddError(null);
   }
 
@@ -363,7 +365,12 @@ function OrganizationHolidaysPage() {
   async function submitAdd(e: React.FormEvent) {
     e.preventDefault();
     if (!addName.trim() || !addDate) {
-      setAddError("Holiday name and holiday date are required.");
+      setAddError("Holiday name and start date are required.");
+      return;
+    }
+    const trimmedEndDate = addEndDate.trim();
+    if (trimmedEndDate && trimmedEndDate < addDate) {
+      setAddError("End date cannot be before start date.");
       return;
     }
     const token = localStorage.getItem("token");
@@ -378,6 +385,7 @@ function OrganizationHolidaysPage() {
         org_id: orgId,
         holiday_name: addName,
         holiday_date: addDate,
+        end_date: trimmedEndDate || null,
       });
       closeAdd();
       await loadHolidays();
@@ -1024,7 +1032,7 @@ function OrganizationHolidaysPage() {
       {/* Edit Modal */}
       {editTarget && (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-[#1F2937]/40 p-0 backdrop-blur-[1px] sm:items-center sm:bg-gray-900/60 sm:p-4"
+          className="fixed inset-0 z-[999] flex items-end justify-center bg-[#1F2937]/40 p-0 backdrop-blur-[1px] sm:items-center sm:bg-gray-900/60 sm:p-4"
           role="dialog"
           aria-modal="true"
         >
@@ -1102,7 +1110,7 @@ function OrganizationHolidaysPage() {
       {/* Add Modal */}
       {addOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-[#1F2937]/40 p-0 backdrop-blur-[1px] sm:items-center sm:bg-gray-900/60 sm:p-4"
+          className="fixed inset-0 z-[9999] flex items-end justify-center bg-[#1F2937]/40 p-0 backdrop-blur-[1px] sm:items-center sm:bg-gray-900/60 sm:p-4"
           role="dialog"
           aria-modal="true"
         >
@@ -1147,7 +1155,7 @@ function OrganizationHolidaysPage() {
               </div>
               <div>
                 <label className="mb-2 block text-[14px] font-medium text-[#374151] sm:text-sm sm:text-gray-700">
-                  Holiday Date
+                  Start date
                 </label>
                 <input
                   type="date"
@@ -1156,6 +1164,22 @@ function OrganizationHolidaysPage() {
                   className={zohoInputCls()}
                   required
                 />
+              </div>
+              <div>
+                <label className="mb-2 block text-[14px] font-medium text-[#374151] sm:text-sm sm:text-gray-700">
+                  End date{" "}
+                  <span className="font-normal text-[#9CA3AF]">(optional)</span>
+                </label>
+                <input
+                  type="date"
+                  value={addEndDate}
+                  min={addDate || undefined}
+                  onChange={(e) => setAddEndDate(e.target.value)}
+                  className={zohoInputCls()}
+                />
+                <p className="mt-1.5 text-[12px] text-[#6B7280]">
+                  Leave blank for a single-day holiday.
+                </p>
               </div>
               <div className="flex flex-col-reverse gap-2 border-t border-[#E4E7EC] pt-4 sm:flex-row sm:justify-end sm:border-gray-100 sm:gap-3">
                 <button type="button" onClick={closeAdd} className={zohoSecondaryBtnCls(true)}>

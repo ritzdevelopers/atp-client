@@ -6,6 +6,7 @@ const ALWAYS_ALLOWED_SUFFIXES = [
   "/not-authorized",
   "/home",
   "/my-attendance-history",
+  "/organization-employees/team-group",
 ];
 
 function parseOrgFeatureAccessCookie(cookieHeader) {
