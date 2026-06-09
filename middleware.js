@@ -7,6 +7,7 @@ const ALWAYS_ALLOWED_SUFFIXES = [
   "/home",
   "/my-attendance-history",
   "/organization-employees/team-group",
+  "/asset-handover"
 ];
 
 function parseOrgFeatureAccessCookie(cookieHeader) {
@@ -23,6 +24,7 @@ function parseOrgFeatureAccessCookie(cookieHeader) {
     return null;
   }
 }
+
 
 function isPathAllowedForOrg(pathname, orgId, allowedPaths) {
   const normalizedPath = pathname.split("?")[0].replace(/\/$/, "") || "/";
