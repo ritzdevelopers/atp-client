@@ -1,4 +1,13 @@
 import { PortalFeature } from "@/services/organization";
+import {
+  fetchOrganizationFeatureGroups,
+  getOrganizationParentGroup,
+  organizationHasParentFeature,
+  organizationHasSubFeature,
+  persistOrganizationFeatureAccess,
+  readOrganizationFeatureSnapshot,
+  type OrgFeatureGroup,
+} from "@/lib/orgFeatureAccess";
 import { useManagementDashboardContext } from "@/components/portal-dashboard/Layout/ManagementDashboardContext";
 import { useRouter, useParams, usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -20,6 +29,7 @@ import {
   MdPayments,
   MdOutlineEventNote,
   MdOutlineManageAccounts,
+  MdSpaceDashboard,
 } from "react-icons/md";
 
 /** Desktop (lg+) nav icons — mobile keeps `NavItem.icon` unchanged. */
@@ -37,6 +47,8 @@ function desktopNavIcon(id: string, fallback: React.ReactNode): React.ReactNode 
       return <MdAdminPanelSettings className={LG_ICON} aria-hidden />;
     case "employees-features-management":
       return <MdVpnKey className={LG_ICON} aria-hidden />;
+    case "dashboard-management":
+      return <MdSpaceDashboard className={LG_ICON} aria-hidden />;
     case "company-ip-addresses-management":
       return <MdWifi className={LG_ICON} aria-hidden />;
     case "company-shift-management":
@@ -73,8 +85,6 @@ const LG_SIDEBAR_STYLES = `
 }
 `;
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
-
 /** Admin mobile bottom bar: quick-access tabs (fourth slot is Menu). */
 const ADMIN_BOTTOM_TAB_IDS: string[] = [
   "home",
@@ -96,6 +106,7 @@ function shortBottomLabel(item: NavItem): string {
     "employee-management": "Employees",
     "employees-roles-management": "Roles",
     "employees-features-management": "Features",
+    "dashboard-management": "Dashboards",
     "company-ip-addresses-management": "IP",
     "company-shift-management": "Shifts",
     "company-holiday-management": "Holidays",
@@ -141,7 +152,7 @@ type NavItem = {
 };
 
 function LeftSideBar({
-  accessableFeatures,
+  accessableFeatures: _accessableFeatures,
 }: {
   accessableFeatures: PortalFeature[];
 }) {
@@ -162,106 +173,50 @@ function LeftSideBar({
     String(effectiveRoleName || "").trim().toLowerCase() === "admin";
   const myHistoryActive = Boolean(pathname?.includes("/my-attendance-history"));
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const [resolvedFeatures, setResolvedFeatures] = useState<PortalFeature[]>(
-    Array.isArray(accessableFeatures) ? accessableFeatures : [],
-  );
+  const [orgFeatureGroups, setOrgFeatureGroups] = useState<OrgFeatureGroup[]>([]);
+  const [featuresLoaded, setFeaturesLoaded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    async function ensureFeatures() {
-      try {
-        const fromSession = sessionStorage.getItem("accessible_features");
-        if (fromSession) {
-          const parsed = JSON.parse(fromSession) as PortalFeature[];
-          if (!cancelled && Array.isArray(parsed) && parsed.length > 0) {
-            setResolvedFeatures(parsed);
-            return;
-          }
+    async function ensureOrgFeatures() {
+      const cached = readOrganizationFeatureSnapshot(orgId);
+      if (cached?.groups?.length) {
+        if (!cancelled) {
+          setOrgFeatureGroups(cached.groups);
+          setFeaturesLoaded(true);
         }
-      } catch {
-        // ignore session parse issues
-      }
-
-      if (Array.isArray(accessableFeatures) && accessableFeatures.length > 0) {
-        setResolvedFeatures(accessableFeatures);
-        try {
-          sessionStorage.setItem(
-            "accessible_features",
-            JSON.stringify(accessableFeatures),
-          );
-        } catch {
-          // ignore quota / private mode
-        }
-        return;
       }
 
       try {
         const token = localStorage.getItem("token");
-        if (!token) return;
-        const res = await fetch(`${API_URL}/api/auth/get-accessible-features`, {
-          method: "GET",
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const data = (await res.json()) as {
-          accessible_features?: PortalFeature[];
-        };
-        if (!res.ok) return;
-        const list = Array.isArray(data.accessible_features)
-          ? data.accessible_features
-          : [];
-        if (!cancelled) setResolvedFeatures(list);
-        try {
-          sessionStorage.setItem("accessible_features", JSON.stringify(list));
-        } catch {
-          // ignore quota / private mode
+        if (!token) {
+          if (!cancelled) setFeaturesLoaded(true);
+          return;
+        }
+        const groups = await fetchOrganizationFeatureGroups(orgId, token);
+        if (!cancelled) {
+          setOrgFeatureGroups(groups);
+          setFeaturesLoaded(true);
         }
       } catch {
-        // silently ignore feature fetch issues
+        if (!cancelled) setFeaturesLoaded(true);
       }
     }
-    void ensureFeatures();
+    void ensureOrgFeatures();
     return () => {
       cancelled = true;
     };
-  }, [accessableFeatures]);
+  }, [orgId]);
 
-  const accessibleTokens = useMemo(() => {
-    const set = new Set<string>();
-    for (const f of resolvedFeatures) {
-      const vals = [
-        f.feature_name,
-        f.name,
-        f.slug,
-        (f as { feature_val?: string }).feature_val,
-        (f as { value?: string }).value,
-      ];
-      for (const v of vals) {
-        if (v && String(v).trim()) {
-          set.add(String(v).trim().toLowerCase());
-        }
-      }
-    }
-    return set;
-  }, [resolvedFeatures]);
+  const hasFeatureAccess = useCallback(
+    (requiredFeature?: string) => organizationHasParentFeature(orgFeatureGroups, requiredFeature),
+    [orgFeatureGroups],
+  );
 
-  const hasFeatureAccess = useCallback((requiredFeature?: string) => {
-    if (!requiredFeature) return true;
-    const wanted = requiredFeature.toLowerCase();
-    if (accessibleTokens.has(wanted)) return true;
-    if (
-      wanted === "get-organization" &&
-      accessibleTokens.has("get-organization-info")
-    )
-      return true;
-    return false;
-  }, [accessibleTokens]);
-
-  const hasAnyFeatureAccess = useCallback(
-    (slugs?: string[]) => {
-      if (!slugs?.length) return true;
-      return slugs.some((s) => hasFeatureAccess(s));
-    },
-    [hasFeatureAccess],
+  const hasSubFeatureAccess = useCallback(
+    (parentFeature?: string, subFeaturePath?: string) =>
+      organizationHasSubFeature(orgFeatureGroups, parentFeature, subFeaturePath),
+    [orgFeatureGroups],
   );
 
   const navItems: NavItem[] = useMemo(
@@ -284,7 +239,7 @@ function LeftSideBar({
         path: `${base}/organization-employees/manage-employees`,
         children: [
           {
-            id: "manage-employees",
+            id: "manage-employee",
             name: "Manage Employees",
             path: `${base}/organization-employees/manage-employees`,
           },
@@ -294,7 +249,7 @@ function LeftSideBar({
             path: `${base}/organization-employees/employee-onboarding`,
           },
           {
-            id: "manage-employee-leaves",
+            id: "employee-leave-management",
             name: "Manage Employee Leaves",
             path: `${base}/organization-employees/manage-employee-leaves`,
           },
@@ -304,7 +259,7 @@ function LeftSideBar({
             path: `${base}/organization-employees/create-team`,
           },
           {
-            id: "manage-teams",
+            id: "team-management",
             name: "Team management",
             path: `${base}/organization-employees/manage-teams`,
           },
@@ -349,16 +304,41 @@ function LeftSideBar({
             name: "Manage Organization Features",
             path: `${base}/organization-features/manage-organization-features`,
           },
-          {
-            id: "get-employee-accessible-features",
-            name: "Get Employee Accessible Features",
-            path: `${base}/organization-features/get-employee-accessible-features`,
-          },
+          // {
+          //   id: "get-employee-accessible-features",
+          //   name: "Get Employee Accessible Features",
+          //   path: `${base}/organization-features/get-employee-accessible-features`,
+          // },
           //assign-features-role-wise
+          // {
+          //   id: "assign-features-role-wise",
+          //   name: "Assign Features Role Wise",
+          //   path: `${base}/organization-features/assign-features-role-wise`,
+          // },
           {
-            id: "assign-features-role-wise",
-            name: "Assign Features Role Wise",
-            path: `${base}/organization-features/assign-features-role-wise`,
+            id: "assign-features-to-the-employee",
+            name: "Assign Features To Employee",
+            path: `${base}/organization-features/assign-features-to-the-employee`,
+          },
+        ],
+      },
+      {
+        id: "dashboard-management",
+        name: "Dashboard Management",
+        value: "dashboard-management",
+        icon: <MdSpaceDashboard />,
+        path: `${base}/dashboard-management/manage-assigned-dashboards`,
+        requiredFeature: "dashboard-management",
+        children: [
+          {
+            id: "manage-assigned-dashboards",
+            name: "Manage Assigned Dashboards",
+            path: `${base}/dashboard-management/manage-assigned-dashboards`,
+          },
+          {
+            id: "assign-dashboard-to-employee",
+            name: "Assign Dashboard To Employee",
+            path: `${base}/dashboard-management/assign-dashboard-to-employee`,
           },
         ],
       },
@@ -392,12 +372,12 @@ function LeftSideBar({
         path: `${base}/organization-settings/manage-company-shifts`,
         children: [
           {
-            id: "manage-company-shifts",
+            id: "manage-shifts",
             name: "Manage Shifts",
             path: `${base}/organization-settings/manage-company-shifts`,
           },
           {
-            id: "create-company-shifts",
+            id: "create-new-shift",
             name: "Create New Shift",
             path: `${base}/organization-settings/create-company-shifts`,
           },
@@ -414,7 +394,7 @@ function LeftSideBar({
         path: `${base}/organization-settings/organization-holidays`,
         children: [
           {
-            id: "organization-holidays",
+            id: "manage-holidays",
             name: "Manage Holidays",
             path: `${base}/organization-settings/organization-holidays`,
           },    
@@ -485,13 +465,34 @@ function LeftSideBar({
   );
 
   const filteredNavItems = useMemo(() => {
+    if (!featuresLoaded) return [];
     const result: NavItem[] = [];
     for (const item of navItems) {
-      const canSee = item.requiredFeatureAny?.length
-        ? hasAnyFeatureAccess(item.requiredFeatureAny)
+      const matchedParentSlug = item.requiredFeatureAny?.length
+        ? item.requiredFeatureAny.find((slug) => hasFeatureAccess(slug))
+        : item.requiredFeature;
+      const canSeeParent = item.requiredFeatureAny?.length
+        ? Boolean(matchedParentSlug)
         : hasFeatureAccess(item.requiredFeature);
-      if (!canSee) continue;
-      const children = item.children;
+      if (!canSeeParent) continue;
+
+      const parentFeatureKey =
+        matchedParentSlug || item.requiredFeature || item.value || item.id;
+      const parentGroup = getOrganizationParentGroup(orgFeatureGroups, parentFeatureKey);
+      const assignedSubCount = parentGroup?.sub_features?.length ?? 0;
+
+      let children: NavSubItem[] = [];
+      if (item.children.length > 0) {
+        if (assignedSubCount === 0) {
+          children = item.children;
+        } else {
+          children = item.children.filter((sub) =>
+            hasSubFeatureAccess(parentFeatureKey, sub.id),
+          );
+        }
+        if (assignedSubCount > 0 && children.length === 0) continue;
+      }
+
       result.push({
         ...item,
         children,
@@ -499,7 +500,19 @@ function LeftSideBar({
       });
     }
     return result;
-  }, [navItems, hasFeatureAccess, hasAnyFeatureAccess]);
+  }, [navItems, featuresLoaded, orgFeatureGroups, hasFeatureAccess, hasSubFeatureAccess]);
+
+  useEffect(() => {
+    if (!featuresLoaded) return;
+    const allowedPaths: string[] = [];
+    for (const item of filteredNavItems) {
+      if (item.path) allowedPaths.push(item.path);
+      for (const sub of item.children) {
+        if (sub.path) allowedPaths.push(sub.path);
+      }
+    }
+    persistOrganizationFeatureAccess(orgId, orgFeatureGroups, allowedPaths);
+  }, [orgId, orgFeatureGroups, filteredNavItems, featuresLoaded]);
 
   const [activeMain, setActiveMain] = useState("organization");
   const [activeSub, setActiveSub] = useState("employee");
