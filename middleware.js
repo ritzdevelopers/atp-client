@@ -25,6 +25,7 @@ function parseOrgFeatureAccessCookie(cookieHeader) {
   }
 }
 
+
 function isPathAllowedForOrg(pathname, orgId, allowedPaths) {
   const normalizedPath = pathname.split("?")[0].replace(/\/$/, "") || "/";
   const base = `/dashboard/${orgId}`;
