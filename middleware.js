@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 
 const ORG_FEATURE_ACCESS_COOKIE = "org_feature_access";
 
-const ALWAYS_ALLOWED_SUFFIXES = ["/not-authorized", "/home"];
+const ALWAYS_ALLOWED_SUFFIXES = [
+  "/not-authorized",
+  "/home",
+  "/my-attendance-history",
+];
 
 function parseOrgFeatureAccessCookie(cookieHeader) {
   if (!cookieHeader) return null;

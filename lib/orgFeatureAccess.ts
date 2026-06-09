@@ -36,7 +36,11 @@ export const SUB_FEATURE_ALIASES: Record<string, string[]> = {
 export const ORG_FEATURES_SESSION_KEY = (orgId: string) => `org_features_${orgId}`;
 export const ORG_FEATURE_ACCESS_COOKIE = "org_feature_access";
 
-const ALWAYS_ALLOWED_SUFFIXES = ["/not-authorized", "/home"];
+const ALWAYS_ALLOWED_SUFFIXES = [
+  "/not-authorized",
+  "/home",
+  "/my-attendance-history",
+];
 
 export function orgFeaturesSessionKey(orgId: string): string {
   return ORG_FEATURES_SESSION_KEY(orgId);
