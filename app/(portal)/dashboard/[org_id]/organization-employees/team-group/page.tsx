@@ -58,6 +58,11 @@ import {
   type AttendanceQueryRow,
 } from "@/services/attendanceQueries";
 import TeamMemberExitProcessReportPage from "./exit-process-report/[user_id]/page";
+import { useManagementDashboardContext } from "@/components/portal-dashboard/Layout/ManagementDashboardContext";
+import type {
+  RightMainSideOrganization,
+  RightMainSideUser,
+} from "@/components/portal-dashboard/Layout/RightMainSide";
 
 function displayTeamTitle(raw: string) {
   return raw
@@ -389,6 +394,34 @@ function jwtRoleName(token: string | null): string {
   }
 }
 
+function jwtUserId(token: string | null): number | null {
+  if (!token) return null;
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1] || "")) as {
+      id?: number | string;
+      user_id?: number | string;
+    };
+    const raw = payload.id ?? payload.user_id;
+    if (raw == null || raw === "") return null;
+    const n = Number(raw);
+    return Number.isNaN(n) ? null : n;
+  } catch {
+    return null;
+  }
+}
+
+/** Strict owner check — owner_id must match signed-in user (avoids name/email false positives). */
+function resolveIsOrgOwner(
+  organization: RightMainSideOrganization | null | undefined,
+  user: RightMainSideUser | null | undefined,
+  token: string | null,
+): boolean {
+  if (!organization) return false;
+  const userId = user?.user_id ?? jwtUserId(token);
+  if (organization.owner_id == null || userId == null) return false;
+  return String(organization.owner_id) === String(userId);
+}
+
 function detailToRow(d: OrgTeamDetail): OrgTeamRow {
   return {
     team_id: d.team_id,
@@ -489,6 +522,7 @@ function TeamGroupPageRouter() {
 function TeamGroupPageContent() {
   const params = useParams();
   const router = useRouter();
+  const dashboardCtx = useManagementDashboardContext();
   const orgId = String(params?.org_id ?? "");
   const orgIdNum = useMemo(() => {
     const n = Number(orgId);
@@ -564,9 +598,23 @@ function TeamGroupPageContent() {
 
   const backHref = `/dashboard/${orgId}/home`;
 
+  const dashboardCtxReady = dashboardCtx != null && dashboardCtx.loading === false;
+
+  const isOrgOwner = useMemo(() => {
+    if (!dashboardCtxReady) return false;
+    return resolveIsOrgOwner(
+      dashboardCtx?.organization,
+      dashboardCtx?.user,
+      typeof window !== "undefined" ? localStorage.getItem("token") : null,
+    );
+  }, [dashboardCtx?.organization, dashboardCtx?.user, dashboardCtxReady]);
+
   const reloadMyHrRequests = useCallback(async () => {
     const t = localStorage.getItem("token");
-    if (!t || !detail?.is_admin) return;
+    if (!t || !detail) return;
+    const shouldLoadMyHr =
+      Boolean(detail.is_admin) || !dashboardCtxReady || !isOrgOwner;
+    if (!shouldLoadMyHr) return;
     const orgIdNum = Number(orgId);
     if (Number.isNaN(orgIdNum)) return;
     try {
@@ -582,7 +630,7 @@ function TeamGroupPageContent() {
         e instanceof Error ? e.message : "Could not load your HR requests.",
       );
     }
-  }, [detail?.is_admin, orgId]);
+  }, [detail, isOrgOwner, dashboardCtxReady, orgId]);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -601,29 +649,16 @@ function TeamGroupPageContent() {
       }
       const my = await fetchMyOrgTeam(token, orgIdNum);
       setDetail(my);
-      const [feed, users] = await Promise.all([
-        fetchTeamActivityFeed(token, my.team_id, orgIdNum),
-        getAllOrgUsers(token),
-      ]);
-      setNotifications(feed.notifications);
-      setExitProcessesReports(feed.exit_processes_reports);
-      setLeaveQueries(feed.leave_queries);
+
+      const users = await getAllOrgUsers(token);
       setOrgUsers(users);
-      try {
-        const rows = await fetchAllAttendanceQueries(token, orgIdNum, {
-          team_id: my.team_id,
-        });
-        setAttendanceQueries(rows);
-        setAttendanceListError(null);
-      } catch (attErr) {
+
+      if (!my.is_admin) {
+        setNotifications([]);
+        setExitProcessesReports([]);
+        setLeaveQueries([]);
         setAttendanceQueries([]);
-        setAttendanceListError(
-          attErr instanceof Error
-            ? attErr.message
-            : "Could not load attendance queries.",
-        );
-      }
-      if (my.is_admin) {
+        setAttendanceListError(null);
         try {
           const [ml, ma] = await Promise.all([
             fetchMyLeaveQueries(token, orgIdNum),
@@ -642,9 +677,23 @@ function TeamGroupPageContent() {
           );
         }
       } else {
-        setMyLeaveRows([]);
-        setMyAttRows([]);
-        setMyRequestsError(null);
+        try {
+          const [ml, ma] = await Promise.all([
+            fetchMyLeaveQueries(token, orgIdNum),
+            fetchMyAttendanceQueries(token, orgIdNum),
+          ]);
+          setMyLeaveRows(ml);
+          setMyAttRows(ma);
+          setMyRequestsError(null);
+        } catch (me) {
+          setMyLeaveRows([]);
+          setMyAttRows([]);
+          setMyRequestsError(
+            me instanceof Error
+              ? me.message
+              : "Could not load your HR requests.",
+          );
+        }
       }
     } catch (e) {
       const err = e as { status?: number; message?: string };
@@ -683,13 +732,13 @@ function TeamGroupPageContent() {
     void loadAll();
   }, [loadAll]);
 
-  const refreshActivityFeed = useCallback(async () => {
-    const t = localStorage.getItem("token");
-    if (!t || !detail) return;
+  const loadTeamActivityData = useCallback(async () => {
+    const token = localStorage.getItem("token");
+    if (!token || !detail) return;
     const orgIdNum = Number(orgId);
     if (Number.isNaN(orgIdNum)) return;
     try {
-      const feed = await fetchTeamActivityFeed(t, detail.team_id, orgIdNum);
+      const feed = await fetchTeamActivityFeed(token, detail.team_id, orgIdNum);
       setNotifications(feed.notifications);
       setExitProcessesReports(feed.exit_processes_reports);
       setLeaveQueries(feed.leave_queries);
@@ -697,25 +746,89 @@ function TeamGroupPageContent() {
       // keep existing feed on error
     }
     try {
-      const rows = await fetchAllAttendanceQueries(t, orgIdNum, {
+      const rows = await fetchAllAttendanceQueries(token, orgIdNum, {
         team_id: detail.team_id,
       });
       setAttendanceQueries(rows);
       setAttendanceListError(null);
     } catch (attErr) {
+      setAttendanceQueries([]);
       setAttendanceListError(
         attErr instanceof Error
           ? attErr.message
           : "Could not load attendance queries.",
       );
     }
-    if (detail.is_admin) {
+  }, [detail, orgId]);
+
+  useEffect(() => {
+    if (!detail) return;
+
+    const canViewActivity =
+      Boolean(detail.is_admin) || (dashboardCtxReady && isOrgOwner);
+    if (!canViewActivity) {
+      setNotifications([]);
+      setExitProcessesReports([]);
+      setLeaveQueries([]);
+      setAttendanceQueries([]);
+      setAttendanceListError(null);
+      return;
+    }
+
+    void loadTeamActivityData();
+  }, [detail, isOrgOwner, dashboardCtxReady, loadTeamActivityData]);
+
+  useEffect(() => {
+    if (!detail || !dashboardCtxReady) return;
+
+    const shouldLoadMyHr =
+      Boolean(detail.is_admin) || !dashboardCtxReady || !isOrgOwner;
+    if (shouldLoadMyHr) {
+      void reloadMyHrRequests();
+      return;
+    }
+    setMyLeaveRows([]);
+    setMyAttRows([]);
+    setMyRequestsError(null);
+  }, [detail, isOrgOwner, dashboardCtxReady, reloadMyHrRequests]);
+
+  const refreshActivityFeed = useCallback(async () => {
+    const t = localStorage.getItem("token");
+    if (!t || !detail) return;
+    const orgIdNum = Number(orgId);
+    if (Number.isNaN(orgIdNum)) return;
+    const canViewActivity =
+      Boolean(detail.is_admin) || (dashboardCtxReady && isOrgOwner);
+    if (canViewActivity) {
+      await loadTeamActivityData();
+    }
+    const shouldLoadMyHr =
+      Boolean(detail.is_admin) || !dashboardCtxReady || !isOrgOwner;
+    if (shouldLoadMyHr) {
       await reloadMyHrRequests();
     }
-  }, [detail, orgId, reloadMyHrRequests]);
+  }, [
+    detail,
+    orgId,
+    isOrgOwner,
+    dashboardCtxReady,
+    loadTeamActivityData,
+    reloadMyHrRequests,
+  ]);
 
   const focusRow = useMemo(() => (detail ? detailToRow(detail) : null), [detail]);
   const isTeamAdmin = Boolean(detail?.is_admin);
+  const showTeamActivity = isTeamAdmin || (dashboardCtxReady && isOrgOwner);
+  const showMemberHrSection = isTeamAdmin || !dashboardCtxReady || !isOrgOwner;
+
+  useEffect(() => {
+    if (!dashboardCtxReady) return;
+    if (mobileMainTab === "activity" && !showTeamActivity) {
+      setMobileMainTab(showMemberHrSection ? "hr" : "members");
+    } else if (mobileMainTab === "hr" && !showMemberHrSection) {
+      setMobileMainTab(showTeamActivity ? "activity" : "members");
+    }
+  }, [mobileMainTab, showTeamActivity, showMemberHrSection, dashboardCtxReady]);
 
   const pendingLeaveCount = useMemo(
     () =>
@@ -1093,9 +1206,11 @@ function TeamGroupPageContent() {
     badge?: number;
   }> = [
     { id: "members", label: "Members" },
-    { id: "activity", label: "Activity", badge: mobileActivityBadge },
+    ...(showTeamActivity
+      ? [{ id: "activity" as const, label: "Activity", badge: mobileActivityBadge }]
+      : []),
     { id: "info", label: "Info" },
-    ...(isTeamAdmin
+    ...(showMemberHrSection
       ? [{ id: "hr" as const, label: "My HR", badge: mobileHrBadge }]
       : []),
   ];
@@ -1288,7 +1403,7 @@ function TeamGroupPageContent() {
           </div>
         ) : null}
 
-        {mobileMainTab === "hr" && isTeamAdmin ? (
+        {mobileMainTab === "hr" && showMemberHrSection ? (
           <div className="space-y-2 p-3">
             <div className="grid grid-cols-2 gap-2">
               <button
@@ -1385,7 +1500,7 @@ function TeamGroupPageContent() {
           </div>
         ) : null}
 
-        {mobileMainTab === "activity" ? (
+        {mobileMainTab === "activity" && showTeamActivity ? (
           <div className="space-y-2 p-3">
             <div className="flex rounded-lg bg-[#F5F7FA] p-0.5">
               {(
@@ -1937,12 +2052,12 @@ function TeamGroupPageContent() {
           <div className="w-full">
             <div
               className={
-                isTeamAdmin
+                showMemberHrSection && showTeamActivity
                   ? "flex flex-col gap-5 lg:flex-row lg:items-stretch"
                   : "flex flex-col gap-5"
               }
             >
-            {isTeamAdmin ? (
+            {showMemberHrSection ? (
               <div className="min-w-0 flex-1 shrink-0">
               <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-lg shadow-slate-900/[0.06] ring-1 ring-slate-950/[0.04]">
                 <div className="relative border-b border-slate-100 bg-gradient-to-br from-[#0C123A] via-[#121a4a] to-[#0C123A] px-4 py-4 sm:px-5">
@@ -1960,10 +2075,19 @@ function TeamGroupPageContent() {
                           <p className="mt-0.5 flex items-start gap-1 text-[11px] leading-snug text-slate-300">
                             <HelpCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#C99237]/90" aria-hidden />
                             <span>
-                              Leave and attendance fixes for you (the team lead) — same queue
-                              org HR uses. Team-wide items stay in{" "}
-                              <span className="font-semibold text-white/95">Team activity</span>{" "}
-                              in the panel to the right.
+                              {isTeamAdmin
+                                ? "Leave and attendance fixes for you (the team lead) — same queue org HR uses."
+                                : "Raise leave and attendance queries for yourself — same queue org HR uses."}
+                              {showTeamActivity ? (
+                                <>
+                                  {" "}
+                                  Team-wide items stay in{" "}
+                                  <span className="font-semibold text-white/95">
+                                    Team activity
+                                  </span>{" "}
+                                  in the panel to the right.
+                                </>
+                              ) : null}
                             </span>
                           </p>
                         </div>
@@ -2182,6 +2306,7 @@ function TeamGroupPageContent() {
               </div>
             ) : null}
 
+            {showTeamActivity ? (
             <div className="min-w-0 flex-1 lg:min-h-0">
             <div className="sticky top-6 overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-xl shadow-slate-900/[0.08] ring-1 ring-slate-950/[0.04]">
               <div className="relative border-b border-slate-100 bg-gradient-to-r from-[#0C123A] via-[#121a4a] to-[#0C123A] px-3 py-4">
@@ -2596,6 +2721,7 @@ function TeamGroupPageContent() {
               </div>
             </div>
             </div>
+            ) : null}
           </div>
           </div>
         </div>
