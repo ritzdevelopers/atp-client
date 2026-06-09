@@ -41,6 +41,7 @@ const ALWAYS_ALLOWED_SUFFIXES = [
   "/home",
   "/my-attendance-history",
   "/organization-employees/team-group",
+  "/asset-handover"
 ];
 
 export function orgFeaturesSessionKey(orgId: string): string {
