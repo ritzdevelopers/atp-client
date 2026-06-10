@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { BarChart3, Building2, MapPin, Package, Plus, UserCircle, UsersRound } from "lucide-react";
+import { BarChart3, Building2, ChevronRight, MapPin, Package, Plus, UserCircle, UsersRound } from "lucide-react";
 import {
   countPendingHandoverItems,
   fetchHandoverAssignedToMe,
@@ -36,14 +36,29 @@ type AttendanceHistoryRow = {
   working_time?: string | number | null;
 };
 
+type EmployeeTeamAssignment = {
+  id?: number | string;
+  user_id?: number | string;
+  team_id: number | string;
+  org_id?: number | string;
+  joined_date?: string | null;
+  leave_date?: string | null;
+  team_name?: string | null;
+  team_info?: string | null;
+  total_number_of_members?: number | null;
+  team_admin_name?: string | null;
+};
+
 type EmployeeDashboardResponse = {
   attendance_history?: AttendanceHistoryRow[];
   employee?: {
     mark_attendance_late_after?: string | null;
+    user_name?: string | null;
   };
   employees?: {
     mark_attendance_late_after?: string | null;
   };
+  teams?: EmployeeTeamAssignment[];
 };
 
 function formatElapsedDuration(ms: number): string {
@@ -66,6 +81,23 @@ function formatJoinedDate(value: string | Date | null | undefined): string {
     day: "numeric",
     year: "numeric",
   });
+}
+
+function displayTeamTitle(raw: string | null | undefined): string {
+  if (!raw?.trim()) return "Team";
+  return raw
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+function teamGroupHref(orgId: number, teamId: number | string): string {
+  return `/dashboard/${orgId}/organization-employees/team-group?team_id=${encodeURIComponent(String(teamId))}`;
+}
+
+function activeTeamAssignments(teams: EmployeeTeamAssignment[] | undefined): EmployeeTeamAssignment[] {
+  return (teams ?? []).filter((team) => team.leave_date == null || team.leave_date === "");
 }
 
 function greetingForHour(): string {
@@ -130,6 +162,125 @@ function mobileSecondaryBtnCls(full = false) {
 
 function mobileGoldBtnCls(full = false) {
   return `inline-flex min-h-[36px] items-center justify-center gap-1.5 rounded-md bg-[#C99237] px-3 py-2 text-[12px] font-semibold text-[#0C123A] transition active:scale-[0.98] hover:bg-[#b87d2e] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full" : ""}`;
+}
+
+function MyTeamsSection({
+  teams,
+  orgId,
+  currentUserName,
+  delayMs,
+}: {
+  teams: EmployeeTeamAssignment[];
+  orgId: number;
+  currentUserName: string;
+  delayMs: number;
+}) {
+  const activeTeams = activeTeamAssignments(teams);
+
+  return (
+    <section
+      className="dashboard-enter overflow-hidden rounded-lg border border-[#008CD3]/20 bg-white shadow-sm ring-1 ring-[#E4E7EC] lg:rounded-2xl lg:border-[#008CD3]/15 lg:shadow-md lg:ring-0"
+      style={{ animationDelay: `${delayMs}ms` }}
+    >
+      <div className="border-b border-[#E4E7EC] bg-gradient-to-r from-[#E8F4FB] via-white to-[#E6F4EA] px-3 py-3.5 lg:px-5 lg:py-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex items-start gap-2.5 lg:gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#008CD3] text-white shadow-sm lg:h-11 lg:w-11 lg:rounded-xl">
+              <UsersRound className="h-5 w-5 lg:h-6 lg:w-6" aria-hidden />
+            </span>
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-[#008CD3]">
+                My teams
+              </p>
+              <h2 className="mt-0.5 text-[15px] font-semibold text-[#1F2937] lg:text-lg lg:text-[#0C123A]">
+                {activeTeams.length === 1
+                  ? "1 team assigned"
+                  : `${activeTeams.length} teams assigned`}
+              </h2>
+              <p className={`mt-0.5 ${mobileCaptionCls} lg:text-sm`}>
+                Open a team workspace to view members, activity, and HR requests.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="p-3 lg:p-5">
+        {activeTeams.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-[#E4E7EC] bg-[#F9FAFB] px-4 py-8 text-center">
+            <UsersRound className="mx-auto h-9 w-9 text-[#9CA3AF]" aria-hidden />
+            <p className="mt-2 text-[14px] font-semibold text-[#1F2937]">No team assigned yet</p>
+            <p className={`mt-1 ${mobileCaptionCls}`}>
+              Your reporting manager or HR will add you to a team.
+            </p>
+          </div>
+        ) : (
+          <ul className="grid gap-3 sm:grid-cols-2">
+            {activeTeams.map((team) => {
+              const teamId = team.team_id;
+              const title = displayTeamTitle(team.team_name);
+              const managerName = team.team_admin_name?.trim() || "—";
+              const isReportingManager =
+                !!currentUserName &&
+                !!managerName &&
+                currentUserName.trim().toLowerCase() === managerName.toLowerCase();
+              const memberCount = Number(team.total_number_of_members ?? 0);
+
+              return (
+                <li
+                  key={String(team.id ?? teamId)}
+                  className="flex h-full flex-col overflow-hidden rounded-xl border border-[#E4E7EC] bg-white shadow-sm transition hover:border-[#008CD3]/35 hover:shadow-md"
+                >
+                  <div className="border-t-[3px] border-t-[#008CD3] px-4 pb-4 pt-3.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <h3 className="truncate text-[15px] font-semibold text-[#1F2937]">
+                          {title}
+                        </h3>
+                        <p className="mt-1 line-clamp-2 text-[12px] leading-snug text-[#6B7280]">
+                          {team.team_info?.trim() || "No team description added yet."}
+                        </p>
+                      </div>
+                      {isReportingManager ? (
+                        <span className="shrink-0 rounded-full bg-[#E6F4EA] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#0F9D58]">
+                          You manage
+                        </span>
+                      ) : null}
+                    </div>
+
+                    <dl className="mt-3 grid grid-cols-2 gap-2">
+                      <div className="rounded-lg bg-[#F9FAFB] px-2.5 py-2">
+                        <dt className={mobileLabelCls}>Reporting manager</dt>
+                        <dd className={`mt-0.5 ${mobileValueCls} truncate`}>{managerName}</dd>
+                      </div>
+                      <div className="rounded-lg bg-[#F9FAFB] px-2.5 py-2">
+                        <dt className={mobileLabelCls}>Members</dt>
+                        <dd className={`mt-0.5 ${mobileValueCls}`}>{memberCount || "—"}</dd>
+                      </div>
+                      <div className="col-span-2 rounded-lg bg-[#F9FAFB] px-2.5 py-2">
+                        <dt className={mobileLabelCls}>Joined on</dt>
+                        <dd className={`mt-0.5 ${mobileValueCls}`}>
+                          {formatJoinedDate(team.joined_date)}
+                        </dd>
+                      </div>
+                    </dl>
+
+                    <Link
+                      href={teamGroupHref(orgId, teamId)}
+                      className={`mt-4 ${mobilePrimaryBtnCls(true)} !min-h-[40px] !rounded-lg !text-[13px] !font-semibold lg:!rounded-xl`}
+                    >
+                      Open {title}
+                      <ChevronRight className="h-4 w-4" aria-hidden />
+                    </Link>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </section>
+  );
 }
 
 function InfoRow({
@@ -593,30 +744,12 @@ function HomeOverview({
       </header>
 
       {roleKey !== "admin" ? (
-        <section
-          className="dashboard-enter overflow-hidden rounded-lg border border-[#C99237]/30 bg-gradient-to-r from-[#0C123A] to-[#151f52] p-3 shadow-md max-lg:ring-1 max-lg:ring-[#C99237]/20 sm:p-4 lg:rounded-2xl lg:border lg:border-[#C99237]/35 lg:p-7 lg:shadow-md lg:ring-0"
-          style={{ animationDelay: "50ms" }}
-        >
-          <div className="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between lg:gap-4">
-            <div className="flex items-start gap-2.5 lg:gap-3">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#C99237]/20 lg:h-11 lg:w-11 lg:rounded-xl">
-                <UsersRound className="h-5 w-5 text-[#C99237] lg:h-6 lg:w-6" aria-hidden />
-              </span>
-              <div className="min-w-0">
-                <h2 className="text-[13px] font-semibold text-white lg:text-base">Your team group</h2>
-                <p className={`mt-0.5 max-lg:line-clamp-2 ${mobileCaptionCls} !text-slate-300 lg:mt-1 lg:text-sm lg:leading-relaxed lg:max-w-xl`}>
-                  Roster, invites, and live activity feed for your team.
-                </p>
-              </div>
-            </div>
-            <Link
-              href={`/dashboard/${orgId}/organization-employees/team-group`}
-              className={`${mobileGoldBtnCls(true)} lg:inline-flex lg:w-auto lg:shrink-0 lg:rounded-xl lg:px-5 lg:py-2.5 lg:text-sm lg:shadow-lg`}
-            >
-              Go to team group
-            </Link>
-          </div>
-        </section>
+        <MyTeamsSection
+          teams={attendanceData?.teams ?? []}
+          orgId={orgId}
+          currentUserName={user.user_name?.trim() || displayName}
+          delayMs={50}
+        />
       ) : null}
 
       <section

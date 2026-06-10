@@ -76,7 +76,7 @@ function modalShell(
 ) {
   return (
     <div
-      className="fixed inset-0 z-[1000] flex items-end justify-center bg-[#111B21]/40 p-0 backdrop-blur-[1px] sm:items-center sm:bg-slate-900/45 sm:p-4 sm:backdrop-blur-[2px]"
+      className="fixed inset-0 z-[9999] flex items-end justify-center bg-[#111B21]/40 p-0 backdrop-blur-[1px] sm:items-center sm:bg-slate-900/45 sm:p-4 sm:backdrop-blur-[2px]"
       role="dialog"
       aria-modal="true"
       aria-labelledby="team-modal-title"

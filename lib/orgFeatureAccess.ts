@@ -41,7 +41,13 @@ const ALWAYS_ALLOWED_SUFFIXES = [
   "/home",
   "/my-attendance-history",
   "/organization-employees/team-group",
-  "/asset-handover"
+  "/asset-handover",
+];
+
+/** Users with these nav paths may also open team detail / exit routes. */
+const TEAM_MANAGEMENT_ACCESS_SUFFIXES = [
+  "/organization-employees/manage-teams",
+  "/organization-employees/create-team",
 ];
 
 export function orgFeaturesSessionKey(orgId: string): string {
@@ -193,6 +199,27 @@ export function organizationHasSubFeature(
   return subFeaturePathMatches(assignedPaths, subFeaturePath);
 }
 
+function hasGrantedTeamChildPath(
+  normalizedPath: string,
+  orgId: string,
+  allowedPaths: string[],
+): boolean {
+  const base = `/dashboard/${orgId}`;
+  const teamsRoot = `${base}/organization-employees/teams`;
+  if (
+    normalizedPath !== teamsRoot &&
+    !normalizedPath.startsWith(`${teamsRoot}/`)
+  ) {
+    return false;
+  }
+  return allowedPaths.some((allowed) => {
+    const normalizedAllowed = allowed.replace(/\/$/, "");
+    return TEAM_MANAGEMENT_ACCESS_SUFFIXES.some(
+      (suffix) => normalizedAllowed === `${base}${suffix}`,
+    );
+  });
+}
+
 export function isPathAllowedForOrg(pathname: string, orgId: string, allowedPaths: string[]): boolean {
   if (!pathname || !orgId) return true;
 
@@ -213,6 +240,10 @@ export function isPathAllowedForOrg(pathname: string, orgId: string, allowedPath
       normalizedPath === `${base}/home` ||
       normalizedPath.startsWith(`${base}/not-authorized`)
     );
+  }
+
+  if (hasGrantedTeamChildPath(normalizedPath, orgId, allowedPaths)) {
+    return true;
   }
 
   return allowedPaths.some((allowed) => {

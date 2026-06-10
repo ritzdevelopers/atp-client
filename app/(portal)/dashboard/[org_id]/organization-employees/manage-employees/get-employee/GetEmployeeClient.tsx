@@ -224,20 +224,118 @@ function formatMonthYear(month: unknown, year: unknown): string {
   return d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
 }
 
-function buildAddress(info: SingleEmployeeData["user_info"]): string {
+function buildAddressSummary(row: Record<string, unknown>): string {
   const parts = [
-    info.house_number,
-    info.street,
-    info.is_from_village ? info.village_name : null,
-    info.city,
-    info.district,
-    info.state,
-    info.country,
-    info.zip_code,
+    row.house_number,
+    row.street,
+    row.is_from_village === 1 || row.is_from_village === true ? row.village_name : null,
+    row.city,
+    row.district,
+    row.state,
+    row.country,
+    row.zip_code,
   ]
     .map((part) => asText(part, ""))
     .filter(Boolean);
   return parts.length > 0 ? parts.join(", ") : "—";
+}
+
+function AddressTypeBadge({ type }: { type: unknown }) {
+  const label = formatLabel(type);
+  const lower = label.toLowerCase();
+  const cls =
+    lower === "permanent"
+      ? "bg-[#E8F4FB] text-[#0070AA] ring-[#B8DDF0]"
+      : "bg-[#E6F4EA] text-[#0F9D58] ring-[#B7E1C1]";
+  return (
+    <span
+      className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ring-1 ring-inset ${cls}`}
+    >
+      {label}
+    </span>
+  );
+}
+
+function AddressDetailCard({ row }: { row: Record<string, unknown> }) {
+  const summary = buildAddressSummary(row);
+  const isVillage = row.is_from_village === 1 || row.is_from_village === true;
+
+  return (
+    <article className="flex h-full flex-col overflow-hidden rounded-xl border border-[#E4E7EC] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+      <div className="flex items-center justify-between gap-2 border-b border-[#EEF2F6] bg-[#FAFBFC] px-3 py-2.5 sm:px-4">
+        <div className="flex items-center gap-2">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#E8F4FB] text-[#008CD3]">
+            <MapPin className="h-4 w-4" aria-hidden />
+          </span>
+          <AddressTypeBadge type={row.address_type} />
+        </div>
+      </div>
+      <div className="flex flex-1 flex-col gap-3 p-3 sm:p-4">
+        <p className="text-[13px] font-medium leading-relaxed text-[#1F2937] sm:text-[14px]">
+          {summary}
+        </p>
+        <dl className="mt-auto grid gap-2 sm:grid-cols-2">
+          <div>
+            <dt className={mobileLabelCls}>Country</dt>
+            <dd className="mt-0.5 text-[13px] font-semibold text-[#374151]">{asText(row.country)}</dd>
+          </div>
+          <div>
+            <dt className={mobileLabelCls}>State</dt>
+            <dd className="mt-0.5 text-[13px] font-semibold text-[#374151]">{asText(row.state)}</dd>
+          </div>
+          <div>
+            <dt className={mobileLabelCls}>District</dt>
+            <dd className="mt-0.5 text-[13px] font-semibold text-[#374151]">{asText(row.district)}</dd>
+          </div>
+          <div>
+            <dt className={mobileLabelCls}>City</dt>
+            <dd className="mt-0.5 text-[13px] font-semibold text-[#374151]">{asText(row.city)}</dd>
+          </div>
+          {isVillage ? (
+            <div className="sm:col-span-2">
+              <dt className={mobileLabelCls}>Village</dt>
+              <dd className="mt-0.5 text-[13px] font-semibold text-[#374151]">
+                {asText(row.village_name)}
+              </dd>
+            </div>
+          ) : null}
+          <div>
+            <dt className={mobileLabelCls}>Street</dt>
+            <dd className="mt-0.5 text-[13px] font-semibold text-[#374151]">{asText(row.street)}</dd>
+          </div>
+          <div>
+            <dt className={mobileLabelCls}>House no.</dt>
+            <dd className="mt-0.5 text-[13px] font-semibold text-[#374151]">
+              {asText(row.house_number)}
+            </dd>
+          </div>
+          <div className="sm:col-span-2">
+            <dt className={mobileLabelCls}>PIN / ZIP</dt>
+            <dd className="mt-0.5 text-[13px] font-semibold text-[#374151]">{asText(row.zip_code)}</dd>
+          </div>
+        </dl>
+      </div>
+    </article>
+  );
+}
+
+function ZohoDetailGrid({ children }: { children: ReactNode }) {
+  return (
+    <dl className="divide-y divide-[#EEF2F6] rounded-xl border border-[#E4E7EC] bg-white">
+      {children}
+    </dl>
+  );
+}
+
+function ZohoDetailRow({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="grid gap-1 px-3 py-3 sm:grid-cols-[140px_1fr] sm:items-start sm:gap-4 sm:px-4 sm:py-3.5">
+      <dt className="text-[11px] font-semibold uppercase tracking-wide text-[#9CA3AF] sm:pt-0.5">
+        {label}
+      </dt>
+      <dd className="text-[13px] font-medium text-[#1F2937] sm:text-[14px]">{value}</dd>
+    </div>
+  );
 }
 
 function maskAccountNumber(value: unknown): string {
@@ -266,30 +364,33 @@ function SectionCard({
   children,
   emptyText,
   isEmpty,
+  subtitle,
 }: {
   title: string;
   icon: ReactNode;
   children: ReactNode;
   emptyText?: string;
   isEmpty?: boolean;
+  subtitle?: string;
 }) {
   return (
-    <section className="overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-sm max-lg:shadow-[0_1px_2px_rgba(15,23,42,0.05)] sm:rounded-2xl sm:shadow-[0_1px_3px_rgba(15,23,42,0.06)]">
-      <div className="flex items-center gap-2 border-b border-[#EEF2F6] bg-[#F9FAFB] px-3 py-2.5 sm:gap-3 sm:bg-gradient-to-r sm:from-[#F8FBFF] sm:to-white sm:px-4 sm:py-3.5 lg:px-5">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#E8F4FB] text-[#008CD3] sm:h-9 sm:w-9 sm:rounded-xl">
+    <section className="overflow-hidden rounded-xl border border-[#E4E7EC] bg-white shadow-[0_1px_3px_rgba(15,23,42,0.05)]">
+      <div className="flex items-start gap-3 border-b border-[#EEF2F6] px-4 py-3.5">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#F0F7FC] text-[#008CD3]">
           {icon}
         </span>
-        <h2 className="text-[13px] font-semibold tracking-tight text-[#1F2937] sm:text-[15px] lg:text-base">
-          {title}
-        </h2>
+        <div className="min-w-0">
+          <h2 className="text-[15px] font-semibold text-[#1F2937]">{title}</h2>
+          {subtitle ? <p className="mt-0.5 text-[12px] text-[#6B7280]">{subtitle}</p> : null}
+        </div>
       </div>
-      <div className="px-3 py-3 sm:px-4 sm:py-4 lg:px-5">
+      <div className="p-4">
         {isEmpty ? (
-          <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
-            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#F5F7FA] text-[#9CA3AF]">
+          <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-[#E4E7EC] bg-[#FAFBFC] py-10 text-center">
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F5F7FA] text-[#9CA3AF]">
               {icon}
             </span>
-            <p className="text-[14px] text-[#6B7280]">{emptyText || "No records found."}</p>
+            <p className="text-[13px] text-[#6B7280]">{emptyText || "No records found."}</p>
           </div>
         ) : (
           children
@@ -397,7 +498,7 @@ function DesktopProfileCard({
   phone: string;
   joined: string;
   imageUrl: string | null;
-  stats: { documents: number; assets: number; leaves: number; logs: number };
+  stats: { documents: number; assets: number; leaves: number; addresses: number };
   onImageZoom: (url: string, alt: string) => void;
 }) {
   return (
@@ -425,7 +526,7 @@ function DesktopProfileCard({
         <QuickStat label="Docs" value={stats.documents} />
         <QuickStat label="Assets" value={stats.assets} />
         <QuickStat label="Leaves" value={stats.leaves} />
-        <QuickStat label="Logs" value={stats.logs} />
+        <QuickStat label="Address" value={stats.addresses} />
       </div>
       <dl className="space-y-0 px-4 py-2">
         <InfoRow label="Email" value={email} />
@@ -672,14 +773,55 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
       </>
     ) : null;
 
+  const latestDocuments = useMemo(() => {
+    const map = new Map<string, Record<string, unknown>>();
+    for (const doc of data?.documents ?? []) {
+      const type = String(doc.document_type ?? doc.id ?? "doc");
+      const existing = map.get(type);
+      const docTime = new Date(String(doc.created_at ?? 0)).getTime();
+      const existingTime = existing
+        ? new Date(String(existing.created_at ?? 0)).getTime()
+        : 0;
+      if (!existing || docTime > existingTime) {
+        map.set(type, doc);
+      }
+    }
+    return Array.from(map.values()).sort(
+      (a, b) =>
+        new Date(String(b.created_at ?? 0)).getTime() -
+        new Date(String(a.created_at ?? 0)).getTime(),
+    );
+  }, [data?.documents]);
+
   const stats = useMemo(
     () => ({
-      documents: data?.documents.length ?? 0,
+      documents: latestDocuments.length,
       assets: data?.assets.length ?? 0,
       leaves: data?.leave_queries.length ?? 0,
-      logs: data?.attendance_logs.length ?? 0,
+      addresses: data?.addresses?.length ?? 0,
     }),
-    [data],
+    [data, latestDocuments.length],
+  );
+
+  const employeeAddresses = useMemo(
+    () => data?.addresses ?? [],
+    [data?.addresses],
+  );
+
+  const permanentAddress = useMemo(
+    () =>
+      employeeAddresses.find(
+        (row) => String(row.address_type ?? "").toLowerCase() === "permanent",
+      ),
+    [employeeAddresses],
+  );
+
+  const currentAddress = useMemo(
+    () =>
+      employeeAddresses.find(
+        (row) => String(row.address_type ?? "").toLowerCase() === "current",
+      ),
+    [employeeAddresses],
   );
 
   const mobileTabs = useMemo(
@@ -693,11 +835,15 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
   );
 
   const overviewSection = data ? (
-    <div className="space-y-2 lg:space-y-4">
-      <SectionCard title="Contact Information" icon={<User className="h-4 w-4" />}>
-        <dl>
-          <InfoRow label="Full name" value={asText(info?.user_name)} />
-          <InfoRow
+    <div className="space-y-4">
+      <SectionCard
+        title="Personal information"
+        subtitle="Basic contact and role details"
+        icon={<User className="h-4 w-4" />}
+      >
+        <ZohoDetailGrid>
+          <ZohoDetailRow label="Full name" value={asText(info?.user_name)} />
+          <ZohoDetailRow
             label="Email"
             value={
               info?.user_email ? (
@@ -709,7 +855,7 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
               )
             }
           />
-          <InfoRow
+          <ZohoDetailRow
             label="Phone"
             value={
               info?.user_phone ? (
@@ -721,37 +867,64 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
               )
             }
           />
-          <InfoRow label="Joined on" value={formatDate(info?.created_at)} />
-          <InfoRow label="Role" value={formatLabel(info?.role_name)} />
-        </dl>
-      </SectionCard>
-
-      <SectionCard title="Address" icon={<MapPin className="h-4 w-4" />} isEmpty={buildAddress(info || {}) === "—"}>
-        <p className="rounded-lg bg-[#F8FBFF] px-3 py-2.5 text-[13px] leading-relaxed text-[#1F2937] sm:rounded-xl sm:px-4 sm:py-3 sm:text-[14px]">
-          {buildAddress(info || {})}
-        </p>
+          <ZohoDetailRow label="Joined on" value={formatDate(info?.created_at)} />
+          <ZohoDetailRow label="Role" value={formatLabel(info?.role_name)} />
+        </ZohoDetailGrid>
       </SectionCard>
 
       <SectionCard
-        title="Emergency Contact"
+        title="Addresses"
+        subtitle="Permanent and current residence on file"
+        icon={<MapPin className="h-4 w-4" />}
+        isEmpty={employeeAddresses.length === 0}
+        emptyText="No addresses saved for this employee."
+      >
+        <div className="grid gap-4 lg:grid-cols-2">
+          {permanentAddress ? (
+            <AddressDetailCard row={permanentAddress as Record<string, unknown>} />
+          ) : null}
+          {currentAddress ? (
+            <AddressDetailCard row={currentAddress as Record<string, unknown>} />
+          ) : null}
+          {!permanentAddress && !currentAddress
+            ? employeeAddresses.map((row, index) => (
+                <AddressDetailCard
+                  key={String(row.id ?? row.address_id ?? index)}
+                  row={row as Record<string, unknown>}
+                />
+              ))
+            : null}
+        </div>
+      </SectionCard>
+
+      <SectionCard
+        title="Emergency contact"
+        subtitle="Person to reach in case of emergency"
         icon={<Phone className="h-4 w-4" />}
         isEmpty={!info?.emergency_contact_name && !info?.emergency_number}
+        emptyText="No emergency contact on file."
       >
-        <dl>
-          <InfoRow label="Contact name" value={asText(info?.emergency_contact_name)} />
-          <InfoRow label="Contact number" value={asText(info?.emergency_number)} />
-          <InfoRow label="Relation" value={formatLabel(info?.relation_blood_line)} />
-        </dl>
+        <ZohoDetailGrid>
+          <ZohoDetailRow label="Contact name" value={asText(info?.emergency_contact_name)} />
+          <ZohoDetailRow label="Contact number" value={asText(info?.emergency_number)} />
+          <ZohoDetailRow label="Relation" value={formatLabel(info?.relation_blood_line)} />
+        </ZohoDetailGrid>
       </SectionCard>
     </div>
   ) : null;
 
   const workSection = data ? (
-    <div className="space-y-2 lg:space-y-4">
-      <SectionCard title="Shift Details" icon={<Clock className="h-4 w-4" />} isEmpty={!info?.shift_name}>
-        <dl>
-          <InfoRow label="Shift" value={asText(info?.shift_name)} />
-          <InfoRow
+    <div className="space-y-4">
+      <SectionCard
+        title="Shift details"
+        subtitle="Assigned work schedule"
+        icon={<Clock className="h-4 w-4" />}
+        isEmpty={!info?.shift_name}
+        emptyText="No shift assigned."
+      >
+        <ZohoDetailGrid>
+          <ZohoDetailRow label="Shift" value={asText(info?.shift_name)} />
+          <ZohoDetailRow
             label="Timing"
             value={
               info?.start_time || info?.end_time
@@ -759,27 +932,29 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
                 : "—"
             }
           />
-          <InfoRow label="Working days" value={asText(info?.working_days)} />
-          <InfoRow
+          <ZohoDetailRow label="Working days" value={asText(info?.working_days)} />
+          <ZohoDetailRow
             label="Night shift"
             value={info?.is_night_shift ? "Yes" : info?.is_night_shift === 0 ? "No" : "—"}
           />
-        </dl>
+        </ZohoDetailGrid>
       </SectionCard>
 
       <SectionCard
-        title="Bank Information"
+        title="Bank information"
+        subtitle="Salary account details"
         icon={<Wallet className="h-4 w-4" />}
         isEmpty={!info?.bank_name && !info?.account_number}
+        emptyText="No bank details on file."
       >
-        <dl>
-          <InfoRow label="Account holder" value={asText(info?.account_holder_name)} />
-          <InfoRow label="Bank" value={asText(info?.bank_name)} />
-          <InfoRow label="Branch" value={asText(info?.bank_branch)} />
-          <InfoRow label="Account number" value={maskAccountNumber(info?.account_number)} />
-          <InfoRow label="IFSC" value={asText(info?.ifsc_code)} />
-          <InfoRow label="UAN" value={asText(info?.uan_number)} />
-        </dl>
+        <ZohoDetailGrid>
+          <ZohoDetailRow label="Account holder" value={asText(info?.account_holder_name)} />
+          <ZohoDetailRow label="Bank" value={asText(info?.bank_name)} />
+          <ZohoDetailRow label="Branch" value={asText(info?.bank_branch)} />
+          <ZohoDetailRow label="Account number" value={maskAccountNumber(info?.account_number)} />
+          <ZohoDetailRow label="IFSC" value={asText(info?.ifsc_code)} />
+          <ZohoDetailRow label="UAN" value={asText(info?.uan_number)} />
+        </ZohoDetailGrid>
       </SectionCard>
 
       <SectionCard
@@ -902,34 +1077,43 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
   const documentsSection = data ? (
     <SectionCard
       title="Documents"
+      subtitle={
+        latestDocuments.length !== data.documents.length
+          ? `Showing latest ${latestDocuments.length} of ${data.documents.length} uploads`
+          : `${latestDocuments.length} document${latestDocuments.length === 1 ? "" : "s"} on file`
+      }
       icon={<FileText className="h-4 w-4" />}
-      isEmpty={data.documents.length === 0}
+      isEmpty={latestDocuments.length === 0}
       emptyText="No documents uploaded."
     >
-      <ul className="space-y-2">
-        {data.documents.map((doc, index) => (
-          <ListItemCard key={String(doc.id ?? index)}>
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="truncate text-[13px] font-semibold text-[#1F2937] sm:text-[15px]">
-                  {asText(doc.document_name ?? doc.document_type, "Document")}
-                </p>
-                <p className="text-[12px] text-[#6B7280]">{formatDate(doc.created_at)}</p>
-              </div>
-              {doc.doc_url ? (
-                <Link
-                  href={asText(doc.doc_url)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="shrink-0 rounded-lg bg-[#008CD3] px-3 py-1.5 text-[12px] font-semibold text-white shadow-sm transition hover:bg-[#0070AA]"
-                >
-                  View
-                </Link>
-              ) : null}
+      <div className="grid gap-3 sm:grid-cols-2">
+        {latestDocuments.map((doc, index) => (
+          <article
+            key={String(doc.id ?? index)}
+            className="flex flex-col justify-between gap-3 rounded-xl border border-[#E4E7EC] bg-[#FAFBFC] p-3 transition hover:border-[#C5E4F3] hover:bg-white"
+          >
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#008CD3]">
+                {formatLabel(doc.document_type)}
+              </p>
+              <p className="mt-1 truncate text-[14px] font-semibold text-[#1F2937]">
+                {asText(doc.document_name, "Document")}
+              </p>
+              <p className="mt-1 text-[12px] text-[#6B7280]">{formatDate(doc.created_at)}</p>
             </div>
-          </ListItemCard>
+            {doc.doc_url ? (
+              <Link
+                href={asText(doc.doc_url)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex w-full items-center justify-center rounded-lg border border-[#008CD3]/30 bg-[#E8F4FB] px-3 py-2 text-[12px] font-semibold text-[#0070AA] transition hover:bg-[#008CD3] hover:text-white"
+              >
+                View document
+              </Link>
+            ) : null}
+          </article>
         ))}
-      </ul>
+      </div>
     </SectionCard>
   ) : null;
 
@@ -1154,7 +1338,7 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
               <QuickStat label="Docs" value={stats.documents} />
               <QuickStat label="Assets" value={stats.assets} />
               <QuickStat label="Leaves" value={stats.leaves} />
-              <QuickStat label="Logs" value={stats.logs} />
+              <QuickStat label="Address" value={stats.addresses} />
             </div>
           ) : null}
 

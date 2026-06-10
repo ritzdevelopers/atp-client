@@ -32,7 +32,7 @@ function RightMainSide({ children }: RightMainSideProps) {
 
   return (
     <div className={shell}>
-      <div className="mx-auto w-full min-w-0 max-w-6xl">{children}</div>
+      <div className="mx-auto w-full min-w-0 max-w-8xl">{children}</div>
     </div>
   );
 }

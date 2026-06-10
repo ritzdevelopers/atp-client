@@ -7,6 +7,7 @@ import {
   AlertCircle,
   ArrowLeft,
   ArrowRight,
+  BarChart3,
   Bell,
   CalendarClock,
   CalendarDays,
@@ -25,6 +26,7 @@ import {
   Trash2,
   UserPlus,
   Users,
+  UsersRound,
   X,
 } from "lucide-react";
 import { getAllOrgUsers, type OrgUserRow } from "@/services/adminUser";
@@ -58,11 +60,7 @@ import {
   type AttendanceQueryRow,
 } from "@/services/attendanceQueries";
 import TeamMemberExitProcessReportPage from "./exit-process-report/[user_id]/page";
-import { useManagementDashboardContext } from "@/components/portal-dashboard/Layout/ManagementDashboardContext";
-import type {
-  RightMainSideOrganization,
-  RightMainSideUser,
-} from "@/components/portal-dashboard/Layout/RightMainSide";
+import TeamMemberAttendancePanel from "./TeamMemberAttendancePanel";
 
 function displayTeamTitle(raw: string) {
   return raw
@@ -334,7 +332,35 @@ function UserAvatarButton({
 }
 
 function searchFieldCls() {
-  return "w-full rounded-lg border border-[#E4E7EC] bg-white py-2 pl-9 pr-3 text-[13px] text-[#1F2937] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15 lg:rounded-xl lg:py-2 lg:pl-9 lg:pr-3 lg:text-sm lg:focus:border-[#C99237]/50 lg:focus:ring-2 lg:focus:ring-[#C99237]/15";
+  return "w-full rounded-lg border border-[#E4E7EC] bg-white py-2.5 pl-9 pr-3 text-[13px] text-[#1F2937] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15";
+}
+
+function zohoCardCls() {
+  return "overflow-hidden rounded-2xl border border-[#E4E7EC] bg-white shadow-sm";
+}
+
+function zohoSectionHeadCls() {
+  return "border-b border-[#E4E7EC] bg-gradient-to-r from-[#E8F4FB] via-white to-[#E6F4EA] px-4 py-4 sm:px-5";
+}
+
+function zohoDesktopPrimaryBtnCls() {
+  return "inline-flex items-center justify-center gap-2 rounded-xl bg-[#008CD3] px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-[#008CD3]/20 transition hover:bg-[#0070AA] disabled:opacity-50";
+}
+
+function zohoDesktopSecondaryBtnCls() {
+  return "inline-flex items-center justify-center gap-2 rounded-xl border border-[#E4E7EC] bg-white px-4 py-2.5 text-sm font-semibold text-[#374151] transition hover:bg-[#F9FAFB] disabled:opacity-50";
+}
+
+function zohoDesktopDangerBtnCls() {
+  return "inline-flex items-center justify-center gap-2 rounded-xl border border-[#FFCDD2] bg-[#FCE8E6] px-4 py-2.5 text-sm font-semibold text-[#C62828] transition hover:bg-[#FFEBEE] disabled:opacity-50";
+}
+
+function desktopRightPrimaryTabCls(active: boolean) {
+  return `relative flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-[13px] font-semibold transition-all duration-200 ease-out ${
+    active
+      ? "bg-white text-[#008CD3] shadow-sm ring-1 ring-[#E4E7EC]"
+      : "text-[#6B7280] hover:bg-white/70 hover:text-[#374151]"
+  }`;
 }
 
 function waFieldCls() {
@@ -342,7 +368,7 @@ function waFieldCls() {
 }
 
 function zohoPrimaryBtnCls() {
-  return "inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg bg-[#008CD3] px-4 py-2.5 text-[14px] font-semibold text-white shadow-sm transition active:scale-[0.98] disabled:opacity-50 sm:w-auto lg:rounded-xl lg:bg-[#0C123A] lg:hover:bg-[#151f52]";
+  return "inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg bg-[#008CD3] px-4 py-2.5 text-[14px] font-semibold text-white shadow-sm transition active:scale-[0.98] hover:bg-[#0070AA] disabled:opacity-50 sm:w-auto lg:rounded-xl";
 }
 
 function zohoSecondaryBtnCls() {
@@ -366,7 +392,7 @@ function waModalPanelClass() {
 }
 
 function waModalHeaderClass() {
-  return "flex shrink-0 items-center justify-between gap-2 border-b border-[#E4E7EC] bg-gradient-to-r from-[#008CD3] to-[#0070AA] px-4 py-3 sm:border-slate-100 sm:bg-white sm:px-5 sm:py-4 sm:[border-top:3px_solid_#C99237]";
+  return "flex shrink-0 items-center justify-between gap-2 border-b border-[#E4E7EC] border-t-[3px] border-t-[#008CD3] bg-gradient-to-r from-[#E8F4FB] to-white px-4 py-4 sm:px-5";
 }
 
 function waModalFooterClass() {
@@ -392,34 +418,6 @@ function jwtRoleName(token: string | null): string {
   } catch {
     return "";
   }
-}
-
-function jwtUserId(token: string | null): number | null {
-  if (!token) return null;
-  try {
-    const payload = JSON.parse(atob(token.split(".")[1] || "")) as {
-      id?: number | string;
-      user_id?: number | string;
-    };
-    const raw = payload.id ?? payload.user_id;
-    if (raw == null || raw === "") return null;
-    const n = Number(raw);
-    return Number.isNaN(n) ? null : n;
-  } catch {
-    return null;
-  }
-}
-
-/** Strict owner check — owner_id must match signed-in user (avoids name/email false positives). */
-function resolveIsOrgOwner(
-  organization: RightMainSideOrganization | null | undefined,
-  user: RightMainSideUser | null | undefined,
-  token: string | null,
-): boolean {
-  if (!organization) return false;
-  const userId = user?.user_id ?? jwtUserId(token);
-  if (organization.owner_id == null || userId == null) return false;
-  return String(organization.owner_id) === String(userId);
 }
 
 function detailToRow(d: OrgTeamDetail): OrgTeamRow {
@@ -522,7 +520,8 @@ function TeamGroupPageRouter() {
 function TeamGroupPageContent() {
   const params = useParams();
   const router = useRouter();
-  const dashboardCtx = useManagementDashboardContext();
+  const searchParams = useSearchParams();
+  const selectedTeamId = searchParams.get("team_id");
   const orgId = String(params?.org_id ?? "");
   const orgIdNum = useMemo(() => {
     const n = Number(orgId);
@@ -539,6 +538,9 @@ function TeamGroupPageContent() {
   const [activityTab, setActivityTab] = useState<
     "notifications" | "leaves" | "attendance"
   >("notifications");
+  const [desktopRightTab, setDesktopRightTab] = useState<"activity" | "hr">(
+    "activity",
+  );
   const [leaveBusyId, setLeaveBusyId] = useState<number | null>(null);
   const [attendanceQueries, setAttendanceQueries] = useState<
     AttendanceQueryRow[]
@@ -595,42 +597,90 @@ function TeamGroupPageContent() {
     imageUrl: string;
     alt: string;
   } | null>(null);
+  const [attendancePanelMember, setAttendancePanelMember] = useState<{
+    user_id: number;
+    user_name: string;
+  } | null>(null);
 
   const backHref = `/dashboard/${orgId}/home`;
 
-  const dashboardCtxReady = dashboardCtx != null && dashboardCtx.loading === false;
+  const loadPersonalHrRequests = useCallback(
+    async (token: string, orgIdNum: number) => {
+      try {
+        const [ml, ma] = await Promise.all([
+          fetchMyLeaveQueries(token, orgIdNum),
+          fetchMyAttendanceQueries(token, orgIdNum),
+        ]);
+        setMyLeaveRows(ml);
+        setMyAttRows(ma);
+        setMyRequestsError(null);
+      } catch (e) {
+        setMyLeaveRows([]);
+        setMyAttRows([]);
+        setMyRequestsError(
+          e instanceof Error ? e.message : "Could not load your HR requests.",
+        );
+      }
+    },
+    [],
+  );
 
-  const isOrgOwner = useMemo(() => {
-    if (!dashboardCtxReady) return false;
-    return resolveIsOrgOwner(
-      dashboardCtx?.organization,
-      dashboardCtx?.user,
-      typeof window !== "undefined" ? localStorage.getItem("token") : null,
-    );
-  }, [dashboardCtx?.organization, dashboardCtx?.user, dashboardCtxReady]);
+  const clearAdminFeedState = useCallback(() => {
+    setOrgUsers([]);
+    setNotifications([]);
+    setExitProcessesReports([]);
+    setLeaveQueries([]);
+    setAttendanceQueries([]);
+    setAttendanceListError(null);
+  }, []);
 
-  const reloadMyHrRequests = useCallback(async () => {
-    const t = localStorage.getItem("token");
-    if (!t || !detail) return;
-    const shouldLoadMyHr =
-      Boolean(detail.is_admin) || !dashboardCtxReady || !isOrgOwner;
-    if (!shouldLoadMyHr) return;
-    const orgIdNum = Number(orgId);
-    if (Number.isNaN(orgIdNum)) return;
-    try {
-      const [ml, ma] = await Promise.all([
-        fetchMyLeaveQueries(t, orgIdNum),
-        fetchMyAttendanceQueries(t, orgIdNum),
-      ]);
-      setMyLeaveRows(ml);
-      setMyAttRows(ma);
-      setMyRequestsError(null);
-    } catch (e) {
-      setMyRequestsError(
-        e instanceof Error ? e.message : "Could not load your HR requests.",
-      );
-    }
-  }, [detail, isOrgOwner, dashboardCtxReady, orgId]);
+  const loadAdminTeamFeed = useCallback(
+    async (token: string, orgIdNum: number, team: OrgTeamDetail) => {
+      try {
+        const users = await getAllOrgUsers(token);
+        setOrgUsers(users);
+      } catch {
+        setOrgUsers([]);
+      }
+
+      try {
+        const feed = await fetchTeamActivityFeed(token, team.team_id, orgIdNum);
+        setNotifications(feed.notifications);
+        setExitProcessesReports(feed.exit_processes_reports);
+        setLeaveQueries(feed.leave_queries);
+      } catch {
+        setNotifications([]);
+        setExitProcessesReports([]);
+        setLeaveQueries([]);
+      }
+
+      try {
+        const rows = await fetchAllAttendanceQueries(token, orgIdNum, {
+          team_id: team.team_id,
+        });
+        setAttendanceQueries(rows);
+        setAttendanceListError(null);
+      } catch (attErr) {
+        setAttendanceQueries([]);
+        setAttendanceListError(
+          attErr instanceof Error
+            ? attErr.message
+            : "Could not load attendance queries.",
+        );
+      }
+
+      await loadPersonalHrRequests(token, orgIdNum);
+    },
+    [loadPersonalHrRequests],
+  );
+
+  const loadMemberTeamData = useCallback(
+    async (token: string, orgIdNum: number) => {
+      clearAdminFeedState();
+      await loadPersonalHrRequests(token, orgIdNum);
+    },
+    [clearAdminFeedState, loadPersonalHrRequests],
+  );
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -647,188 +697,76 @@ function TeamGroupPageContent() {
         setBanner({ type: "err", text: "Invalid organization." });
         return;
       }
-      const my = await fetchMyOrgTeam(token, orgIdNum);
-      setDetail(my);
 
-      const users = await getAllOrgUsers(token);
-      setOrgUsers(users);
-
-      if (!my.is_admin) {
-        setNotifications([]);
-        setExitProcessesReports([]);
-        setLeaveQueries([]);
-        setAttendanceQueries([]);
-        setAttendanceListError(null);
-        try {
-          const [ml, ma] = await Promise.all([
-            fetchMyLeaveQueries(token, orgIdNum),
-            fetchMyAttendanceQueries(token, orgIdNum),
-          ]);
-          setMyLeaveRows(ml);
-          setMyAttRows(ma);
-          setMyRequestsError(null);
-        } catch (me) {
+      let my: OrgTeamDetail;
+      try {
+        my = await fetchMyOrgTeam(
+          token,
+          orgIdNum,
+          selectedTeamId ?? undefined,
+        );
+      } catch (e) {
+        const err = e as { status?: number; message?: string };
+        if (err.status === 404) {
+          setNoTeam(true);
+          setDetail(null);
+          clearAdminFeedState();
           setMyLeaveRows([]);
           setMyAttRows([]);
-          setMyRequestsError(
-            me instanceof Error
-              ? me.message
-              : "Could not load your HR requests.",
-          );
-        }
-      } else {
-        try {
-          const [ml, ma] = await Promise.all([
-            fetchMyLeaveQueries(token, orgIdNum),
-            fetchMyAttendanceQueries(token, orgIdNum),
-          ]);
-          setMyLeaveRows(ml);
-          setMyAttRows(ma);
           setMyRequestsError(null);
-        } catch (me) {
-          setMyLeaveRows([]);
-          setMyAttRows([]);
-          setMyRequestsError(
-            me instanceof Error
-              ? me.message
-              : "Could not load your HR requests.",
-          );
+          return;
         }
-      }
-    } catch (e) {
-      const err = e as { status?: number; message?: string };
-      if (err.status === 404) {
-        setNoTeam(true);
         setDetail(null);
-        setLeaveQueries([]);
-        setNotifications([]);
-        setExitProcessesReports([]);
-        setAttendanceQueries([]);
-        setAttendanceListError(null);
-        setMyLeaveRows([]);
-        setMyAttRows([]);
-        setMyRequestsError(null);
-      } else {
-        setDetail(null);
-        setLeaveQueries([]);
-        setNotifications([]);
-        setExitProcessesReports([]);
-        setAttendanceQueries([]);
-        setAttendanceListError(null);
-        setMyLeaveRows([]);
-        setMyAttRows([]);
-        setMyRequestsError(null);
         setBanner({
           type: "err",
           text: e instanceof Error ? e.message : "Could not load team.",
         });
+        return;
+      }
+
+      setDetail(my);
+      setNoTeam(false);
+
+      if (my.is_admin) {
+        await loadAdminTeamFeed(token, orgIdNum, my);
+      } else {
+        await loadMemberTeamData(token, orgIdNum);
       }
     } finally {
       setLoading(false);
     }
-  }, [orgId]);
+  }, [orgId, selectedTeamId, clearAdminFeedState, loadAdminTeamFeed, loadMemberTeamData]);
 
   useEffect(() => {
     void loadAll();
   }, [loadAll]);
 
-  const loadTeamActivityData = useCallback(async () => {
-    const token = localStorage.getItem("token");
-    if (!token || !detail) return;
-    const orgIdNum = Number(orgId);
-    if (Number.isNaN(orgIdNum)) return;
-    try {
-      const feed = await fetchTeamActivityFeed(token, detail.team_id, orgIdNum);
-      setNotifications(feed.notifications);
-      setExitProcessesReports(feed.exit_processes_reports);
-      setLeaveQueries(feed.leave_queries);
-    } catch {
-      // keep existing feed on error
-    }
-    try {
-      const rows = await fetchAllAttendanceQueries(token, orgIdNum, {
-        team_id: detail.team_id,
-      });
-      setAttendanceQueries(rows);
-      setAttendanceListError(null);
-    } catch (attErr) {
-      setAttendanceQueries([]);
-      setAttendanceListError(
-        attErr instanceof Error
-          ? attErr.message
-          : "Could not load attendance queries.",
-      );
-    }
-  }, [detail, orgId]);
-
-  useEffect(() => {
-    if (!detail) return;
-
-    const canViewActivity =
-      Boolean(detail.is_admin) || (dashboardCtxReady && isOrgOwner);
-    if (!canViewActivity) {
-      setNotifications([]);
-      setExitProcessesReports([]);
-      setLeaveQueries([]);
-      setAttendanceQueries([]);
-      setAttendanceListError(null);
-      return;
-    }
-
-    void loadTeamActivityData();
-  }, [detail, isOrgOwner, dashboardCtxReady, loadTeamActivityData]);
-
-  useEffect(() => {
-    if (!detail || !dashboardCtxReady) return;
-
-    const shouldLoadMyHr =
-      Boolean(detail.is_admin) || !dashboardCtxReady || !isOrgOwner;
-    if (shouldLoadMyHr) {
-      void reloadMyHrRequests();
-      return;
-    }
-    setMyLeaveRows([]);
-    setMyAttRows([]);
-    setMyRequestsError(null);
-  }, [detail, isOrgOwner, dashboardCtxReady, reloadMyHrRequests]);
-
   const refreshActivityFeed = useCallback(async () => {
-    const t = localStorage.getItem("token");
-    if (!t || !detail) return;
+    const token = localStorage.getItem("token");
+    if (!token || !detail?.is_admin) return;
     const orgIdNum = Number(orgId);
     if (Number.isNaN(orgIdNum)) return;
-    const canViewActivity =
-      Boolean(detail.is_admin) || (dashboardCtxReady && isOrgOwner);
-    if (canViewActivity) {
-      await loadTeamActivityData();
-    }
-    const shouldLoadMyHr =
-      Boolean(detail.is_admin) || !dashboardCtxReady || !isOrgOwner;
-    if (shouldLoadMyHr) {
-      await reloadMyHrRequests();
-    }
-  }, [
-    detail,
-    orgId,
-    isOrgOwner,
-    dashboardCtxReady,
-    loadTeamActivityData,
-    reloadMyHrRequests,
-  ]);
+    await loadAdminTeamFeed(token, orgIdNum, detail);
+  }, [detail, orgId, loadAdminTeamFeed]);
 
   const focusRow = useMemo(() => (detail ? detailToRow(detail) : null), [detail]);
   const isTeamAdmin = Boolean(detail?.is_admin);
-  const showTeamActivity = isTeamAdmin || (dashboardCtxReady && isOrgOwner);
-  const showMemberHrSection = isTeamAdmin || !dashboardCtxReady || !isOrgOwner;
+  const showTeamActivity = isTeamAdmin;
+  const showMemberHrSection = true;
+  const showDesktopRightPanel =
+    showMemberHrSection || showTeamActivity || (isTeamAdmin && attendancePanelMember);
 
   useEffect(() => {
-    if (!dashboardCtxReady) return;
     if (mobileMainTab === "activity" && !showTeamActivity) {
-      setMobileMainTab(showMemberHrSection ? "hr" : "members");
-    } else if (mobileMainTab === "hr" && !showMemberHrSection) {
-      setMobileMainTab(showTeamActivity ? "activity" : "members");
+      setMobileMainTab("hr");
     }
-  }, [mobileMainTab, showTeamActivity, showMemberHrSection, dashboardCtxReady]);
+  }, [mobileMainTab, showTeamActivity]);
+
+  useEffect(() => {
+    if (desktopRightTab === "activity" && !showTeamActivity) {
+      setDesktopRightTab("hr");
+    }
+  }, [desktopRightTab, showTeamActivity]);
 
   const pendingLeaveCount = useMemo(
     () =>
@@ -1097,7 +1035,7 @@ function TeamGroupPageContent() {
       });
       setAdminLeaveModalOpen(false);
       setBanner({ type: "ok", text: "Your leave request was submitted." });
-      await reloadMyHrRequests();
+      await loadPersonalHrRequests(t, orgIdNum);
     } catch (err) {
       setLeaveFormError(
         err instanceof Error ? err.message : "Could not submit leave.",
@@ -1144,7 +1082,7 @@ function TeamGroupPageContent() {
       });
       setAdminAttModalOpen(false);
       setBanner({ type: "ok", text: "Attendance query submitted to HR." });
-      await reloadMyHrRequests();
+      await loadPersonalHrRequests(t, orgIdNum);
     } catch (err) {
       setAttFormError(
         err instanceof Error ? err.message : "Could not submit query.",
@@ -1159,13 +1097,13 @@ function TeamGroupPageContent() {
   if (loading && !detail && !noTeam) {
     return (
       <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 bg-[#F5F7FA] text-[#6B7280] lg:bg-[#f5f6fa] lg:text-slate-600">
-        <Loader2 className="h-9 w-9 animate-spin text-[#008CD3] lg:h-10 lg:w-10 lg:text-[#C99237]" />
+        <Loader2 className="h-9 w-9 animate-spin text-[#008CD3] lg:h-10 lg:w-10" />
         <p className="text-[15px] lg:text-base">Opening your team…</p>
       </div>
     );
   }
 
-  if (noTeam || !detail) {
+  if (noTeam) {
     return (
       <div className="mx-auto max-w-md bg-[#F0F2F5] px-6 py-20 text-center lg:bg-transparent">
         <Users className="mx-auto h-12 w-12 text-[#8696A0] lg:text-slate-300" />
@@ -1177,11 +1115,33 @@ function TeamGroupPageContent() {
         </p>
         <Link
           href={backHref}
-          className="mt-8 inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-[#008CD3] px-5 py-2.5 text-[15px] font-medium text-white active:scale-[0.98] lg:rounded-xl lg:bg-[#0C123A] lg:text-sm lg:font-semibold lg:hover:bg-[#151f52]"
+          className="mt-8 inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-[#008CD3] px-5 py-2.5 text-[15px] font-medium text-white active:scale-[0.98] lg:rounded-xl lg:text-sm lg:font-semibold lg:hover:bg-[#0070AA]"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to home
         </Link>
+      </div>
+    );
+  }
+
+  if (!detail) {
+    return (
+      <div className="mx-auto max-w-md bg-[#F0F2F5] px-6 py-20 text-center lg:bg-transparent">
+        <AlertCircle className="mx-auto h-12 w-12 text-[#D93025]" />
+        <h1 className="mt-4 text-xl font-semibold text-[#111B21] lg:text-[#0C123A]">
+          Could not load team
+        </h1>
+        <p className="mt-2 text-sm text-[#667781] lg:text-slate-600">
+          {banner?.text ?? "Something went wrong while loading your team."}
+        </p>
+        <button
+          type="button"
+          onClick={() => void loadAll()}
+          className="mt-8 inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-[#008CD3] px-5 py-2.5 text-[15px] font-medium text-white"
+        >
+          <RefreshCw className="h-4 w-4" />
+          Try again
+        </button>
       </div>
     );
   }
@@ -1193,6 +1153,15 @@ function TeamGroupPageContent() {
 
   const openPhotoZoom = (imageUrl: string, alt: string) => {
     setPhotoZoom({ imageUrl, alt });
+  };
+
+  const openAttendancePanel = (member: { user_id: number; user_name: string }) => {
+    setAttendancePanelMember(member);
+    setDesktopRightTab("activity");
+  };
+
+  const closeAttendancePanel = () => {
+    setAttendancePanelMember(null);
   };
 
   const imageForUserId = (userId: number | null | undefined) => {
@@ -1216,7 +1185,7 @@ function TeamGroupPageContent() {
   ];
 
   return (
-    <div className="min-h-full bg-[#F5F7FA] lg:relative lg:overflow-x-hidden lg:bg-[#f0f2f8] lg:pb-16">
+    <div className="min-h-full bg-[#F5F7FA] lg:relative lg:overflow-x-hidden lg:bg-[#f0f2f8] lg:overflow-hidden lg:pb-0">
       {/* Mobile & tablet: Zoho-style shell */}
       <div className="lg:hidden">
         <div className="sticky top-0 z-20 border-b border-[#E4E7EC] bg-white/95 shadow-sm backdrop-blur">
@@ -1235,12 +1204,11 @@ function TeamGroupPageContent() {
                   My team
                 </p>
                 <h1 className="truncate text-[16px] font-bold leading-tight">{title}</h1>
-                <p className="truncate text-[12px] text-white/80">
+                <p className="truncate text-[12px] text-white/85">
                   {detail.total_number_of_members} members
-                  {isTeamAdmin ? " · You are admin" : ` · ${detail.admin_name ?? "Team admin"}`}
-                  {detail.members.some((m) => profileImageUrlFromRow(m.user_image))
-                    ? " · tap photo to enlarge"
-                    : ""}
+                  {isTeamAdmin
+                    ? " · Reporting manager (you)"
+                    : ` · ${detail.admin_name ?? "Reporting manager"}`}
                 </p>
               </div>
               <button
@@ -1350,8 +1318,8 @@ function TeamGroupPageContent() {
                               {m.user_name}
                             </p>
                             {isAdminMember ? (
-                              <span className="shrink-0 rounded-full bg-[#FFF8E1] px-2 py-0.5 text-[10px] font-semibold text-[#8D6E00]">
-                                Admin
+                              <span className="shrink-0 rounded-full bg-[#E6F4EA] px-2 py-0.5 text-[10px] font-semibold text-[#0F9D58]">
+                                Reporting manager
                               </span>
                             ) : null}
                           </div>
@@ -1361,6 +1329,21 @@ function TeamGroupPageContent() {
                           <p className={`mt-0.5 ${mobileCaptionCls}`}>
                             Joined {fmtDateOnly(m.joined_date)}
                           </p>
+                          {isTeamAdmin ? (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                openAttendancePanel({
+                                  user_id: Number(m.user_id),
+                                  user_name: m.user_name,
+                                })
+                              }
+                              className="mt-2 inline-flex items-center gap-1 rounded-lg border border-[#B8DDF0] bg-[#E8F4FB] px-2.5 py-1.5 text-[11px] font-semibold text-[#0070AA] active:scale-[0.98]"
+                            >
+                              <BarChart3 className="h-3.5 w-3.5" />
+                              View attendance
+                            </button>
+                          ) : null}
                         </div>
                       </div>
                     </li>
@@ -1384,7 +1367,7 @@ function TeamGroupPageContent() {
             </section>
             <section className="overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-sm">
               {[
-                ["Team admin", detail.admin_name ?? `User #${detail.admin_id}`],
+                ["Reporting manager", detail.admin_name ?? `User #${detail.admin_id}`],
                 ["Created", fmtDateOnly(detail.created_at)],
                 ["Last updated", fmtDateOnly(detail.updated_at)],
                 ["Members", String(detail.total_number_of_members)],
@@ -1758,234 +1741,214 @@ function TeamGroupPageContent() {
         ) : null}
       </div>
 
-      {/* Desktop layout (unchanged) */}
-      <div className="hidden lg:block">
-      <div className="relative min-h-full overflow-x-hidden bg-[#f0f2f8] pb-16">
-      <div
-        className="pointer-events-none absolute inset-x-0 top-0 h-[480px] bg-[radial-gradient(ellipse_75%_55%_at_50%_-12%,rgba(12,18,58,0.06),transparent_58%)]"
-        aria-hidden
-      />
-      <header className="relative isolate overflow-hidden border-b border-[#0C123A]/10 bg-[#0C123A] pb-14 pt-6 sm:pb-16 sm:pt-8">
-        <div className="pointer-events-none absolute -right-20 top-0 h-64 w-64 rounded-full bg-[#C99237]/25 blur-[80px]" />
-        <div className="pointer-events-none absolute bottom-0 left-0 h-48 w-48 rounded-full bg-white/5 blur-[60px]" />
-
-        <div className="relative mx-auto w-full max-w-[1680px] px-4 sm:px-8 lg:px-10">
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={() => router.push(backHref)}
-              className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white/90 transition hover:bg-white/15"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" />
-              Home
-            </button>
-            <button
-              type="button"
-              onClick={() => void loadAll()}
-              className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white/90 transition hover:bg-white/15"
-            >
-              <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-              Refresh
-            </button>
-          </div>
-
-          <div className="mt-8 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#C99237]">
-                My team group
-              </p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-                {title}
-              </h1>
-              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-300">
-                {detail.team_info?.trim() || "Collaborate with your squad — roster, history, and updates in one place."}
-              </p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white ring-1 ring-white/15">
-                  <Users className="h-3.5 w-3.5" />
-                  {detail.total_number_of_members} members
-                </span>
-                {isTeamAdmin ? (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#C99237]/25 px-3 py-1 text-xs font-semibold text-[#C99237] ring-1 ring-[#C99237]/40">
-                    <Crown className="h-3.5 w-3.5" />
-                    You are team admin
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-xs text-slate-200">
-                    <ShieldAlert className="h-3.5 w-3.5" />
-                    Member view — admin manages roster
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {isTeamAdmin ? (
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => setModal("add")}
-                  className="inline-flex items-center gap-2 rounded-xl bg-[#C99237] px-4 py-2.5 text-sm font-semibold text-[#0C123A] shadow-lg shadow-black/20 transition hover:bg-[#d9a343]"
-                >
-                  <UserPlus className="h-4 w-4" />
-                  Add member
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setModal("remove")}
-                  className="inline-flex items-center gap-2 rounded-xl border border-rose-400/50 bg-rose-500/20 px-4 py-2.5 text-sm font-semibold text-rose-100 transition hover:bg-rose-500/30"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Remove member
-                </button>
-              </div>
-            ) : null}
-          </div>
+      {attendancePanelMember && isTeamAdmin && detail ? (
+        <div className="fixed inset-0 z-[10040] flex flex-col bg-[#F5F7FA] p-3 lg:hidden">
+          <TeamMemberAttendancePanel
+            orgId={orgId}
+            teamId={detail.team_id}
+            employeeId={attendancePanelMember.user_id}
+            employeeName={attendancePanelMember.user_name}
+            onClose={closeAttendancePanel}
+          />
         </div>
-      </header>
+      ) : null}
 
-      <div className="relative z-10 mx-auto w-full max-w-[1680px] -mt-8 px-4 sm:px-8 lg:px-10">
+      {/* Desktop: wide split — headers left, activity/HR tabs right */}
+      <div className="hidden lg:block lg:h-[calc(100vh-4rem)] lg:overflow-hidden">
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `
+              @keyframes teamGroupPanelIn {
+                from { opacity: 0; transform: translateY(8px); }
+                to { opacity: 1; transform: translateY(0); }
+              }
+              .team-group-panel-in {
+                animation: teamGroupPanelIn 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+              }
+              @media (prefers-reduced-motion: reduce) {
+                .team-group-panel-in { animation: none; }
+              }
+            `,
+          }}
+        />
+        <div className="mx-auto flex h-full w-full max-w-none flex-col gap-3 px-5 py-3 xl:px-10 xl:py-4">
         {banner ? (
           <div
-            className={`mb-6 flex items-start gap-3 rounded-2xl border px-4 py-3.5 text-sm shadow-sm ${
+            className={`flex shrink-0 items-start gap-3 rounded-xl border px-4 py-2.5 text-sm ${
               banner.type === "ok"
-                ? "border-emerald-200/80 bg-emerald-50/95 text-emerald-950 ring-1 ring-emerald-500/10"
-                : "border-rose-200/80 bg-rose-50/95 text-rose-950 ring-1 ring-rose-500/10"
+                ? "border-[#0F9D58]/30 bg-[#E6F4EA] text-[#0B8043]"
+                : "border-[#F5C6C2] bg-[#FCE8E6] text-[#D93025]"
             }`}
           >
             {banner.type === "ok" ? (
-              <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-700">
-                <CheckCircle2 className="h-4 w-4" aria-hidden />
-              </span>
+              <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" aria-hidden />
             ) : (
-              <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-rose-500/15 text-rose-700">
-                <AlertCircle className="h-4 w-4" aria-hidden />
-              </span>
+              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden />
             )}
-            <p className="min-w-0 pt-0.5 font-medium leading-snug">{banner.text}</p>
+            <p className="min-w-0 font-medium leading-snug">{banner.text}</p>
           </div>
         ) : null}
 
-        <div className="flex flex-col gap-8">
-          <div className="w-full space-y-6">
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="group relative overflow-hidden rounded-2xl border border-slate-200/90 bg-gradient-to-br from-white to-slate-50/90 p-5 shadow-md ring-1 ring-slate-950/[0.03] transition hover:shadow-lg">
-                <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-[#C99237]/10 blur-2xl transition group-hover:bg-[#C99237]/15" aria-hidden />
-                <div className="relative flex items-start justify-between gap-2">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#C99237]/15 text-[#C99237] ring-1 ring-[#C99237]/25">
-                    <CalendarClock className="h-5 w-5" aria-hidden />
-                  </div>
-                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">
-                    Timeline
-                  </span>
-                </div>
-                <p className="relative mt-4 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
-                  Team created
-                </p>
-                <p className="relative mt-1.5 text-base font-semibold leading-snug text-[#0C123A]">
-                  {fmtLong(detail.created_at)}
-                </p>
-                <p className="relative mt-2 flex items-center gap-1.5 text-xs text-slate-600">
-                  <Users className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
-                  <span>
-                    By{" "}
-                    <span className="font-medium text-slate-700">
-                      {detail.created_by_name ?? `User #${detail.created_by ?? "—"}`}
-                    </span>
-                  </span>
+        <div
+          className={
+            showDesktopRightPanel
+              ? "grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(520px,42%)] gap-6"
+              : "min-h-0 flex-1"
+          }
+        >
+          {/* LEFT — all section headers & primary content */}
+          <div className="flex min-h-0 flex-col gap-3 overflow-y-auto pr-0.5">
+            <div className="flex shrink-0 flex-wrap items-center gap-3">
+              <span className="h-7 w-1 shrink-0 rounded-full bg-[#008CD3]" aria-hidden />
+              <div className="min-w-0 flex-1">
+                <h2 className="text-[15px] font-semibold tracking-tight text-[#1F2937]">
+                  Team overview
+                </h2>
+                <p className="text-[11px] text-[#6B7280]">
+                  {title} · {detail.total_number_of_members} members
+                  {isTeamAdmin ? " · You are reporting manager" : ` · Manager: ${detail.admin_name ?? "—"}`}
                 </p>
               </div>
-              <div className="group relative overflow-hidden rounded-2xl border border-slate-200/90 bg-gradient-to-br from-white to-slate-50/90 p-5 shadow-md ring-1 ring-slate-950/[0.03] transition hover:shadow-lg">
-                <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-[#0C123A]/8 blur-2xl transition group-hover:bg-[#0C123A]/12" aria-hidden />
-                <div className="relative flex items-start justify-between gap-2">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#0C123A]/10 text-[#0C123A] ring-1 ring-[#0C123A]/15">
-                    <Layers className="h-5 w-5" aria-hidden />
-                  </div>
-                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">
-                    Audit
-                  </span>
-                </div>
-                <p className="relative mt-4 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
-                  Last updated
-                </p>
-                <p className="relative mt-1.5 text-base font-semibold leading-snug text-[#0C123A]">
-                  {fmtLong(detail.updated_at)}
-                </p>
-                <p className="relative mt-2 text-xs leading-snug text-slate-500">
-                  Metadata refreshes when roster or team details change.
-                </p>
-              </div>
-              <div className="group relative overflow-hidden rounded-2xl border border-slate-200/90 bg-gradient-to-br from-white via-amber-50/40 to-slate-50/90 p-5 shadow-md ring-1 ring-slate-950/[0.03] transition hover:shadow-lg">
-                <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-amber-400/15 blur-2xl" aria-hidden />
-                <div className="relative flex items-start justify-between gap-2">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/15 text-amber-700 ring-1 ring-amber-500/25">
-                    <Crown className="h-5 w-5" aria-hidden />
-                  </div>
-                  <span className="rounded-full bg-amber-100/80 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-900/80">
-                    Lead
-                  </span>
-                </div>
-                <p className="relative mt-4 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
-                  Team admin
-                </p>
-                <p className="relative mt-1.5 truncate text-base font-semibold text-[#0C123A]">
-                  {detail.admin_name ?? `User #${detail.admin_id}`}
-                </p>
-                <p className="relative mt-2 text-xs leading-relaxed text-slate-600">
-                  Joined {fmtLong(detail.admin_joined_date)}
-                  <span className="text-slate-400"> · </span>
-                  Added by{" "}
-                  <span className="font-medium text-slate-700">
-                    {detail.admin_added_by_name ?? "—"}
-                  </span>
-                </p>
+              <div className="flex shrink-0 flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => router.push(backHref)}
+                  className={zohoDesktopSecondaryBtnCls()}
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Back
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void loadAll()}
+                  className={zohoDesktopSecondaryBtnCls()}
+                >
+                  <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+                  Refresh
+                </button>
+                {isTeamAdmin ? (
+                  <>
+                    <button type="button" onClick={() => setModal("add")} className={zohoDesktopPrimaryBtnCls()}>
+                      <UserPlus className="h-4 w-4" />
+                      Add
+                    </button>
+                    <button type="button" onClick={() => setModal("remove")} className={zohoDesktopDangerBtnCls()}>
+                      <Trash2 className="h-4 w-4" />
+                      Remove
+                    </button>
+                  </>
+                ) : null}
               </div>
             </div>
 
-            <div className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-md ring-1 ring-slate-950/[0.03]">
-              <div className="flex flex-col gap-3 border-b border-slate-100 bg-gradient-to-r from-slate-50/80 to-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#0C123A]/10 text-[#0C123A]">
-                      <Users className="h-4 w-4" aria-hidden />
-                    </span>
-                    <div>
-                      <h2 className="text-sm font-semibold text-[#0C123A]">Members</h2>
-                      <p className="text-xs text-slate-500">
-                        {detail.total_number_of_members} on roster · search filters the table
-                      </p>
-                    </div>
-                  </div>
+            <div className={`${zohoCardCls()} shrink-0`}>
+              <div className="flex flex-wrap items-center gap-4 px-5 py-3.5">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#008CD3] text-white shadow-sm">
+                  <UsersRound className="h-5 w-5" aria-hidden />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <h1 className="text-[22px] font-semibold tracking-tight text-[#1F2937]">{title}</h1>
+                  <p className="mt-0.5 line-clamp-2 text-[13px] text-[#6B7280]">
+                    {detail.team_info?.trim() ||
+                      "Team roster, HR requests, and updates in one workspace."}
+                  </p>
                 </div>
-                <div className="relative w-full sm:max-w-sm lg:max-w-md">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="search"
-                    placeholder="Search by name or email…"
-                    value={tableSearch}
-                    onChange={(e) => setTableSearch(e.target.value)}
-                    className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm shadow-sm outline-none transition focus:border-[#C99237]/50 focus:ring-2 focus:ring-[#C99237]/15"
-                  />
+                <div className="flex flex-wrap gap-2">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-[#E8F4FB] px-2.5 py-1 text-[11px] font-semibold text-[#008CD3]">
+                    <Users className="h-3 w-3" />
+                    {detail.total_number_of_members}
+                  </span>
+                  {isTeamAdmin ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-[#E6F4EA] px-2.5 py-1 text-[11px] font-semibold text-[#0F9D58]">
+                      <Crown className="h-3 w-3" />
+                      Manager (you)
+                    </span>
+                  ) : null}
                 </div>
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[680px] text-left text-sm">
+              <div className="grid grid-cols-2 divide-x divide-y divide-[#E4E7EC] border-t border-[#E4E7EC] xl:grid-cols-4 xl:divide-y-0">
+                <div className="px-4 py-2.5">
+                  <p className={mobileLabelCls}>Team size</p>
+                  <p className="mt-0.5 text-[18px] font-bold tabular-nums text-[#008CD3]">
+                    {detail.total_number_of_members}
+                  </p>
+                </div>
+                <div className="px-4 py-2.5">
+                  <p className={mobileLabelCls}>Created</p>
+                  <p className="mt-0.5 text-[13px] font-semibold text-[#1F2937]">
+                    {fmtDateOnly(detail.created_at)}
+                  </p>
+                  <p className={`${mobileCaptionCls} truncate`}>By {detail.created_by_name ?? "—"}</p>
+                </div>
+                <div className="px-4 py-2.5">
+                  <p className={mobileLabelCls}>Updated</p>
+                  <p className="mt-0.5 text-[13px] font-semibold text-[#1F2937]">
+                    {fmtDateOnly(detail.updated_at)}
+                  </p>
+                </div>
+                <div className="px-4 py-2.5">
+                  <p className={mobileLabelCls}>Reporting manager</p>
+                  <p className="mt-0.5 truncate text-[13px] font-semibold text-[#1F2937]">
+                    {detail.admin_name ?? "—"}
+                  </p>
+                  <p className={mobileCaptionCls}>Joined {fmtDateOnly(detail.admin_joined_date)}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 pt-0.5">
+              <div className="flex items-center gap-2.5">
+                <span className="h-7 w-1 shrink-0 rounded-full bg-[#008CD3]" aria-hidden />
+                <div>
+                  <h2 className="text-[15px] font-semibold text-[#1F2937]">Team roster</h2>
+                  <p className="text-[11px] text-[#6B7280]">
+                    {attendancePanelMember && isTeamAdmin
+                      ? `Viewing ${attendancePanelMember.user_name}'s attendance on the right`
+                      : showDesktopRightPanel
+                        ? "All members on the left · activity & My HR on the right"
+                        : "Browse all team members"}
+                  </p>
+                </div>
+              </div>
+              <div className="relative w-full max-w-xs sm:w-72">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF]" />
+                <input
+                  type="search"
+                  placeholder="Search members…"
+                  value={tableSearch}
+                  onChange={(e) => setTableSearch(e.target.value)}
+                  className={searchFieldCls()}
+                />
+              </div>
+            </div>
+
+            <div className={`${zohoCardCls()} flex min-h-0 min-w-0 flex-1 flex-col`}>
+              <div className="flex shrink-0 items-center gap-2 border-b border-[#E4E7EC] bg-[#F9FAFB] px-4 py-2.5">
+                <Users className="h-4 w-4 shrink-0 text-[#008CD3]" aria-hidden />
+                <h3 className="text-[13px] font-semibold text-[#1F2937]">
+                  All members ({detail.total_number_of_members})
+                </h3>
+              </div>
+              <div className="min-h-0 flex-1 overflow-auto">
+                <table className="w-full text-left text-sm">
                   <thead>
-                    <tr className="border-b border-slate-100 bg-slate-50/90 text-[10px] font-bold uppercase tracking-wide text-slate-500">
-                      <th className="px-5 py-3">Member</th>
-                      <th className="px-5 py-3">Contact</th>
-                      <th className="px-5 py-3">Joined</th>
-                      <th className="px-5 py-3">Invited by</th>
+                    <tr className="border-b border-[#E4E7EC] bg-[#F9FAFB] text-[10px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                      <th className="px-4 py-2">Member</th>
+                      <th className="px-4 py-2">Contact</th>
+                      <th className="px-4 py-2">Joined</th>
+                      <th className="px-4 py-2">Added by</th>
+                      {isTeamAdmin ? <th className="px-4 py-2">Actions</th> : null}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-[#EEF2F6]">
                     {filteredMembers.length === 0 ? (
                       <tr>
-                        <td colSpan={4} className="px-5 py-12 text-center">
+                        <td colSpan={isTeamAdmin ? 5 : 4} className="px-5 py-12 text-center">
                           <div className="mx-auto flex max-w-xs flex-col items-center gap-2">
-                            <Search className="h-8 w-8 text-slate-300" aria-hidden />
-                            <p className="text-sm font-medium text-slate-600">No matches</p>
-                            <p className="text-xs text-slate-500">
-                              Try a different search, or clear the filter to see everyone.
+                            <Search className="h-8 w-8 text-[#CBD5E1]" aria-hidden />
+                            <p className="text-sm font-medium text-[#374151]">No members found</p>
+                            <p className="text-xs text-[#6B7280]">
+                              Try another search or clear the filter.
                             </p>
                           </div>
                         </td>
@@ -1994,52 +1957,67 @@ function TeamGroupPageContent() {
                       filteredMembers.map((m) => (
                         <tr
                           key={m.team_member_id}
-                          className="transition hover:bg-slate-50/95"
+                          className="transition hover:bg-[#F9FAFB]"
                         >
-                          <td className="px-5 py-3">
+                          <td className="px-4 py-2">
                             <div className="flex items-center gap-3">
-                              <span
-                                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#0C123A] to-[#252f6e] text-xs font-bold text-white shadow-sm ring-2 ring-white"
-                                aria-hidden
-                              >
-                                {initialsFromName(m.user_name)}
-                              </span>
+                              <UserAvatarButton
+                                name={m.user_name}
+                                userImage={m.user_image}
+                                isAdmin={Number(m.user_id) === Number(detail.admin_id)}
+                                size="sm"
+                                onZoom={openPhotoZoom}
+                              />
                               <div className="min-w-0">
-                                <div className="flex items-center gap-1.5">
-                                  {Number(m.user_id) === Number(detail.admin_id) ? (
-                                    <span title="Team admin">
-                                      <Crown
-                                        className="h-3.5 w-3.5 shrink-0 text-amber-500"
-                                        aria-hidden
-                                      />
-                                    </span>
-                                  ) : null}
-                                  <span className="truncate font-medium text-[#0C123A]">
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <span className="truncate font-semibold text-[#1F2937]">
                                     {m.user_name}
                                   </span>
+                                  {Number(m.user_id) === Number(detail.admin_id) ? (
+                                    <span className="rounded-full bg-[#E6F4EA] px-2 py-0.5 text-[10px] font-semibold text-[#0F9D58]">
+                                      Reporting manager
+                                    </span>
+                                  ) : null}
                                 </div>
-                                <p className="truncate text-[11px] text-slate-500">
+                                <p className="truncate text-[11px] text-[#6B7280]">
                                   ID #{m.user_id}
                                 </p>
                               </div>
                             </div>
                           </td>
-                          <td className="min-w-0 max-w-[min(380px,36vw)] px-5 py-3 text-xs text-slate-600">
+                          <td className="min-w-0 px-4 py-2 text-xs text-[#6B7280]">
                             <div className="truncate" title={m.user_email}>
                               {m.user_email}
                             </div>
                             {m.user_phone ? (
-                              <div className="truncate text-slate-400">{m.user_phone}</div>
+                              <div className="truncate text-[#9CA3AF]">{m.user_phone}</div>
                             ) : null}
                           </td>
-                          <td className="whitespace-nowrap px-5 py-3 text-slate-700">
-                            {fmtLong(m.joined_date)}
+                          <td className="whitespace-nowrap px-4 py-2 text-[#374151]">
+                            {fmtDateOnly(m.joined_date)}
                           </td>
-                          <td className="px-5 py-3 text-slate-700">
+                          <td className="px-4 py-2 text-[#374151]">
                             {m.added_by_name ?? (
-                              <span className="text-slate-400">—</span>
+                              <span className="text-[#9CA3AF]">—</span>
                             )}
                           </td>
+                          {isTeamAdmin ? (
+                            <td className="px-4 py-2">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  openAttendancePanel({
+                                    user_id: Number(m.user_id),
+                                    user_name: m.user_name,
+                                  })
+                                }
+                                className="inline-flex items-center gap-1 rounded-lg border border-[#B8DDF0] bg-[#E8F4FB] px-2.5 py-1.5 text-[11px] font-semibold text-[#0070AA] transition hover:bg-[#008CD3] hover:text-white"
+                              >
+                                <BarChart3 className="h-3.5 w-3.5" />
+                                View attendance
+                              </button>
+                            </td>
+                          ) : null}
                         </tr>
                       ))
                     )}
@@ -2049,301 +2027,80 @@ function TeamGroupPageContent() {
             </div>
           </div>
 
-          <div className="w-full">
-            <div
-              className={
-                showMemberHrSection && showTeamActivity
-                  ? "flex flex-col gap-5 lg:flex-row lg:items-stretch"
-                  : "flex flex-col gap-5"
-              }
-            >
-            {showMemberHrSection ? (
-              <div className="min-w-0 flex-1 shrink-0">
-              <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-lg shadow-slate-900/[0.06] ring-1 ring-slate-950/[0.04]">
-                <div className="relative border-b border-slate-100 bg-gradient-to-br from-[#0C123A] via-[#121a4a] to-[#0C123A] px-4 py-4 sm:px-5">
-                  <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_120%_80%_at_100%_-20%,rgba(201,146,55,0.22),transparent_50%)]" aria-hidden />
-                  <div className="relative flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[#C99237]/20 text-[#C99237] ring-1 ring-[#C99237]/35">
-                          <Sparkles className="h-4 w-4" aria-hidden />
+          {/* RIGHT — Team activity / My HR / Member attendance */}
+          {showDesktopRightPanel ? (
+            <div className="flex min-h-0 min-w-0 flex-col">
+            {attendancePanelMember && isTeamAdmin && detail ? (
+              <TeamMemberAttendancePanel
+                orgId={orgId}
+                teamId={detail.team_id}
+                employeeId={attendancePanelMember.user_id}
+                employeeName={attendancePanelMember.user_name}
+                onClose={closeAttendancePanel}
+              />
+            ) : (
+            <div className={`${zohoCardCls()} flex min-h-0 flex-1 flex-col`}>
+              <div className="shrink-0 border-b border-[#E4E7EC] bg-[#F9FAFB] p-2">
+                <div className="flex gap-1 rounded-lg bg-[#F5F7FA] p-0.5" role="tablist" aria-label="Right panel">
+                  {showTeamActivity ? (
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={desktopRightTab === "activity"}
+                      onClick={() => setDesktopRightTab("activity")}
+                      className={desktopRightPrimaryTabCls(desktopRightTab === "activity")}
+                    >
+                      <Bell className="h-4 w-4 shrink-0" />
+                      <span className="truncate">Team activity</span>
+                      {pendingLeaveCount + pendingAttendanceCount + pendingExitReportsCount > 0 ? (
+                        <span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[#D93025] px-1 text-[9px] font-bold text-white">
+                          {pendingLeaveCount + pendingAttendanceCount + pendingExitReportsCount > 9
+                            ? "9+"
+                            : pendingLeaveCount + pendingAttendanceCount + pendingExitReportsCount}
                         </span>
-                        <div>
-                          <h3 className="text-sm font-bold tracking-tight text-white">
-                            Your HR inbox
-                          </h3>
-                          <p className="mt-0.5 flex items-start gap-1 text-[11px] leading-snug text-slate-300">
-                            <HelpCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#C99237]/90" aria-hidden />
-                            <span>
-                              {isTeamAdmin
-                                ? "Leave and attendance fixes for you (the team lead) — same queue org HR uses."
-                                : "Raise leave and attendance queries for yourself — same queue org HR uses."}
-                              {showTeamActivity ? (
-                                <>
-                                  {" "}
-                                  Team-wide items stay in{" "}
-                                  <span className="font-semibold text-white/95">
-                                    Team activity
-                                  </span>{" "}
-                                  in the panel to the right.
-                                </>
-                              ) : null}
-                            </span>
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="relative mt-4 grid grid-cols-3 gap-2">
-                    <div className="rounded-xl bg-black/25 px-2.5 py-2 ring-1 ring-white/10 backdrop-blur-sm">
-                      <p className="text-[9px] font-bold uppercase tracking-wide text-slate-400">
-                        Pending leave
-                      </p>
-                      <p className="mt-0.5 flex items-baseline gap-1 text-lg font-bold tabular-nums text-white">
-                        {myPendingLeaveCount}
-                        {myPendingLeaveCount > 0 ? (
-                          <Clock className="mb-0.5 inline h-3.5 w-3.5 text-amber-300" aria-hidden />
-                        ) : null}
-                      </p>
-                    </div>
-                    <div className="rounded-xl bg-black/25 px-2.5 py-2 ring-1 ring-white/10 backdrop-blur-sm">
-                      <p className="text-[9px] font-bold uppercase tracking-wide text-slate-400">
-                        Pending att.
-                      </p>
-                      <p className="mt-0.5 flex items-baseline gap-1 text-lg font-bold tabular-nums text-white">
-                        {myPendingAttCount}
-                        {myPendingAttCount > 0 ? (
-                          <Clock className="mb-0.5 inline h-3.5 w-3.5 text-cyan-300" aria-hidden />
-                        ) : null}
-                      </p>
-                    </div>
-                    <div className="rounded-xl bg-black/25 px-2.5 py-2 ring-1 ring-white/10 backdrop-blur-sm">
-                      <p className="text-[9px] font-bold uppercase tracking-wide text-slate-400">
-                        Total items
-                      </p>
-                      <p className="mt-0.5 text-lg font-bold tabular-nums text-white">
-                        {myLeaveRows.length + myAttRows.length}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid gap-2.5 p-4 sm:grid-cols-2">
-                  <button
-                    type="button"
-                    onClick={openAdminLeaveModal}
-                    className="group flex flex-col items-start gap-2 rounded-2xl border border-slate-200/90 bg-gradient-to-br from-white to-slate-50/90 p-3.5 text-left shadow-sm ring-1 ring-slate-950/[0.02] transition hover:border-[#C99237]/40 hover:shadow-md hover:ring-[#C99237]/20"
-                  >
-                    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-700 ring-1 ring-indigo-500/20 transition group-hover:bg-indigo-500/15">
-                      <CalendarDays className="h-5 w-5" aria-hidden />
-                    </span>
-                    <span>
-                      <span className="block text-sm font-semibold text-[#0C123A]">
-                        Request leave
-                      </span>
-                      <span className="mt-0.5 block text-[11px] leading-snug text-slate-500">
-                        Full, half, or short-day — tied to this team.
-                      </span>
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={openAdminAttModal}
-                    className="group flex flex-col items-start gap-2 rounded-2xl border border-slate-200/90 bg-gradient-to-br from-[#0C123A] to-[#151f52] p-3.5 text-left text-white shadow-md transition hover:shadow-lg hover:brightness-105"
-                  >
-                    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 text-[#C99237] ring-1 ring-white/20">
-                      <ClipboardList className="h-5 w-5" aria-hidden />
-                    </span>
-                    <span>
-                      <span className="block text-sm font-semibold">
-                        Attendance query
-                      </span>
-                      <span className="mt-0.5 block text-[11px] leading-snug text-slate-300">
-                        Missed punch-in/out or corrections for a date.
-                      </span>
-                    </span>
-                  </button>
-                </div>
-
-                {myRequestsError ? (
-                  <div className="mx-4 mb-4 flex items-start gap-2 rounded-xl border border-amber-200/80 bg-amber-50 px-3 py-2.5 text-xs text-amber-950">
-                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden />
-                    <span>{myRequestsError}</span>
-                  </div>
-                ) : null}
-
-                <div className="grid gap-0 border-t border-slate-100 bg-slate-50/50 sm:grid-cols-2">
-                  <div className="border-b border-slate-100 p-4 sm:border-b-0 sm:border-r">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
-                        Your leave
-                      </p>
-                      <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-bold text-slate-600 ring-1 ring-slate-200/80">
-                        {myLeaveRows.length}
-                      </span>
-                    </div>
-                    {myLeaveRows.length === 0 ? (
-                      <div className="mt-3 rounded-xl border border-dashed border-slate-200 bg-white/80 px-3 py-6 text-center">
-                        <CalendarDays className="mx-auto h-8 w-8 text-slate-300" aria-hidden />
-                        <p className="mt-2 text-xs font-medium text-slate-600">Nothing submitted yet</p>
-                        <p className="mt-1 text-[11px] text-slate-500">
-                          Use <span className="font-semibold text-[#0C123A]">Request leave</span> above.
-                        </p>
-                      </div>
-                    ) : (
-                      <ul className="mt-3 max-h-56 space-y-2.5 overflow-y-auto pr-1">
-                        {myLeaveRows.map((r) => (
-                          <li
-                            key={r.id}
-                            className="rounded-xl border border-slate-100/90 bg-white px-3 py-2.5 shadow-sm ring-1 ring-slate-950/[0.02]"
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex min-w-0 items-start gap-2">
-                                <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
-                                  <CalendarDays className="h-3.5 w-3.5" aria-hidden />
-                                </span>
-                                <div className="min-w-0">
-                                  <span className="font-semibold capitalize text-[#0C123A]">
-                                    {leaveTypeLabel(r.leave_type)}
-                                  </span>
-                                  <p className="mt-0.5 text-[11px] leading-snug text-slate-600">
-                                    {fmtLong(r.start_date)}
-                                    {r.end_date ? ` → ${fmtLong(r.end_date)}` : ""}
-                                  </p>
-                                  {r.reason ? (
-                                    <p className="mt-1 line-clamp-2 text-[10px] leading-snug text-slate-500">
-                                      “{r.reason}”
-                                    </p>
-                                  ) : null}
-                                </div>
-                              </div>
-                              <span
-                                className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase ring-1 ${leaveStatusChipClass(r.status)}`}
-                              >
-                                {r.status}
-                              </span>
-                            </div>
-                            {r.approved_by_name ? (
-                              <p className="mt-2 border-t border-slate-100 pt-2 text-[10px] text-slate-500">
-                                <span className="font-semibold text-slate-600">Reviewer: </span>
-                                {r.approved_by_name}
-                              </p>
-                            ) : null}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                  <div className="p-4">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
-                        Your attendance
-                      </p>
-                      <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-bold text-slate-600 ring-1 ring-slate-200/80">
-                        {myAttRows.length}
-                      </span>
-                    </div>
-                    {myAttRows.length === 0 ? (
-                      <div className="mt-3 rounded-xl border border-dashed border-slate-200 bg-white/80 px-3 py-6 text-center">
-                        <ClipboardList className="mx-auto h-8 w-8 text-slate-300" aria-hidden />
-                        <p className="mt-2 text-xs font-medium text-slate-600">No queries yet</p>
-                        <p className="mt-1 text-[11px] text-slate-500">
-                          Tap <span className="font-semibold text-[#0C123A]">Attendance query</span> for HR.
-                        </p>
-                      </div>
-                    ) : (
-                      <ul className="mt-3 max-h-56 space-y-2.5 overflow-y-auto pr-1">
-                        {myAttRows.map((r) => (
-                          <li
-                            key={r.id}
-                            className="rounded-xl border border-slate-100/90 bg-white px-3 py-2.5 shadow-sm ring-1 ring-slate-950/[0.02]"
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex min-w-0 items-start gap-2">
-                                <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-cyan-50 text-cyan-700">
-                                  <ClipboardList className="h-3.5 w-3.5" aria-hidden />
-                                </span>
-                                <div className="min-w-0">
-                                  <span className="font-semibold text-[#0C123A]">
-                                    {attendanceCategoryLabel(r.category)}
-                                  </span>
-                                  <p className="mt-0.5 text-[11px] text-slate-600">
-                                    Work date:{" "}
-                                    <span className="font-medium">{fmtDateOnly(r.attendance_date)}</span>
-                                  </p>
-                                  {r.query_message ? (
-                                    <p className="mt-1 line-clamp-2 text-[10px] leading-snug text-slate-500">
-                                      {r.query_message}
-                                    </p>
-                                  ) : null}
-                                </div>
-                              </div>
-                              <span
-                                className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase ring-1 ${leaveStatusChipClass(r.query_status)}`}
-                              >
-                                {r.query_status}
-                              </span>
-                            </div>
-                            {r.admin_response ? (
-                              <p className="mt-2 rounded-lg border border-slate-100 bg-slate-50/90 px-2 py-1.5 text-[10px] leading-snug text-slate-700">
-                                <span className="font-semibold text-slate-800">HR note: </span>
-                                {r.admin_response}
-                              </p>
-                            ) : null}
-                            {r.approved_by_name &&
-                            String(r.query_status).toLowerCase() !== "pending" ? (
-                              <p className="mt-1.5 text-[10px] text-slate-500">
-                                By {r.approved_by_name}
-                              </p>
-                            ) : null}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
+                      ) : null}
+                    </button>
+                  ) : null}
+                  {showMemberHrSection ? (
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={desktopRightTab === "hr"}
+                      onClick={() => setDesktopRightTab("hr")}
+                      className={desktopRightPrimaryTabCls(desktopRightTab === "hr")}
+                    >
+                      <Sparkles className="h-4 w-4 shrink-0" />
+                      <span className="truncate">My HR</span>
+                      {myPendingLeaveCount + myPendingAttCount > 0 ? (
+                        <span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[#008CD3] px-1 text-[9px] font-bold text-white">
+                          {myPendingLeaveCount + myPendingAttCount > 9
+                            ? "9+"
+                            : myPendingLeaveCount + myPendingAttCount}
+                        </span>
+                      ) : null}
+                    </button>
+                  ) : null}
                 </div>
               </div>
-              </div>
-            ) : null}
 
-            {showTeamActivity ? (
-            <div className="min-w-0 flex-1 lg:min-h-0">
-            <div className="sticky top-6 overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-xl shadow-slate-900/[0.08] ring-1 ring-slate-950/[0.04]">
-              <div className="relative border-b border-slate-100 bg-gradient-to-r from-[#0C123A] via-[#121a4a] to-[#0C123A] px-3 py-4">
-                <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(105deg,transparent_40%,rgba(201,146,55,0.08)_100%)]" aria-hidden />
-                <div className="relative flex items-start justify-between gap-2 px-1">
-                  <div className="flex items-start gap-2.5">
-                    <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#C99237]/25 text-[#C99237] ring-1 ring-[#C99237]/40">
-                      <Bell className="h-4 w-4" aria-hidden />
-                    </span>
-                    <div>
-                      <h2 className="text-sm font-bold tracking-tight text-white">
-                        Team activity
-                      </h2>
-                      <p className="mt-0.5 max-w-2xl text-[11px] leading-snug text-slate-300">
-                        Org-wide alerts, leave queue, and attendance corrections for{" "}
-                        <span className="font-semibold text-white/95">{title}</span>.
-                      </p>
-                    </div>
-                  </div>
-                  <span className="hidden shrink-0 rounded-lg bg-white/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-[#C99237] ring-1 ring-white/15 sm:inline">
-                    Live feed
-                  </span>
-                </div>
-                <div className="relative mt-3 flex gap-1 rounded-xl bg-black/25 p-1 ring-1 ring-white/10">
+              <div className="relative min-h-0 flex-1 overflow-hidden">
+                {desktopRightTab === "activity" && showTeamActivity ? (
+                <div key="desktop-activity" className="team-group-panel-in absolute inset-0 flex flex-col">
+              <div className="shrink-0 border-b border-[#E4E7EC] bg-white p-2">
+                <div className="flex gap-1 rounded-lg bg-[#F5F7FA] p-0.5">
                   <button
                     type="button"
                     onClick={() => setActivityTab("notifications")}
-                    className={`relative flex flex-1 items-center justify-center gap-1 rounded-lg px-2 py-2 text-[11px] font-semibold transition ${
+                    className={`relative flex flex-1 items-center justify-center gap-1 rounded-lg px-2 py-2 text-[12px] font-semibold transition ${
                       activityTab === "notifications"
-                        ? "bg-white text-[#0C123A] shadow-md"
-                        : "text-white/85 hover:bg-white/10 hover:text-white"
+                        ? "bg-white text-[#008CD3] shadow-sm ring-1 ring-[#E4E7EC]"
+                        : "text-[#6B7280] hover:text-[#374151]"
                     }`}
                   >
-                    <Bell className="h-3.5 w-3.5 shrink-0 opacity-90" />
+                    <Bell className="h-3.5 w-3.5 shrink-0" />
                     <span className="truncate">Alerts</span>
                     {pendingExitReportsCount > 0 ? (
-                      <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-violet-500 px-1 text-[9px] font-bold text-white ring-2 ring-[#0C123A]">
+                      <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-[#D93025] px-1 text-[9px] font-bold text-white">
                         {pendingExitReportsCount > 9 ? "9+" : pendingExitReportsCount}
                       </span>
                     ) : null}
@@ -2351,16 +2108,16 @@ function TeamGroupPageContent() {
                   <button
                     type="button"
                     onClick={() => setActivityTab("leaves")}
-                    className={`relative flex flex-1 items-center justify-center gap-1 rounded-lg px-2 py-2 text-[11px] font-semibold transition ${
+                    className={`relative flex flex-1 items-center justify-center gap-1 rounded-lg px-2 py-2 text-[12px] font-semibold transition ${
                       activityTab === "leaves"
-                        ? "bg-white text-[#0C123A] shadow-md"
-                        : "text-white/85 hover:bg-white/10 hover:text-white"
+                        ? "bg-white text-[#008CD3] shadow-sm ring-1 ring-[#E4E7EC]"
+                        : "text-[#6B7280] hover:text-[#374151]"
                     }`}
                   >
-                    <CalendarDays className="h-3.5 w-3.5 shrink-0 opacity-90" />
+                    <CalendarDays className="h-3.5 w-3.5 shrink-0" />
                     <span className="truncate">Leaves</span>
                     {pendingLeaveCount > 0 ? (
-                      <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-emerald-500 px-1 text-[9px] font-bold text-white ring-2 ring-[#0C123A]">
+                      <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-[#0F9D58] px-1 text-[9px] font-bold text-white">
                         {pendingLeaveCount > 9 ? "9+" : pendingLeaveCount}
                       </span>
                     ) : null}
@@ -2368,16 +2125,16 @@ function TeamGroupPageContent() {
                   <button
                     type="button"
                     onClick={() => setActivityTab("attendance")}
-                    className={`relative flex flex-1 items-center justify-center gap-1 rounded-lg px-2 py-2 text-[11px] font-semibold transition ${
+                    className={`relative flex flex-1 items-center justify-center gap-1 rounded-lg px-2 py-2 text-[12px] font-semibold transition ${
                       activityTab === "attendance"
-                        ? "bg-white text-[#0C123A] shadow-md"
-                        : "text-white/85 hover:bg-white/10 hover:text-white"
+                        ? "bg-white text-[#008CD3] shadow-sm ring-1 ring-[#E4E7EC]"
+                        : "text-[#6B7280] hover:text-[#374151]"
                     }`}
                   >
-                    <ClipboardList className="h-3.5 w-3.5 shrink-0 opacity-90" />
+                    <ClipboardList className="h-3.5 w-3.5 shrink-0" />
                     <span className="truncate">Attendance</span>
                     {pendingAttendanceCount > 0 ? (
-                      <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-cyan-500 px-1 text-[9px] font-bold text-white ring-2 ring-[#0C123A]">
+                      <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-[#008CD3] px-1 text-[9px] font-bold text-white">
                         {pendingAttendanceCount > 9
                           ? "9+"
                           : pendingAttendanceCount}
@@ -2387,43 +2144,7 @@ function TeamGroupPageContent() {
                 </div>
               </div>
 
-              {activityTab === "notifications" ? (
-                <div className="flex items-start gap-2 border-b border-slate-100 bg-slate-50/90 px-4 py-3">
-                  <HelpCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#C99237]" aria-hidden />
-                  <p className="text-[11px] leading-relaxed text-slate-600">
-                    <span className="font-semibold text-[#0C123A]">Alerts.</span>{" "}
-                    {pendingExitReportsCount > 0 ? (
-                      <>
-                        <span className="font-semibold text-rose-800/90">Open exits</span> for
-                        this team need follow-up (
-                        <span className="font-semibold">{pendingExitReportsCount}</span>).{" "}
-                      </>
-                    ) : null}
-                    <span className="font-semibold text-[#0C123A]">Roster log:</span> adds,
-                    removals, and updates below.
-                  </p>
-                </div>
-              ) : null}
-              {activityTab === "leaves" ? (
-                <div className="flex items-start gap-2 border-b border-slate-100 bg-indigo-50/50 px-4 py-3">
-                  <HelpCircle className="mt-0.5 h-4 w-4 shrink-0 text-indigo-500" aria-hidden />
-                  <p className="text-[11px] leading-relaxed text-slate-600">
-                    <span className="font-semibold text-indigo-900">Team leave queue.</span>{" "}
-                    Approve or reject only if your org role allows (admin, HR, or manager).
-                  </p>
-                </div>
-              ) : null}
-              {activityTab === "attendance" ? (
-                <div className="flex items-start gap-2 border-b border-slate-100 bg-cyan-50/50 px-4 py-3">
-                  <HelpCircle className="mt-0.5 h-4 w-4 shrink-0 text-cyan-600" aria-hidden />
-                  <p className="text-[11px] leading-relaxed text-slate-600">
-                    <span className="font-semibold text-cyan-950">Correction requests.</span>{" "}
-                    Same approval rules — org admin, HR, or manager can resolve pending items.
-                  </p>
-                </div>
-              ) : null}
-
-              <div className="max-h-[min(70vh,560px)] overflow-y-auto">
+              <div className="min-h-0 flex-1 overflow-y-auto">
                 {activityTab === "notifications" ? (
                   <>
                     {exitProcessesReports.length > 0 && detail ? (
@@ -2462,7 +2183,7 @@ function TeamGroupPageContent() {
                             <div className="mt-3">
                               <Link
                                 href={`/dashboard/${orgId}/organization-employees/team-group?user_id=${encodeURIComponent(String(ep.employee_id))}`}
-                                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#0C123A] px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-[#121a4a]"
+                                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#008CD3] px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-[#0070AA]"
                               >
                                 View more
                                 <ArrowRight className="h-3.5 w-3.5" aria-hidden />
@@ -2488,12 +2209,12 @@ function TeamGroupPageContent() {
                           {notifications.map((n) => (
                             <li
                               key={n.id}
-                              className="relative border-l-[3px] border-l-[#C99237]/70 pl-4 pr-4 py-3 transition hover:bg-slate-50/90"
+                              className="relative border-l-[3px] border-l-[#008CD3]/70 pl-4 pr-4 py-3 transition hover:bg-[#F9FAFB]"
                             >
-                              <p className="text-[10px] font-bold uppercase tracking-wide text-[#C99237]">
+                              <p className="text-[10px] font-bold uppercase tracking-wide text-[#008CD3]">
                                 {actionLabel(n.action_type)}
                               </p>
-                              <p className="mt-1 text-sm font-medium text-[#0C123A]">
+                              <p className="mt-1 text-sm font-medium text-[#1F2937]">
                                 {n.action_reason}
                               </p>
                               <div className="mt-1.5 flex flex-wrap gap-x-2 text-[11px] text-slate-500">
@@ -2527,14 +2248,14 @@ function TeamGroupPageContent() {
                         return (
                           <li
                             key={q.id}
-                            className="rounded-xl border border-slate-100 bg-slate-50/90 p-3 shadow-sm"
+                            className="rounded-xl border border-[#E4E7EC] bg-[#F9FAFB] p-3 shadow-sm"
                           >
                             <div className="flex flex-wrap items-start justify-between gap-2">
                               <div className="min-w-0">
-                                <p className="font-semibold text-[#0C123A]">
+                                <p className="font-semibold text-[#1F2937]">
                                   {q.user_name}
                                 </p>
-                                <p className="text-[11px] text-slate-600">
+                                <p className="text-[11px] text-[#6B7280]">
                                   {q.user_email}
                                   {q.user_phone ? ` · ${q.user_phone}` : ""}
                                 </p>
@@ -2617,15 +2338,15 @@ function TeamGroupPageContent() {
                         return (
                           <li
                             key={row.id}
-                            className="rounded-xl border border-slate-100 bg-slate-50/90 p-3 shadow-sm"
+                            className="rounded-xl border border-[#E4E7EC] bg-[#F9FAFB] p-3 shadow-sm"
                           >
                             <div className="flex flex-wrap items-start justify-between gap-2">
                               <div className="min-w-0">
-                                <p className="font-semibold text-[#0C123A]">
+                                <p className="font-semibold text-[#1F2937]">
                                   {who.name}
                                 </p>
                                 {who.email ? (
-                                  <p className="text-[11px] text-slate-600">
+                                  <p className="text-[11px] text-[#6B7280]">
                                     {who.email}
                                     {who.phone ? ` · ${who.phone}` : ""}
                                   </p>
@@ -2719,14 +2440,134 @@ function TeamGroupPageContent() {
                   )
                 ) : null}
               </div>
+                </div>
+                ) : null}
+
+                {desktopRightTab === "hr" && showMemberHrSection ? (
+                <div key="desktop-hr" className="team-group-panel-in absolute inset-0 flex flex-col overflow-y-auto">
+                  <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[#E4E7EC] bg-[#F9FAFB] px-4 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 text-[#008CD3]" aria-hidden />
+                      <h3 className="text-[13px] font-semibold text-[#1F2937]">My HR requests</h3>
+                    </div>
+                    <div className="flex gap-2 text-[10px] font-semibold text-[#6B7280]">
+                      <span className="rounded-full bg-white px-2 py-0.5 ring-1 ring-[#E4E7EC]">
+                        Leave {myPendingLeaveCount}
+                      </span>
+                      <span className="rounded-full bg-white px-2 py-0.5 ring-1 ring-[#E4E7EC]">
+                        Attendance {myPendingAttCount}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex shrink-0 gap-2 border-b border-[#E4E7EC] p-3">
+                    <button
+                      type="button"
+                      onClick={openAdminLeaveModal}
+                      className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#008CD3] px-3 py-2 text-[12px] font-semibold text-white transition hover:bg-[#0070AA]"
+                    >
+                      <CalendarDays className="h-3.5 w-3.5" />
+                      Request leave
+                    </button>
+                    <button
+                      type="button"
+                      onClick={openAdminAttModal}
+                      className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#E4E7EC] bg-white px-3 py-2 text-[12px] font-semibold text-[#374151] transition hover:bg-[#F9FAFB]"
+                    >
+                      <ClipboardList className="h-3.5 w-3.5" />
+                      Attendance query
+                    </button>
+                  </div>
+
+                  {myRequestsError ? (
+                    <div className="mx-3 mt-2 flex items-start gap-2 rounded-lg border border-amber-200/80 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden />
+                      <span>{myRequestsError}</span>
+                    </div>
+                  ) : null}
+
+                  <div className="grid min-h-0 flex-1 grid-cols-1 divide-y divide-[#E4E7EC] sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+                    <div className="flex min-h-0 flex-col p-3">
+                      <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-[#9CA3AF]">
+                        Your leave ({myLeaveRows.length})
+                      </p>
+                      <div className="min-h-0 flex-1 overflow-y-auto">
+                      {myLeaveRows.length === 0 ? (
+                        <p className="py-6 text-center text-[11px] text-[#9CA3AF]">Nothing submitted yet</p>
+                      ) : (
+                        <ul className="space-y-2">
+                          {myLeaveRows.map((r) => (
+                            <li
+                              key={r.id}
+                              className="rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] px-2.5 py-2"
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <span className="text-[12px] font-semibold capitalize text-[#1F2937]">
+                                    {leaveTypeLabel(r.leave_type)}
+                                  </span>
+                                  <p className="mt-0.5 text-[10px] text-[#6B7280]">
+                                    {fmtDateOnly(r.start_date)}
+                                    {r.end_date ? ` – ${fmtDateOnly(r.end_date)}` : ""}
+                                  </p>
+                                </div>
+                                <span
+                                  className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase ${leaveStatusChipClass(r.status)}`}
+                                >
+                                  {r.status}
+                                </span>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      </div>
+                    </div>
+                    <div className="flex min-h-0 flex-col p-3">
+                      <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-[#9CA3AF]">
+                        Your attendance ({myAttRows.length})
+                      </p>
+                      <div className="min-h-0 flex-1 overflow-y-auto">
+                      {myAttRows.length === 0 ? (
+                        <p className="py-6 text-center text-[11px] text-[#9CA3AF]">No queries yet</p>
+                      ) : (
+                        <ul className="space-y-2">
+                          {myAttRows.map((r) => (
+                            <li
+                              key={r.id}
+                              className="rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] px-2.5 py-2"
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <span className="text-[12px] font-semibold text-[#1F2937]">
+                                    {attendanceCategoryLabel(r.category)}
+                                  </span>
+                                  <p className="mt-0.5 text-[10px] text-[#6B7280]">
+                                    {fmtDateOnly(r.attendance_date)}
+                                  </p>
+                                </div>
+                                <span
+                                  className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase ${leaveStatusChipClass(r.query_status)}`}
+                                >
+                                  {r.query_status}
+                                </span>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                ) : null}
+              </div>
             </div>
+            )}
             </div>
-            ) : null}
-          </div>
-          </div>
+          ) : null}
         </div>
-      </div>
-      </div>
+        </div>
       </div>
 
       {adminLeaveModalOpen ? (
@@ -2747,11 +2588,11 @@ function TeamGroupPageContent() {
               <div className="min-w-0 flex-1 pr-2">
                 <h2
                   id="admin-leave-title"
-                  className="text-[15px] font-semibold text-white sm:text-lg sm:font-bold sm:text-[#0C123A]"
+                  className="text-[15px] font-semibold text-[#1F2937] sm:text-lg sm:font-bold"
                 >
                   Request leave
                 </h2>
-                <p className="mt-0.5 text-[12px] text-white/80 sm:text-xs sm:text-slate-500">
+                <p className="mt-0.5 text-[12px] text-[#6B7280] sm:text-xs">
                   Submitted to HR for this organization (linked to your team).
                 </p>
               </div>
@@ -2759,7 +2600,7 @@ function TeamGroupPageContent() {
                 type="button"
                 disabled={leaveSubmitting}
                 onClick={() => setAdminLeaveModalOpen(false)}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/25 bg-white/10 text-white active:bg-white/20 disabled:opacity-50 sm:border-slate-200 sm:bg-white sm:text-slate-700"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#E4E7EC] bg-white text-[#6B7280] transition hover:bg-[#F5F7FA] disabled:opacity-50"
                 aria-label="Close"
               >
                 <X className="h-5 w-5" />
@@ -2882,7 +2723,7 @@ function TeamGroupPageContent() {
                 type="button"
                 disabled={attSubmitting}
                 onClick={() => setAdminAttModalOpen(false)}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/25 bg-white/10 text-white active:bg-white/20 disabled:opacity-50 sm:border-slate-200 sm:bg-white sm:text-slate-700"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#E4E7EC] bg-white text-[#6B7280] transition hover:bg-[#F5F7FA] disabled:opacity-50"
                 aria-label="Close"
               >
                 <X className="h-5 w-5" />
@@ -2998,7 +2839,7 @@ function TeamGroupPageContent() {
                 type="button"
                 disabled={attResolveSubmitting}
                 onClick={() => setAttResolveModal(null)}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/25 bg-white/10 text-white active:bg-white/20 disabled:opacity-50 sm:border-slate-200 sm:bg-white sm:text-slate-700"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#E4E7EC] bg-white text-[#6B7280] transition hover:bg-[#F5F7FA] disabled:opacity-50"
                 aria-label="Close dialog"
               >
                 <X className="h-5 w-5" />

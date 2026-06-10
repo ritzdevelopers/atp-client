@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, Suspense } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   Building2,
@@ -19,23 +19,23 @@ import {
   X,
 } from "lucide-react";
 import type { ApiError } from "@/services/auth";
-import {
-  applyForLeave,
-  fetchMyLeaveQueries,
-  type LeaveQueryRow,
-} from "@/services/employeeLeaves";
+import { applyForLeave, type LeaveQueryRow } from "@/services/employeeLeaves";
 import AssignedLeaveTypeSelect from "@/components/portal-dashboard/user-layout/AssignedLeaveTypeSelect";
 import { useAssignedLeaveTypes } from "@/hooks/useAssignedLeaveTypes";
 import {
   attendanceCategoryLabel,
   correctAttendanceQuery,
-  fetchMyAttendanceQueries,
   raiseAttendanceQuery,
   type AttendanceQueryCategory,
   type AttendanceQueryRow,
 } from "@/services/attendanceQueries";
 import { fetchMyOrgTeam } from "@/services/orgTeams";
-import type { OrgTeamDetail, OrgTeamMemberRow } from "@/services/orgTeams";
+import type {
+  OrgTeamDetail,
+  OrgTeamMemberRow,
+  TeamAttendanceQueryRow,
+  TeamLeaveQueryRow,
+} from "@/services/orgTeams";
 
 function formatDate(value: string | null | undefined): string {
   if (value == null || value === "") return "—";
@@ -62,6 +62,54 @@ function initialsFromName(name: string | null | undefined): string {
   if (name == null || !String(name).trim()) return "?";
   const parts = String(name).trim().split(/\s+/).filter(Boolean).slice(0, 2);
   return parts.map((p) => p[0]!.toUpperCase()).join("") || "?";
+}
+
+function normalizeTeamLeaveRows(rows: TeamLeaveQueryRow[] | undefined): LeaveQueryRow[] {
+  return (rows ?? []).map((row) => ({
+    id: Number(row.id),
+    user_id: row.user_id != null ? Number(row.user_id) : null,
+    user_name: String(row.user_name ?? ""),
+    user_email: String(row.user_email ?? ""),
+    org_id: Number(row.org_id),
+    leave_type: String(row.leave_type ?? "Leave"),
+    start_date: String(row.start_date),
+    end_date: row.end_date != null ? String(row.end_date) : null,
+    reason: row.reason != null ? String(row.reason) : null,
+    status: String(row.status ?? "pending").toLowerCase() as LeaveQueryRow["status"],
+    approved_by: row.approved_by != null ? Number(row.approved_by) : null,
+    approved_by_name:
+      row.approved_by_name != null && String(row.approved_by_name).trim() !== ""
+        ? String(row.approved_by_name)
+        : null,
+    team_id: row.team_id != null ? Number(row.team_id) : null,
+    created_at: String(row.created_at),
+    updated_at: row.updated_at != null ? String(row.updated_at) : null,
+  }));
+}
+
+function normalizeTeamAttendanceRows(
+  rows: TeamAttendanceQueryRow[] | undefined,
+): AttendanceQueryRow[] {
+  return (rows ?? []).map((row) => ({
+    id: Number(row.id),
+    user_id: Number(row.user_id),
+    org_id: Number(row.org_id),
+    team_id: row.team_id != null ? Number(row.team_id) : null,
+    query_status: String(row.query_status ?? "pending"),
+    category: String(row.category),
+    query_message: String(row.query_message ?? ""),
+    attendance_date: String(row.attendance_date),
+    approved_by: row.approved_by != null ? Number(row.approved_by) : null,
+    approved_by_name:
+      row.approved_by_name != null && String(row.approved_by_name).trim() !== ""
+        ? String(row.approved_by_name)
+        : null,
+    admin_response:
+      row.admin_response != null ? String(row.admin_response) : null,
+    resolved_at: row.resolved_at != null ? String(row.resolved_at) : null,
+    created_at: String(row.created_at),
+    updated_at: row.updated_at != null ? String(row.updated_at) : null,
+  }));
 }
 
 function leaveStatusTone(
@@ -412,7 +460,23 @@ function MobileAttendanceRow({
 }
 
 export default function UserMyTeamPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-[50vh] items-center justify-center text-[#6B7280]">
+          <Loader2 className="h-8 w-8 animate-spin text-[#008CD3]" />
+        </div>
+      }
+    >
+      <UserMyTeamPageContent />
+    </Suspense>
+  );
+}
+
+function UserMyTeamPageContent() {
   const params = useParams();
+  const searchParams = useSearchParams();
+  const selectedTeamId = searchParams.get("team_id");
   const orgIdParam = params?.org_id;
   const orgId = Number(orgIdParam);
 
@@ -423,13 +487,13 @@ export default function UserMyTeamPage() {
   const [noTeam, setNoTeam] = useState(false);
   const [teamError, setTeamError] = useState<string | null>(null);
 
-  const [leaveRows, setLeaveRows] = useState<LeaveQueryRow[]>([]);
-  const [leaveLoadError, setLeaveLoadError] = useState<string | null>(null);
-  const [attendanceRows, setAttendanceRows] = useState<AttendanceQueryRow[]>(
-    [],
+  const leaveRows = useMemo(
+    () => normalizeTeamLeaveRows(team?.my_leave_queries),
+    [team],
   );
-  const [attendanceLoadError, setAttendanceLoadError] = useState<string | null>(
-    null,
+  const attendanceRows = useMemo(
+    () => normalizeTeamAttendanceRows(team?.my_attendance_related_queries),
+    [team],
   );
 
   const [leaveModalOpen, setLeaveModalOpen] = useState(false);
@@ -488,54 +552,24 @@ export default function UserMyTeamPage() {
       }
       setTeamError(null);
       setNoTeam(false);
-      setLeaveLoadError(null);
-      setAttendanceLoadError(null);
 
       try {
-        const data = await fetchMyOrgTeam(t, orgId);
+        const data = await fetchMyOrgTeam(t, orgId, selectedTeamId ?? undefined);
         setTeam(data);
       } catch (e) {
         const err = e as ApiError;
+        setTeam(null);
         if (err.status === 404) {
-          setTeam(null);
           setNoTeam(true);
         } else {
-          setTeam(null);
           setTeamError(err.message || "Could not load team.");
         }
-      }
-
-      const [leaveRes, attRes] = await Promise.allSettled([
-        fetchMyLeaveQueries(t, orgId),
-        fetchMyAttendanceQueries(t, orgId),
-      ]);
-
-      if (leaveRes.status === "fulfilled") {
-        setLeaveRows(leaveRes.value);
-      } else {
-        setLeaveRows([]);
-        setLeaveLoadError(
-          leaveRes.reason instanceof Error
-            ? leaveRes.reason.message
-            : "Could not load leave history.",
-        );
-      }
-
-      if (attRes.status === "fulfilled") {
-        setAttendanceRows(attRes.value);
-      } else {
-        setAttendanceRows([]);
-        setAttendanceLoadError(
-          attRes.reason instanceof Error
-            ? attRes.reason.message
-            : "Could not load attendance queries.",
-        );
       }
 
       setLoading(false);
       setRefreshing(false);
     },
-    [orgId],
+    [orgId, selectedTeamId],
   );
 
   useEffect(() => {
@@ -636,8 +670,8 @@ export default function UserMyTeamPage() {
         setAttMessage("");
         setAttCategory("forget_punch_in");
       }
-      const rows = await fetchMyAttendanceQueries(t, orgId);
-      setAttendanceRows(rows);
+      const refreshed = await fetchMyOrgTeam(t, orgId, selectedTeamId ?? undefined);
+      setTeam(refreshed);
     } catch (err) {
       setAttFormError(
         err instanceof Error ? err.message : "Something went wrong.",
@@ -678,8 +712,8 @@ export default function UserMyTeamPage() {
       setStartDate("");
       setEndDate("");
       setReason("");
-      const rows = await fetchMyLeaveQueries(t, orgId);
-      setLeaveRows(rows);
+      const refreshed = await fetchMyOrgTeam(t, orgId, selectedTeamId ?? undefined);
+      setTeam(refreshed);
     } catch (err) {
       setLeaveFormError(
         err instanceof Error ? err.message : "Could not submit leave request.",
@@ -1003,22 +1037,17 @@ export default function UserMyTeamPage() {
               </span>
               <div>
                 <p className={mobileValueCls}>Leave requests</p>
-                <p className={mobileCaptionCls}>Newest first · {leaveRows.length} total</p>
+                <p className={mobileCaptionCls}>For this team · {leaveRows.length} total</p>
               </div>
             </div>
-            {leaveLoadError ? (
-              <div className="mx-3 mt-2 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2.5 text-[12px] text-[#D93025] sm:mx-4">
-                {leaveLoadError}
-              </div>
-            ) : null}
-            {leaveRows.length === 0 && !leaveLoadError ? (
+            {leaveRows.length === 0 ? (
               <div className="mx-3 mt-2 rounded-xl border border-dashed border-[#E4E7EC] bg-white px-4 py-14 text-center sm:mx-4">
                 <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#F5F7FA] text-[#9CA3AF]">
                   <CalendarDays className="h-6 w-6" aria-hidden />
                 </span>
                 <p className="mt-3 text-[15px] font-semibold text-[#1F2937]">No leave requests</p>
                 <p className={`mt-1.5 max-w-xs mx-auto ${mobileCaptionCls}`}>
-                  Tap Request time off below to submit a new request.
+                  Leave raised for this team will appear here.
                 </p>
               </div>
             ) : (
@@ -1039,22 +1068,17 @@ export default function UserMyTeamPage() {
               </span>
               <div>
                 <p className={mobileValueCls}>Attendance corrections</p>
-                <p className={mobileCaptionCls}>Edit while pending · {attendanceRows.length} total</p>
+                <p className={mobileCaptionCls}>For this team · {attendanceRows.length} total</p>
               </div>
             </div>
-            {attendanceLoadError ? (
-              <div className="mx-3 mt-2 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2.5 text-[12px] text-[#D93025] sm:mx-4">
-                {attendanceLoadError}
-              </div>
-            ) : null}
-            {attendanceRows.length === 0 && !attendanceLoadError ? (
+            {attendanceRows.length === 0 ? (
               <div className="mx-3 mt-2 rounded-xl border border-dashed border-[#E4E7EC] bg-white px-4 py-14 text-center sm:mx-4">
                 <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#F5F7FA] text-[#9CA3AF]">
                   <ClipboardList className="h-6 w-6" aria-hidden />
                 </span>
                 <p className="mt-3 text-[15px] font-semibold text-[#1F2937]">No corrections yet</p>
                 <p className={`mt-1.5 max-w-xs mx-auto ${mobileCaptionCls}`}>
-                  Tap Correction below to report a missed punch or timing issue.
+                  Attendance queries raised for this team will appear here.
                 </p>
               </div>
             ) : (
@@ -1267,9 +1291,7 @@ export default function UserMyTeamPage() {
                 </Link>
               </section>
               <ActivityColumn
-                leaveLoadError={leaveLoadError}
                 leaveRows={leaveRows}
-                attendanceLoadError={attendanceLoadError}
                 attendanceRows={attendanceRows}
                 onEditAttendance={openEditAttendanceModal}
               />
@@ -1485,9 +1507,7 @@ export default function UserMyTeamPage() {
               </div>
 
               <ActivityColumn
-                leaveLoadError={leaveLoadError}
                 leaveRows={leaveRows}
-                attendanceLoadError={attendanceLoadError}
                 attendanceRows={attendanceRows}
                 onEditAttendance={openEditAttendanceModal}
               />
@@ -1755,15 +1775,11 @@ function ModalScrim({
 
 function ActivityColumn({
   leaveRows,
-  leaveLoadError,
   attendanceRows,
-  attendanceLoadError,
   onEditAttendance,
 }: {
   leaveRows: LeaveQueryRow[];
-  leaveLoadError: string | null;
   attendanceRows: AttendanceQueryRow[];
-  attendanceLoadError: string | null;
   onEditAttendance: (row: AttendanceQueryRow) => void;
 }) {
   return (
@@ -1776,24 +1792,19 @@ function ActivityColumn({
           <div className="min-w-0">
             <h2 className={desktopValueCls}>Leave requests</h2>
             <p className={`mt-0.5 ${desktopCaptionCls}`}>
-              Newest first · {leaveRows.length} total
+              For this team · {leaveRows.length} total
             </p>
           </div>
         </div>
         <div className="max-h-[min(48vh,400px)] overflow-y-auto p-4">
-          {leaveLoadError ? (
-            <p className="rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] p-3 text-[12px] text-[#D93025]">
-              {leaveLoadError}
-            </p>
-          ) : null}
-          {!leaveLoadError && leaveRows.length === 0 ? (
+          {leaveRows.length === 0 ? (
             <div className="flex flex-col items-center py-10 text-center">
               <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#F5F7FA] text-[#9CA3AF]">
                 <CalendarDays className="h-6 w-6" aria-hidden />
               </span>
               <p className={`mt-3 ${desktopValueCls}`}>No leave requests yet</p>
               <p className={`mt-1 max-w-[220px] ${desktopCaptionCls}`}>
-                Use Request time off in the header when you need time away.
+                Leave raised for this team will appear here.
               </p>
             </div>
           ) : null}
@@ -1851,24 +1862,19 @@ function ActivityColumn({
           <div className="min-w-0">
             <h2 className={desktopValueCls}>Attendance corrections</h2>
             <p className={`mt-0.5 ${desktopCaptionCls}`}>
-              Edit while pending · {attendanceRows.length} total
+              For this team · {attendanceRows.length} total
             </p>
           </div>
         </div>
         <div className="max-h-[min(48vh,400px)] overflow-y-auto p-4">
-          {attendanceLoadError ? (
-            <p className="rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] p-3 text-[12px] text-[#D93025]">
-              {attendanceLoadError}
-            </p>
-          ) : null}
-          {!attendanceLoadError && attendanceRows.length === 0 ? (
+          {attendanceRows.length === 0 ? (
             <div className="flex flex-col items-center py-10 text-center">
               <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#F5F7FA] text-[#9CA3AF]">
                 <ClipboardList className="h-6 w-6" aria-hidden />
               </span>
               <p className={`mt-3 ${desktopValueCls}`}>No corrections yet</p>
               <p className={`mt-1 max-w-[240px] ${desktopCaptionCls}`}>
-                Use Correction in the header to report a missed punch or timing issue.
+                Attendance queries raised for this team will appear here.
               </p>
             </div>
           ) : null}

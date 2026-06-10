@@ -194,6 +194,46 @@ export type UpdateOrgTeamPayload = {
   team_info?: string;
 };
 
+/** Attendance query row scoped to a team (`get-my-team`). */
+export type TeamAttendanceQueryRow = {
+  id: number;
+  user_id: number;
+  org_id: number;
+  team_id: number | null;
+  query_status: string;
+  category: string;
+  query_message: string;
+  attendance_date: string;
+  approved_by: number | null;
+  approved_by_name?: string | null;
+  admin_response: string | null;
+  resolved_at: string | null;
+  created_at: string;
+  updated_at?: string | null;
+};
+
+/** Leave row attached to team (`leave_quiry.team_id`). */
+export type TeamLeaveQueryRow = {
+  id: number;
+  user_id: number | null;
+  user_name: string;
+  user_email: string;
+  user_phone?: string | null;
+  org_id: number;
+  leave_type: string;
+  leave_type_id?: number | null;
+  leave_type_name?: string | null;
+  start_date: string;
+  end_date: string | null;
+  reason: string | null;
+  status: string;
+  approved_by: number | null;
+  approved_by_name: string | null;
+  team_id: number | null;
+  created_at: string;
+  updated_at: string | null;
+};
+
 /** Full team record from `GET /api/org-teams/get-team/:team_id`. */
 export type OrgTeamDetail = {
   team_id: number;
@@ -212,6 +252,10 @@ export type OrgTeamDetail = {
   members: OrgTeamMemberRow[];
   /** Present on `get-my-team` response. */
   is_admin?: boolean;
+  /** Current user's leave requests raised for this team. */
+  my_leave_queries?: TeamLeaveQueryRow[];
+  /** Current user's attendance queries raised for this team. */
+  my_attendance_related_queries?: TeamAttendanceQueryRow[];
 };
 
 export type TeamActivityNotification = {
@@ -221,24 +265,6 @@ export type TeamActivityNotification = {
   created_at: string;
   performed_by_name: string | null;
   affected_user_name: string | null;
-};
-
-/** Leave row attached to team (`leave_quiry.team_id`). */
-export type TeamLeaveQueryRow = {
-  id: number;
-  user_id: number | null;
-  user_name: string;
-  user_email: string;
-  user_phone: string | null;
-  org_id: number;
-  leave_type: string;
-  start_date: string;
-  end_date: string | null;
-  reason: string | null;
-  status: string;
-  team_id: number | null;
-  created_at: string;
-  updated_at: string | null;
 };
 
 /** In-progress employee exit processes tied to this team (from activity feed API). */
@@ -297,15 +323,20 @@ export type TeamMemberExitProcessReportData = {
   handover_queries: TeamMemberExitReportHandoverRow[];
 };
 
-/** Current user's team (`GET /api/org-teams/get-my-team`). Pass `orgId` when the user belongs to multiple orgs. */
+/** Current user's team (`GET /api/org-teams/get-my-team`). Pass `orgId` when the user belongs to multiple orgs. Optional `teamId` when assigned to multiple teams. */
 export async function fetchMyOrgTeam(
   token: string,
   orgId?: number | string,
+  teamId?: number | string,
 ): Promise<OrgTeamDetail> {
-  const q =
-    orgId != null && String(orgId).trim() !== ""
-      ? `?org_id=${encodeURIComponent(String(orgId))}`
-      : "";
+  const params = new URLSearchParams();
+  if (orgId != null && String(orgId).trim() !== "") {
+    params.set("org_id", String(orgId));
+  }
+  if (teamId != null && String(teamId).trim() !== "") {
+    params.set("team_id", String(teamId));
+  }
+  const q = params.toString() ? `?${params.toString()}` : "";
   const res = await fetch(`${API_URL}/api/org-teams/get-my-team${q}`, {
     method: "GET",
     headers: {
@@ -330,6 +361,12 @@ export async function fetchMyOrgTeam(
   return {
     ...data,
     members: Array.isArray(data.members) ? data.members : [],
+    my_leave_queries: Array.isArray(data.my_leave_queries)
+      ? data.my_leave_queries
+      : [],
+    my_attendance_related_queries: Array.isArray(data.my_attendance_related_queries)
+      ? data.my_attendance_related_queries
+      : [],
   };
 }
 

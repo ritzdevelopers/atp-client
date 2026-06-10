@@ -251,6 +251,98 @@ export async function addUserExternalInformation(
   };
 }
 
+export type BackgroundVerificationPersonRole = "hr" | "reporting_manager";
+
+export type BackgroundVerificationInfoPayload = {
+  previous_company_name: string;
+  company_email?: string;
+  employee_code?: string;
+  designation?: string;
+  employment_start_date?: string;
+  employment_end_date?: string;
+  person_name: string;
+  person_role: BackgroundVerificationPersonRole;
+  person_contact_number1: string;
+  person_contact_number2?: string;
+  person_contact_email: string;
+};
+
+export type PreviousCompanyReferenceRow = {
+  id: number;
+  employee_id: number;
+  org_id: number;
+  previous_company_name: string;
+  company_email: string | null;
+  employee_code: string | null;
+  designation: string | null;
+  employment_start_date: string | null;
+  employment_end_date: string | null;
+  person_name: string;
+  person_role: BackgroundVerificationPersonRole;
+  person_contact_number1: string;
+  person_contact_number2: string | null;
+  person_contact_email: string;
+  verification_status: string;
+  verification_notes: string | null;
+  verification_by_id: number | null;
+  verification_by_name: string | null;
+  verified_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export async function createUserBackgroundVerification(
+  token: string,
+  payload: {
+    org_id: number | string;
+    employee_id: number | string;
+    background_verification_info:
+      | BackgroundVerificationInfoPayload
+      | BackgroundVerificationInfoPayload[];
+  },
+): Promise<{
+  success?: boolean;
+  message?: string;
+  data?: {
+    employee_id?: number;
+    org_id?: number;
+    references?: PreviousCompanyReferenceRow[];
+  };
+}> {
+  const res = await fetch(`${API_URL}/api/user/create-user-background-verification`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      org_id: payload.org_id,
+      employee_id: payload.employee_id,
+      background_verification_info: payload.background_verification_info,
+    }),
+  });
+
+  const result = (await res.json()) as {
+    success?: boolean;
+    message?: string;
+    data?: {
+      employee_id?: number;
+      org_id?: number;
+      references?: PreviousCompanyReferenceRow[];
+    };
+  };
+
+  if (!res.ok) {
+    const error: ApiError = new Error(
+      result.message || "Could not save previous company reference",
+    );
+    error.status = res.status;
+    throw error;
+  }
+
+  return result;
+}
+
 /** Matches server `employee_assets.asset_type`. */
 export const EMPLOYEE_ASSET_TYPES = [
   "laptop",
@@ -479,7 +571,27 @@ export async function uploadEmployeeAssetsBatch(
   return result;
 }
 
+export type EmployeeAddressEntryPayload = {
+  address_type: "permanent" | "current";
+  country: string;
+  state: string;
+  district: string;
+  city: string;
+  is_from_village: boolean;
+  village_name?: string | null;
+  street: string;
+  house_number: string;
+  zip_code: string;
+};
+
 export type AddUserAddressPayload = {
+  employee_id: number | string;
+  org_id: number | string;
+  address_info: [EmployeeAddressEntryPayload, EmployeeAddressEntryPayload];
+};
+
+/** @deprecated Legacy flat shape — use employee_id + address_info instead. */
+export type LegacyAddUserAddressPayload = {
   user_id: number | string;
   org_id: number | string;
   country: string;
@@ -493,17 +605,17 @@ export type AddUserAddressPayload = {
   zip_code: string;
 };
 
-export type UserAddressRow = AddUserAddressPayload & {
+export type UserAddressRow = EmployeeAddressEntryPayload & {
   id?: number | string;
   address_id?: number | string;
+  user_id?: number | string;
+  org_id?: number | string;
   created_at?: string;
   updated_at?: string;
   [key: string]: unknown;
 };
 
-export type UpdateUserAddressPayload = Partial<
-  Omit<AddUserAddressPayload, "user_id" | "org_id">
-> & {
+export type UpdateUserAddressPayload = Partial<EmployeeAddressEntryPayload> & {
   address_id: number | string;
   user_id: number | string;
   org_id: number | string;
@@ -512,24 +624,49 @@ export type UpdateUserAddressPayload = Partial<
 export async function addUserAddress(
   token: string,
   payload: AddUserAddressPayload,
-): Promise<{ message?: string; data?: unknown }> {
+): Promise<{
+  success?: boolean;
+  message?: string;
+  data?: {
+    employee_id?: number;
+    org_id?: number;
+    addresses?: UserAddressRow[];
+  };
+}> {
   const res = await fetch(`${API_URL}/api/user/add-user-address`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      org_id: payload.org_id,
+      employee_id: payload.employee_id,
+      address_info: payload.address_info,
+    }),
   });
 
-  const result = await res.json();
+  const result = (await res.json()) as {
+    success?: boolean;
+    message?: string;
+    data?: unknown;
+  };
+
   if (!res.ok) {
     const error: ApiError = new Error(result.message || "Could not add employee address");
     error.status = res.status;
     throw error;
   }
 
-  return result;
+  return result as {
+    success?: boolean;
+    message?: string;
+    data?: {
+      employee_id?: number;
+      org_id?: number;
+      addresses?: UserAddressRow[];
+    };
+  };
 }
 
 export async function getUserAddresses(
@@ -865,6 +1002,7 @@ export type EmployeeUserInfo = {
 
 export type SingleEmployeeData = {
   user_info: EmployeeUserInfo;
+  addresses: UserAddressRow[];
   documents: Record<string, unknown>[];
   assets: Record<string, unknown>[];
   leave_balance: Record<string, unknown>[];

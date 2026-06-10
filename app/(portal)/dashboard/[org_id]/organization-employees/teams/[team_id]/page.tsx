@@ -6,13 +6,13 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
   ArrowLeft,
+  BarChart3,
   CalendarClock,
   ClipboardList,
   Crown,
   Eye,
   Layers,
   Loader2,
-  Mail,
   RefreshCw,
   Search,
   Settings2,
@@ -39,6 +39,8 @@ import {
   fetchEmployeeExitProcesses,
   type EmployeeExitProcessRow,
 } from "@/services/employeeExit";
+import TeamMemberAttendancePanel from "../../team-group/TeamMemberAttendancePanel";
+import TeamDetailDesktopLayout from "./TeamDetailDesktopLayout";
 
 type ModalKind = null | "add" | "remove" | "admin" | "update";
 
@@ -250,6 +252,22 @@ function zohoSecondaryBtnCls() {
 
 function searchFieldCls() {
   return "w-full rounded-lg border border-[#E4E7EC] bg-white py-2 pl-9 pr-3 text-[13px] text-[#1F2937] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15 lg:rounded-xl lg:py-2.5 lg:pl-10 lg:pr-4 lg:text-sm lg:shadow-sm";
+}
+
+function zohoCardCls() {
+  return "overflow-hidden rounded-2xl border border-[#E4E7EC] bg-white shadow-sm";
+}
+
+function zohoDesktopPrimaryBtnCls() {
+  return "inline-flex items-center justify-center gap-2 rounded-xl bg-[#008CD3] px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-[#008CD3]/20 transition hover:bg-[#0070AA] disabled:opacity-50";
+}
+
+function zohoDesktopSecondaryBtnCls() {
+  return "inline-flex items-center justify-center gap-2 rounded-xl border border-[#E4E7EC] bg-white px-4 py-2.5 text-sm font-semibold text-[#374151] transition hover:bg-[#F9FAFB] disabled:opacity-50";
+}
+
+function zohoDesktopDangerBtnCls() {
+  return "inline-flex items-center justify-center gap-2 rounded-xl border border-[#FFCDD2] bg-[#FCE8E6] px-4 py-2.5 text-sm font-semibold text-[#C62828] transition hover:bg-[#FFEBEE] disabled:opacity-50";
 }
 
 function waFieldCls() {
@@ -470,6 +488,10 @@ function TeamDetailPageContent() {
     imageUrl: string;
     alt: string;
   } | null>(null);
+  const [attendancePanelMember, setAttendancePanelMember] = useState<{
+    user_id: number;
+    user_name: string;
+  } | null>(null);
 
   const backHref = `/dashboard/${orgId}/organization-employees/manage-teams`;
 
@@ -654,24 +676,7 @@ function TeamDetailPageContent() {
   }
 
   const title = displayTeamTitle(detail.team_name);
-  const teamDetail = detail;
   const token = () => localStorage.getItem("token");
-  const sessionUserId =
-    typeof window !== "undefined" ? localStorage.getItem("user_id") : null;
-
-  function openTerminateForMember(m: OrgTeamMemberRow) {
-    const isAdmin = Number(m.user_id) === Number(teamDetail.admin_id);
-    if (isAdmin) {
-      setChangeAdminBeforeTerminateOpen(true);
-      return;
-    }
-    setTerminateMember(m);
-    setTerminateReason("");
-    setTerminateExitDate("");
-    setTerminateLastWorkingDay("");
-    setTerminateStatus("pending");
-    setTerminateInternalNote("");
-  }
 
   const mobileTabs: Array<{
     id: "members" | "info" | "exits" | "manage";
@@ -692,8 +697,16 @@ function TeamDetailPageContent() {
     setPhotoZoom({ imageUrl, alt });
   };
 
+  const openAttendancePanel = (member: { user_id: number; user_name: string }) => {
+    setAttendancePanelMember(member);
+  };
+
+  const closeAttendancePanel = () => {
+    setAttendancePanelMember(null);
+  };
+
   return (
-    <div className="min-h-full bg-[#F5F7FA] pb-6 lg:bg-[#f4f6f9] lg:pb-0">
+    <div className="min-h-full bg-[#F5F7FA] pb-6 lg:overflow-hidden lg:pb-0">
       {/* Mobile & tablet: Zoho-style shell */}
       <div className="lg:hidden">
         <div className="sticky top-0 z-20 border-b border-[#E4E7EC] bg-white/95 shadow-sm backdrop-blur">
@@ -788,8 +801,6 @@ function TeamDetailPageContent() {
               ) : (
                 filteredTableMembers.map((m) => {
                   const isAdmin = Number(m.user_id) === Number(detail.admin_id);
-                  const hideTerminate =
-                    sessionUserId != null && Number(sessionUserId) === Number(m.user_id);
                   return (
                     <li
                       key={m.team_member_id}
@@ -817,26 +828,28 @@ function TeamDetailPageContent() {
                           <p className={`mt-0.5 ${mobileCaptionCls}`}>
                             Joined {fmtLong(m.joined_date)}
                           </p>
-                        </div>
-                        {!hideTerminate ? (
-                          <div className="shrink-0 self-center">
-                            {memberHasExitProcess(m) ? (
+                          {memberHasExitProcess(m) ? (
+                            <div className="mt-2">
                               <MemberExitStatusBadge
                                 mobile
                                 status={String(m.exit_process_application_status)}
                               />
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => openTerminateForMember(m)}
-                                className="inline-flex min-h-[34px] items-center gap-1 rounded-md border border-[#FFCDD2] bg-[#FFECEC] px-2 py-1.5 text-[11px] font-semibold text-[#C62828] active:scale-[0.98]"
-                              >
-                                <ShieldAlert className="h-3 w-3" />
-                                Exit
-                              </button>
-                            )}
-                          </div>
-                        ) : null}
+                            </div>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              openAttendancePanel({
+                                user_id: Number(m.user_id),
+                                user_name: m.user_name,
+                              })
+                            }
+                            className="mt-2 inline-flex items-center gap-1 rounded-lg border border-[#B8DDF0] bg-[#E8F4FB] px-2.5 py-1.5 text-[11px] font-semibold text-[#0070AA] active:scale-[0.98]"
+                          >
+                            <BarChart3 className="h-3.5 w-3.5" />
+                            View attendance
+                          </button>
+                        </div>
                       </div>
                     </li>
                   );
@@ -1019,466 +1032,59 @@ function TeamDetailPageContent() {
         ) : null}
       </div>
 
-      {/* Desktop layout (unchanged) */}
-      <div className="hidden lg:block">
-      <div className="relative isolate overflow-hidden bg-slate-950 px-4 pb-16 pt-8 sm:px-8 sm:pb-20">
-        <div className="pointer-events-none absolute -left-20 top-0 h-72 w-72 rounded-full bg-teal-500/20 blur-[90px]" />
-        <div className="pointer-events-none absolute bottom-0 right-0 h-64 w-64 rounded-full bg-indigo-500/15 blur-[80px]" />
-
-        <div className="relative mx-auto max-w-6xl">
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={() => router.push(backHref)}
-              className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-teal-100 transition hover:bg-white/15"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" />
-              Teams
-            </button>
-            <button
-              type="button"
-              onClick={() => void loadAll()}
-              className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-teal-100 transition hover:bg-white/15"
-            >
-              <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-              Refresh
-            </button>
-          </div>
-
-          <div className="mt-8 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-teal-300/90">
-                Team workspace
-              </p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-                {title}
-              </h1>
-              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-400">
-                {detail.team_info?.trim() || "No description yet — add context so others know what this team owns."}
-              </p>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setModal("add");
-                }}
-                className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-900 shadow-lg shadow-black/20 transition hover:bg-slate-100"
-              >
-                <UserPlus className="h-4 w-4" />
-                Add members
-              </button>
-              <button
-                type="button"
-                onClick={() => setModal("admin")}
-                className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/15"
-              >
-                <Crown className="h-4 w-4 text-amber-300" />
-                Change admin
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setUpdateName(detail.team_name);
-                  setUpdateInfo(detail.team_info ?? "");
-                  setModal("update");
-                }}
-                className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/15"
-              >
-                <Settings2 className="h-4 w-4" />
-                Update info
-              </button>
-              <button
-                type="button"
-                onClick={() => setModal("remove")}
-                className="inline-flex items-center gap-2 rounded-xl border border-rose-400/40 bg-rose-500/15 px-4 py-2.5 text-sm font-semibold text-rose-100 transition hover:bg-rose-500/25"
-              >
-                <UserMinus className="h-4 w-4" />
-                Remove members
-              </button>
-            </div>
-          </div>
-
-          <div className="mt-8 w-full overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.09] via-white/[0.04] to-transparent p-5 shadow-[0_20px_50px_-15px_rgba(0,0,0,0.45)] backdrop-blur-md ring-1 ring-white/10 sm:p-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div className="min-w-0">
-                <h2 className="text-sm font-semibold tracking-tight text-white">
-                  Admin membership
-                </h2>
-                <p className="mt-1 text-xs leading-relaxed text-slate-400">
-                  How this person entered the team roster.
-                </p>
-              </div>
-              <div className="flex shrink-0 items-center gap-3 rounded-xl border border-amber-400/25 bg-amber-500/10 px-4 py-2.5 ring-1 ring-amber-400/15">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-400/20">
-                  <Crown className="h-5 w-5 text-amber-300" aria-hidden />
-                </div>
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-white">
-                    {detail.admin_name ?? `User #${detail.admin_id}`}
-                  </p>
-                  <p className="text-[11px] text-amber-200/80">Team admin</p>
-                </div>
-              </div>
-            </div>
-            <dl className="mt-6 grid gap-3 sm:grid-cols-3">
-              <div className="rounded-xl border border-white/10 bg-white/[0.05] px-4 py-3">
-                <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                  Joined team
-                </dt>
-                <dd className="mt-1.5 text-sm font-medium text-white">
-                  {fmtLong(detail.admin_joined_date)}
-                </dd>
-              </div>
-              <div className="rounded-xl border border-white/10 bg-white/[0.05] px-4 py-3">
-                <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                  Added by
-                </dt>
-                <dd className="mt-1.5 truncate text-sm font-medium text-white">
-                  {detail.admin_added_by_name ?? "—"}
-                </dd>
-              </div>
-              <div className="rounded-xl border border-white/10 bg-white/[0.05] px-4 py-3 sm:col-span-1">
-                <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                  Team focus
-                </dt>
-                <dd className="mt-1.5 line-clamp-2 text-sm leading-snug text-slate-300">
-                  {detail.team_info?.trim()
-                    ? detail.team_info
-                    : "No description — capture scope so admins stay aligned."}
-                </dd>
-              </div>
-            </dl>
-          </div>
+      {attendancePanelMember ? (
+        <div className="fixed inset-0 z-[10040] flex flex-col bg-[#F5F7FA] p-3 lg:hidden">
+          <TeamMemberAttendancePanel
+            orgId={orgId}
+            teamId={detail.team_id}
+            employeeId={attendancePanelMember.user_id}
+            employeeName={attendancePanelMember.user_name}
+            onClose={closeAttendancePanel}
+            accessMode="org_admin"
+          />
         </div>
-      </div>
+      ) : null}
 
-      <div className="relative z-10 mx-auto max-w-6xl -mt-10 px-4 sm:px-8">
-        {banner ? (
-          <div
-            className={`mb-6 rounded-2xl border px-4 py-3 text-sm ${
-              banner.type === "ok"
-                ? "border-teal-200 bg-teal-50 text-teal-900"
-                : "border-rose-200 bg-rose-50 text-rose-900"
-            }`}
-          >
-            {banner.text}
-          </div>
-        ) : null}
-
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-lg shadow-slate-200/30 ring-1 ring-slate-950/[0.04]">
-            <div className="flex items-center gap-2 text-slate-500">
-              <Users className="h-4 w-4 text-teal-600" />
-              <span className="text-[11px] font-semibold uppercase tracking-wide">
-                Total members
-              </span>
-            </div>
-            <p className="mt-3 text-3xl font-semibold tabular-nums text-slate-900">
-              {detail.total_number_of_members}
-            </p>
-          </div>
-          <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-lg shadow-slate-200/30 ring-1 ring-slate-950/[0.04]">
-            <div className="flex items-center gap-2 text-slate-500">
-              <Crown className="h-4 w-4 text-amber-500" />
-              <span className="text-[11px] font-semibold uppercase tracking-wide">
-                Team admin
-              </span>
-            </div>
-            <p className="mt-3 truncate text-lg font-semibold text-slate-900">
-              {detail.admin_name ?? `User #${detail.admin_id}`}
-            </p>
-            <p className="mt-1 truncate text-xs text-slate-500">ID { String(detail.admin_id) }</p>
-          </div>
-          <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-lg shadow-slate-200/30 ring-1 ring-slate-950/[0.04]">
-            <div className="flex items-center gap-2 text-slate-500">
-              <CalendarClock className="h-4 w-4 text-teal-600" />
-              <span className="text-[11px] font-semibold uppercase tracking-wide">
-                Team created
-              </span>
-            </div>
-            <p className="mt-3 text-sm font-semibold leading-snug text-slate-900">
-              {fmtLong(detail.created_at)}
-            </p>
-            <p className="mt-1 text-xs text-slate-500">
-              By {detail.created_by_name ?? `User #${detail.created_by ?? "—"}`}
-            </p>
-          </div>
-          <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-lg shadow-slate-200/30 ring-1 ring-slate-950/[0.04]">
-            <div className="flex items-center gap-2 text-slate-500">
-              <Layers className="h-4 w-4 text-indigo-500" />
-              <span className="text-[11px] font-semibold uppercase tracking-wide">
-                Last updated
-              </span>
-            </div>
-            <p className="mt-3 text-sm font-semibold leading-snug text-slate-900">
-              {fmtLong(detail.updated_at)}
-            </p>
-            <p className="mt-1 text-xs text-slate-500">Schema: team record</p>
-          </div>
-        </div>
-
-        <div className="mt-6 w-full overflow-hidden rounded-[22px] border border-slate-200/90 bg-gradient-to-b from-white via-white to-slate-50/40 shadow-[0_12px_40px_-12px_rgba(15,23,42,0.12)] ring-1 ring-slate-950/[0.04]">
-          <div className="relative border-b border-slate-100/90 bg-gradient-to-r from-teal-600/[0.06] via-transparent to-indigo-600/[0.05] px-5 py-5 sm:px-6">
-            <div className="pointer-events-none absolute inset-y-0 right-0 w-40 bg-gradient-to-l from-teal-400/10 to-transparent blur-2xl" />
-            <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <h2 className="text-base font-semibold tracking-tight text-slate-900">
-                  Roster
-                </h2>
-                <p className="mt-1 text-xs text-slate-500">
-                  Everyone on this team — cards stay easy to scan on any screen width.
-                </p>
-              </div>
-              <div className="relative w-full lg:max-w-md">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="search"
-                  placeholder="Search by name or email…"
-                  value={memberTableSearch}
-                  onChange={(e) => setMemberTableSearch(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200/90 bg-white py-2.5 pl-10 pr-4 text-sm shadow-sm outline-none ring-slate-950/[0.03] transition focus:border-teal-500/45 focus:ring-2 focus:ring-teal-500/15"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="p-5 sm:p-6">
-            {filteredTableMembers.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 py-16 text-center">
-                <Users className="mx-auto h-10 w-10 text-slate-300" aria-hidden />
-                <p className="mt-3 text-sm font-medium text-slate-600">No members match your search.</p>
-                <p className="mt-1 text-xs text-slate-400">Try another keyword or clear the filter.</p>
-              </div>
-            ) : (
-              <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-                {filteredTableMembers.map((m) => {
-                  const isAdmin = Number(m.user_id) === Number(detail.admin_id);
-                  const hideTerminate =
-                    sessionUserId != null && Number(sessionUserId) === Number(m.user_id);
-                  return (
-                    <article
-                      key={m.team_member_id}
-                      className={`group relative flex flex-col overflow-hidden rounded-2xl border bg-white p-5 shadow-md shadow-slate-200/50 ring-1 ring-slate-950/[0.04] transition duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-slate-900/10 ${
-                        isAdmin
-                          ? "border-amber-200/70 hover:border-amber-300/80"
-                          : "border-slate-200/90 hover:border-teal-200/70"
-                      }`}
-                    >
-                      <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-gradient-to-br from-teal-400/15 to-transparent opacity-0 transition group-hover:opacity-100" />
-                      <div className="relative flex gap-4">
-                        <div
-                          className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-lg font-bold text-white shadow-inner ${
-                            isAdmin
-                              ? "bg-gradient-to-br from-amber-500 to-amber-700 shadow-amber-900/25"
-                              : "bg-gradient-to-br from-teal-600 to-slate-800 shadow-black/20"
-                          }`}
-                          aria-hidden
-                        >
-                          {memberInitials(m.user_name)}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            {isAdmin ? (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800 ring-1 ring-amber-200/80">
-                                <Crown className="h-3 w-3" aria-hidden />
-                                Admin
-                              </span>
-                            ) : null}
-                            <h3 className="truncate text-[15px] font-semibold text-slate-900">
-                              {m.user_name}
-                            </h3>
-                          </div>
-                          <p className="mt-2 flex items-start gap-1.5 text-xs text-slate-600">
-                            <Mail className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
-                            <span className="break-all">{m.user_email}</span>
-                          </p>
-                          {m.user_phone ? (
-                            <p className="mt-1 pl-[22px] text-xs text-slate-400">{m.user_phone}</p>
-                          ) : null}
-                        </div>
-                      </div>
-
-                      <dl className="relative mt-5 grid gap-2 rounded-xl bg-slate-50/90 px-3.5 py-3 text-xs ring-1 ring-slate-100">
-                        <div className="flex items-start justify-between gap-3">
-                          <dt className="shrink-0 text-slate-500">Joined</dt>
-                          <dd className="text-right font-medium text-slate-800">{fmtLong(m.joined_date)}</dd>
-                        </div>
-                        <div className="flex items-start justify-between gap-3 border-t border-slate-200/70 pt-2">
-                          <dt className="shrink-0 text-slate-500">Added by</dt>
-                          <dd className="max-w-[65%] truncate text-right font-medium text-slate-800">
-                            {m.added_by_name ?? "—"}
-                          </dd>
-                        </div>
-                      </dl>
-
-                      <div className="relative mt-4 flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-4">
-                        {hideTerminate ? (
-                          <span className="text-[11px] text-slate-400">Your account</span>
-                        ) : memberHasExitProcess(m) ? (
-                          <MemberExitStatusBadge
-                            status={String(m.exit_process_application_status)}
-                          />
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (isAdmin) {
-                                setChangeAdminBeforeTerminateOpen(true);
-                                return;
-                              }
-                              setTerminateMember(m);
-                              setTerminateReason("");
-                              setTerminateExitDate("");
-                              setTerminateLastWorkingDay("");
-                              setTerminateStatus("pending");
-                              setTerminateInternalNote("");
-                            }}
-                            className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200/90 bg-gradient-to-b from-white to-rose-50 px-3.5 py-2 text-[11px] font-semibold uppercase tracking-wide text-rose-700 shadow-sm shadow-rose-900/[0.06] ring-rose-900/[0.04] transition hover:border-rose-300 hover:from-rose-50 hover:to-rose-100/90 hover:text-rose-900"
-                          >
-                            <ShieldAlert className="h-3.5 w-3.5" aria-hidden />
-                            Terminate
-                          </button>
-                        )}
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="mt-6 w-full overflow-hidden rounded-[22px] border border-slate-200/90 bg-gradient-to-b from-white via-white to-slate-50/40 shadow-[0_12px_40px_-12px_rgba(15,23,42,0.12)] ring-1 ring-slate-950/[0.04]">
-          <div className="relative border-b border-slate-100/90 bg-gradient-to-r from-slate-800/[0.04] via-transparent to-rose-600/[0.05] px-5 py-5 sm:px-6">
-            <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white shadow-md shadow-slate-900/20">
-                  <ClipboardList className="h-5 w-5" aria-hidden />
-                </div>
-                <div>
-                  <h2 className="text-base font-semibold tracking-tight text-slate-900">
-                    Exit &amp; offboarding
-                  </h2>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Exit processes filed for members of this team (
-                    <span className="font-medium text-slate-600">{title}</span>).
-                  </p>
-                </div>
-              </div>
-              {exitTotalRecords != null && exitTotalRecords > 0 ? (
-                <p className="text-xs font-medium tabular-nums text-slate-500 sm:text-right">
-                  {exitTotalRecords} record
-                  {exitTotalRecords !== 1 ? "s" : ""}
-                  {exitTotalRecords > EXIT_LIST_LIMIT
-                    ? ` — showing newest ${EXIT_LIST_LIMIT}`
-                    : ""}
-                </p>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="p-5 sm:p-6">
-            {exitListError ? (
-              <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
-                {exitListError}
-              </div>
-            ) : exitProcesses.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 py-14 text-center">
-                <ClipboardList className="mx-auto h-9 w-9 text-slate-300" aria-hidden />
-                <p className="mt-3 text-sm font-medium text-slate-600">
-                  No exit processes for this team yet.
-                </p>
-                <p className="mt-1 text-xs text-slate-400">
-                  Terminations or resignations linked to this team appear here once created.
-                </p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto rounded-xl border border-slate-100 ring-1 ring-slate-950/[0.03]">
-                <table className="w-full min-w-[860px] border-collapse text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-100 bg-slate-50/90">
-                      <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                        Employee
-                      </th>
-                      <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                        Type
-                      </th>
-                      <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                        Status
-                      </th>
-                      <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                        Dates
-                      </th>
-                      <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                        Opened
-                      </th>
-                      <th className="whitespace-nowrap px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {exitProcesses.map((row) => (
-                      <tr
-                        key={row.id}
-                        className="border-b border-slate-100 bg-white transition hover:bg-slate-50/80"
-                      >
-                        <td className="max-w-[200px] px-4 py-3">
-                          <p className="truncate font-semibold text-slate-900">
-                            {row.employee_name ?? `Employee #${row.employee_id}`}
-                          </p>
-                          <p className="truncate text-xs text-slate-500">{row.employee_email}</p>
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3">
-                          <span className="capitalize text-slate-700">{row.action_type}</span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span
-                            className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide ring-1 ${exitStatusPillClass(
-                              row.application_status,
-                            )}`}
-                          >
-                            {String(row.application_status).replace(/_/g, " ")}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-xs text-slate-600">
-                          <div className="space-y-0.5">
-                            <div>
-                              <span className="text-slate-400">Last day: </span>
-                              {row.last_working_day
-                                ? fmtLong(row.last_working_day)
-                                : "—"}
-                            </div>
-                            <div>
-                              <span className="text-slate-400">Exit: </span>
-                              {row.exit_date ? fmtLong(row.exit_date) : "—"}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-600">
-                          {fmtLong(row.created_at)}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <Link
-                            href={`/dashboard/${orgId}/organization-employees/teams/0/exit/0?team_id=${encodeURIComponent(teamId)}&exit_process_id=${encodeURIComponent(String(row.id))}`}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-teal-200 bg-teal-50 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-teal-800 transition hover:border-teal-300 hover:bg-teal-100/80"
-                          >
-                            <Eye className="h-3.5 w-3.5" aria-hidden />
-                            View full info
-                          </Link>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-      </div>
+      <TeamDetailDesktopLayout
+        orgId={orgId}
+        teamId={teamId}
+        title={title}
+        detail={detail}
+        loading={loading}
+        banner={banner}
+        memberTableSearch={memberTableSearch}
+        onMemberSearchChange={setMemberTableSearch}
+        filteredMembers={filteredTableMembers}
+        exitProcesses={exitProcesses}
+        exitListError={exitListError}
+        exitTotalRecords={exitTotalRecords}
+        exitListLimit={EXIT_LIST_LIMIT}
+        attendancePanelMember={attendancePanelMember}
+        onOpenAttendance={openAttendancePanel}
+        onCloseAttendance={closeAttendancePanel}
+        onBack={() => router.push(backHref)}
+        onRefresh={() => void loadAll()}
+        onAddMembers={() => setModal("add")}
+        onChangeAdmin={() => setModal("admin")}
+        onUpdateInfo={() => {
+          setUpdateName(detail.team_name);
+          setUpdateInfo(detail.team_info ?? "");
+          setModal("update");
+        }}
+        onRemoveMembers={() => setModal("remove")}
+        fmtLong={fmtLong}
+        memberInitials={memberInitials}
+        memberHasExitProcess={memberHasExitProcess}
+        MemberExitStatusBadge={MemberExitStatusBadge}
+        exitStatusPillClass={exitStatusPillClass}
+        zohoCardCls={zohoCardCls}
+        zohoDesktopPrimaryBtnCls={zohoDesktopPrimaryBtnCls}
+        zohoDesktopSecondaryBtnCls={zohoDesktopSecondaryBtnCls}
+        zohoDesktopDangerBtnCls={zohoDesktopDangerBtnCls}
+        searchFieldCls={searchFieldCls}
+        mobileLabelCls={mobileLabelCls}
+        mobileCaptionCls={mobileCaptionCls}
+      />
 
       {terminateMember ? (
         <div
