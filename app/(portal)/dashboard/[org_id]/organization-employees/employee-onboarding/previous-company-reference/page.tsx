@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -141,6 +141,21 @@ function validateRow(row: CompanyDraftRow, index: number): string | null {
 }
 
 export default function PreviousCompanyReferencePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="mx-auto flex min-h-[40vh] max-w-3xl flex-col items-center justify-center gap-3 px-3 py-6 text-[#6B7280] sm:px-4 lg:px-6">
+          <Loader2 className="h-8 w-8 animate-spin text-[#008CD3]" aria-hidden />
+          <p className="text-sm">Loading previous company reference…</p>
+        </div>
+      }
+    >
+      <PreviousCompanyReferencePageContent />
+    </Suspense>
+  );
+}
+
+function PreviousCompanyReferencePageContent() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();

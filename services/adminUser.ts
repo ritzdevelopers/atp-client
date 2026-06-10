@@ -615,7 +615,18 @@ export type UserAddressRow = EmployeeAddressEntryPayload & {
   [key: string]: unknown;
 };
 
-export type UpdateUserAddressPayload = Partial<EmployeeAddressEntryPayload> & {
+export type EmployeeAddressUpdateEntryPayload = EmployeeAddressEntryPayload & {
+  address_id: number | string;
+};
+
+export type UpdateUserAddressPayload = {
+  employee_id: number | string;
+  org_id: number | string;
+  address_info: [EmployeeAddressUpdateEntryPayload, EmployeeAddressUpdateEntryPayload];
+};
+
+/** @deprecated Legacy flat shape — use employee_id + address_info instead. */
+export type LegacyUpdateUserAddressPayload = Partial<EmployeeAddressEntryPayload> & {
   address_id: number | string;
   user_id: number | string;
   org_id: number | string;
@@ -702,7 +713,11 @@ export async function updateUserAddress(
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      org_id: payload.org_id,
+      employee_id: payload.employee_id,
+      address_info: payload.address_info,
+    }),
   });
 
   const result = await res.json();

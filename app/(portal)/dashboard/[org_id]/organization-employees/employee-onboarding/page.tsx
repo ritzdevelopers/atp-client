@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import {
@@ -503,6 +503,21 @@ function AddressFormFields({
 }
 
 export default function EmployeOnboardingPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="mx-auto flex min-h-[40vh] max-w-4xl flex-col items-center justify-center gap-3 px-3 py-6 text-[#6B7280] sm:px-4 lg:px-6">
+          <Loader2 className="h-8 w-8 animate-spin text-[#008CD3]" aria-hidden />
+          <p className="text-sm">Loading employee onboarding…</p>
+        </div>
+      }
+    >
+      <EmployeOnboardingPageContent />
+    </Suspense>
+  );
+}
+
+function EmployeOnboardingPageContent() {
   const params = useParams();
   const searchParams = useSearchParams();
   const orgIdParam = params?.org_id;

@@ -42,6 +42,8 @@ import {
   updateUserRoleAssignment,
   uploadEmployeeDocuments,
   type EmployeeOnboardingDocumentField,
+  type EmployeeAddressEntryPayload,
+  type EmployeeAddressUpdateEntryPayload,
   type OrgUserRow,
   type OrgRoleRow,
   type UserAddressRow,
@@ -668,6 +670,39 @@ function validateAddressDraft(draft: AddressDraft): string | null {
   return null;
 }
 
+function addressDraftToEntry(
+  draft: AddressDraft,
+  address_type: "permanent" | "current",
+): EmployeeAddressEntryPayload {
+  return {
+    address_type,
+    country: draft.country.trim(),
+    state: draft.state.trim(),
+    district: draft.district.trim(),
+    city: draft.city.trim(),
+    is_from_village: draft.is_from_village,
+    village_name: draft.is_from_village ? draft.village_name.trim() : null,
+    street: draft.street.trim(),
+    house_number: draft.house_number.trim(),
+    zip_code: draft.zip_code.trim(),
+  };
+}
+
+function addressDraftToUpdateEntry(
+  draft: AddressDraft,
+  address: UserAddressRow,
+  addressId: number | string,
+): EmployeeAddressUpdateEntryPayload {
+  const address_type =
+    address.address_type === "permanent" || address.address_type === "current"
+      ? address.address_type
+      : "permanent";
+  return {
+    address_id: addressId,
+    ...addressDraftToEntry(draft, address_type),
+  };
+}
+
 export default function ManageEmployeesPage() {
   const params = useParams();
   const ctx = useManagementDashboardContext();
@@ -733,6 +768,7 @@ export default function ManageEmployeesPage() {
   const [addressSavingKey, setAddressSavingKey] = useState<string | null>(null);
   const [addressError, setAddressError] = useState<string | null>(null);
   const [addressSuccess, setAddressSuccess] = useState<string | null>(null);
+  const [currentSameAsPermanent, setCurrentSameAsPermanent] = useState(true);
 
   const [documentsRow, setDocumentsRow] = useState<OrgUserRow | null>(null);
   const [docFiles, setDocFiles] = useState<Partial<Record<EmployeeOnboardingDocumentField, File>>>({});
@@ -997,7 +1033,11 @@ export default function ManageEmployeesPage() {
     setAddressRow(row);
     setAddressMode("add");
     setAddressRows([]);
-    setAddressDrafts({ new: { ...emptyAddressDraft } });
+    setAddressDrafts({
+      permanent: { ...emptyAddressDraft },
+      current: { ...emptyAddressDraft },
+    });
+    setCurrentSameAsPermanent(true);
     setAddressError(null);
     setAddressSuccess(null);
     setAddressLoading(false);
@@ -1047,10 +1087,19 @@ export default function ManageEmployeesPage() {
       setAddressError("Invalid user or organization.");
       return;
     }
-    const draft = addressDrafts.new ?? emptyAddressDraft;
-    const validation = validateAddressDraft(draft);
-    if (validation) {
-      setAddressError(validation);
+    const permanentDraft = addressDrafts.permanent ?? emptyAddressDraft;
+    const currentDraft = currentSameAsPermanent
+      ? permanentDraft
+      : (addressDrafts.current ?? emptyAddressDraft);
+
+    const permanentValidation = validateAddressDraft(permanentDraft);
+    if (permanentValidation) {
+      setAddressError(permanentValidation);
+      return;
+    }
+    const currentValidation = validateAddressDraft(currentDraft);
+    if (currentValidation) {
+      setAddressError(currentValidation);
       return;
     }
     const token = localStorage.getItem("token");
@@ -1064,20 +1113,19 @@ export default function ManageEmployeesPage() {
     setAddressSuccess(null);
     try {
       await addUserAddress(token, {
-        user_id: addressRow.id,
+        employee_id: addressRow.id,
         org_id: organizationIdNum,
-        country: draft.country.trim(),
-        state: draft.state.trim(),
-        district: draft.district.trim(),
-        city: draft.city.trim(),
-        is_from_village: draft.is_from_village,
-        village_name: draft.is_from_village ? draft.village_name.trim() : null,
-        street: draft.street.trim(),
-        house_number: draft.house_number.trim(),
-        zip_code: draft.zip_code.trim(),
+        address_info: [
+          addressDraftToEntry(permanentDraft, "permanent"),
+          addressDraftToEntry(currentDraft, "current"),
+        ],
       });
-      setAddressDrafts({ new: { ...emptyAddressDraft } });
-      setAddressSuccess("Address added successfully.");
+      setAddressDrafts({
+        permanent: { ...emptyAddressDraft },
+        current: { ...emptyAddressDraft },
+      });
+      setCurrentSameAsPermanent(true);
+      setAddressSuccess("Employee addresses added successfully.");
     } catch (err) {
       setAddressError(err instanceof Error ? err.message : "Could not add address.");
     } finally {
@@ -1090,43 +1138,45 @@ export default function ManageEmployeesPage() {
       setAddressError("Invalid user or organization.");
       return;
     }
-    const addressId = address.id ?? address.address_id;
-    if (addressId == null) {
-      setAddressError("Address id is missing.");
+    if (addressRows.length !== 2) {
+      setAddressError("Both permanent and current addresses are required before updating.");
       return;
     }
-    const key = String(addressId);
-    const draft = addressDrafts[key] ?? makeAddressDraft(address);
-    const validation = validateAddressDraft(draft);
-    if (validation) {
-      setAddressError(validation);
-      return;
+
+    const addressInfo: EmployeeAddressUpdateEntryPayload[] = [];
+    for (const row of addressRows) {
+      const rowAddressId = row.id ?? row.address_id;
+      if (rowAddressId == null) {
+        setAddressError("Address id is missing.");
+        return;
+      }
+      const key = String(rowAddressId);
+      const draft = addressDrafts[key] ?? makeAddressDraft(row);
+      const validation = validateAddressDraft(draft);
+      if (validation) {
+        setAddressError(validation);
+        return;
+      }
+      addressInfo.push(addressDraftToUpdateEntry(draft, row, rowAddressId));
     }
+
     const token = localStorage.getItem("token");
     if (!token) {
       setAddressError("Not signed in.");
       return;
     }
 
-    setAddressSavingKey(key);
+    const triggerKey = String(address.id ?? address.address_id ?? "update");
+    setAddressSavingKey(triggerKey);
     setAddressError(null);
     setAddressSuccess(null);
     try {
       await updateUserAddress(token, {
-        address_id: addressId,
-        user_id: addressRow.id,
+        employee_id: addressRow.id,
         org_id: organizationIdNum,
-        country: draft.country.trim(),
-        state: draft.state.trim(),
-        district: draft.district.trim(),
-        city: draft.city.trim(),
-        is_from_village: draft.is_from_village,
-        village_name: draft.is_from_village ? draft.village_name.trim() : null,
-        street: draft.street.trim(),
-        house_number: draft.house_number.trim(),
-        zip_code: draft.zip_code.trim(),
+        address_info: addressInfo as [EmployeeAddressUpdateEntryPayload, EmployeeAddressUpdateEntryPayload],
       });
-      setAddressSuccess("Address updated successfully.");
+      setAddressSuccess("Addresses updated successfully.");
       const addresses = await getUserAddresses(token, organizationIdNum, addressRow.id);
       const drafts: Record<string, AddressDraft> = {};
       for (const item of addresses) {
@@ -2388,7 +2438,7 @@ export default function ManageEmployeesPage() {
                 <p className="mt-0.5 text-[13px] text-[#6B7280]">
                   <span className="font-medium text-[#1F2937]">{addressRow.user_name}</span>
                   {addressMode === "add"
-                    ? " can have multiple saved addresses."
+                    ? " — permanent and current addresses are required."
                     : " addresses are shown below in separate forms."}
                 </p>
               </div>
@@ -2416,7 +2466,35 @@ export default function ManageEmployeesPage() {
 
             {addressMode === "add" ? (
               <form onSubmit={submitAddAddress} className="space-y-4">
-                {renderAddressFields("new", addressDrafts.new ?? emptyAddressDraft)}
+                <div className="space-y-3 rounded-xl border border-[#E4E7EC] bg-[#FAFBFC] p-3">
+                  <p className="text-[12px] font-semibold uppercase tracking-wide text-[#008CD3]">
+                    Permanent address
+                  </p>
+                  {renderAddressFields(
+                    "permanent",
+                    addressDrafts.permanent ?? emptyAddressDraft,
+                  )}
+                </div>
+                <label className="flex items-center gap-2 text-[13px] text-[#374151]">
+                  <input
+                    type="checkbox"
+                    checked={currentSameAsPermanent}
+                    onChange={(e) => setCurrentSameAsPermanent(e.target.checked)}
+                    className="rounded border-[#E4E7EC]"
+                  />
+                  Current address is same as permanent address
+                </label>
+                {!currentSameAsPermanent ? (
+                  <div className="space-y-3 rounded-xl border border-[#E4E7EC] bg-[#FAFBFC] p-3">
+                    <p className="text-[12px] font-semibold uppercase tracking-wide text-[#0F9D58]">
+                      Current address
+                    </p>
+                    {renderAddressFields(
+                      "current",
+                      addressDrafts.current ?? emptyAddressDraft,
+                    )}
+                  </div>
+                ) : null}
                 <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
                   <button
                     type="button"
