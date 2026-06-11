@@ -439,6 +439,39 @@ export type AssignUserShiftPayload = {
   shift_id: number | string;
 };
 
+export async function getUserShifts(
+  token: string,
+  orgId: number | string,
+  employeeId: number | string,
+): Promise<CompanyShiftRow[]> {
+  const q = new URLSearchParams();
+  q.set("org_id", String(orgId));
+  q.set("employee_id", String(employeeId));
+  const res = await fetch(
+    `${API_URL}/api/organization-settings/get-user-shifts?${q.toString()}`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+
+  const result = (await res.json()) as {
+    message?: string;
+    success?: boolean;
+    data?: CompanyShiftRow[];
+  };
+
+  if (!res.ok) {
+    const error: ApiError = new Error(result.message || "Could not load employee shifts");
+    error.status = res.status;
+    throw error;
+  }
+
+  return Array.isArray(result.data) ? result.data : [];
+}
+
 export async function assignUserToShift(
   token: string,
   payload: AssignUserShiftPayload,

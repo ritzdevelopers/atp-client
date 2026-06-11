@@ -189,6 +189,89 @@ export async function uploadEmployeeDocuments(
   return result;
 }
 
+export async function updateEmployeeDocument(
+  token: string,
+  payload: {
+    org_id: number | string;
+    employee_user_id: number | string;
+    document_id: number | string;
+    file: File;
+  },
+): Promise<{ success?: boolean; message?: string; document?: unknown }> {
+  const fd = new FormData();
+  fd.append("employee_user_id", String(payload.employee_user_id));
+  fd.append("org_id", String(payload.org_id));
+  fd.append("document_id", String(payload.document_id));
+  fd.append("file", payload.file);
+
+  const res = await fetch(`${API_URL}/api/employee-documents/update-document`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: fd,
+  });
+
+  const result = (await res.json()) as {
+    success?: boolean;
+    message?: string;
+    document?: unknown;
+  };
+
+  if (!res.ok) {
+    const error: ApiError = new Error(result.message || "Could not update document");
+    error.status = res.status;
+    throw error;
+  }
+
+  return result;
+}
+
+export async function deleteEmployeeDocuments(
+  token: string,
+  payload: {
+    org_id: number | string;
+    employee_user_id: number | string;
+    document_ids?: (number | string)[];
+    delete_all?: boolean;
+  },
+): Promise<{
+  success?: boolean;
+  message?: string;
+  deleted_count?: number;
+  deleted_ids?: number[];
+}> {
+  const res = await fetch(`${API_URL}/api/employee-documents/delete-documents`, {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      org_id: payload.org_id,
+      employee_user_id: payload.employee_user_id,
+      ...(payload.delete_all
+        ? { delete_all: true }
+        : { document_ids: payload.document_ids ?? [] }),
+    }),
+  });
+
+  const result = (await res.json()) as {
+    success?: boolean;
+    message?: string;
+    deleted_count?: number;
+    deleted_ids?: number[];
+  };
+
+  if (!res.ok) {
+    const error: ApiError = new Error(result.message || "Could not delete documents");
+    error.status = res.status;
+    throw error;
+  }
+
+  return result;
+}
+
 export async function addUserExternalInformation(
   token: string,
   payload: {
@@ -335,6 +418,270 @@ export async function createUserBackgroundVerification(
   if (!res.ok) {
     const error: ApiError = new Error(
       result.message || "Could not save previous company reference",
+    );
+    error.status = res.status;
+    throw error;
+  }
+
+  return result;
+}
+
+export type BackgroundVerificationStatus =
+  | "pending"
+  | "in_progress"
+  | "verified"
+  | "failed"
+  | "unable_to_contact";
+
+export type BackgroundVerificationReferenceItem = {
+  id: number;
+  previous_company_name: string;
+  company_email: string | null;
+  employee_code: string | null;
+  designation: string | null;
+  employment_start_date: string | null;
+  employment_end_date: string | null;
+  person_name: string;
+  person_role: BackgroundVerificationPersonRole;
+  person_contact_number1: string;
+  person_contact_number2: string | null;
+  person_contact_email: string;
+  verification_status: string;
+  verification_notes: string | null;
+  verification_by_id: number | null;
+  verification_by_name: string | null;
+  verified_at: string | null;
+  verificator_name: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type BackgroundVerificationEmployeeGroup = {
+  id: number;
+  employee_id: number;
+  org_id: number;
+  created_at: string | null;
+  updated_at: string | null;
+  employee_name: string | null;
+  member_since: string | null;
+  total_references_count: number;
+  references: BackgroundVerificationReferenceItem[];
+};
+
+/** @deprecated Flat row shape; list API now returns {@link BackgroundVerificationEmployeeGroup}. */
+export type BackgroundVerificationListRow = PreviousCompanyReferenceRow & {
+  employee_name: string | null;
+  verificator_name: string | null;
+  member_since: string | null;
+};
+
+export type BackgroundVerificationListFilters = {
+  status?: BackgroundVerificationStatus | "";
+  employee_name?: string;
+  employee_id?: number | string;
+  previous_company_name?: string;
+  person_role?: BackgroundVerificationPersonRole | "";
+  joining_date?: string;
+  is_ascending?: "ASC" | "DESC";
+  limit?: number;
+};
+
+export type BackgroundVerificationDetailRow = PreviousCompanyReferenceRow & {
+  employee_name: string | null;
+  employee_email: string | null;
+  employee_phone: string | null;
+  employee_joining_date: string | null;
+  employee_image: string | null;
+  verificator_name: string | null;
+  verificator_email: string | null;
+  verificator_phone: string | null;
+  verificator_joining_date: string | null;
+  verificator_image: string | null;
+  verificator_id: number | null;
+  member_since: string | null;
+};
+
+export async function getAllUserBackgroundVerifications(
+  token: string,
+  orgId: number | string,
+  filters: BackgroundVerificationListFilters = {},
+): Promise<{
+  success?: boolean;
+  message?: string;
+  data?: BackgroundVerificationEmployeeGroup[];
+}> {
+  const q = new URLSearchParams();
+  q.set("org_id", String(orgId));
+  if (filters.status) q.set("status", filters.status);
+  if (filters.employee_name?.trim()) q.set("employee_name", filters.employee_name.trim());
+  if (filters.employee_id != null && String(filters.employee_id).trim()) {
+    q.set("employee_id", String(filters.employee_id));
+  }
+  if (filters.previous_company_name?.trim()) {
+    q.set("previous_company_name", filters.previous_company_name.trim());
+  }
+  if (filters.person_role) q.set("person_role", filters.person_role);
+  if (filters.joining_date) q.set("joining_date", filters.joining_date);
+  if (filters.is_ascending) q.set("is_ascending", filters.is_ascending);
+  if (filters.limit) q.set("limit", String(filters.limit));
+
+  const qs = q.toString();
+  const res = await fetch(
+    `${API_URL}/api/user/get-all-user-background-verifications${qs ? `?${qs}` : ""}`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+
+  const result = (await res.json()) as {
+    success?: boolean;
+    message?: string;
+    data?: BackgroundVerificationEmployeeGroup[];
+  };
+
+  if (!res.ok) {
+    const error: ApiError = new Error(
+      result.message || "Could not load background verifications",
+    );
+    error.status = res.status;
+    throw error;
+  }
+
+  return result;
+}
+
+export async function getSingleUserBackgroundVerification(
+  token: string,
+  orgId: number | string,
+  employeeId: number | string,
+  referenceId: number | string,
+): Promise<{
+  success?: boolean;
+  message?: string;
+  data?: BackgroundVerificationDetailRow;
+}> {
+  const q = new URLSearchParams();
+  q.set("org_id", String(orgId));
+
+  const res = await fetch(
+    `${API_URL}/api/user/get-user-background-verification/${encodeURIComponent(String(employeeId))}/${encodeURIComponent(String(referenceId))}?${q.toString()}`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+
+  const result = (await res.json()) as {
+    success?: boolean;
+    message?: string;
+    data?: BackgroundVerificationDetailRow;
+  };
+
+  if (!res.ok) {
+    const error: ApiError = new Error(
+      result.message || "Could not load background verification detail",
+    );
+    error.status = res.status;
+    throw error;
+  }
+
+  return result;
+}
+
+export async function updateUserBackgroundVerification(
+  token: string,
+  payload: {
+    org_id: number | string;
+    employee_id: number | string;
+    reference_id: number | string;
+    background_verification_info: BackgroundVerificationInfoPayload;
+  },
+): Promise<{
+  success?: boolean;
+  message?: string;
+  data?: {
+    employee_id?: number;
+    org_id?: number;
+    reference?: PreviousCompanyReferenceRow;
+  };
+}> {
+  const res = await fetch(`${API_URL}/api/user/update-user-background-verification`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      org_id: payload.org_id,
+      employee_id: payload.employee_id,
+      reference_id: payload.reference_id,
+      background_verification_info: payload.background_verification_info,
+    }),
+  });
+
+  const result = (await res.json()) as {
+    success?: boolean;
+    message?: string;
+    data?: {
+      employee_id?: number;
+      org_id?: number;
+      reference?: PreviousCompanyReferenceRow;
+    };
+  };
+
+  if (!res.ok) {
+    const error: ApiError = new Error(
+      result.message || "Could not update previous company reference",
+    );
+    error.status = res.status;
+    throw error;
+  }
+
+  return result;
+}
+
+export async function updateEmployeeBackgroundVerificationStatus(
+  token: string,
+  payload: {
+    org_id: number | string;
+    employee_id: number | string;
+    verification_info: {
+      verification_id: number | string;
+      verification_status: BackgroundVerificationStatus;
+      verification_notes?: string | null;
+    };
+  },
+): Promise<{
+  success?: boolean;
+  message?: string;
+  data?: PreviousCompanyReferenceRow;
+}> {
+  const res = await fetch(
+    `${API_URL}/api/user/update-employee-background-verification-status`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    },
+  );
+
+  const result = (await res.json()) as {
+    success?: boolean;
+    message?: string;
+    data?: PreviousCompanyReferenceRow;
+  };
+
+  if (!res.ok) {
+    const error: ApiError = new Error(
+      result.message || "Could not update verification status",
     );
     error.status = res.status;
     throw error;
@@ -564,6 +911,169 @@ export async function uploadEmployeeAssetsBatch(
 
   if (!res.ok) {
     const error: ApiError = new Error(result.message || "Could not upload employee assets");
+    error.status = res.status;
+    throw error;
+  }
+
+  return result;
+}
+
+export type EmployeeAssetRow = {
+  id?: number | string;
+  employee_id?: number | string;
+  org_id?: number | string;
+  asset_given_by_id?: number | string;
+  asset_name?: string | null;
+  asset_summary?: string | null;
+  asset_type?: string | null;
+  asset_image_url?: string | null;
+  asset_status?: string | null;
+  is_returned?: boolean | number | null;
+  returned_to_id?: number | string | null;
+  handover_date_time?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  [key: string]: unknown;
+};
+
+export async function getSingleEmployeeAsset(
+  token: string,
+  orgId: number | string,
+  assetId: number | string,
+): Promise<{ success?: boolean; message?: string; data?: EmployeeAssetRow }> {
+  const q = new URLSearchParams({ org_id: String(orgId) });
+  const res = await fetch(
+    `${API_URL}/api/employee-assets/detail/${encodeURIComponent(String(assetId))}?${q.toString()}`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+
+  const result = (await res.json()) as {
+    success?: boolean;
+    message?: string;
+    data?: EmployeeAssetRow;
+  };
+
+  if (!res.ok) {
+    const error: ApiError = new Error(result.message || "Could not load asset");
+    error.status = res.status;
+    throw error;
+  }
+
+  return result;
+}
+
+export type UpdateEmployeeAssetItemPayload = {
+  id: number | string;
+  asset_name?: string;
+  asset_type?: string;
+  asset_summary?: string | null;
+  handover_date_time?: string | null;
+  image_field?: string;
+  file?: File | null;
+};
+
+export async function updateEmployeeAssetsBatch(
+  token: string,
+  payload: {
+    org_id: number | string;
+    items: UpdateEmployeeAssetItemPayload[];
+  },
+): Promise<{ success?: boolean; message?: string; data?: unknown[] }> {
+  if (payload.items.length === 0) {
+    const error: ApiError = new Error("No assets to update");
+    error.status = 400;
+    throw error;
+  }
+
+  const fd = new FormData();
+  fd.append("org_id", String(payload.org_id));
+
+  const meta = payload.items.map((item, index) => {
+    const image_field =
+      item.image_field && item.image_field.trim() !== ""
+        ? item.image_field.trim()
+        : `asset_image_${index}`;
+    const row: Record<string, unknown> = {
+      id: item.id,
+      image_field,
+    };
+    if (item.asset_name !== undefined) row.asset_name = item.asset_name;
+    if (item.asset_type !== undefined) row.asset_type = item.asset_type;
+    if (item.asset_summary !== undefined) row.asset_summary = item.asset_summary;
+    if (item.handover_date_time !== undefined) row.handover_date_time = item.handover_date_time;
+    return row;
+  });
+
+  fd.append("updates", JSON.stringify(meta));
+
+  payload.items.forEach((item, index) => {
+    const image_field =
+      String(meta[index]?.image_field ?? `asset_image_${index}`);
+    if (item.file) {
+      fd.append(image_field, item.file);
+    }
+  });
+
+  const res = await fetch(`${API_URL}/api/employee-assets/update`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: fd,
+  });
+
+  const result = (await res.json()) as {
+    success?: boolean;
+    message?: string;
+    data?: unknown[];
+  };
+
+  if (!res.ok) {
+    const error: ApiError = new Error(result.message || "Could not update assets");
+    error.status = res.status;
+    throw error;
+  }
+
+  return result;
+}
+
+export type ReturnEmployeeAssetEntry = {
+  asset_id: number | string;
+  returned_to_id: number | string;
+};
+
+export async function returnEmployeeAssets(
+  token: string,
+  payload: {
+    org_id: number | string;
+    returns: ReturnEmployeeAssetEntry[];
+  },
+): Promise<{ success?: boolean; message?: string; data?: unknown[] }> {
+  const res = await fetch(`${API_URL}/api/employee-assets/return`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      org_id: payload.org_id,
+      returns: payload.returns,
+    }),
+  });
+
+  const result = (await res.json()) as {
+    success?: boolean;
+    message?: string;
+    data?: unknown[];
+  };
+
+  if (!res.ok) {
+    const error: ApiError = new Error(result.message || "Could not update asset status");
     error.status = res.status;
     throw error;
   }
