@@ -983,8 +983,8 @@ function EmployeeInsightsPanel({
   };
 
   return (
-    <div className={`${GLASS_CARD} flex h-full flex-col`}>
-      <div className="shrink-0 px-5 pt-5">
+    <div className={`${GLASS_CARD} flex h-full max-h-[42rem] flex-col`}>
+      <div className="shrink-0 px-5 pt-5 ">
         <div className="flex items-center gap-2">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-[#8B5CF6]/15 to-[#A78BFA]/5 text-[#8B5CF6]">
             <Sparkles className="h-4.5 w-4.5" aria-hidden />
@@ -2043,7 +2043,7 @@ function DocumentEmptyPlaceholderCard({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="group flex w-full flex-col items-center justify-center rounded-2xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] px-6 py-14 text-center transition-all duration-300 hover:-translate-y-0.5 hover:border-[#2563EB]/40 hover:bg-[#EFF6FF] hover:shadow-[0_10px_30px_rgba(37,99,235,0.08)]"
+      className="group flex w-full min-w-0 max-w-full flex-col items-center justify-center rounded-2xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] px-4 py-10 text-center transition-all duration-300 hover:-translate-y-0.5 hover:border-[#2563EB]/40 hover:bg-[#EFF6FF] hover:shadow-[0_10px_30px_rgba(37,99,235,0.08)] sm:px-6 sm:py-14"
     >
       <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[#F59E0B]/15 to-[#FBBF24]/5 text-[#D97706] transition group-hover:scale-105">
         <Upload className="h-7 w-7" aria-hidden />
@@ -2070,40 +2070,44 @@ function DocumentFileCard({
   onDelete?: () => void;
 }) {
   const url = doc.doc_url ? asText(doc.doc_url) : null;
+  const actionBtnCls =
+    "flex h-8 w-8 items-center justify-center rounded-lg border border-[#E2E8F0] bg-white text-[#64748B] transition sm:h-9 sm:w-9 sm:rounded-xl";
   return (
-    <div className="group flex items-center gap-3 rounded-2xl border border-[#E2E8F0] bg-white p-3.5 transition-all duration-300 hover:-translate-y-0.5 hover:border-[#BFDBFE] hover:shadow-[0_8px_24px_rgba(37,99,235,0.1)]">
-      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#EFF6FF] to-[#DBEAFE] text-[#2563EB]">
-        <FileText className="h-5 w-5" aria-hidden />
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-[14px] font-semibold text-[#0F172A]">
-          {asText(doc.document_name, "Document")}
-        </p>
-        <p className="truncate text-[12px] text-[#94A3B8]">
-          {formatLabel(doc.document_type)} · {formatDate(doc.created_at)}
-        </p>
+    <div className="group w-full min-w-0 max-w-full overflow-hidden rounded-2xl border border-[#E2E8F0] bg-white p-3 transition-all duration-300 sm:flex sm:items-center sm:gap-3 sm:p-3.5 sm:hover:-translate-y-0.5 sm:hover:border-[#BFDBFE] sm:hover:shadow-[0_8px_24px_rgba(37,99,235,0.1)]">
+      <div className="flex min-w-0 flex-1 items-start gap-2.5 sm:items-center sm:gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#EFF6FF] to-[#DBEAFE] text-[#2563EB] sm:h-11 sm:w-11">
+          <FileText className="h-4 w-4 sm:h-5 sm:w-5" aria-hidden />
+        </span>
+        <div className="min-w-0 flex-1 overflow-hidden">
+          <p className="truncate text-[13px] font-semibold text-[#0F172A] sm:text-[14px]">
+            {asText(doc.document_name, "Document")}
+          </p>
+          <p className="mt-0.5 truncate text-[11px] text-[#94A3B8] sm:text-[12px]">
+            {formatLabel(doc.document_type)} · {formatDate(doc.created_at)}
+          </p>
+        </div>
       </div>
-      <div className="flex shrink-0 items-center gap-1">
+      <div className="mt-2.5 flex min-w-0 flex-wrap items-center justify-end gap-1 border-t border-[#F1F5F9] pt-2.5 sm:mt-0 sm:shrink-0 sm:flex-nowrap sm:border-0 sm:pt-0">
         {url ? (
           <>
             <Link
               href={url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#E2E8F0] bg-white text-[#64748B] transition hover:bg-[#EFF6FF] hover:text-[#2563EB]"
+              className={`${actionBtnCls} hover:bg-[#EFF6FF] hover:text-[#2563EB]`}
               aria-label="Preview document"
             >
-              <Eye className="h-4 w-4" />
+              <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             </Link>
             <Link
               href={url}
               target="_blank"
               rel="noopener noreferrer"
               download
-              className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#E2E8F0] bg-white text-[#64748B] transition hover:bg-[#F1F5F9] hover:text-[#2563EB]"
+              className={`${actionBtnCls} hover:bg-[#F1F5F9] hover:text-[#2563EB]`}
               aria-label="Download document"
             >
-              <Download className="h-4 w-4" />
+              <Download className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             </Link>
           </>
         ) : null}
@@ -2111,20 +2115,20 @@ function DocumentFileCard({
           <button
             type="button"
             onClick={onUpdate}
-            className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#E2E8F0] bg-white text-[#64748B] transition hover:bg-[#EFF6FF] hover:text-[#2563EB]"
+            className={`${actionBtnCls} hover:bg-[#EFF6FF] hover:text-[#2563EB]`}
             aria-label="Update document"
           >
-            <Pencil className="h-4 w-4" />
+            <Pencil className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
           </button>
         ) : null}
         {onDelete ? (
           <button
             type="button"
             onClick={onDelete}
-            className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#FECACA] bg-white text-[#DC2626] transition hover:bg-[#FEF2F2]"
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#FECACA] bg-white text-[#DC2626] transition hover:bg-[#FEF2F2] sm:h-9 sm:w-9 sm:rounded-xl"
             aria-label="Delete document"
           >
-            <Trash2 className="h-4 w-4" />
+            <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
           </button>
         ) : null}
       </div>
@@ -2154,8 +2158,119 @@ function createEmptyAssetDraft(): AssetDraftRow {
   };
 }
 
-function assetFileInputCls() {
-  return "block w-full cursor-pointer rounded-xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] px-3 py-2.5 text-[13px] text-[#334155] outline-none transition file:mr-2 file:cursor-pointer file:rounded-lg file:border-0 file:bg-[#F3E8FF] file:px-2.5 file:py-1 file:text-[12px] file:font-semibold file:text-[#7C3AED] hover:border-[#8B5CF6]/40 focus:border-[#8B5CF6] focus:ring-2 focus:ring-[#8B5CF6]/15";
+function assetFormFieldCls() {
+  return "w-full rounded-xl border border-[#E2E8F0] bg-white px-3 py-2 text-[14px] text-[#0F172A] outline-none transition placeholder:text-[#94A3B8] focus:border-[#8B5CF6] focus:ring-2 focus:ring-[#8B5CF6]/12";
+}
+
+function formatAssetFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function AssetFilePicker({
+  inputId,
+  file,
+  onChange,
+  accent = "violet",
+}: {
+  inputId: string;
+  file: File | null;
+  onChange: (file: File | null) => void;
+  accent?: "violet" | "primary";
+}) {
+  const previewUrl = useMemo(() => {
+    if (!file || !file.type.startsWith("image/")) return null;
+    return URL.createObjectURL(file);
+  }, [file]);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
+  const isPdf = file?.type === "application/pdf";
+  const accentDrop =
+    accent === "violet"
+      ? "hover:border-[#8B5CF6]/45 hover:bg-[#F5F3FF] focus-within:border-[#8B5CF6] focus-within:ring-[#8B5CF6]/12"
+      : "hover:border-[#2563EB]/45 hover:bg-[#EFF6FF] focus-within:border-[#2563EB] focus-within:ring-[#2563EB]/12";
+
+  if (file) {
+    return (
+      <div className="overflow-hidden rounded-xl border border-[#E2E8F0] bg-white shadow-sm">
+        <div className="flex items-stretch gap-0">
+          <div className="flex w-[88px] shrink-0 items-center justify-center border-r border-[#F1F5F9] bg-[#F8FAFC] p-2">
+            {previewUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={previewUrl}
+                alt="Selected asset preview"
+                className="h-[72px] w-[72px] rounded-lg object-cover shadow-sm ring-1 ring-black/5"
+              />
+            ) : isPdf ? (
+              <div className="flex h-[72px] w-[72px] flex-col items-center justify-center rounded-lg bg-[#FEF2F2] text-[#DC2626] ring-1 ring-[#FECACA]">
+                <FileText className="h-7 w-7" aria-hidden />
+                <span className="mt-1 text-[9px] font-bold uppercase tracking-wide">PDF</span>
+              </div>
+            ) : (
+              <div className="flex h-[72px] w-[72px] items-center justify-center rounded-lg bg-[#F1F5F9] text-[#94A3B8]">
+                <FileText className="h-7 w-7" aria-hidden />
+              </div>
+            )}
+          </div>
+          <div className="flex min-w-0 flex-1 flex-col justify-center px-3 py-2.5">
+            <p className="truncate text-[13px] font-semibold text-[#0F172A]">{file.name}</p>
+            <p className="mt-0.5 text-[11px] text-[#94A3B8]">{formatAssetFileSize(file.size)}</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <label
+                htmlFor={inputId}
+                className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] px-2 py-1 text-[11px] font-semibold text-[#475569] transition hover:bg-white hover:text-[#7C3AED]"
+              >
+                <Upload className="h-3 w-3" aria-hidden />
+                Replace
+              </label>
+              <button
+                type="button"
+                onClick={() => onChange(null)}
+                className="inline-flex items-center gap-1 rounded-lg border border-[#FECACA] bg-[#FEF2F2] px-2 py-1 text-[11px] font-semibold text-[#DC2626] transition hover:bg-[#FEE2E2]"
+              >
+                <X className="h-3 w-3" aria-hidden />
+                Remove
+              </button>
+            </div>
+          </div>
+        </div>
+        <input
+          id={inputId}
+          type="file"
+          accept="image/png,image/jpeg,image/jpg,image/webp,application/pdf"
+          className="sr-only"
+          onChange={(e) => onChange(e.target.files?.[0] ?? null)}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <label
+      htmlFor={inputId}
+      className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] px-4 py-6 text-center transition focus-within:ring-2 ${accentDrop}`}
+    >
+      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-[#7C3AED] shadow-sm ring-1 ring-[#E2E8F0]">
+        <Upload className="h-5 w-5" aria-hidden />
+      </span>
+      <span className="mt-2.5 text-[13px] font-semibold text-[#334155]">Upload image or PDF</span>
+      <span className="mt-1 text-[11px] text-[#94A3B8]">PNG, JPG, WEBP · max 5 MB</span>
+      <input
+        id={inputId}
+        type="file"
+        accept="image/png,image/jpeg,image/jpg,image/webp,application/pdf"
+        className="sr-only"
+        onChange={(e) => onChange(e.target.files?.[0] ?? null)}
+      />
+    </label>
+  );
 }
 
 function assetRowIsEmpty(row: AssetDraftRow) {
@@ -4876,59 +4991,62 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
       <button
         type="button"
         onClick={() => openDocumentUpload(false)}
-        className="inline-flex items-center gap-1.5 rounded-xl border border-[#E2E8F0] bg-white px-3.5 py-2 text-[13px] font-semibold text-[#334155] shadow-sm transition hover:-translate-y-0.5 hover:text-[#2563EB] hover:shadow-md"
+        className="inline-flex max-w-full items-center gap-1 rounded-lg border border-[#E2E8F0] bg-white px-2.5 py-1.5 text-[12px] font-semibold text-[#334155] shadow-sm transition hover:text-[#2563EB] sm:gap-1.5 sm:rounded-xl sm:px-3.5 sm:py-2 sm:text-[13px] sm:hover:-translate-y-0.5 sm:hover:shadow-md"
       >
-        <Plus className="h-4 w-4" />
-        Add more
+        <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+        <span className="truncate">Add more</span>
       </button>
     ) : null;
 
   const documentsSection = data ? (
-    <SectionCard
-      id="section-documents"
-      title="Documents"
-      subtitle={
-        latestDocuments.length === 0
-          ? "Upload employee KYC and supporting files"
-          : `${latestDocuments.length} on file`
-      }
-      icon={<FileText className="h-5 w-5" />}
-      accent="warning"
-      action={documentsAction}
-    >
-      {documentSuccess &&
-      !documentUploadOpen &&
-      !documentUpdateTarget &&
-      !documentDeleteTarget ? (
-        <div className="mb-4 flex items-start gap-2 rounded-xl border border-[#A7F3D0] bg-[#ECFDF5] px-3 py-2 text-[13px] text-[#059669]">
-          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-          <span className="flex-1">{documentSuccess}</span>
-          <button
-            type="button"
-            onClick={() => setDocumentSuccess(null)}
-            className="shrink-0 rounded p-0.5 hover:bg-[#D1FAE5]"
-            aria-label="Dismiss"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      ) : null}
+    <div id="section-documents" className="min-w-0 max-w-full overflow-hidden scroll-mt-24">
+      <SectionCard
+        title="Documents"
+        subtitle={
+          latestDocuments.length === 0
+            ? "Upload employee KYC and supporting files"
+            : `${latestDocuments.length} on file`
+        }
+        icon={<FileText className="h-5 w-5" />}
+        accent="warning"
+        action={documentsAction}
+      >
+        <div className="min-w-0 max-w-full overflow-x-hidden">
+          {documentSuccess &&
+          !documentUploadOpen &&
+          !documentUpdateTarget &&
+          !documentDeleteTarget ? (
+            <div className="mb-4 flex items-start gap-2 rounded-xl border border-[#A7F3D0] bg-[#ECFDF5] px-3 py-2 text-[13px] text-[#059669]">
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+              <span className="min-w-0 flex-1 break-words">{documentSuccess}</span>
+              <button
+                type="button"
+                onClick={() => setDocumentSuccess(null)}
+                className="shrink-0 rounded p-0.5 hover:bg-[#D1FAE5]"
+                aria-label="Dismiss"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : null}
 
-      {latestDocuments.length === 0 ? (
-        <DocumentEmptyPlaceholderCard onClick={() => openDocumentUpload(true)} />
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
-          {latestDocuments.map((doc, index) => (
-            <DocumentFileCard
-              key={String(doc.id ?? index)}
-              doc={doc as Record<string, unknown>}
-              onUpdate={() => openDocumentUpdate(doc as Record<string, unknown>)}
-              onDelete={() => openDocumentDelete(doc as Record<string, unknown>)}
-            />
-          ))}
+          {latestDocuments.length === 0 ? (
+            <DocumentEmptyPlaceholderCard onClick={() => openDocumentUpload(true)} />
+          ) : (
+            <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
+              {latestDocuments.map((doc, index) => (
+                <DocumentFileCard
+                  key={String(doc.id ?? index)}
+                  doc={doc as Record<string, unknown>}
+                  onUpdate={() => openDocumentUpdate(doc as Record<string, unknown>)}
+                  onDelete={() => openDocumentDelete(doc as Record<string, unknown>)}
+                />
+              ))}
+            </div>
+          )}
         </div>
-      )}
-    </SectionCard>
+      </SectionCard>
+    </div>
   ) : null;
 
   const shiftSection = data ? (
@@ -5225,9 +5343,9 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
 
       {addressesSection}
 
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+      <div className="grid min-w-0 grid-cols-1 gap-5 xl:grid-cols-2">
         {assetsSection}
-        {documentsSection}
+        <div className="min-w-0 max-w-full overflow-hidden">{documentsSection}</div>
       </div>
 
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
@@ -5721,65 +5839,72 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
             <>
               <button
                 type="button"
-                className="absolute inset-0 bg-[#0F172A]/45 backdrop-blur-sm"
+                className="absolute inset-0 bg-[#0F172A]/50 backdrop-blur-[2px]"
                 aria-label="Close dialog"
                 onClick={closeAssetAdd}
               />
-              <div className="card-fade-in relative z-10 flex max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-[24px] border border-white/60 bg-white shadow-[0_24px_70px_rgba(15,23,42,0.25)] sm:rounded-[24px]">
-                <div className="shrink-0 border-b border-[#EEF2F6] px-5 py-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#8B5CF6] to-[#7C3AED] text-white shadow-sm">
-                        <Laptop className="h-5 w-5" aria-hidden />
+              <div className="card-fade-in relative z-10 flex max-h-[min(88dvh,720px)] w-full max-w-lg flex-col overflow-hidden rounded-t-[20px] border border-white/70 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.22)] sm:rounded-[20px]">
+                <div className="shrink-0 border-b border-[#F1F5F9] bg-gradient-to-r from-[#FAF5FF] to-white px-4 py-3.5 sm:px-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#8B5CF6] to-[#7C3AED] text-white shadow-sm">
+                        <Laptop className="h-4 w-4" aria-hidden />
                       </span>
-                      <div>
-                        <h2 className="text-[18px] font-bold text-[#0F172A]">Assign assets</h2>
-                        <p className="mt-0.5 text-[13px] text-[#64748B]">
-                          Add one or more assets for {employeeName}
-                        </p>
+                      <div className="min-w-0">
+                        <h2 className="truncate text-[16px] font-bold text-[#0F172A]">Assign assets</h2>
+                        <p className="truncate text-[12px] text-[#64748B]">{employeeName}</p>
                       </div>
                     </div>
                     <button
                       type="button"
                       disabled={assetSaving}
                       onClick={closeAssetAdd}
-                      className="flex h-9 w-9 items-center justify-center rounded-xl text-[#94A3B8] transition hover:bg-[#F1F5F9]"
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[#94A3B8] transition hover:bg-white hover:text-[#475569]"
                       aria-label="Close"
                     >
-                      <X className="h-5 w-5" />
+                      <X className="h-4 w-4" />
                     </button>
                   </div>
                 </div>
-                <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+
+                <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
                   {assetError && assetAddOpen ? (
-                    <div className="mb-4 flex items-start gap-2 rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-3.5 py-2.5 text-[14px] font-medium text-[#DC2626]">
-                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <div className="mb-3 flex items-start gap-2 rounded-lg border border-[#FECACA] bg-[#FEF2F2] px-3 py-2 text-[13px] font-medium text-[#DC2626]">
+                      <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                       {assetError}
                     </div>
                   ) : null}
-                  <div className="space-y-4">
+
+                  <div className="space-y-3">
                     {assetDraftRows.map((row, index) => (
                       <div
                         key={row.key}
-                        className="rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] p-4"
+                        className="overflow-hidden rounded-xl border border-[#E8ECF4] bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)]"
                       >
-                        <div className="mb-3 flex items-center justify-between">
-                          <p className="text-[14px] font-semibold text-[#0F172A]">Asset {index + 1}</p>
+                        <div className="flex items-center justify-between border-b border-[#F1F5F9] bg-[#FAFBFC] px-3 py-2">
+                          <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-wide text-[#7C3AED]">
+                            <span className="flex h-5 w-5 items-center justify-center rounded-md bg-[#EDE9FE] text-[11px]">
+                              {index + 1}
+                            </span>
+                            Asset
+                          </span>
                           {assetDraftRows.length > 1 ? (
                             <button
                               type="button"
                               onClick={() =>
                                 setAssetDraftRows((prev) => prev.filter((r) => r.key !== row.key))
                               }
-                              className="text-[12px] font-semibold text-[#DC2626] hover:underline"
+                              className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-semibold text-[#DC2626] transition hover:bg-[#FEF2F2]"
                             >
+                              <Trash2 className="h-3 w-3" />
                               Remove
                             </button>
                           ) : null}
                         </div>
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          <label className="sm:col-span-2">
-                            <span className="mb-1.5 block text-[13px] font-medium text-[#64748B]">
+
+                        <div className="space-y-3 p-3">
+                          <label className="block">
+                            <span className="mb-1 block text-[12px] font-medium text-[#64748B]">
                               Asset name <span className="text-[#EF4444]">*</span>
                             </span>
                             <input
@@ -5791,52 +5916,57 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
                                   ),
                                 )
                               }
-                              className="w-full rounded-xl border border-[#E2E8F0] bg-white px-3 py-2.5 text-[14px] text-[#0F172A] outline-none focus:border-[#8B5CF6] focus:ring-2 focus:ring-[#8B5CF6]/15"
+                              placeholder="e.g. MacBook Pro 14"
+                              className={assetFormFieldCls()}
                             />
                           </label>
-                          <label>
-                            <span className="mb-1.5 block text-[13px] font-medium text-[#64748B]">
-                              Type <span className="text-[#EF4444]">*</span>
-                            </span>
-                            <select
-                              value={row.asset_type}
-                              onChange={(e) =>
-                                setAssetDraftRows((prev) =>
-                                  prev.map((r) =>
-                                    r.key === row.key ? { ...r, asset_type: e.target.value } : r,
-                                  ),
-                                )
-                              }
-                              className="w-full rounded-xl border border-[#E2E8F0] bg-white px-3 py-2.5 text-[14px] text-[#0F172A] outline-none focus:border-[#8B5CF6] focus:ring-2 focus:ring-[#8B5CF6]/15"
-                            >
-                              {EMPLOYEE_ASSET_TYPES.map((type) => (
-                                <option key={type} value={type}>
-                                  {formatLabel(type)}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <label>
-                            <span className="mb-1.5 block text-[13px] font-medium text-[#64748B]">
-                              Handover date
-                            </span>
-                            <input
-                              type="datetime-local"
-                              value={row.handover_date_time}
-                              onChange={(e) =>
-                                setAssetDraftRows((prev) =>
-                                  prev.map((r) =>
-                                    r.key === row.key
-                                      ? { ...r, handover_date_time: e.target.value }
-                                      : r,
-                                  ),
-                                )
-                              }
-                              className="w-full rounded-xl border border-[#E2E8F0] bg-white px-3 py-2.5 text-[14px] text-[#0F172A] outline-none focus:border-[#8B5CF6] focus:ring-2 focus:ring-[#8B5CF6]/15"
-                            />
-                          </label>
-                          <label className="sm:col-span-2">
-                            <span className="mb-1.5 block text-[13px] font-medium text-[#64748B]">
+
+                          <div className="grid grid-cols-2 gap-2.5">
+                            <label className="block">
+                              <span className="mb-1 block text-[12px] font-medium text-[#64748B]">
+                                Type <span className="text-[#EF4444]">*</span>
+                              </span>
+                              <select
+                                value={row.asset_type}
+                                onChange={(e) =>
+                                  setAssetDraftRows((prev) =>
+                                    prev.map((r) =>
+                                      r.key === row.key ? { ...r, asset_type: e.target.value } : r,
+                                    ),
+                                  )
+                                }
+                                className={assetFormFieldCls()}
+                              >
+                                {EMPLOYEE_ASSET_TYPES.map((type) => (
+                                  <option key={type} value={type}>
+                                    {formatLabel(type)}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="block">
+                              <span className="mb-1 block text-[12px] font-medium text-[#64748B]">
+                                Handover
+                              </span>
+                              <input
+                                type="datetime-local"
+                                value={row.handover_date_time}
+                                onChange={(e) =>
+                                  setAssetDraftRows((prev) =>
+                                    prev.map((r) =>
+                                      r.key === row.key
+                                        ? { ...r, handover_date_time: e.target.value }
+                                        : r,
+                                    ),
+                                  )
+                                }
+                                className={assetFormFieldCls()}
+                              />
+                            </label>
+                          </div>
+
+                          <label className="block">
+                            <span className="mb-1 block text-[12px] font-medium text-[#64748B]">
                               Summary
                             </span>
                             <textarea
@@ -5849,49 +5979,50 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
                                 )
                               }
                               rows={2}
-                              className="w-full rounded-xl border border-[#E2E8F0] bg-white px-3 py-2.5 text-[14px] text-[#0F172A] outline-none focus:border-[#8B5CF6] focus:ring-2 focus:ring-[#8B5CF6]/15"
+                              placeholder="Serial number, condition, accessories…"
+                              className={`${assetFormFieldCls()} resize-none`}
                             />
                           </label>
-                          <label className="sm:col-span-2">
-                            <span className="mb-1.5 block text-[13px] font-medium text-[#64748B]">
-                              Image / PDF
+
+                          <div>
+                            <span className="mb-1.5 block text-[12px] font-medium text-[#64748B]">
+                              Attachment
                             </span>
-                            <input
-                              type="file"
-                              accept="image/png,image/jpeg,image/jpg,image/webp,application/pdf"
-                              className={assetFileInputCls()}
-                              onChange={(e) =>
+                            <AssetFilePicker
+                              inputId={`asset-file-${row.key}`}
+                              file={row.file}
+                              onChange={(nextFile) =>
                                 setAssetDraftRows((prev) =>
                                   prev.map((r) =>
-                                    r.key === row.key
-                                      ? { ...r, file: e.target.files?.[0] ?? null }
-                                      : r,
+                                    r.key === row.key ? { ...r, file: nextFile } : r,
                                   ),
                                 )
                               }
                             />
-                          </label>
+                          </div>
                         </div>
                       </div>
                     ))}
+
                     <button
                       type="button"
                       onClick={() =>
                         setAssetDraftRows((prev) => [...prev, createEmptyAssetDraft()])
                       }
-                      className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-[#CBD5E1] bg-white px-3.5 py-2 text-[13px] font-semibold text-[#64748B] transition hover:border-[#8B5CF6]/40 hover:text-[#7C3AED]"
+                      className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-[#CBD5E1] bg-[#FAFBFC] px-3 py-2.5 text-[12px] font-semibold text-[#64748B] transition hover:border-[#8B5CF6]/40 hover:bg-[#FAF5FF] hover:text-[#7C3AED]"
                     >
-                      <Plus className="h-4 w-4" />
+                      <Plus className="h-3.5 w-3.5" />
                       Add another asset
                     </button>
                   </div>
                 </div>
-                <div className="flex flex-col-reverse gap-2.5 border-t border-[#EEF2F6] px-5 py-4 sm:flex-row sm:justify-end">
+
+                <div className="flex shrink-0 gap-2 border-t border-[#F1F5F9] bg-[#FAFBFC] px-4 py-3 sm:justify-end sm:px-5">
                   <button
                     type="button"
                     disabled={assetSaving}
                     onClick={closeAssetAdd}
-                    className="inline-flex min-h-[42px] w-full items-center justify-center rounded-xl border border-[#E2E8F0] bg-white px-4 py-2.5 text-[14px] font-semibold text-[#334155] sm:w-auto"
+                    className="inline-flex min-h-[40px] flex-1 items-center justify-center rounded-xl border border-[#E2E8F0] bg-white px-4 text-[13px] font-semibold text-[#475569] sm:flex-none sm:min-w-[100px]"
                   >
                     Cancel
                   </button>
@@ -5899,14 +6030,14 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
                     type="button"
                     disabled={assetSaving}
                     onClick={() => void submitAssetAdd()}
-                    className="inline-flex min-h-[42px] w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-[#8B5CF6] to-[#7C3AED] px-4 py-2.5 text-[14px] font-semibold text-white shadow-sm disabled:opacity-60 sm:w-auto"
+                    className="inline-flex min-h-[40px] flex-1 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-[#8B5CF6] to-[#7C3AED] px-4 text-[13px] font-semibold text-white shadow-sm disabled:opacity-60 sm:flex-none sm:min-w-[140px]"
                   >
                     {assetSaving ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
                       <Save className="h-4 w-4" />
                     )}
-                    {assetSaving ? "Saving…" : "Assign assets"}
+                    {assetSaving ? "Saving…" : "Assign"}
                   </button>
                 </div>
               </div>
@@ -6037,10 +6168,15 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
                   className="w-full rounded-xl border border-[#E2E8F0] px-3 py-2.5 text-[14px] outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/15"
                 />
               </label>
-              <label className="block">
+              <div>
                 <span className="mb-1.5 block text-[13px] font-medium text-[#64748B]">Replace image / PDF</span>
-                <input type="file" accept="image/png,image/jpeg,image/jpg,image/webp,application/pdf" className={assetFileInputCls()} onChange={(e) => setAssetEditDraft((d) => ({ ...d, file: e.target.files?.[0] ?? null }))} />
-              </label>
+                <AssetFilePicker
+                  inputId="asset-edit-file"
+                  file={assetEditDraft.file}
+                  accent="primary"
+                  onChange={(nextFile) => setAssetEditDraft((d) => ({ ...d, file: nextFile }))}
+                />
+              </div>
             </div>
             <div className="flex flex-col-reverse gap-2.5 border-t border-[#EEF2F6] px-5 py-4 sm:flex-row sm:justify-end">
               <button type="button" disabled={assetSaving} onClick={() => setAssetEditTarget(null)} className="inline-flex min-h-[42px] w-full items-center justify-center rounded-xl border border-[#E2E8F0] bg-white px-4 py-2.5 text-[14px] font-semibold sm:w-auto">Cancel</button>
