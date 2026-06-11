@@ -78,6 +78,10 @@ import {
   type AttendanceHistoryRow,
 } from "@/services/attendanceHistory";
 import {
+  createEmployeeBankInfo,
+  updateEmployeeBankInfo,
+} from "@/services/bankInfo";
+import {
   assignIpToEmployee,
   assignUserToShift,
   getCompanyIPAddresses,
@@ -1703,6 +1707,128 @@ function maskAccountNumber(value: unknown): string {
   return `•••• ${raw.slice(-4)}`;
 }
 
+type BankInfoForm = {
+  account_holder_name: string;
+  account_number: string;
+  bank_name: string;
+  bank_branch: string;
+  ifsc_code: string;
+  uan_number: string;
+};
+
+function createEmptyBankForm(): BankInfoForm {
+  return {
+    account_holder_name: "",
+    account_number: "",
+    bank_name: "",
+    bank_branch: "",
+    ifsc_code: "",
+    uan_number: "",
+  };
+}
+
+function bankInfoFromUserInfo(info: Record<string, unknown> | null | undefined): BankInfoForm {
+  return {
+    account_holder_name: info?.account_holder_name != null ? String(info.account_holder_name) : "",
+    account_number: info?.account_number != null ? String(info.account_number) : "",
+    bank_name: info?.bank_name != null ? String(info.bank_name) : "",
+    bank_branch: info?.bank_branch != null ? String(info.bank_branch) : "",
+    ifsc_code: info?.ifsc_code != null ? String(info.ifsc_code) : "",
+    uan_number: info?.uan_number != null ? String(info.uan_number) : "",
+  };
+}
+
+function hasEmployeeBankInfo(info: Record<string, unknown> | null | undefined): boolean {
+  if (!info) return false;
+  return Boolean(
+    String(info.account_holder_name ?? "").trim() ||
+      String(info.bank_name ?? "").trim() ||
+      String(info.account_number ?? "").trim() ||
+      String(info.ifsc_code ?? "").trim(),
+  );
+}
+
+function isValidIfscCode(value: string): boolean {
+  return /^[A-Z]{4}0[A-Z0-9]{6}$/i.test(value.trim());
+}
+
+function bankFieldCls() {
+  return "w-full rounded-xl border border-[#E2E8F0] bg-white px-3 py-2.5 text-[14px] text-[#0F172A] outline-none focus:border-[#10B981] focus:ring-2 focus:ring-[#10B981]/15";
+}
+
+function BankInfoFormFields({
+  form,
+  onChange,
+}: {
+  form: BankInfoForm;
+  onChange: (patch: Partial<BankInfoForm>) => void;
+}) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      <label className="sm:col-span-2">
+        <span className="mb-1.5 block text-[13px] font-medium text-[#64748B]">
+          Account holder name <span className="text-[#EF4444]">*</span>
+        </span>
+        <input
+          value={form.account_holder_name}
+          onChange={(e) => onChange({ account_holder_name: e.target.value })}
+          className={bankFieldCls()}
+        />
+      </label>
+      <label>
+        <span className="mb-1.5 block text-[13px] font-medium text-[#64748B]">
+          Bank name <span className="text-[#EF4444]">*</span>
+        </span>
+        <input
+          value={form.bank_name}
+          onChange={(e) => onChange({ bank_name: e.target.value })}
+          className={bankFieldCls()}
+        />
+      </label>
+      <label>
+        <span className="mb-1.5 block text-[13px] font-medium text-[#64748B]">
+          Branch <span className="text-[#EF4444]">*</span>
+        </span>
+        <input
+          value={form.bank_branch}
+          onChange={(e) => onChange({ bank_branch: e.target.value })}
+          className={bankFieldCls()}
+        />
+      </label>
+      <label className="sm:col-span-2">
+        <span className="mb-1.5 block text-[13px] font-medium text-[#64748B]">
+          Account number <span className="text-[#EF4444]">*</span>
+        </span>
+        <input
+          value={form.account_number}
+          onChange={(e) => onChange({ account_number: e.target.value })}
+          className={bankFieldCls()}
+          inputMode="numeric"
+        />
+      </label>
+      <label>
+        <span className="mb-1.5 block text-[13px] font-medium text-[#64748B]">
+          IFSC code <span className="text-[#EF4444]">*</span>
+        </span>
+        <input
+          value={form.ifsc_code}
+          onChange={(e) => onChange({ ifsc_code: e.target.value.toUpperCase() })}
+          className={bankFieldCls()}
+          maxLength={11}
+        />
+      </label>
+      <label>
+        <span className="mb-1.5 block text-[13px] font-medium text-[#64748B]">UAN number</span>
+        <input
+          value={form.uan_number}
+          onChange={(e) => onChange({ uan_number: e.target.value })}
+          className={bankFieldCls()}
+        />
+      </label>
+    </div>
+  );
+}
+
 function SectionCard({
   title,
   icon,
@@ -2745,6 +2871,13 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
   const [shiftSaving, setShiftSaving] = useState(false);
   const [shiftError, setShiftError] = useState<string | null>(null);
   const [shiftSuccess, setShiftSuccess] = useState<string | null>(null);
+
+  const [bankFormOpen, setBankFormOpen] = useState(false);
+  const [bankFormMode, setBankFormMode] = useState<"add" | "edit">("add");
+  const [bankForm, setBankForm] = useState<BankInfoForm>(createEmptyBankForm);
+  const [bankSaving, setBankSaving] = useState(false);
+  const [bankError, setBankError] = useState<string | null>(null);
+  const [bankSuccess, setBankSuccess] = useState<string | null>(null);
 
   const now = useMemo(() => new Date(), []);
   const [attendanceMonth, setAttendanceMonth] = useState(now.getMonth() + 1);
@@ -4163,6 +4296,88 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
     }
   }, [shiftUnassignTarget, orgId, userId, loadUserShifts, loadEmployee]);
 
+  const employeeHasBankInfo = useMemo(
+    () => hasEmployeeBankInfo(info as Record<string, unknown> | undefined),
+    [info],
+  );
+
+  const openBankAdd = useCallback(() => {
+    setBankFormMode("add");
+    setBankForm(createEmptyBankForm());
+    setBankError(null);
+    setBankFormOpen(true);
+  }, []);
+
+  const openBankEdit = useCallback(() => {
+    setBankFormMode("edit");
+    setBankForm(bankInfoFromUserInfo(info as Record<string, unknown> | undefined));
+    setBankError(null);
+    setBankFormOpen(true);
+  }, [info]);
+
+  const closeBankForm = useCallback(() => {
+    if (bankSaving) return;
+    setBankFormOpen(false);
+    setBankForm(createEmptyBankForm());
+    setBankError(null);
+  }, [bankSaving]);
+
+  const validateBankForm = useCallback((form: BankInfoForm): string | null => {
+    if (!form.account_holder_name.trim()) return "Account holder name is required.";
+    if (!form.bank_name.trim()) return "Bank name is required.";
+    if (!form.bank_branch.trim()) return "Bank branch is required.";
+    if (!form.account_number.trim()) return "Account number is required.";
+    if (!form.ifsc_code.trim()) return "IFSC code is required.";
+    if (!isValidIfscCode(form.ifsc_code)) {
+      return "IFSC code must match standard format (e.g. SBIN0001234).";
+    }
+    return null;
+  }, []);
+
+  const submitBankForm = useCallback(async () => {
+    const validationError = validateBankForm(bankForm);
+    if (validationError) {
+      setBankError(validationError);
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setBankError("Not signed in.");
+      return;
+    }
+
+    const payload = {
+      org_id: orgId,
+      user_id: userId,
+      account_holder_name: bankForm.account_holder_name,
+      account_number: bankForm.account_number,
+      bank_name: bankForm.bank_name,
+      bank_branch: bankForm.bank_branch,
+      ifsc_code: bankForm.ifsc_code,
+      uan_number: bankForm.uan_number.trim() || null,
+    };
+
+    setBankSaving(true);
+    setBankError(null);
+    try {
+      if (bankFormMode === "add") {
+        await createEmployeeBankInfo(token, payload);
+        setBankSuccess("Bank information added successfully.");
+      } else {
+        await updateEmployeeBankInfo(token, payload);
+        setBankSuccess("Bank information updated successfully.");
+      }
+      setBankFormOpen(false);
+      setBankForm(createEmptyBankForm());
+      await loadEmployee(true);
+    } catch (e) {
+      setBankError(e instanceof Error ? e.message : "Could not save bank information.");
+    } finally {
+      setBankSaving(false);
+    }
+  }, [bankForm, bankFormMode, orgId, userId, validateBankForm, loadEmployee]);
+
   const orgName = asText(ctx?.organization?.org_name, "Organization");
   const employeeIsActive = !hasOpenExit;
 
@@ -4309,6 +4524,28 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
     </SectionCard>
   ) : null;
 
+  const workSectionAction = data ? (
+    employeeHasBankInfo ? (
+      <button
+        type="button"
+        onClick={openBankEdit}
+        className="inline-flex items-center gap-1.5 rounded-xl border border-[#E2E8F0] bg-white px-3.5 py-2 text-[13px] font-semibold text-[#334155] shadow-sm transition hover:-translate-y-0.5 hover:text-[#059669] hover:shadow-md"
+      >
+        <Pencil className="h-4 w-4" />
+        Update bank information
+      </button>
+    ) : (
+      <button
+        type="button"
+        onClick={openBankAdd}
+        className="inline-flex items-center gap-1.5 rounded-xl border border-[#E2E8F0] bg-white px-3.5 py-2 text-[13px] font-semibold text-[#334155] shadow-sm transition hover:-translate-y-0.5 hover:text-[#059669] hover:shadow-md"
+      >
+        <Plus className="h-4 w-4" />
+        Add bank information
+      </button>
+    )
+  ) : null;
+
   const workSection = data ? (
     <SectionCard
       id="section-payroll"
@@ -4316,9 +4553,32 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
       subtitle="Shift schedule and banking details"
       icon={<Wallet className="h-5 w-5" />}
       accent="success"
-      isEmpty={!info?.shift_name && !info?.bank_name && !info?.account_number}
+      action={workSectionAction}
+      isEmpty={!info?.shift_name && !employeeHasBankInfo}
       emptyText="No work or bank details on file."
     >
+      {bankSuccess && !bankFormOpen ? (
+        <div className="mb-4 flex items-start gap-2 rounded-xl border border-[#A7F3D0] bg-[#ECFDF5] px-3 py-2 text-[13px] text-[#059669]">
+          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+          <span className="flex-1">{bankSuccess}</span>
+          <button
+            type="button"
+            onClick={() => setBankSuccess(null)}
+            className="shrink-0 rounded p-0.5 hover:bg-[#D1FAE5]"
+            aria-label="Dismiss"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      ) : null}
+
+      {bankError && !bankFormOpen ? (
+        <div className="mb-4 flex items-start gap-2 rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-3 py-2 text-[13px] text-[#DC2626]">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{bankError}</span>
+        </div>
+      ) : null}
+
       <DetailGrid>
         <DetailItem label="Shift" icon={<Clock className="h-4 w-4" />} value={asText(info?.shift_name)} />
         <DetailItem
@@ -4343,6 +4603,18 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
         <DetailItem label="IFSC" icon={<Hash className="h-4 w-4" />} value={asText(info?.ifsc_code)} />
         <DetailItem label="UAN" icon={<Hash className="h-4 w-4" />} value={asText(info?.uan_number)} />
       </DetailGrid>
+
+      {!employeeHasBankInfo ? (
+        <button
+          type="button"
+          onClick={openBankAdd}
+          className="mt-4 flex w-full flex-col items-center justify-center rounded-2xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] px-4 py-8 text-center transition hover:border-[#10B981]/40 hover:bg-[#ECFDF5]"
+        >
+          <Wallet className="h-7 w-7 text-[#94A3B8]" aria-hidden />
+          <p className="mt-2 text-[14px] font-semibold text-[#0F172A]">No bank details on file</p>
+          <p className="mt-1 text-[12px] text-[#64748B]">Click to add payroll bank information</p>
+        </button>
+      ) : null}
     </SectionCard>
   ) : null;
 
@@ -6698,6 +6970,88 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
                   <X className="h-4 w-4" />
                 )}
                 {ipSaving ? "Removing…" : "Yes, unassign"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {bankFormOpen ? (
+        <div
+          className="fixed inset-0 z-[99999] flex items-end justify-center p-0 sm:items-center sm:p-4"
+          role="dialog"
+          aria-modal="true"
+        >
+          <button
+            type="button"
+            className="absolute inset-0 bg-[#0F172A]/45 backdrop-blur-sm"
+            aria-label="Close dialog"
+            onClick={closeBankForm}
+          />
+          <div className="card-fade-in relative z-10 flex max-h-[92dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-[24px] border border-white/60 bg-white shadow-[0_24px_70px_rgba(15,23,42,0.25)] sm:rounded-[24px]">
+            <div className="shrink-0 border-b border-[#EEF2F6] px-5 py-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#10B981] to-[#059669] text-white shadow-sm">
+                    <Wallet className="h-5 w-5" aria-hidden />
+                  </span>
+                  <div>
+                    <h2 className="text-[18px] font-bold text-[#0F172A]">
+                      {bankFormMode === "add" ? "Add bank information" : "Update bank information"}
+                    </h2>
+                    <p className="mt-0.5 text-[13px] text-[#64748B]">
+                      Payroll account details for {employeeName}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={bankSaving}
+                  onClick={closeBankForm}
+                  className="flex h-9 w-9 items-center justify-center rounded-xl text-[#94A3B8] transition hover:bg-[#F1F5F9]"
+                  aria-label="Close"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+              {bankError && bankFormOpen ? (
+                <div className="mb-4 flex items-start gap-2 rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-3.5 py-2.5 text-[14px] font-medium text-[#DC2626]">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  {bankError}
+                </div>
+              ) : null}
+              <BankInfoFormFields
+                form={bankForm}
+                onChange={(patch) => setBankForm((prev) => ({ ...prev, ...patch }))}
+              />
+            </div>
+            <div className="flex flex-col-reverse gap-2.5 border-t border-[#EEF2F6] px-5 py-4 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                disabled={bankSaving}
+                onClick={closeBankForm}
+                className="inline-flex min-h-[42px] w-full items-center justify-center rounded-xl border border-[#E2E8F0] bg-white px-4 py-2.5 text-[14px] font-semibold sm:w-auto"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={bankSaving}
+                onClick={() => void submitBankForm()}
+                className="inline-flex min-h-[42px] w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-[#10B981] to-[#059669] px-4 py-2.5 text-[14px] font-semibold text-white sm:w-auto"
+              >
+                {bankSaving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                {bankSaving
+                  ? "Saving…"
+                  : bankFormMode === "add"
+                    ? "Save bank information"
+                    : "Update bank information"}
               </button>
             </div>
           </div>
