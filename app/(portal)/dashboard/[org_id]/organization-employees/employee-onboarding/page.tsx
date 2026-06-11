@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { useParams, useSearchParams } from "next/navigation";
 import {
   UserPlus,
   Loader2,
@@ -19,23 +20,21 @@ import {
   IdCard,
   ImageIcon,
   FileStack,
-  Users,
   Package,
   PlusCircle,
+  Briefcase,
 } from "lucide-react";
 import { useManagementDashboardContext } from "@/components/portal-dashboard/Layout/ManagementDashboardContext";
 import {
   addUserAddress,
   addUserExternalInformation,
-  addEmployeeReference,
   createEmployee,
   EMPLOYEE_ASSET_TYPES,
-  getManagementEmployeesPage,
   getOrganizationRoles,
   uploadEmployeeAssetsBatch,
   uploadEmployeeDocuments,
+  type EmployeeAddressEntryPayload,
   type EmployeeOnboardingDocumentField,
-  type ManagementEmployeeRow,
   type OrgRoleRow,
 } from "@/services/adminUser";
 
@@ -113,7 +112,7 @@ function stepDescCls() {
 const ONBOARDING_STEP_NAV = [
   { key: "basic" as const, n: "1", label: "Basics", short: "Basics" },
   { key: "external" as const, n: "2", label: "Emergency", short: "Emergency" },
-  { key: "reference" as const, n: "3", label: "Reference", short: "Reference" },
+  { key: "reference" as const, n: "3", label: "Prev. company", short: "Company" },
   { key: "assets" as const, n: "4", label: "Assets", short: "Assets" },
   { key: "documents" as const, n: "5", label: "Documents", short: "Docs" },
   { key: "address" as const, n: "6", label: "Address", short: "Address" },
@@ -282,15 +281,6 @@ type AssetDraftRow = {
   file: File | null;
 };
 
-function formatReferrerOptionLabel(row: ManagementEmployeeRow) {
-  const name = (row.user_name ?? "").trim() || "Unknown";
-  const email = (row.user_email ?? "").trim() || "—";
-  const designations =
-    row.roles?.map((r) => (r.role_name ?? "").trim()).filter(Boolean).join(", ") ||
-    "No role assigned";
-  return `${name} · ${email} · ${designations}`;
-}
-
 function createEmptyAssetDraft(): AssetDraftRow {
   return {
     key: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
@@ -302,8 +292,234 @@ function createEmptyAssetDraft(): AssetDraftRow {
   };
 }
 
+type AddressFormValues = {
+  country: string;
+  state: string;
+  district: string;
+  city: string;
+  is_from_village: boolean;
+  village_name: string;
+  street: string;
+  house_number: string;
+  zip_code: string;
+};
+
+function createEmptyAddressForm(): AddressFormValues {
+  return {
+    country: "",
+    state: "",
+    district: "",
+    city: "",
+    is_from_village: false,
+    village_name: "",
+    street: "",
+    house_number: "",
+    zip_code: "",
+  };
+}
+
+function validateAddressFormValues(
+  values: AddressFormValues,
+  label: string,
+): string | null {
+  if (
+    !values.country.trim() ||
+    !values.state.trim() ||
+    !values.district.trim() ||
+    !values.city.trim() ||
+    !values.street.trim() ||
+    !values.house_number.trim() ||
+    !values.zip_code.trim()
+  ) {
+    return `${label}: fill every required field, or skip this step.`;
+  }
+  if (values.is_from_village && !values.village_name.trim()) {
+    return `${label}: village name is required when "from village" is checked.`;
+  }
+  return null;
+}
+
+function toAddressEntry(
+  values: AddressFormValues,
+  address_type: "permanent" | "current",
+): EmployeeAddressEntryPayload {
+  return {
+    address_type,
+    country: values.country.trim(),
+    state: values.state.trim(),
+    district: values.district.trim(),
+    city: values.city.trim(),
+    is_from_village: values.is_from_village,
+    village_name: values.is_from_village ? values.village_name.trim() : null,
+    street: values.street.trim(),
+    house_number: values.house_number.trim(),
+    zip_code: values.zip_code.trim(),
+  };
+}
+
+function AddressFormFields({
+  idPrefix,
+  title,
+  values,
+  onChange,
+  disabled = false,
+}: {
+  idPrefix: string;
+  title: string;
+  values: AddressFormValues;
+  onChange: (patch: Partial<AddressFormValues>) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="space-y-4 rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] p-3 sm:p-4">
+      <h3 className="text-[14px] font-semibold text-[#1F2937]">{title}</h3>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label htmlFor={`${idPrefix}-country`} className={labelCls()}>
+            Country <span className="text-red-500">*</span>
+          </label>
+          <input
+            id={`${idPrefix}-country`}
+            className={inputCls()}
+            value={values.country}
+            onChange={(e) => onChange({ country: e.target.value })}
+            placeholder="India"
+            disabled={disabled}
+          />
+        </div>
+        <div>
+          <label htmlFor={`${idPrefix}-state`} className={labelCls()}>
+            State <span className="text-red-500">*</span>
+          </label>
+          <input
+            id={`${idPrefix}-state`}
+            className={inputCls()}
+            value={values.state}
+            onChange={(e) => onChange({ state: e.target.value })}
+            placeholder="Maharashtra"
+            disabled={disabled}
+          />
+        </div>
+        <div>
+          <label htmlFor={`${idPrefix}-district`} className={labelCls()}>
+            District <span className="text-red-500">*</span>
+          </label>
+          <input
+            id={`${idPrefix}-district`}
+            className={inputCls()}
+            value={values.district}
+            onChange={(e) => onChange({ district: e.target.value })}
+            placeholder="Pune"
+            disabled={disabled}
+          />
+        </div>
+        <div>
+          <label htmlFor={`${idPrefix}-city`} className={labelCls()}>
+            City <span className="text-red-500">*</span>
+          </label>
+          <input
+            id={`${idPrefix}-city`}
+            className={inputCls()}
+            value={values.city}
+            onChange={(e) => onChange({ city: e.target.value })}
+            placeholder="Pune"
+            disabled={disabled}
+          />
+        </div>
+        <div className="sm:col-span-2">
+          <label className="flex items-center gap-2 text-[13px] font-medium text-[#1F2937]">
+            <input
+              type="checkbox"
+              checked={values.is_from_village}
+              onChange={(e) => {
+                onChange({
+                  is_from_village: e.target.checked,
+                  village_name: e.target.checked ? values.village_name : "",
+                });
+              }}
+              disabled={disabled}
+              className="h-4 w-4 rounded border-[#E4E7EC] text-[#008CD3] focus:ring-[#008CD3]/30"
+            />
+            Employee is from a village
+          </label>
+        </div>
+        {values.is_from_village && (
+          <div className="sm:col-span-2">
+            <label htmlFor={`${idPrefix}-village`} className={labelCls()}>
+              Village name <span className="text-red-500">*</span>
+            </label>
+            <input
+              id={`${idPrefix}-village`}
+              className={inputCls()}
+              value={values.village_name}
+              onChange={(e) => onChange({ village_name: e.target.value })}
+              placeholder="Village name"
+              disabled={disabled}
+            />
+          </div>
+        )}
+        <div>
+          <label htmlFor={`${idPrefix}-street`} className={labelCls()}>
+            Street <span className="text-red-500">*</span>
+          </label>
+          <input
+            id={`${idPrefix}-street`}
+            className={inputCls()}
+            value={values.street}
+            onChange={(e) => onChange({ street: e.target.value })}
+            placeholder="Street / Area"
+            disabled={disabled}
+          />
+        </div>
+        <div>
+          <label htmlFor={`${idPrefix}-house`} className={labelCls()}>
+            House number <span className="text-red-500">*</span>
+          </label>
+          <input
+            id={`${idPrefix}-house`}
+            className={inputCls()}
+            value={values.house_number}
+            onChange={(e) => onChange({ house_number: e.target.value })}
+            placeholder="A-101"
+            disabled={disabled}
+          />
+        </div>
+        <div className="sm:col-span-2">
+          <label htmlFor={`${idPrefix}-zip`} className={labelCls()}>
+            ZIP / PIN code <span className="text-red-500">*</span>
+          </label>
+          <input
+            id={`${idPrefix}-zip`}
+            className={inputCls()}
+            value={values.zip_code}
+            onChange={(e) => onChange({ zip_code: e.target.value })}
+            placeholder="411001"
+            disabled={disabled}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function EmployeOnboardingPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="mx-auto flex min-h-[40vh] max-w-4xl flex-col items-center justify-center gap-3 px-3 py-6 text-[#6B7280] sm:px-4 lg:px-6">
+          <Loader2 className="h-8 w-8 animate-spin text-[#008CD3]" aria-hidden />
+          <p className="text-sm">Loading employee onboarding…</p>
+        </div>
+      }
+    >
+      <EmployeOnboardingPageContent />
+    </Suspense>
+  );
+}
+
+function EmployeOnboardingPageContent() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const orgIdParam = params?.org_id;
   const ctx = useManagementDashboardContext();
 
@@ -333,27 +549,17 @@ export default function EmployeOnboardingPage() {
   const [externalSubmitting, setExternalSubmitting] = useState(false);
   const [externalError, setExternalError] = useState<string | null>(null);
 
-  const [referrersLoading, setReferrersLoading] = useState(false);
-  const [referrerOptions, setReferrerOptions] = useState<ManagementEmployeeRow[]>([]);
-  const [referredById, setReferredById] = useState<string>("");
-  const [referredByNameOverride, setReferredByNameOverride] = useState("");
-  const [referredByDesignationId, setReferredByDesignationId] = useState<string>("");
-  const [referenceSubmitting, setReferenceSubmitting] = useState(false);
-  const [referenceError, setReferenceError] = useState<string | null>(null);
-
   const [assetDraftRows, setAssetDraftRows] = useState<AssetDraftRow[]>([]);
   const [assetsSubmitting, setAssetsSubmitting] = useState(false);
   const [assetsError, setAssetsError] = useState<string | null>(null);
 
-  const [addressCountry, setAddressCountry] = useState("");
-  const [addressState, setAddressState] = useState("");
-  const [addressDistrict, setAddressDistrict] = useState("");
-  const [addressCity, setAddressCity] = useState("");
-  const [addressIsFromVillage, setAddressIsFromVillage] = useState(false);
-  const [addressVillage, setAddressVillage] = useState("");
-  const [addressStreet, setAddressStreet] = useState("");
-  const [addressHouseNumber, setAddressHouseNumber] = useState("");
-  const [addressZipCode, setAddressZipCode] = useState("");
+  const [permanentAddress, setPermanentAddress] = useState<AddressFormValues>(
+    createEmptyAddressForm,
+  );
+  const [currentAddress, setCurrentAddress] = useState<AddressFormValues>(
+    createEmptyAddressForm,
+  );
+  const [currentSameAsPermanent, setCurrentSameAsPermanent] = useState(false);
   const [addressSubmitting, setAddressSubmitting] = useState(false);
   const [addressError, setAddressError] = useState<string | null>(null);
   const [addressSuccess, setAddressSuccess] = useState<string | null>(null);
@@ -416,31 +622,23 @@ export default function EmployeOnboardingPage() {
   }
 
   function resetAddressForm() {
-    setAddressCountry("");
-    setAddressState("");
-    setAddressDistrict("");
-    setAddressCity("");
-    setAddressIsFromVillage(false);
-    setAddressVillage("");
-    setAddressStreet("");
-    setAddressHouseNumber("");
-    setAddressZipCode("");
+    setPermanentAddress(createEmptyAddressForm());
+    setCurrentAddress(createEmptyAddressForm());
+    setCurrentSameAsPermanent(false);
     setAddressError(null);
   }
+
+  useEffect(() => {
+    if (currentSameAsPermanent) {
+      setCurrentAddress({ ...permanentAddress });
+    }
+  }, [currentSameAsPermanent, permanentAddress]);
 
   function resetExternalForm() {
     setEmergencyName("");
     setEmergencyNumber("");
     setRelationBloodLine("father");
     setExternalError(null);
-  }
-
-  function resetReferenceForm() {
-    setReferredById("");
-    setReferredByNameOverride("");
-    setReferredByDesignationId("");
-    setReferenceError(null);
-    setReferrerOptions([]);
   }
 
   function resetAssetDraftRows() {
@@ -464,7 +662,6 @@ export default function EmployeOnboardingPage() {
     resetAddressForm();
     resetDocumentsForm();
     resetExternalForm();
-    resetReferenceForm();
     resetAssetDraftRows();
     setOnboardingStep("basic");
     setName("");
@@ -476,6 +673,26 @@ export default function EmployeOnboardingPage() {
     setShowConfirmPassword(false);
     if (roles.length > 0) setUserRoleId(String(roles[0].id));
   }
+
+  useEffect(() => {
+    const employeeIdFromUrl = searchParams.get("employee_id");
+    const employeeNameFromUrl = searchParams.get("employee_name");
+    const stepFromUrl = searchParams.get("step");
+
+    if (employeeIdFromUrl) {
+      setCreatedEmployeeId(employeeIdFromUrl);
+      if (employeeNameFromUrl) {
+        setCreatedEmployeeName(decodeURIComponent(employeeNameFromUrl));
+      }
+    }
+
+    if (
+      stepFromUrl &&
+      (ONBOARDING_STEPS_ORDER as readonly string[]).includes(stepFromUrl)
+    ) {
+      setOnboardingStep(stepFromUrl as OnboardingWizardStep);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     let cancelled = false;
@@ -573,11 +790,10 @@ export default function EmployeOnboardingPage() {
       resetAddressForm();
       resetDocumentsForm();
       resetExternalForm();
-      resetReferenceForm();
       resetAssetDraftRows();
       setOnboardingStep("external");
       setSuccess(
-        `Step 1 done — ${employeeName} has an account. Next: emergency contact, reference, assets (optional), documents, optional address.`,
+        `Step 1 done — ${employeeName} has an account. Next: emergency contact, previous company (optional), assets, documents, and address.`,
       );
       setName("");
       setEmail("");
@@ -639,7 +855,7 @@ export default function EmployeOnboardingPage() {
       });
       setOnboardingStep("reference");
       setSuccess(
-        `${createdEmployeeName || "Employee"}: emergency contact saved. Add internal reference (next step).`,
+        `${createdEmployeeName || "Employee"}: emergency contact saved. Add previous company reference or skip if fresher.`,
       );
     } catch (err) {
       setExternalError(err instanceof Error ? err.message : "Could not save emergency contact.");
@@ -648,116 +864,20 @@ export default function EmployeOnboardingPage() {
     }
   }
 
-  useEffect(() => {
-    let cancelled = false;
+  const previousCompanyFormUrl = useMemo(() => {
+    if (!createdEmployeeId || !orgIdParam) return "";
+    const q = new URLSearchParams({
+      employee_id: String(createdEmployeeId),
+      employee_name: createdEmployeeName || "Employee",
+    });
+    return `/dashboard/${orgIdParam}/organization-employees/employee-onboarding/previous-company-reference?${q.toString()}`;
+  }, [createdEmployeeId, createdEmployeeName, orgIdParam]);
 
-    async function loadReferrerDirectory() {
-      if (
-        onboardingStep !== "reference" ||
-        !createdEmployeeId ||
-        !organizationIdNum ||
-        Number.isNaN(organizationIdNum)
-      ) {
-        return;
-      }
-      const token = localStorage.getItem("token");
-      if (!token) {
-        if (!cancelled) {
-          setReferenceError("Not signed in.");
-          setReferrerOptions([]);
-        }
-        return;
-      }
-
-      setReferrersLoading(true);
-      setReferenceError(null);
-      try {
-        const merged: ManagementEmployeeRow[] = [];
-        let page = 1;
-        while (true) {
-          const res = await getManagementEmployeesPage(token, organizationIdNum, page, 100);
-          if (cancelled) return;
-          merged.push(...res.data);
-          if (!res.pagination.has_next) break;
-          page += 1;
-          if (page > 40) break;
-        }
-        const newbie = String(createdEmployeeId);
-        if (!cancelled) {
-          setReferrerOptions(merged.filter((r) => String(r.user_id) !== newbie));
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setReferrerOptions([]);
-          setReferenceError(
-            err instanceof Error ? err.message : "Could not load organization members for reference.",
-          );
-        }
-      } finally {
-        if (!cancelled) setReferrersLoading(false);
-      }
-    }
-
-    void loadReferrerDirectory();
-    return () => {
-      cancelled = true;
-    };
-  }, [onboardingStep, createdEmployeeId, organizationIdNum]);
-
-  async function handleReferenceSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setReferenceError(null);
-
-    if (!createdEmployeeId) {
-      setReferenceError("Create an employee first.");
-      return;
-    }
-    if (!organizationIdNum || Number.isNaN(organizationIdNum)) {
-      setReferenceError("Invalid organization.");
-      return;
-    }
-    if (!referredById.trim()) {
-      setReferenceError("Choose who referred this employee.");
-      return;
-    }
-    if (String(referredById).trim() === String(createdEmployeeId).trim()) {
-      setReferenceError("Referrer cannot be the new employee.");
-      return;
-    }
-    if (referredByNameOverride.trim().length > 200) {
-      setReferenceError("Optional referrer display name must be at most 200 characters.");
-      return;
-    }
-
-    const token = localStorage.getItem("token");
-    if (!token) {
-      setReferenceError("Not signed in.");
-      return;
-    }
-
-    setReferenceSubmitting(true);
-    try {
-      await addEmployeeReference(token, {
-        org_id: organizationIdNum,
-        employee_id: createdEmployeeId,
-        referred_by_id: referredById,
-        referred_by_name:
-          referredByNameOverride.trim() !== "" ? referredByNameOverride.trim() : undefined,
-        referred_by_designation_id:
-          referredByDesignationId.trim() !== ""
-            ? Number(referredByDesignationId)
-            : undefined,
-      });
-      setReferenceError(null);
-      setOnboardingStep("assets");
-      setSuccess(
-        `${createdEmployeeName || "Employee"}: reference saved. Assign assets next (optional) or skip.`,
-      );
-    } catch (err) {
-      setReferenceError(err instanceof Error ? err.message : "Could not save reference.");
-    } finally {
-      setReferenceSubmitting(false);
-    }
+  function handlePreviousCompanySkip() {
+    setOnboardingStep("assets");
+    setSuccess(
+      `${createdEmployeeName || "Employee"}: skipped previous company reference. Assign assets next (optional) or skip.`,
+    );
   }
 
   function assetRowIsEmpty(row: AssetDraftRow) {
@@ -924,7 +1044,6 @@ export default function EmployeOnboardingPage() {
     setCreatedEmployeeName("");
     resetDocumentsForm();
     resetExternalForm();
-    resetReferenceForm();
     resetAssetDraftRows();
   }
 
@@ -941,17 +1060,25 @@ export default function EmployeOnboardingPage() {
       setAddressError("Invalid organization.");
       return;
     }
-    if (
-      !addressCountry.trim() ||
-      !addressState.trim() ||
-      !addressDistrict.trim() ||
-      !addressCity.trim() ||
-      !addressStreet.trim() ||
-      !addressHouseNumber.trim() ||
-      !addressZipCode.trim() ||
-      (addressIsFromVillage && !addressVillage.trim())
-    ) {
-      setAddressError("Fill every field to save address, or use Skip.");
+
+    const permanentValidation = validateAddressFormValues(
+      permanentAddress,
+      "Permanent address",
+    );
+    if (permanentValidation) {
+      setAddressError(permanentValidation);
+      return;
+    }
+
+    const currentValues = currentSameAsPermanent
+      ? permanentAddress
+      : currentAddress;
+    const currentValidation = validateAddressFormValues(
+      currentValues,
+      "Current address",
+    );
+    if (currentValidation) {
+      setAddressError(currentValidation);
       return;
     }
 
@@ -964,23 +1091,17 @@ export default function EmployeOnboardingPage() {
     setAddressSubmitting(true);
     try {
       await addUserAddress(token, {
-        user_id: createdEmployeeId,
+        employee_id: createdEmployeeId,
         org_id: organizationIdNum,
-        country: addressCountry.trim(),
-        state: addressState.trim(),
-        district: addressDistrict.trim(),
-        city: addressCity.trim(),
-        is_from_village: addressIsFromVillage,
-        village_name: addressIsFromVillage ? addressVillage.trim() : null,
-        street: addressStreet.trim(),
-        house_number: addressHouseNumber.trim(),
-        zip_code: addressZipCode.trim(),
+        address_info: [
+          toAddressEntry(permanentAddress, "permanent"),
+          toAddressEntry(currentValues, "current"),
+        ],
       });
-      setAddressSuccess("Employee address saved. Onboarding complete.");
+      setAddressSuccess("Employee addresses saved. Onboarding complete.");
       resetAddressForm();
       resetDocumentsForm();
       resetExternalForm();
-      resetReferenceForm();
       resetAssetDraftRows();
       setOnboardingStep("basic");
       setCreatedEmployeeId(null);
@@ -1076,7 +1197,7 @@ export default function EmployeOnboardingPage() {
             <h1 className="text-[18px] font-semibold text-[#1F2937]">Employee onboarding</h1>
             <p className="mt-0.5 text-[13px] text-[#6B7280]">
               Six steps for <span className="font-medium text-[#374151]">{orgName}</span>: basics, emergency
-              contact, reference, assets, documents, and address.
+              contact, previous company (optional), assets, documents, and address.
             </p>
           </div>
         </div>
@@ -1443,7 +1564,7 @@ export default function EmployeOnboardingPage() {
                 ) : (
                   <>
                     <ShieldCheck className="h-4 w-4" aria-hidden />
-                    Continue to reference
+                    Continue to previous company
                   </>
                 )}
               </button>
@@ -1456,140 +1577,44 @@ export default function EmployeOnboardingPage() {
         <div className={stepPanelShell()}>
           <div className={stepSectionHeaderShell()}>
             <span className={stepIconShellCls()}>
-              <Users className="h-4 w-4" aria-hidden />
+              <Briefcase className="h-4 w-4" aria-hidden />
             </span>
             <div>
-              <h2 className={stepTitleCls()}>Internal reference</h2>
+              <h2 className={stepTitleCls()}>Previous company reference</h2>
               <p className={stepDescCls()}>
-                Who referred{" "}
-                <span className="font-medium text-[#374151]">{createdEmployeeName}</span>? Choose an
-                existing org member — their user id is sent to HR records (step&nbsp;3 of&nbsp;6).
+                Optional background verification for{" "}
+                <span className="font-medium text-[#374151]">{createdEmployeeName}</span>. Experienced
+                hires can add prior employer details; freshers can skip (step&nbsp;3 of&nbsp;6).
               </p>
             </div>
           </div>
 
-          {referenceError && (
-            <div
-              className={alertErrorCls()}
-              role="alert"
-            >
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#D93025]" aria-hidden />
-              <span>{referenceError}</span>
-            </div>
-          )}
-
-          <form onSubmit={handleReferenceSubmit} className="space-y-4">
-            <div>
-              <label htmlFor="referred-by" className={labelCls()}>
-                Referred by (org member) <span className="text-red-500">*</span>
-              </label>
-              <select
-                id="referred-by"
-                className={inputCls()}
-                disabled={referrersLoading || referenceSubmitting}
-                value={referredById}
-                onChange={(e) => {
-                  const next = e.target.value;
-                  setReferredById(next);
-                  const row = referrerOptions.find((r) => String(r.user_id) === next);
-                  const primary = row?.roles?.[0]?.role_id;
-                  setReferredByDesignationId(
-                    primary != null && primary !== undefined ? String(primary) : "",
-                  );
-                }}
-                required={!referrersLoading}
-              >
-                <option value="">
-                  {referrersLoading ? "Loading members…" : "Select name / email / role…"}
-                </option>
-                {referrerOptions.map((row) => (
-                  <option key={String(row.user_id)} value={String(row.user_id)}>
-                    {formatReferrerOptionLabel(row)}
-                  </option>
-                ))}
-              </select>
-              {!referrersLoading && referrerOptions.length === 0 && (
-                <p className="mt-2 text-[11px] text-[#E8710A]">
-                  No other members loaded. Ensure people exist in this org or check permissions.
-                </p>
-              )}
-            </div>
-
-            <div>
-              <label htmlFor="referrer-display-name" className={labelCls()}>
-                Referrer display name <span className="text-[11px] font-normal text-[#9CA3AF]">(optional)</span>
-              </label>
-              <input
-                id="referrer-display-name"
-                className={inputCls()}
-                value={referredByNameOverride}
-                onChange={(e) => setReferredByNameOverride(e.target.value)}
-                placeholder="Override stored label (max 200 characters)"
-                maxLength={200}
-              />
-            </div>
-
-            <div>
-              <label htmlFor="referrer-designation" className={labelCls()}>
-                Referrer designation (organization role)&nbsp;
-                <span className="text-[11px] font-normal text-[#9CA3AF]">(optional)</span>
-              </label>
-              <select
-                id="referrer-designation"
-                className={inputCls()}
-                value={referredByDesignationId}
-                disabled={rolesLoading || referenceSubmitting || roles.length === 0}
-                onChange={(e) => setReferredByDesignationId(e.target.value)}
-              >
-                <option value="">
-                  Auto from selected member&apos;s primary role — or choose…
-                </option>
-                {roles.map((r) => (
-                  <option key={String(r.id)} value={String(r.id)}>
-                    {(r.role_name ?? "Role").replace(/\b\w/g, (c) => c.toUpperCase())}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div className="space-y-4">
+            <p className="text-[13px] text-[#6B7280]">
+              Capture previous company name, employment dates, and an HR or reporting manager contact for
+              verification. You can add multiple previous employers on the next screen.
+            </p>
 
             <div className={stepFooterShell()}>
               <button
                 type="button"
-                disabled={referenceSubmitting}
-                onClick={() => {
-                  setReferredById("");
-                  setReferredByNameOverride("");
-                  setReferredByDesignationId("");
-                  setReferenceError(null);
-                }}
-                className={btnSecondaryCls()}
+                onClick={handlePreviousCompanySkip}
+                className={btnSkipCls()}
               >
-                Reset selection
+                No reference — fresher employee
               </button>
-              <button
-                type="submit"
-                disabled={
-                  referenceSubmitting ||
-                  referrersLoading ||
-                  !referredById ||
-                  referrerOptions.length === 0
-                }
-                className={btnPrimaryCls()}
-              >
-                {referenceSubmitting ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                    Saving…
-                  </>
-                ) : (
-                  <>
-                    <Users className="h-4 w-4" aria-hidden />
-                    Save reference &amp; continue
-                  </>
-                )}
-              </button>
+              {previousCompanyFormUrl ? (
+                <Link href={previousCompanyFormUrl} className={btnPrimaryCls()}>
+                  <Briefcase className="h-4 w-4" aria-hidden />
+                  Add previous company reference
+                </Link>
+              ) : (
+                <button type="button" disabled className={btnPrimaryCls()}>
+                  Add previous company reference
+                </button>
+              )}
             </div>
-          </form>
+          </div>
         </div>
       )}
 
@@ -2068,8 +2093,9 @@ export default function EmployeOnboardingPage() {
             <div>
               <h2 className={stepTitleCls()}>Employee address</h2>
               <p className={stepDescCls()}>
-                Optional — skip if you&apos;ll capture this later for{" "}
-                <span className="font-medium text-[#374151]">{createdEmployeeName}</span>.
+                Permanent and current address for{" "}
+                <span className="font-medium text-[#374151]">{createdEmployeeName}</span> (step&nbsp;6
+                of&nbsp;6). Optional — skip if you&apos;ll capture this later.
               </p>
             </div>
           </div>
@@ -2085,167 +2111,79 @@ export default function EmployeOnboardingPage() {
           )}
 
           <form onSubmit={handleAddressSubmit} className="space-y-4">
-              <div className="grid gap-5 sm:grid-cols-2">
-                <div>
-                  <label htmlFor="addr-country" className={labelCls()}>
-                    Country
-                  </label>
-                  <input
-                    id="addr-country"
-                    className={inputCls()}
-                    value={addressCountry}
-                    onChange={(e) => setAddressCountry(e.target.value)}
-                    placeholder="India"
-                  />
-                </div>
+            <AddressFormFields
+              idPrefix="perm"
+              title="Permanent address"
+              values={permanentAddress}
+              onChange={(patch) =>
+                setPermanentAddress((prev) => ({ ...prev, ...patch }))
+              }
+              disabled={addressSubmitting}
+            />
 
-                <div>
-                  <label htmlFor="addr-state" className={labelCls()}>
-                    State
-                  </label>
-                  <input
-                    id="addr-state"
-                    className={inputCls()}
-                    value={addressState}
-                    onChange={(e) => setAddressState(e.target.value)}
-                    placeholder="Maharashtra"
-                  />
-                </div>
+            <label className="flex items-center gap-2 rounded-lg border border-[#E4E7EC] bg-white px-3 py-2.5 text-[13px] font-medium text-[#1F2937]">
+              <input
+                type="checkbox"
+                checked={currentSameAsPermanent}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setCurrentSameAsPermanent(checked);
+                  if (checked) {
+                    setCurrentAddress({ ...permanentAddress });
+                  }
+                }}
+                disabled={addressSubmitting}
+                className="h-4 w-4 rounded border-[#E4E7EC] text-[#008CD3] focus:ring-[#008CD3]/30"
+              />
+              Current address is same as permanent address
+            </label>
 
-                <div>
-                  <label htmlFor="addr-district" className={labelCls()}>
-                    District
-                  </label>
-                  <input
-                    id="addr-district"
-                    className={inputCls()}
-                    value={addressDistrict}
-                    onChange={(e) => setAddressDistrict(e.target.value)}
-                    placeholder="Pune"
-                  />
-                </div>
+            <AddressFormFields
+              idPrefix="curr"
+              title="Current address"
+              values={currentSameAsPermanent ? permanentAddress : currentAddress}
+              onChange={(patch) => setCurrentAddress((prev) => ({ ...prev, ...patch }))}
+              disabled={addressSubmitting || currentSameAsPermanent}
+            />
 
-                <div>
-                  <label htmlFor="addr-city" className={labelCls()}>
-                    City
-                  </label>
-                  <input
-                    id="addr-city"
-                    className={inputCls()}
-                    value={addressCity}
-                    onChange={(e) => setAddressCity(e.target.value)}
-                    placeholder="Pune"
-                  />
-                </div>
-
-                <div className="sm:col-span-2">
-                  <label className="flex items-center gap-2 text-[13px] font-medium text-[#1F2937]">
-                    <input
-                      type="checkbox"
-                      checked={addressIsFromVillage}
-                      onChange={(e) => {
-                        setAddressIsFromVillage(e.target.checked);
-                        if (!e.target.checked) setAddressVillage("");
-                      }}
-                      className="h-4 w-4 rounded border-[#E4E7EC] text-[#008CD3] focus:ring-[#008CD3]/30"
-                    />
-                    Employee is from a village
-                  </label>
-                </div>
-
-                {addressIsFromVillage && (
-                  <div className="sm:col-span-2">
-                    <label htmlFor="addr-village" className={labelCls()}>
-                      Village name {addressIsFromVillage && "(required when checked)"}
-                    </label>
-                    <input
-                      id="addr-village"
-                      className={inputCls()}
-                      value={addressVillage}
-                      onChange={(e) => setAddressVillage(e.target.value)}
-                      placeholder="Village name"
-                    />
-                  </div>
-                )}
-
-                <div>
-                  <label htmlFor="addr-street" className={labelCls()}>
-                    Street
-                  </label>
-                  <input
-                    id="addr-street"
-                    className={inputCls()}
-                    value={addressStreet}
-                    onChange={(e) => setAddressStreet(e.target.value)}
-                    placeholder="Street / Area"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="addr-house" className={labelCls()}>
-                    House number
-                  </label>
-                  <input
-                    id="addr-house"
-                    className={inputCls()}
-                    value={addressHouseNumber}
-                    onChange={(e) => setAddressHouseNumber(e.target.value)}
-                    placeholder="A-101"
-                  />
-                </div>
-
-                <div className="sm:col-span-2">
-                  <label htmlFor="addr-zip" className={labelCls()}>
-                    ZIP / PIN code
-                  </label>
-                  <input
-                    id="addr-zip"
-                    className={inputCls()}
-                    value={addressZipCode}
-                    onChange={(e) => setAddressZipCode(e.target.value)}
-                    placeholder="411001"
-                  />
-                </div>
-              </div>
-
-              <div className={`${stepFooterShell()} lg:justify-between`}>
+            <div className={`${stepFooterShell()} lg:justify-between`}>
+              <button
+                type="button"
+                disabled={addressSubmitting}
+                onClick={() => handleAddressSkip()}
+                className={btnSkipCls()}
+              >
+                Skip address — finish onboarding
+              </button>
+              <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap lg:justify-end">
                 <button
                   type="button"
                   disabled={addressSubmitting}
-                  onClick={() => handleAddressSkip()}
-                  className={btnSkipCls()}
+                  onClick={() => resetAddressForm()}
+                  className={btnSecondaryCls()}
                 >
-                  Skip address — finish onboarding
+                  Clear fields
                 </button>
-                <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap lg:justify-end">
-                  <button
-                    type="button"
-                    disabled={addressSubmitting}
-                    onClick={() => resetAddressForm()}
-                    className={btnSecondaryCls()}
-                  >
-                    Clear fields
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={addressSubmitting}
-                    className={btnPrimaryCls()}
-                  >
-                    {addressSubmitting ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                        Saving…
-                      </>
-                    ) : (
-                      <>
-                        <MapPin className="h-4 w-4" aria-hidden />
-                        Save address
-                      </>
-                    )}
-                  </button>
-                </div>
+                <button
+                  type="submit"
+                  disabled={addressSubmitting}
+                  className={btnPrimaryCls()}
+                >
+                  {addressSubmitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                      Saving…
+                    </>
+                  ) : (
+                    <>
+                      <MapPin className="h-4 w-4" aria-hidden />
+                      Save addresses
+                    </>
+                  )}
+                </button>
               </div>
-            </form>
+            </div>
+          </form>
         </div>
       )}
       </div>

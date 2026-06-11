@@ -6,13 +6,19 @@ import {
   Check,
   ChevronDown,
   KeyRound,
-  Loader2,
   Puzzle,
   RefreshCw,
+  Search,
+  ShieldCheck,
+  Sparkles,
   UserPlus,
   Users,
   X,
 } from "lucide-react";
+import PortalPageLoader from "@/components/portal-dashboard/ui/PortalPageLoader";
+import PortalResponseModal, {
+  type PortalResponseVariant,
+} from "@/components/portal-dashboard/ui/PortalResponseModal";
 import {
   fetchOrganizationFeatureGroups,
   persistOrganizationFeatureAccess,
@@ -25,7 +31,13 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
 const PERMISSIONS = ["create", "read", "update", "delete"] as const;
 type Permission = (typeof PERMISSIONS)[number];
-type AssignmentMode = "view" | "feature" | "sub-feature";
+
+const PERMISSION_COLORS: Record<Permission, string> = {
+  create: "bg-[#E8F4FB] text-[#008CD3] ring-[#008CD3]/20",
+  read: "bg-[#E6F4EA] text-[#0F9D58] ring-[#0F9D58]/20",
+  update: "bg-[#FEF3E6] text-[#E8710A] ring-[#E8710A]/20",
+  delete: "bg-[#FCE8E6] text-[#D93025] ring-[#D93025]/20",
+};
 
 type EmployeeOption = {
   employee_id: number | string;
@@ -61,6 +73,10 @@ function moduleColorClass(name: string) {
   return colors[Math.abs(hash) % colors.length];
 }
 
+function zohoInputCls() {
+  return "w-full rounded-lg border border-[#E4E7EC] bg-white py-2.5 pl-9 pr-3 text-[13px] text-[#1F2937] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15";
+}
+
 export default function AssignFeaturesToEmployeePage() {
   const params = useParams();
   const orgId = String(params?.org_id ?? "");
@@ -68,13 +84,14 @@ export default function AssignFeaturesToEmployeePage() {
   const [loadingFeatures, setLoadingFeatures] = useState(true);
   const [featureError, setFeatureError] = useState<string | null>(null);
   const [orgFeatures, setOrgFeatures] = useState<OrgFeatureGroup[]>([]);
+  const [featureSearch, setFeatureSearch] = useState("");
 
-  const [assignmentMode, setAssignmentMode] = useState<AssignmentMode>("view");
-  const [pendingMode, setPendingMode] = useState<AssignmentMode>("view");
+  const [isAssignmentActive, setIsAssignmentActive] = useState(false);
   const [showEmployeeModal, setShowEmployeeModal] = useState(false);
   const [employeeLoading, setEmployeeLoading] = useState(false);
   const [employeeError, setEmployeeError] = useState<string | null>(null);
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
+  const [employeeSearch, setEmployeeSearch] = useState("");
   const [modalEmployeeId, setModalEmployeeId] = useState<string>("");
 
   const [selectedEmployee, setSelectedEmployee] = useState<EmployeeOption | null>(null);
@@ -86,7 +103,31 @@ export default function AssignFeaturesToEmployeePage() {
   const [subPermissions, setSubPermissions] = useState<Record<string, Permission[]>>({});
 
   const [assigning, setAssigning] = useState(false);
-  const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [responseModal, setResponseModal] = useState<{
+    open: boolean;
+    variant: PortalResponseVariant;
+    title: string;
+    message: string;
+    detail?: string;
+  }>({
+    open: false,
+    variant: "success",
+    title: "",
+    message: "",
+  });
+
+  function showResponse(
+    variant: PortalResponseVariant,
+    title: string,
+    message: string,
+    detail?: string,
+  ) {
+    setResponseModal({ open: true, variant, title, message, detail });
+  }
+
+  function closeResponseModal() {
+    setResponseModal((prev) => ({ ...prev, open: false }));
+  }
 
   const loadOrgFeatures = useCallback(async () => {
     if (!orgId) return;
@@ -126,11 +167,11 @@ export default function AssignFeaturesToEmployeePage() {
   }
 
   function exitAssignmentMode() {
-    setAssignmentMode("view");
-    setPendingMode("view");
+    setIsAssignmentActive(false);
     setSelectedEmployee(null);
     resetSelections();
-    setActionMessage(null);
+    closeResponseModal();
+    setFeatureSearch("");
   }
 
   async function loadEmployees() {
@@ -166,9 +207,9 @@ export default function AssignFeaturesToEmployeePage() {
     }
   }
 
-  async function startAssignmentMode(mode: "feature" | "sub-feature") {
-    setPendingMode(mode);
+  async function openAssignmentFlow() {
     setModalEmployeeId(selectedEmployee ? String(selectedEmployee.employee_id) : "");
+    setEmployeeSearch("");
     setShowEmployeeModal(true);
     await loadEmployees();
   }
@@ -182,12 +223,11 @@ export default function AssignFeaturesToEmployeePage() {
     if (!emp) return;
 
     setSelectedEmployee(emp);
-    setAssignmentMode(pendingMode);
+    setIsAssignmentActive(true);
     resetSelections();
     setExpandedFeatureIds(new Set(orgFeatures.map((f) => String(f.parent_feature_id))));
     setShowEmployeeModal(false);
     setEmployeeError(null);
-    setActionMessage(null);
   }
 
   function toggleFeatureExpand(parentId: string) {
@@ -200,7 +240,7 @@ export default function AssignFeaturesToEmployeePage() {
   }
 
   function toggleFeatureSelect(parentId: string) {
-    if (assignmentMode !== "feature" || !selectedEmployee) return;
+    if (!isAssignmentActive || !selectedEmployee) return;
     setSelectedFeatureIds((prev) => {
       const next = new Set(prev);
       if (next.has(parentId)) next.delete(parentId);
@@ -210,7 +250,7 @@ export default function AssignFeaturesToEmployeePage() {
   }
 
   function toggleSubFeature(parentId: string, subId: string) {
-    if (assignmentMode !== "sub-feature" || !selectedEmployee) return;
+    if (!isAssignmentActive || !selectedEmployee) return;
     setSelectedSubByFeature((prev) => {
       const current = new Set(prev[parentId] ?? []);
       if (current.has(subId)) {
@@ -226,13 +266,14 @@ export default function AssignFeaturesToEmployeePage() {
           ...perms,
           [subId]: perms[subId]?.length ? perms[subId] : ["read"],
         }));
+        setExpandedFeatureIds((prevExpanded) => new Set(prevExpanded).add(parentId));
       }
       return { ...prev, [parentId]: current };
     });
   }
 
   function toggleSubPermission(subId: string, perm: Permission) {
-    if (assignmentMode !== "sub-feature") return;
+    if (!isAssignmentActive) return;
     setSubPermissions((prev) => {
       const current = prev[subId] ?? [];
       const has = current.includes(perm);
@@ -241,9 +282,31 @@ export default function AssignFeaturesToEmployeePage() {
     });
   }
 
+  const filteredFeatures = useMemo(() => {
+    const q = featureSearch.trim().toLowerCase();
+    if (!q) return orgFeatures;
+    return orgFeatures.filter((feature) => {
+      const parentText = `${feature.feature_name} ${feature.feature_val}`.toLowerCase();
+      const subText = (feature.sub_features ?? [])
+        .map((sf) => `${sf.sub_feature_name} ${sf.sub_feature_path}`)
+        .join(" ")
+        .toLowerCase();
+      return parentText.includes(q) || subText.includes(q);
+    });
+  }, [orgFeatures, featureSearch]);
+
+  const filteredEmployees = useMemo(() => {
+    const q = employeeSearch.trim().toLowerCase();
+    if (!q) return employees;
+    return employees.filter(
+      (emp) =>
+        emp.employee_name.toLowerCase().includes(q) ||
+        String(emp.employee_id).includes(q),
+    );
+  }, [employees, employeeSearch]);
+
   const totalSubFeatureCount = useMemo(
-    () =>
-      orgFeatures.reduce((sum, f) => sum + (f.sub_features?.length ?? 0), 0),
+    () => orgFeatures.reduce((sum, f) => sum + (f.sub_features?.length ?? 0), 0),
     [orgFeatures],
   );
 
@@ -254,6 +317,10 @@ export default function AssignFeaturesToEmployeePage() {
     }
     return count;
   }, [selectedSubByFeature]);
+
+  const selectedFeatureCount = selectedFeatureIds.size;
+
+  const hasAnySelection = selectedFeatureCount > 0 || selectedSubCount > 0;
 
   const allFeaturesSelected =
     orgFeatures.length > 0 &&
@@ -320,101 +387,187 @@ export default function AssignFeaturesToEmployeePage() {
     setSubPermissions(next);
   }
 
-  async function assignParentFeatures() {
-    if (!selectedEmployee || selectedFeatureIds.size === 0) {
-      setActionMessage("Select at least one feature.");
+  function buildFeaturesPayload() {
+    const features_data: Array<{
+      feature_id: number;
+      access_permission: boolean;
+      sub_features_data: Array<{
+        sub_feature_id: number;
+        access_permission: boolean;
+        feature_access: Permission[];
+      }>;
+    }> = [];
+
+    for (const feature of orgFeatures) {
+      const parentId = String(feature.parent_feature_id);
+      const parentSelected = selectedFeatureIds.has(parentId);
+      const selectedSubs = selectedSubByFeature[parentId] ?? new Set<string>();
+
+      if (!parentSelected && selectedSubs.size === 0) continue;
+
+      const sub_features_data = (feature.sub_features ?? [])
+        .filter((sf) => selectedSubs.has(String(sf.id)))
+        .map((sf) => {
+          const perms = subPermissions[String(sf.id)] ?? [];
+          if (perms.length === 0) {
+            throw new Error(
+              `Select at least one permission for "${sf.sub_feature_name}".`,
+            );
+          }
+          return {
+            sub_feature_id: Number(sf.id),
+            access_permission: true,
+            feature_access: perms,
+          };
+        });
+
+      features_data.push({
+        feature_id: Number(feature.parent_feature_id),
+        access_permission: parentSelected || sub_features_data.length > 0,
+        sub_features_data,
+      });
+    }
+
+    return features_data;
+  }
+
+  async function assignAccess() {
+    if (!selectedEmployee) {
+      showResponse(
+        "error",
+        "Employee required",
+        "Select an employee before assigning access.",
+      );
+      return;
+    }
+    if (!hasAnySelection) {
+      showResponse(
+        "error",
+        "Nothing selected",
+        "Select at least one module or sub-module to assign.",
+      );
       return;
     }
 
-    const features_info = orgFeatures
-      .filter((f) => selectedFeatureIds.has(String(f.parent_feature_id)))
-      .map((f) => ({
-        feature_id: Number(f.parent_feature_id),
-        access_permission: true,
-      }));
+    let features_data;
+    try {
+      features_data = buildFeaturesPayload();
+    } catch (e) {
+      showResponse(
+        "error",
+        "Invalid selection",
+        e instanceof Error ? e.message : "Please review your selections.",
+      );
+      return;
+    }
+
+    if (features_data.length === 0) {
+      showResponse(
+        "error",
+        "Nothing selected",
+        "Select at least one module or sub-module to assign.",
+      );
+      return;
+    }
 
     setAssigning(true);
-    setActionMessage(null);
     try {
       const res = await fetch(
-        `${API_URL}/api/organization-features/assign-feature-access-to-the-employee`,
+        `${API_URL}/api/organization-features/assign-features-and-sub-features-to-the-employee`,
         {
           method: "POST",
           headers: authHeaders(),
           body: JSON.stringify({
             org_id: Number(orgId),
             employee_id: Number(selectedEmployee.employee_id),
-            features_info,
+            features_data,
           }),
         },
       );
       const data = (await res.json()) as { message?: string };
-      if (!res.ok) throw new Error(data.message || "Could not assign features");
-      setActionMessage("Parent features assigned successfully.");
+      if (!res.ok) throw new Error(data.message || "Could not assign access");
+      showResponse(
+        "success",
+        "Access assigned",
+        "Feature and sub-feature access was assigned successfully.",
+        `Assigned to ${selectedEmployee.employee_name}.`,
+      );
       resetSelections();
     } catch (e) {
-      setActionMessage(e instanceof Error ? e.message : "Assignment failed");
+      showResponse(
+        "error",
+        "Assignment failed",
+        e instanceof Error ? e.message : "Something went wrong. Please try again.",
+      );
     } finally {
       setAssigning(false);
     }
   }
 
-  async function assignSubFeatures() {
-    if (!selectedEmployee || selectedSubCount === 0) {
-      setActionMessage("Select at least one sub-feature.");
-      return;
-    }
+  function renderSelectableSubFeature(parentId: string, sub: OrgSubFeature) {
+    const subId = String(sub.id);
+    const checked = selectedSubByFeature[parentId]?.has(subId) ?? false;
+    const perms = subPermissions[subId] ?? [];
 
-    const feature_info = orgFeatures
-      .map((f) => {
-        const parentId = String(f.parent_feature_id);
-        const selectedSubs = selectedSubByFeature[parentId] ?? new Set<string>();
-        const sub_features_info = (f.sub_features ?? [])
-          .filter((sf) => selectedSubs.has(String(sf.id)))
-          .map((sf) => {
-            const perms = subPermissions[String(sf.id)] ?? [];
-            if (perms.length === 0) {
-              throw new Error(`Select permissions for "${sf.sub_feature_name}".`);
-            }
-            return {
-              sub_feature_id: Number(sf.id),
-              access_sub_permission: true,
-              feature_access: perms.join("-"),
-            };
-          });
-        if (sub_features_info.length === 0) return null;
-        return {
-          parent_feature_id: Number(f.parent_feature_id),
-          access_permission: true,
-          sub_features_info,
-        };
-      })
-      .filter(Boolean);
-
-    setAssigning(true);
-    setActionMessage(null);
-    try {
-      const res = await fetch(
-        `${API_URL}/api/organization-features/assign-features-to-employee`,
-        {
-          method: "POST",
-          headers: authHeaders(),
-          body: JSON.stringify({
-            org_id: Number(orgId),
-            employee_id: Number(selectedEmployee.employee_id),
-            feature_info,
-          }),
-        },
-      );
-      const data = (await res.json()) as { message?: string };
-      if (!res.ok) throw new Error(data.message || "Could not assign sub-features");
-      setActionMessage("Sub-features assigned successfully.");
-      resetSelections();
-    } catch (e) {
-      setActionMessage(e instanceof Error ? e.message : "Assignment failed");
-    } finally {
-      setAssigning(false);
-    }
+    return (
+      <div
+        key={subId}
+        className={`group rounded-xl border p-3.5 transition-all duration-200 ${
+          checked
+            ? "border-[#008CD3] bg-gradient-to-br from-[#E8F4FB] to-white shadow-sm ring-1 ring-[#008CD3]/15"
+            : "border-[#E4E7EC] bg-white hover:border-[#008CD3]/40 hover:shadow-sm"
+        }`}
+      >
+        <button
+          type="button"
+          onClick={() => toggleSubFeature(parentId, subId)}
+          className="flex w-full items-start gap-3 text-left"
+        >
+          <span
+            className={`mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-md border transition ${
+              checked
+                ? "border-[#008CD3] bg-[#008CD3] text-white shadow-sm"
+                : "border-[#CBD5E1] bg-white group-hover:border-[#008CD3]/50"
+            }`}
+          >
+            {checked ? <Check className="h-3 w-3" strokeWidth={3} /> : null}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[13px] font-semibold text-[#1F2937]">
+              {sub.sub_feature_name}
+            </p>
+            <p className="mt-0.5 text-[11px] text-[#6B7280]">{sub.sub_feature_path}</p>
+          </div>
+        </button>
+        {checked ? (
+          <div className="mt-3 border-t border-[#E4E7EC]/80 pt-3 pl-[30px]">
+            <p className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#9CA3AF]">
+              <KeyRound className="h-3 w-3" />
+              CRUD permissions
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {PERMISSIONS.map((perm) => {
+                const on = perms.includes(perm);
+                return (
+                  <button
+                    key={perm}
+                    type="button"
+                    onClick={() => toggleSubPermission(subId, perm)}
+                    className={`rounded-md px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ring-1 transition ${
+                      on
+                        ? PERMISSION_COLORS[perm]
+                        : "bg-[#F9FAFB] text-[#9CA3AF] ring-[#E4E7EC] hover:text-[#6B7280]"
+                    }`}
+                  >
+                    {perm}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+      </div>
+    );
   }
 
   function renderViewSubFeature(sub: OrgSubFeature) {
@@ -429,407 +582,356 @@ export default function AssignFeaturesToEmployeePage() {
     );
   }
 
-  function renderSelectableSubFeature(parentId: string, sub: OrgSubFeature) {
-    const subId = String(sub.id);
-    const checked = selectedSubByFeature[parentId]?.has(subId) ?? false;
-    const perms = subPermissions[subId] ?? [];
-
-    return (
-      <div
-        key={subId}
-        className={`rounded-lg border p-3 transition ${
-          checked ? "border-[#008CD3] bg-[#E8F4FB]/40" : "border-[#E4E7EC] bg-white"
-        }`}
-      >
-        <button
-          type="button"
-          onClick={() => toggleSubFeature(parentId, subId)}
-          className="flex w-full items-start gap-2 text-left"
-        >
-          <span
-            className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
-              checked ? "border-[#008CD3] bg-[#008CD3] text-white" : "border-[#CBD5E1] bg-white"
-            }`}
-          >
-            {checked ? <Check className="h-3 w-3" /> : null}
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="text-[13px] font-semibold text-[#1F2937]">{sub.sub_feature_name}</p>
-            <p className="text-[11px] text-[#6B7280]">{sub.sub_feature_path}</p>
-          </div>
-        </button>
-        {checked ? (
-          <div className="mt-2 border-t border-[#E4E7EC] pt-2 pl-6">
-            <p className="mb-1.5 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
-              <KeyRound className="h-3 w-3" />
-              Permissions
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {PERMISSIONS.map((perm) => {
-                const on = perms.includes(perm);
-                return (
-                  <button
-                    key={perm}
-                    type="button"
-                    onClick={() => toggleSubPermission(subId, perm)}
-                    className={`rounded-md px-2.5 py-1 text-[10px] font-semibold uppercase transition ${
-                      on
-                        ? "bg-[#008CD3] text-white"
-                        : "bg-[#F5F7FA] text-[#6B7280] ring-1 ring-[#E4E7EC]"
-                    }`}
-                  >
-                    {perm}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ) : null}
-      </div>
-    );
-  }
-
-  const modeLabel =
-    assignmentMode === "feature"
-      ? "Assigning parent features"
-      : assignmentMode === "sub-feature"
-        ? "Assigning sub-features"
-        : null;
-
   return (
     <section className="min-h-full bg-[#F5F7FA] p-4 lg:p-6">
       <div className="mx-auto max-w-6xl space-y-4">
-        <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm lg:p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h1 className="text-[18px] font-semibold text-[#1F2937]">
-                Assign features to employee
-              </h1>
-              <p className="mt-1 text-[13px] text-[#6B7280]">
-                Browse modules and sub-modules, then assign parent features or sub-features
-                separately.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => void loadOrgFeatures()}
-                disabled={loadingFeatures}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-[#E4E7EC] bg-white px-3 py-2 text-[13px] font-medium text-[#374151] hover:bg-[#F9FAFB] disabled:opacity-50"
-              >
-                <RefreshCw className={`h-4 w-4 ${loadingFeatures ? "animate-spin" : ""}`} />
-                Refresh
-              </button>
-              <button
-                type="button"
-                onClick={() => void startAssignmentMode("feature")}
-                className={`inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-[13px] font-semibold transition ${
-                  assignmentMode === "feature"
-                    ? "bg-[#0070AA] text-white ring-2 ring-[#008CD3]/30"
-                    : "bg-[#008CD3] text-white hover:bg-[#0070AA]"
-                }`}
-              >
-                <UserPlus className="h-4 w-4" />
-                Assign feature to employee
-              </button>
-              <button
-                type="button"
-                onClick={() => void startAssignmentMode("sub-feature")}
-                className={`inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-[13px] font-semibold transition ${
-                  assignmentMode === "sub-feature"
-                    ? "bg-[#0B8043] text-white ring-2 ring-[#0F9D58]/30"
-                    : "bg-[#0F9D58] text-white hover:bg-[#0B8043]"
-                }`}
-              >
-                <KeyRound className="h-4 w-4" />
-                Sub feature assignment
-              </button>
+        {/* Hero header */}
+        <div className="overflow-hidden rounded-2xl border border-[#E4E7EC] bg-white shadow-sm">
+          <div className="border-b border-[#E4E7EC] bg-gradient-to-r from-[#E8F4FB] via-white to-[#E6F4EA] px-5 py-5 lg:px-6">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#008CD3] text-white shadow-md shadow-[#008CD3]/25">
+                  <ShieldCheck className="h-5 w-5" />
+                </span>
+                <div>
+                  <h1 className="text-[20px] font-semibold tracking-tight text-[#1F2937]">
+                    Assign access to employee
+                  </h1>
+                  <p className="mt-1 max-w-xl text-[13px] leading-relaxed text-[#6B7280]">
+                    Select an employee, choose modules and sub-modules in one flow, and
+                    assign parent features with CRUD permissions in a single save.
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void loadOrgFeatures()}
+                  disabled={loadingFeatures}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-[#E4E7EC] bg-white px-3 py-2 text-[13px] font-medium text-[#374151] shadow-sm transition hover:bg-[#F9FAFB] disabled:opacity-50"
+                >
+                  <RefreshCw
+                    className={`h-4 w-4 ${loadingFeatures ? "animate-spin" : ""}`}
+                  />
+                  Refresh
+                </button>
+                {!isAssignmentActive ? (
+                  <button
+                    type="button"
+                    onClick={() => void openAssignmentFlow()}
+                    className="inline-flex items-center gap-2 rounded-lg bg-[#008CD3] px-4 py-2 text-[13px] font-semibold text-white shadow-md shadow-[#008CD3]/25 transition hover:bg-[#0070AA]"
+                  >
+                    <UserPlus className="h-4 w-4" />
+                    Start assignment
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={exitAssignmentMode}
+                    className="inline-flex items-center gap-2 rounded-lg border border-[#E4E7EC] bg-white px-4 py-2 text-[13px] font-semibold text-[#374151] shadow-sm transition hover:bg-[#F9FAFB]"
+                  >
+                    <X className="h-4 w-4" />
+                    Cancel assignment
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
-          {assignmentMode !== "view" && selectedEmployee ? (
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#008CD3]/25 bg-[#E8F4FB] px-4 py-3">
+          {isAssignmentActive && selectedEmployee ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#E4E7EC] bg-white px-5 py-4 lg:px-6">
               <div className="flex items-center gap-3">
                 {selectedEmployee.employee_profile_image ? (
                   <img
                     src={selectedEmployee.employee_profile_image}
                     alt=""
-                    className="h-10 w-10 rounded-full object-cover"
+                    className="h-11 w-11 rounded-full object-cover ring-2 ring-[#008CD3]/20"
                   />
                 ) : (
-                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-[12px] font-semibold text-[#008CD3]">
+                  <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#E8F4FB] text-[13px] font-bold text-[#008CD3] ring-2 ring-[#008CD3]/20">
                     {userInitials(selectedEmployee.employee_name)}
                   </span>
                 )}
                 <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-[#008CD3]">
-                    {modeLabel}
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[#008CD3]">
+                    Assigning to
                   </p>
-                  <p className="text-[14px] font-semibold text-[#1F2937]">
+                  <p className="text-[15px] font-semibold text-[#1F2937]">
                     {selectedEmployee.employee_name}
                   </p>
                   <p className="text-[12px] text-[#6B7280]">
-                    ID: {String(selectedEmployee.employee_id)}
+                    Employee ID · {String(selectedEmployee.employee_id)}
                   </p>
                 </div>
               </div>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => void startAssignmentMode(assignmentMode)}
-                  className="text-[12px] font-medium text-[#008CD3] underline"
-                >
-                  Change employee
-                </button>
-                <button
-                  type="button"
-                  onClick={exitAssignmentMode}
-                  className="rounded-lg border border-[#E4E7EC] bg-white px-3 py-1.5 text-[12px] font-medium text-[#374151]"
-                >
-                  Cancel
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => void openAssignmentFlow()}
+                className="rounded-lg border border-[#008CD3]/25 bg-[#E8F4FB] px-3 py-1.5 text-[12px] font-semibold text-[#008CD3] transition hover:bg-[#D6EDF9]"
+              >
+                Change employee
+              </button>
             </div>
           ) : (
-            <p className="mt-4 rounded-lg border border-dashed border-[#E4E7EC] bg-[#F9FAFB] px-4 py-3 text-[13px] text-[#6B7280]">
-              Click a feature card to view its sub-features. Use the buttons above to start
-              assigning parent features or sub-features to an employee.
-            </p>
+            <div className="px-5 py-4 lg:px-6">
+              <div className="flex items-start gap-3 rounded-xl border border-dashed border-[#E4E7EC] bg-[#F9FAFB] px-4 py-3.5">
+                <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-[#008CD3]" />
+                <p className="text-[13px] leading-relaxed text-[#6B7280]">
+                  Browse modules below. Click{" "}
+                  <span className="font-semibold text-[#374151]">Start assignment</span> to
+                  pick an employee and turn feature cards into selectable modules with
+                  sub-feature permissions.
+                </p>
+              </div>
+            </div>
           )}
         </div>
 
         {featureError ? (
-          <div className="rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-4 py-3 text-[13px] text-[#D93025]">
+          <div className="rounded-xl border border-[#F5C6C2] bg-[#FCE8E6] px-4 py-3 text-[13px] text-[#D93025]">
             {featureError}
           </div>
         ) : null}
 
-        {actionMessage ? (
-          <div className="rounded-lg border border-[#E4E7EC] bg-white px-4 py-3 text-[13px] text-[#374151]">
-            {actionMessage}
-          </div>
-        ) : null}
-
-        {loadingFeatures ? (
-          <div className="flex items-center justify-center gap-2 py-16 text-[#6B7280]">
-            <Loader2 className="h-7 w-7 animate-spin text-[#008CD3]" />
-            <span>Loading organization features…</span>
-          </div>
-        ) : null}
-
         {!loadingFeatures && orgFeatures.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-[#E4E7EC] bg-white px-6 py-14 text-center">
-            <Puzzle className="mx-auto h-9 w-9 text-[#9CA3AF]" />
-            <p className="mt-2 text-[15px] font-semibold text-[#1F2937]">No features found</p>
-          </div>
-        ) : null}
-
-        {!loadingFeatures &&
-        orgFeatures.length > 0 &&
-        assignmentMode === "feature" &&
-        selectedEmployee ? (
-          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[#E4E7EC] bg-white px-4 py-3 shadow-sm">
-            <button
-              type="button"
-              onClick={selectAllFeatures}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[#008CD3]/30 bg-[#E8F4FB] px-3 py-1.5 text-[12px] font-semibold text-[#008CD3] transition hover:bg-[#D6EDF9]"
-            >
-              <Check className="h-3.5 w-3.5" />
-              {allFeaturesSelected ? "Deselect all features" : "Select all features"}
-            </button>
-            <span className="text-[12px] text-[#6B7280]">
-              {selectedFeatureIds.size} of {orgFeatures.length} selected
-            </span>
-          </div>
-        ) : null}
-
-        {!loadingFeatures &&
-        orgFeatures.length > 0 &&
-        assignmentMode === "sub-feature" &&
-        selectedEmployee ? (
-          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[#E4E7EC] bg-white px-4 py-3 shadow-sm">
-            <button
-              type="button"
-              onClick={selectAllSubFeatures}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[#0F9D58]/30 bg-[#E6F4EA] px-3 py-1.5 text-[12px] font-semibold text-[#0F9D58] transition hover:bg-[#D4EDDA]"
-            >
-              <Check className="h-3.5 w-3.5" />
-              {allSubFeaturesSelected ? "Deselect all sub-features" : "Select all sub-features"}
-            </button>
-            <button
-              type="button"
-              onClick={markAllPermissionsForSelected}
-              disabled={selectedSubCount === 0}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] px-3 py-1.5 text-[12px] font-semibold text-[#374151] transition hover:bg-[#F3F4F6] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <KeyRound className="h-3.5 w-3.5" />
-              {allSelectedSubsHaveFullPermissions
-                ? "All CRUD permissions set"
-                : "Mark all permissions (CRUD)"}
-            </button>
-            <span className="text-[12px] text-[#6B7280]">
-              {selectedSubCount} of {totalSubFeatureCount} sub-features selected
-            </span>
+          <div className="rounded-2xl border border-dashed border-[#E4E7EC] bg-white px-6 py-16 text-center shadow-sm">
+            <Puzzle className="mx-auto h-10 w-10 text-[#9CA3AF]" />
+            <p className="mt-3 text-[16px] font-semibold text-[#1F2937]">No features found</p>
+            <p className="mt-1 text-[13px] text-[#6B7280]">
+              This organization has no assignable modules yet.
+            </p>
           </div>
         ) : null}
 
         {!loadingFeatures && orgFeatures.length > 0 ? (
-          <div className="space-y-3">
-            {orgFeatures.map((feature) => {
-              const parentId = String(feature.parent_feature_id);
-              const title = feature.feature_name || feature.feature_val;
-              const isExpanded = expandedFeatureIds.has(parentId);
-              const isFeatureSelected = selectedFeatureIds.has(parentId);
-              const subs = feature.sub_features ?? [];
-              const isFeatureMode = assignmentMode === "feature";
-              const isSubMode = assignmentMode === "sub-feature";
+          <>
+            <div className="flex flex-col gap-3 rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+              <div className="relative min-w-0 flex-1 sm:max-w-md">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF]" />
+                <input
+                  type="search"
+                  value={featureSearch}
+                  onChange={(e) => setFeatureSearch(e.target.value)}
+                  placeholder="Search modules or sub-modules…"
+                  className={zohoInputCls()}
+                />
+              </div>
 
-              return (
-                <article
-                  key={parentId}
-                  className={`overflow-hidden rounded-xl border bg-white shadow-sm transition ${
-                    isFeatureMode && isFeatureSelected
-                      ? "border-[#008CD3] ring-1 ring-[#008CD3]/20"
-                      : "border-[#E4E7EC]"
-                  }`}
-                >
-                  {isFeatureMode ? (
-                    <button
-                      type="button"
-                      onClick={() => toggleFeatureSelect(parentId)}
-                      className="flex w-full items-center gap-3 px-4 py-4 text-left"
-                    >
-                      <span
-                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border ${
-                          isFeatureSelected
-                            ? "border-[#008CD3] bg-[#008CD3] text-white"
-                            : "border-[#CBD5E1] bg-white"
-                        }`}
-                      >
-                        {isFeatureSelected ? <Check className="h-3.5 w-3.5" /> : null}
-                      </span>
-                      <span
-                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[12px] font-semibold ${moduleColorClass(title)}`}
-                      >
-                        {title.slice(0, 2).toUpperCase()}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[15px] font-semibold text-[#1F2937]">{title}</p>
-                        <p className="text-[12px] text-[#6B7280]">{feature.feature_val}</p>
-                        <p className="mt-0.5 text-[11px] text-[#9CA3AF]">
-                          {subs.length} sub-feature{subs.length === 1 ? "" : "s"}
-                        </p>
-                      </div>
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => toggleFeatureExpand(parentId)}
-                      className="flex w-full items-center gap-3 px-4 py-4 text-left"
-                    >
-                      <span
-                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[12px] font-semibold ${moduleColorClass(title)}`}
-                      >
-                        {title.slice(0, 2).toUpperCase()}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[15px] font-semibold text-[#1F2937]">{title}</p>
-                        <p className="text-[12px] text-[#6B7280]">{feature.feature_val}</p>
-                        <p className="mt-0.5 text-[11px] text-[#9CA3AF]">
-                          {subs.length} sub-feature{subs.length === 1 ? "" : "s"}
-                        </p>
-                      </div>
-                      {subs.length > 0 ? (
-                        <ChevronDown
-                          className={`h-5 w-5 shrink-0 text-[#9CA3AF] transition ${isExpanded ? "rotate-180" : ""}`}
-                        />
-                      ) : null}
-                    </button>
-                  )}
-
-                  {isExpanded && subs.length > 0 ? (
-                    <div className="border-t border-[#E4E7EC] bg-[#F9FAFB] px-4 py-3">
-                      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
-                        {isSubMode ? "Select sub-features & permissions" : "Sub-features"}
-                      </p>
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        {subs.map((sub) =>
-                          isSubMode
-                            ? renderSelectableSubFeature(parentId, sub)
-                            : renderViewSubFeature(sub),
-                        )}
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {isFeatureMode && isFeatureSelected && subs.length > 0 ? (
-                    <div className="border-t border-[#E4E7EC] bg-[#F9FAFB] px-4 py-3">
-                      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
-                        Sub-features (view only)
-                      </p>
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        {subs.map((sub) => renderViewSubFeature(sub))}
-                      </div>
-                    </div>
-                  ) : null}
-                </article>
-              );
-            })}
-          </div>
-        ) : null}
-
-        {assignmentMode === "feature" &&
-        selectedEmployee &&
-        selectedFeatureIds.size > 0 ? (
-          <div className="sticky bottom-4 rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-lg">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-[13px] text-[#6B7280]">
-                <span className="font-semibold text-[#1F2937]">
-                  {selectedFeatureIds.size}
-                </span>{" "}
-                parent feature{selectedFeatureIds.size === 1 ? "" : "s"} selected
-              </p>
-              <button
-                type="button"
-                disabled={assigning}
-                onClick={() => void assignParentFeatures()}
-                className="inline-flex min-h-[40px] items-center gap-2 rounded-lg bg-[#008CD3] px-5 py-2 text-[14px] font-semibold text-white hover:bg-[#0070AA] disabled:opacity-60"
-              >
-                {assigning ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Assigning…
-                  </>
-                ) : (
-                  "Assign parent features"
-                )}
-              </button>
+              {isAssignmentActive && selectedEmployee ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={selectAllFeatures}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-[#008CD3]/25 bg-[#E8F4FB] px-3 py-1.5 text-[12px] font-semibold text-[#008CD3] transition hover:bg-[#D6EDF9]"
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                    {allFeaturesSelected ? "Deselect modules" : "Select all modules"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={selectAllSubFeatures}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-[#0F9D58]/25 bg-[#E6F4EA] px-3 py-1.5 text-[12px] font-semibold text-[#0F9D58] transition hover:bg-[#D4EDDA]"
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                    {allSubFeaturesSelected
+                      ? "Deselect sub-modules"
+                      : "Select all sub-modules"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={markAllPermissionsForSelected}
+                    disabled={selectedSubCount === 0}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] px-3 py-1.5 text-[12px] font-semibold text-[#374151] transition hover:bg-[#F3F4F6] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <KeyRound className="h-3.5 w-3.5" />
+                    {allSelectedSubsHaveFullPermissions ? "Full CRUD set" : "Grant full CRUD"}
+                  </button>
+                </div>
+              ) : null}
             </div>
-          </div>
+
+            {isAssignmentActive && selectedEmployee ? (
+              <div className="grid gap-2 rounded-xl border border-[#008CD3]/15 bg-[#E8F4FB]/50 px-4 py-3 sm:grid-cols-3">
+                <div className="text-center sm:text-left">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
+                    Modules
+                  </p>
+                  <p className="text-[18px] font-bold text-[#008CD3]">
+                    {selectedFeatureCount}
+                    <span className="text-[13px] font-medium text-[#6B7280]">
+                      {" "}
+                      / {orgFeatures.length}
+                    </span>
+                  </p>
+                </div>
+                <div className="text-center sm:text-left">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
+                    Sub-modules
+                  </p>
+                  <p className="text-[18px] font-bold text-[#0F9D58]">
+                    {selectedSubCount}
+                    <span className="text-[13px] font-medium text-[#6B7280]">
+                      {" "}
+                      / {totalSubFeatureCount}
+                    </span>
+                  </p>
+                </div>
+                <div className="text-center sm:text-left">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
+                    Ready to save
+                  </p>
+                  <p className="text-[18px] font-bold text-[#1F2937]">
+                    {hasAnySelection ? "Yes" : "No"}
+                  </p>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="space-y-3">
+              {filteredFeatures.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-[#E4E7EC] bg-white px-6 py-10 text-center">
+                  <p className="text-[14px] font-medium text-[#1F2937]">No matching modules</p>
+                  <p className="mt-1 text-[13px] text-[#6B7280]">
+                    Try a different search term.
+                  </p>
+                </div>
+              ) : null}
+
+              {filteredFeatures.map((feature) => {
+                const parentId = String(feature.parent_feature_id);
+                const title = feature.feature_name || feature.feature_val;
+                const isExpanded = expandedFeatureIds.has(parentId);
+                const isFeatureSelected = selectedFeatureIds.has(parentId);
+                const subs = feature.sub_features ?? [];
+                const selectedSubsInFeature = selectedSubByFeature[parentId]?.size ?? 0;
+                const inAssignment = isAssignmentActive && selectedEmployee;
+
+                return (
+                  <article
+                    key={parentId}
+                    className={`overflow-hidden rounded-2xl border bg-white shadow-sm transition-all duration-200 ${
+                      inAssignment && isFeatureSelected
+                        ? "border-[#008CD3] ring-2 ring-[#008CD3]/15"
+                        : inAssignment && selectedSubsInFeature > 0
+                          ? "border-[#0F9D58]/40 ring-1 ring-[#0F9D58]/10"
+                          : "border-[#E4E7EC] hover:shadow-md"
+                    }`}
+                  >
+                    <div className="flex items-stretch">
+                      {inAssignment ? (
+                        <button
+                          type="button"
+                          onClick={() => toggleFeatureSelect(parentId)}
+                          aria-label={`Select module ${title}`}
+                          className={`flex w-12 shrink-0 items-center justify-center border-r transition ${
+                            isFeatureSelected
+                              ? "border-[#008CD3]/20 bg-[#E8F4FB]"
+                              : "border-[#E4E7EC] bg-[#F9FAFB] hover:bg-[#E8F4FB]/60"
+                          }`}
+                        >
+                          <span
+                            className={`flex h-5 w-5 items-center justify-center rounded-md border transition ${
+                              isFeatureSelected
+                                ? "border-[#008CD3] bg-[#008CD3] text-white"
+                                : "border-[#CBD5E1] bg-white"
+                            }`}
+                          >
+                            {isFeatureSelected ? (
+                              <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                            ) : null}
+                          </span>
+                        </button>
+                      ) : null}
+
+                      <button
+                        type="button"
+                        onClick={() => toggleFeatureExpand(parentId)}
+                        className="flex min-w-0 flex-1 items-center gap-3 px-4 py-4 text-left"
+                      >
+                        <span
+                          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-[12px] font-bold shadow-sm ${moduleColorClass(title)}`}
+                        >
+                          {title.slice(0, 2).toUpperCase()}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-[15px] font-semibold text-[#1F2937]">{title}</p>
+                            {inAssignment && selectedSubsInFeature > 0 ? (
+                              <span className="rounded-full bg-[#E6F4EA] px-2 py-0.5 text-[10px] font-semibold text-[#0F9D58]">
+                                {selectedSubsInFeature} sub-module
+                                {selectedSubsInFeature === 1 ? "" : "s"}
+                              </span>
+                            ) : null}
+                          </div>
+                          <p className="text-[12px] text-[#6B7280]">{feature.feature_val}</p>
+                          <p className="mt-0.5 text-[11px] text-[#9CA3AF]">
+                            {subs.length} sub-module{subs.length === 1 ? "" : "s"}
+                          </p>
+                        </div>
+                        {subs.length > 0 ? (
+                          <ChevronDown
+                            className={`h-5 w-5 shrink-0 text-[#9CA3AF] transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
+                          />
+                        ) : null}
+                      </button>
+                    </div>
+
+                    {isExpanded && subs.length > 0 ? (
+                      <div className="border-t border-[#E4E7EC] bg-gradient-to-b from-[#F9FAFB] to-white px-4 py-4">
+                        <p className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#9CA3AF]">
+                          {inAssignment ? (
+                            <>
+                              <KeyRound className="h-3.5 w-3.5" />
+                              Select sub-modules &amp; permissions
+                            </>
+                          ) : (
+                            "Sub-modules"
+                          )}
+                        </p>
+                        <div className="grid gap-2.5 sm:grid-cols-2">
+                          {subs.map((sub) =>
+                            inAssignment
+                              ? renderSelectableSubFeature(parentId, sub)
+                              : renderViewSubFeature(sub),
+                          )}
+                        </div>
+                      </div>
+                    ) : null}
+                  </article>
+                );
+              })}
+            </div>
+          </>
         ) : null}
 
-        {assignmentMode === "sub-feature" && selectedEmployee && selectedSubCount > 0 ? (
-          <div className="sticky bottom-4 rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-lg">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-[13px] text-[#6B7280]">
-                <span className="font-semibold text-[#1F2937]">{selectedSubCount}</span>{" "}
-                sub-feature{selectedSubCount === 1 ? "" : "s"} selected
-              </p>
-              <button
-                type="button"
-                disabled={assigning}
-                onClick={() => void assignSubFeatures()}
-                className="inline-flex min-h-[40px] items-center gap-2 rounded-lg bg-[#0F9D58] px-5 py-2 text-[14px] font-semibold text-white hover:bg-[#0B8043] disabled:opacity-60"
-              >
-                {assigning ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Assigning…
-                  </>
-                ) : (
-                  "Assign sub-features"
-                )}
-              </button>
+        {isAssignmentActive && selectedEmployee && hasAnySelection ? (
+          <div className="sticky bottom-4 z-20 overflow-hidden rounded-2xl border border-[#E4E7EC] bg-white shadow-xl shadow-black/10">
+            <div className="border-t-[3px] border-t-[#008CD3] bg-gradient-to-r from-[#E8F4FB]/80 via-white to-[#E6F4EA]/50 px-5 py-4">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[#008CD3]">
+                    Review &amp; assign
+                  </p>
+                  <p className="mt-0.5 text-[14px] text-[#374151]">
+                    <span className="font-bold text-[#1F2937]">{selectedFeatureCount}</span>{" "}
+                    module{selectedFeatureCount === 1 ? "" : "s"},{" "}
+                    <span className="font-bold text-[#0F9D58]">{selectedSubCount}</span>{" "}
+                    sub-module{selectedSubCount === 1 ? "" : "s"}
+                  </p>
+                  <p className="text-[12px] text-[#6B7280]">
+                    for {selectedEmployee.employee_name}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={assigning}
+                  onClick={() => void assignAccess()}
+                  className="inline-flex min-h-[44px] min-w-[180px] items-center justify-center gap-2 rounded-xl bg-[#008CD3] px-6 py-2.5 text-[14px] font-semibold text-white shadow-lg shadow-[#008CD3]/25 transition hover:bg-[#0070AA] disabled:opacity-60"
+                >
+                  <ShieldCheck className="h-4 w-4" />
+                  Assign access
+                </button>
+              </div>
             </div>
           </div>
         ) : null}
@@ -840,86 +942,154 @@ export default function AssignFeaturesToEmployeePage() {
           <button
             type="button"
             aria-label="Close"
-            className="absolute inset-0 bg-black/50"
+            className="absolute inset-0 bg-black/50 backdrop-blur-[2px]"
             onClick={() => setShowEmployeeModal(false)}
           />
-          <div className="relative z-10 w-full max-w-md overflow-hidden rounded-t-xl border border-[#E4E7EC] bg-white shadow-xl sm:rounded-xl">
-            <div className="border-b border-[#E4E7EC] border-t-[3px] border-t-[#008CD3] px-4 py-4">
-              <div className="flex items-start justify-between gap-2">
+          <div className="relative z-10 w-full max-w-lg overflow-hidden rounded-t-2xl border border-[#E4E7EC] bg-white shadow-2xl sm:rounded-2xl">
+            <div className="border-b border-[#E4E7EC] border-t-[3px] border-t-[#008CD3] bg-gradient-to-r from-[#E8F4FB] to-white px-5 py-5">
+              <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-[#008CD3]">
-                    Select employee
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[#008CD3]">
+                    Step 1 · Select employee
                   </p>
-                  <h3 className="text-[16px] font-semibold text-[#1F2937]">
-                    {pendingMode === "sub-feature"
-                      ? "Sub-feature assignment"
-                      : "Parent feature assignment"}
+                  <h3 className="mt-0.5 text-[18px] font-semibold text-[#1F2937]">
+                    Who receives this access?
                   </h3>
+                  <p className="mt-1 text-[13px] text-[#6B7280]">
+                    Choose one employee, then select modules and sub-modules on the next
+                    screen.
+                  </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowEmployeeModal(false)}
-                  className="rounded-md border border-[#E4E7EC] p-1.5 text-[#6B7280]"
+                  className="rounded-lg border border-[#E4E7EC] p-2 text-[#6B7280] transition hover:bg-[#F9FAFB]"
                 >
                   <X className="h-4 w-4" />
                 </button>
               </div>
             </div>
 
-            <div className="max-h-[50vh] overflow-y-auto p-4">
+            <div className="max-h-[55vh] overflow-y-auto p-5">
               {employeeLoading ? (
                 <div className="flex justify-center py-10">
-                  <Loader2 className="h-7 w-7 animate-spin text-[#008CD3]" />
+                  <PortalPageLoader size="sm" message="Loading employees…" />
                 </div>
               ) : null}
 
               {employeeError ? (
-                <p className="mb-3 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2 text-[12px] text-[#D93025]">
+                <p className="mb-3 rounded-xl border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2.5 text-[12px] text-[#D93025]">
                   {employeeError}
                 </p>
               ) : null}
 
               {!employeeLoading && employees.length === 0 ? (
-                <div className="py-10 text-center">
-                  <Users className="mx-auto h-8 w-8 text-[#9CA3AF]" />
-                  <p className="mt-2 text-[13px] text-[#6B7280]">No employees found</p>
+                <div className="py-12 text-center">
+                  <Users className="mx-auto h-9 w-9 text-[#9CA3AF]" />
+                  <p className="mt-2 text-[14px] font-medium text-[#1F2937]">
+                    No employees found
+                  </p>
                 </div>
               ) : null}
 
               {!employeeLoading && employees.length > 0 ? (
-                <label className="block">
-                  <span className="mb-1.5 block text-[12px] font-medium text-[#374151]">
-                    Employee
-                  </span>
-                  <select
-                    value={modalEmployeeId}
-                    onChange={(e) => setModalEmployeeId(e.target.value)}
-                    className="w-full rounded-lg border border-[#E4E7EC] bg-white px-3 py-2.5 text-[14px] text-[#1F2937] outline-none focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15"
-                  >
-                    <option value="">Select an employee…</option>
-                    {employees.map((emp) => (
-                      <option key={String(emp.employee_id)} value={String(emp.employee_id)}>
-                        {emp.employee_name} (ID: {emp.employee_id})
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <div className="space-y-3">
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF]" />
+                    <input
+                      type="search"
+                      value={employeeSearch}
+                      onChange={(e) => setEmployeeSearch(e.target.value)}
+                      placeholder="Search by name or ID…"
+                      className={zohoInputCls()}
+                    />
+                  </div>
+
+                  <div className="max-h-[280px] space-y-2 overflow-y-auto pr-1">
+                    {filteredEmployees.length === 0 ? (
+                      <p className="py-6 text-center text-[13px] text-[#6B7280]">
+                        No employees match your search.
+                      </p>
+                    ) : null}
+                    {filteredEmployees.map((emp) => {
+                      const id = String(emp.employee_id);
+                      const selected = modalEmployeeId === id;
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => setModalEmployeeId(id)}
+                          className={`flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left transition ${
+                            selected
+                              ? "border-[#008CD3] bg-[#E8F4FB] ring-2 ring-[#008CD3]/15"
+                              : "border-[#E4E7EC] bg-white hover:border-[#008CD3]/40 hover:bg-[#F9FAFB]"
+                          }`}
+                        >
+                          {emp.employee_profile_image ? (
+                            <img
+                              src={emp.employee_profile_image}
+                              alt=""
+                              className="h-10 w-10 rounded-full object-cover"
+                            />
+                          ) : (
+                            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F3F4F6] text-[12px] font-bold text-[#374151]">
+                              {userInitials(emp.employee_name)}
+                            </span>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-[14px] font-semibold text-[#1F2937]">
+                              {emp.employee_name}
+                            </p>
+                            <p className="text-[12px] text-[#6B7280]">ID · {emp.employee_id}</p>
+                          </div>
+                          <span
+                            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
+                              selected
+                                ? "border-[#008CD3] bg-[#008CD3] text-white"
+                                : "border-[#CBD5E1] bg-white"
+                            }`}
+                          >
+                            {selected ? <Check className="h-3 w-3" strokeWidth={3} /> : null}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               ) : null}
             </div>
 
-            <div className="border-t border-[#E4E7EC] p-4">
+            <div className="border-t border-[#E4E7EC] bg-[#F9FAFB] p-5">
               <button
                 type="button"
                 onClick={confirmEmployeeSelection}
                 disabled={!modalEmployeeId || employeeLoading}
-                className="inline-flex w-full min-h-[40px] items-center justify-center rounded-lg bg-[#008CD3] text-[14px] font-semibold text-white hover:bg-[#0070AA] disabled:opacity-50"
+                className="inline-flex w-full min-h-[44px] items-center justify-center gap-2 rounded-xl bg-[#008CD3] text-[14px] font-semibold text-white shadow-md shadow-[#008CD3]/20 transition hover:bg-[#0070AA] disabled:opacity-50"
               >
-                Confirm selected
+                Continue to module selection
               </button>
             </div>
           </div>
         </div>
       ) : null}
+
+      {loadingFeatures ? (
+        <PortalPageLoader overlay message="Loading organization features…" />
+      ) : null}
+
+      {assigning ? (
+        <PortalPageLoader overlay message="Assigning feature access…" />
+      ) : null}
+
+      <PortalResponseModal
+        open={responseModal.open}
+        variant={responseModal.variant}
+        title={responseModal.title}
+        message={responseModal.message}
+        detail={responseModal.detail}
+        confirmLabel="Got it"
+        onClose={closeResponseModal}
+      />
     </section>
   );
 }

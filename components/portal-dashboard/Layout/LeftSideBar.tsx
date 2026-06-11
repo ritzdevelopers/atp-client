@@ -249,6 +249,11 @@ function LeftSideBar({
             path: `${base}/organization-employees/employee-onboarding`,
           },
           {
+            id: "background-verification",
+            name: "Background verification",
+            path: `${base}/organization-employees/background-verification`,
+          },
+          {
             id: "employee-leave-management",
             name: "Manage Employee Leaves",
             path: `${base}/organization-employees/manage-employee-leaves`,

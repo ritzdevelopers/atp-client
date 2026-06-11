@@ -5,47 +5,124 @@ import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   AlertCircle,
+  AlertTriangle,
   ArrowRight,
   Briefcase,
   Building2,
   CalendarDays,
+  CalendarCheck,
   CheckCircle2,
   ChevronLeft,
   Clock,
+  Copy,
+  Check,
+  Download,
+  Eye,
   FileText,
   Globe,
+  Hash,
   Laptop,
   Loader2,
+  Mail,
   MapPin,
+  Pencil,
   Phone,
+  Plus,
   RefreshCw,
-  Shield,
+  Save,
+  ShieldCheck,
+  Sparkles,
+  Trash2,
+  Upload,
+  UserCheck,
+  UserRound,
   User,
   Users,
-  UserX,
   Wallet,
   X,
+  Activity,
+  ClipboardList,
 } from "lucide-react";
 
-import { getSingleEmployee, type SingleEmployeeData } from "@/services/adminUser";
 import {
+  addUserAddress,
+  createUserBackgroundVerification,
+  deleteEmployeeDocuments,
+  EMPLOYEE_ASSET_TYPES,
+  getAllUserBackgroundVerifications,
+  getManagementEmployeesPage,
+  getSingleEmployee,
+  getSingleEmployeeAsset,
+  getSingleUserBackgroundVerification,
+  returnEmployeeAssets,
+  updateEmployeeAssetsBatch,
+  updateEmployeeBackgroundVerificationStatus,
+  updateEmployeeDocument,
+  updateUserAddress,
+  updateUserBackgroundVerification,
+  uploadEmployeeAssetsBatch,
+  uploadEmployeeDocuments,
+  type BackgroundVerificationDetailRow,
+  type BackgroundVerificationInfoPayload,
+  type BackgroundVerificationPersonRole,
+  type BackgroundVerificationReferenceItem,
+  type BackgroundVerificationStatus,
+  type EmployeeAddressEntryPayload,
+  type EmployeeAddressUpdateEntryPayload,
+  type EmployeeAssetRow,
+  type EmployeeOnboardingDocumentField,
+  type SingleEmployeeData,
+} from "@/services/adminUser";
+import {
+  fetchSingleUserAttendanceHistory,
+  type AttendanceHistoryRow,
+} from "@/services/attendanceHistory";
+import {
+  assignIpToEmployee,
+  assignUserToShift,
+  getCompanyIPAddresses,
+  getCompanyShifts,
+  getUserShifts,
+  unassignIpFromEmployee,
+  unassignUserFromShift,
+  type CompanyIpRow,
+  type CompanyShiftRow,
+} from "@/services/organizationSettings";
+import {
+  assignHandoverManager,
   buildEmployeeExitDetailHref,
   employeeExitCompleted,
+  fetchEmployeeExitProcessById,
   fetchEmployeeExitProcesses,
+  handoverDateTimeSqlNow,
   isInProgressExitStatus,
   isOpenExitStatus,
   isPendingExitStatus,
   pickRelevantEmployeeExitRow,
+  returnAssetsCompleted,
+  updateAssignedHandoverManager,
+  type EmployeeExitHandoverQueryRow,
   type EmployeeExitProcessRow,
 } from "@/services/employeeExit";
 import { useManagementDashboardContext } from "@/components/portal-dashboard/Layout/ManagementDashboardContext";
-import TerminateEmployeeModal from "@/components/portal-dashboard/employees/TerminateEmployeeModal";
+
+// ── Design system tokens ──────────────────────────────────────────────
+const GLASS_CARD =
+  "rounded-[20px] border border-white/60 bg-white/80 shadow-[0_10px_40px_rgba(15,23,42,0.08)] backdrop-blur-xl";
+
+const WEEKDAY_META = [
+  { keys: ["monday", "mon"], label: "Monday" },
+  { keys: ["tuesday", "tue"], label: "Tuesday" },
+  { keys: ["wednesday", "wed"], label: "Wednesday" },
+  { keys: ["thursday", "thu"], label: "Thursday" },
+  { keys: ["friday", "fri"], label: "Friday" },
+  { keys: ["saturday", "sat"], label: "Saturday" },
+  { keys: ["sunday", "sun"], label: "Sunday" },
+] as const;
 
 type GetEmployeeClientProps = {
   userId: string;
 };
-
-type MobileTab = "overview" | "work" | "leaves" | "more";
 
 const USER_ICON_COLORS = [
   "bg-[#E8F4FB] text-[#008CD3]",
@@ -71,8 +148,6 @@ function userInitials(name: string) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-const mobileLabelCls =
-  "text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]";
 function ProfilePhotoZoomModal({
   open,
   imageUrl,
@@ -215,6 +290,61 @@ function formatLabel(value: unknown): string {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+function normalizeWeekdayIndex(token: string): number {
+  const normalized = token.trim().toLowerCase().replace(/_/g, "");
+  for (let i = 0; i < WEEKDAY_META.length; i += 1) {
+    if (WEEKDAY_META[i].keys.some((key) => normalized === key || normalized.startsWith(key))) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+function formatWorkingDays(value: unknown): string {
+  if (value == null || value === "") return "—";
+  const raw = String(value).trim();
+  if (/ to /i.test(raw) && !raw.includes(",")) {
+    return raw.replace(/\s+to\s+/gi, " To ");
+  }
+
+  const indices = [
+    ...new Set(
+      raw
+        .split(/[,;/|]+/)
+        .map((part) => normalizeWeekdayIndex(part))
+        .filter((index) => index >= 0),
+    ),
+  ].sort((a, b) => a - b);
+
+  if (indices.length === 0) return formatLabel(raw);
+
+  const ranges: string[] = [];
+  let rangeStart = indices[0];
+  let rangeEnd = indices[0];
+
+  for (let i = 1; i < indices.length; i += 1) {
+    if (indices[i] === rangeEnd + 1) {
+      rangeEnd = indices[i];
+    } else {
+      ranges.push(
+        rangeStart === rangeEnd
+          ? WEEKDAY_META[rangeStart].label
+          : `${WEEKDAY_META[rangeStart].label} To ${WEEKDAY_META[rangeEnd].label}`,
+      );
+      rangeStart = indices[i];
+      rangeEnd = indices[i];
+    }
+  }
+
+  ranges.push(
+    rangeStart === rangeEnd
+      ? WEEKDAY_META[rangeStart].label
+      : `${WEEKDAY_META[rangeStart].label} To ${WEEKDAY_META[rangeEnd].label}`,
+  );
+
+  return ranges.join(", ");
+}
+
 function formatMonthYear(month: unknown, year: unknown): string {
   const monthNum = asNumber(month, 0);
   const yearNum = asNumber(year, 0);
@@ -224,20 +354,1346 @@ function formatMonthYear(month: unknown, year: unknown): string {
   return d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
 }
 
-function buildAddress(info: SingleEmployeeData["user_info"]): string {
+function formatTime(value: unknown): string {
+  if (value == null || value === "") return "—";
+  const d = new Date(String(value));
+  if (Number.isNaN(d.getTime())) return String(value);
+  return d.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
+
+function formatWorkingTime(minutesValue: unknown): string {
+  if (minutesValue === undefined || minutesValue === null || minutesValue === "") return "—";
+  const minutesNum = Number(minutesValue);
+  if (Number.isNaN(minutesNum) || minutesNum < 0) return String(minutesValue);
+  const hours = Math.floor(minutesNum / 60);
+  const minutes = minutesNum % 60;
+  return `${hours}h ${minutes}m`;
+}
+
+function normalizeAttendanceStatus(
+  status: unknown,
+): "present" | "late" | "leave" | "half_day" | "short_leave" | "other" {
+  const value = String(status ?? "").trim().toLowerCase();
+  if (!value) return "other";
+  if (value.includes("short") && value.includes("leave")) return "short_leave";
+  if (value.includes("half")) return "half_day";
+  if (value.includes("late")) return "late";
+  if (value.includes("present")) return "present";
+  if (value.includes("leave") || value.includes("absent")) return "leave";
+  return "other";
+}
+
+function attendanceStatusClass(status: unknown): string {
+  const bucket = normalizeAttendanceStatus(status);
+  if (bucket === "present") return "bg-[#ECFDF5] text-[#059669] ring-[#A7F3D0]";
+  if (bucket === "late") return "bg-[#FFFBEB] text-[#D97706] ring-[#FDE68A]";
+  if (bucket === "leave") return "bg-[#FEF2F2] text-[#DC2626] ring-[#FECACA]";
+  if (bucket === "half_day") return "bg-[#F5F3FF] text-[#7C3AED] ring-[#DDD6FE]";
+  if (bucket === "short_leave") return "bg-[#EFF6FF] text-[#2563EB] ring-[#BFDBFE]";
+  return "bg-[#F1F5F9] text-[#64748B] ring-[#E2E8F0]";
+}
+
+function attendanceDayClass(status: unknown): string {
+  const bucket = normalizeAttendanceStatus(status);
+  if (bucket === "present") return "bg-[#10B981] text-white shadow-sm";
+  if (bucket === "late") return "bg-[#F59E0B] text-white shadow-sm";
+  if (bucket === "leave") return "bg-[#EF4444] text-white shadow-sm";
+  if (bucket === "half_day") return "bg-[#8B5CF6] text-white shadow-sm";
+  if (bucket === "short_leave") return "bg-[#2563EB] text-white shadow-sm";
+  return "bg-[#64748B] text-white shadow-sm";
+}
+
+function workedForDuration(joinDate: unknown): string {
+  if (joinDate == null || joinDate === "") return "—";
+  const start = new Date(String(joinDate));
+  if (Number.isNaN(start.getTime())) return "—";
+  const now = new Date();
+  let months =
+    (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth());
+  if (now.getDate() < start.getDate()) months -= 1;
+  if (months < 0) months = 0;
+  const years = Math.floor(months / 12);
+  const remMonths = months % 12;
+  if (years > 0 && remMonths > 0) return `${years}y ${remMonths}m`;
+  if (years > 0) return `${years} year${years === 1 ? "" : "s"}`;
+  return `${remMonths} month${remMonths === 1 ? "" : "s"}`;
+}
+
+type StatAccent = "primary" | "success" | "warning" | "violet";
+
+const STAT_ACCENTS: Record<
+  StatAccent,
+  { card: string; icon: string; value: string }
+> = {
+  primary: {
+    card: "from-[#2563EB]/[0.08] to-[#3B82F6]/[0.02]",
+    icon: "bg-gradient-to-br from-[#2563EB] to-[#3B82F6] text-white",
+    value: "text-[#1D4ED8]",
+  },
+  success: {
+    card: "from-[#10B981]/[0.08] to-[#34D399]/[0.02]",
+    icon: "bg-gradient-to-br from-[#10B981] to-[#34D399] text-white",
+    value: "text-[#059669]",
+  },
+  warning: {
+    card: "from-[#F59E0B]/[0.08] to-[#FBBF24]/[0.02]",
+    icon: "bg-gradient-to-br from-[#F59E0B] to-[#FBBF24] text-white",
+    value: "text-[#D97706]",
+  },
+  violet: {
+    card: "from-[#8B5CF6]/[0.08] to-[#A78BFA]/[0.02]",
+    icon: "bg-gradient-to-br from-[#8B5CF6] to-[#A78BFA] text-white",
+    value: "text-[#7C3AED]",
+  },
+};
+
+function StatCard({
+  icon,
+  label,
+  value,
+  sub,
+  accent,
+  delay = 0,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string | number;
+  sub?: string;
+  accent: StatAccent;
+  delay?: number;
+}) {
+  const a = STAT_ACCENTS[accent];
+  return (
+    <div
+      className={`card-fade-in group relative overflow-hidden rounded-[20px] border border-white/60 bg-gradient-to-br ${a.card} bg-white/80 p-5 shadow-[0_4px_24px_rgba(15,23,42,0.06)] backdrop-blur-xl transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_16px_44px_rgba(15,23,42,0.12)]`}
+      style={{ animationDelay: `${delay}ms` }}
+    >
+      <div className="flex items-start justify-between">
+        <div className="min-w-0">
+          <p className="text-[13px] font-medium text-[#64748B]">{label}</p>
+          <p className={`mt-1.5 text-[30px] font-bold leading-none tabular-nums ${a.value}`}>
+            {value}
+          </p>
+          {sub ? <p className="mt-2 text-[12px] text-[#94A3B8]">{sub}</p> : null}
+        </div>
+        <span
+          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl shadow-sm transition-transform duration-300 group-hover:scale-110 ${a.icon}`}
+        >
+          {icon}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function DetailGrid({ children }: { children: ReactNode }) {
+  return <dl className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">{children}</dl>;
+}
+
+function DetailItem({
+  label,
+  value,
+  icon,
+  full = false,
+}: {
+  label: string;
+  value: ReactNode;
+  icon?: ReactNode;
+  full?: boolean;
+}) {
+  return (
+    <div className={`flex items-start gap-3 ${full ? "sm:col-span-2" : ""}`}>
+      {icon ? (
+        <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#F1F5F9] text-[#64748B]">
+          {icon}
+        </span>
+      ) : null}
+      <div className="min-w-0">
+        <dt className="text-[13px] font-medium text-[#94A3B8]">{label}</dt>
+        <dd className="mt-0.5 text-[15px] font-semibold text-[#0F172A]">{value}</dd>
+      </div>
+    </div>
+  );
+}
+
+function QuickActionChip({
+  icon,
+  label,
+  onClick,
+}: {
+  icon: ReactNode;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-2 rounded-xl border border-white/70 bg-white/70 px-3.5 py-2 text-[13px] font-semibold text-[#334155] shadow-sm backdrop-blur transition-all duration-200 hover:-translate-y-0.5 hover:bg-white hover:text-[#2563EB] hover:shadow-md active:scale-95"
+    >
+      <span className="text-[#2563EB]">{icon}</span>
+      {label}
+    </button>
+  );
+}
+
+function HeroMetaItem({
+  icon,
+  label,
+  value,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-2xl bg-white/60 px-3.5 py-2.5 backdrop-blur">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-[#2563EB] shadow-sm">
+        {icon}
+      </span>
+      <div className="min-w-0">
+        <p className="text-[12px] font-medium text-[#64748B]">{label}</p>
+        <p className="truncate text-[14px] font-semibold text-[#0F172A]">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+function AttendanceMiniCalendar({
+  month,
+  year,
+  rows,
+  selectedDay,
+  onSelectDay,
+  onPrevMonth,
+  onNextMonth,
+}: {
+  month: number;
+  year: number;
+  rows: AttendanceHistoryRow[];
+  selectedDay: number | null;
+  onSelectDay: (day: number) => void;
+  onPrevMonth: () => void;
+  onNextMonth: () => void;
+}) {
+  const statusByDay = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const row of rows) {
+      const dateStr = row.attendance_date || row.attendance_history;
+      if (!dateStr) continue;
+      const d = new Date(dateStr);
+      if (Number.isNaN(d.getTime())) continue;
+      if (d.getMonth() + 1 !== month || d.getFullYear() !== year) continue;
+      map.set(d.getDate(), String(row.attendance_status ?? ""));
+    }
+    return map;
+  }, [rows, month, year]);
+
+  const firstDay = new Date(year, month - 1, 1).getDay();
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const monthLabel = new Date(year, month - 1, 1).toLocaleDateString(undefined, {
+    month: "long",
+    year: "numeric",
+  });
+  const today = new Date();
+  const isToday = (day: number) =>
+    today.getDate() === day &&
+    today.getMonth() + 1 === month &&
+    today.getFullYear() === year;
+  const weekdayLabels = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+  const cells: ReactNode[] = [];
+  for (let i = 0; i < firstDay; i += 1) {
+    cells.push(<span key={`empty-${i}`} className="h-9" aria-hidden />);
+  }
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const status = statusByDay.get(day);
+    const isSelected = selectedDay === day;
+    const hasAttendance = status != null;
+    cells.push(
+      <button
+        key={day}
+        type="button"
+        onClick={() => onSelectDay(day)}
+        className={`group relative flex h-9 w-full flex-col items-center justify-center rounded-xl text-[13px] font-semibold transition-all duration-200 hover:-translate-y-0.5 ${
+          isSelected ? "ring-2 ring-[#2563EB] ring-offset-2" : ""
+        } ${
+          hasAttendance
+            ? attendanceDayClass(status)
+            : `text-[#475569] hover:bg-[#F1F5F9] ${isToday(day) ? "ring-1 ring-[#2563EB]/40" : ""}`
+        }`}
+        aria-label={`Day ${day}`}
+      >
+        <span>{day}</span>
+        {hasAttendance ? (
+          <span className="absolute bottom-1 h-1 w-1 rounded-full bg-white/80" aria-hidden />
+        ) : isToday(day) ? (
+          <span className="absolute bottom-1 h-1 w-1 rounded-full bg-[#2563EB]" aria-hidden />
+        ) : null}
+      </button>,
+    );
+  }
+
+  return (
+    <div className="flex flex-col">
+      <div className="mb-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#2563EB]/15 to-[#3B82F6]/5 text-[#2563EB]">
+            <CalendarDays className="h-4 w-4" aria-hidden />
+          </span>
+          <h3 className="text-[15px] font-semibold text-[#0F172A]">{monthLabel}</h3>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={onPrevMonth}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-[#64748B] transition hover:bg-[#F1F5F9] hover:text-[#0F172A]"
+            aria-label="Previous month"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={onNextMonth}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-[#64748B] transition hover:bg-[#F1F5F9] hover:text-[#0F172A]"
+            aria-label="Next month"
+          >
+            <ChevronLeft className="h-4 w-4 rotate-180" />
+          </button>
+        </div>
+      </div>
+      <div className="mb-1.5 grid grid-cols-7 gap-1">
+        {weekdayLabels.map((label) => (
+          <span
+            key={label}
+            className="flex h-6 items-center justify-center text-[11px] font-semibold uppercase tracking-wide text-[#94A3B8]"
+          >
+            {label}
+          </span>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-1">{cells}</div>
+    </div>
+  );
+}
+
+type HeroQuickAction = { id: string; icon: ReactNode; label: string };
+
+function ProfileHeroCard({
+  name,
+  role,
+  department,
+  isActive,
+  imageUrl,
+  onImageZoom,
+  employeeId,
+  joined,
+  workDuration,
+  company,
+  email,
+  phone,
+  quickActions,
+  onQuickAction,
+}: {
+  name: string;
+  role: string;
+  department: string;
+  isActive: boolean;
+  imageUrl: string | null;
+  onImageZoom: (url: string, alt: string) => void;
+  employeeId: string;
+  joined: string;
+  workDuration: string;
+  company: string;
+  email: string;
+  phone: string;
+  quickActions: HeroQuickAction[];
+  onQuickAction: (id: string) => void;
+}) {
+  return (
+    <article className="card-fade-in relative overflow-hidden rounded-[24px] border border-white/60 bg-white/80 shadow-[0_10px_40px_rgba(15,23,42,0.08)] backdrop-blur-xl">
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-br from-[#2563EB]/12 via-[#3B82F6]/6 to-transparent"
+        aria-hidden
+      />
+      <div
+        className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-[#8B5CF6]/10 blur-3xl"
+        aria-hidden
+      />
+      <div className="relative grid gap-6 p-6 lg:grid-cols-[1.4fr_1fr] lg:p-7">
+        <div className="flex flex-col gap-5">
+          <div className="flex items-start gap-5">
+            <div className="relative shrink-0">
+              <ProfileAvatarButton
+                name={name}
+                imageUrl={imageUrl}
+                size="lg"
+                onZoom={onImageZoom}
+                className="!h-24 !w-24 !rounded-3xl shadow-lg ring-4 ring-white/70"
+              />
+              <span
+                className={`absolute -bottom-1.5 -right-1.5 flex h-7 w-7 items-center justify-center rounded-full border-[3px] border-white ${
+                  isActive ? "bg-[#10B981]" : "bg-[#94A3B8]"
+                }`}
+                aria-hidden
+              >
+                {isActive ? (
+                  <span className="badge-pulse-dot h-2 w-2 rounded-full bg-white" />
+                ) : null}
+              </span>
+            </div>
+            <div className="min-w-0 flex-1 pt-1">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <h2 className="truncate text-[28px] font-bold leading-tight tracking-tight text-[#0F172A]">
+                  {name}
+                </h2>
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold ${
+                    isActive
+                      ? "bg-[#ECFDF5] text-[#059669] ring-1 ring-inset ring-[#A7F3D0]"
+                      : "bg-[#F1F5F9] text-[#64748B] ring-1 ring-inset ring-[#E2E8F0]"
+                  }`}
+                >
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full ${isActive ? "bg-[#10B981]" : "bg-[#94A3B8]"}`}
+                  />
+                  {isActive ? "Active" : "Inactive"}
+                </span>
+              </div>
+              <p className="mt-1.5 text-[16px] font-semibold text-[#334155]">{role}</p>
+              <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-[#64748B]">
+                <span className="inline-flex items-center gap-1.5">
+                  <Building2 className="h-4 w-4 text-[#94A3B8]" />
+                  {department}
+                </span>
+                {email !== "—" ? (
+                  <a
+                    href={`mailto:${email}`}
+                    className="inline-flex items-center gap-1.5 hover:text-[#2563EB]"
+                  >
+                    <Mail className="h-4 w-4 text-[#94A3B8]" />
+                    {email}
+                  </a>
+                ) : null}
+                {phone !== "—" ? (
+                  <a
+                    href={`tel:${phone}`}
+                    className="inline-flex items-center gap-1.5 hover:text-[#2563EB]"
+                  >
+                    <Phone className="h-4 w-4 text-[#94A3B8]" />
+                    {phone}
+                  </a>
+                ) : null}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {quickActions.map((action) => (
+              <QuickActionChip
+                key={action.id}
+                icon={action.icon}
+                label={action.label}
+                onClick={() => onQuickAction(action.id)}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-2.5 self-center sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+          <HeroMetaItem icon={<Hash className="h-4 w-4" />} label="Employee ID" value={employeeId} />
+          <HeroMetaItem icon={<CalendarDays className="h-4 w-4" />} label="Joining date" value={joined} />
+          <HeroMetaItem icon={<Clock className="h-4 w-4" />} label="Work duration" value={workDuration} />
+          <HeroMetaItem icon={<Building2 className="h-4 w-4" />} label="Company" value={company} />
+        </div>
+      </div>
+    </article>
+  );
+}
+
+type ActivityPanelTab =
+  | "recent_activity"
+  | "leave_balance"
+  | "leave_requests"
+  | "attendance_queries";
+
+const ACTIVITY_TABS: { id: ActivityPanelTab; label: string; icon: ReactNode }[] = [
+  { id: "recent_activity", label: "Activity", icon: <Activity className="h-3.5 w-3.5" /> },
+  { id: "leave_balance", label: "Leave balance", icon: <Briefcase className="h-3.5 w-3.5" /> },
+  { id: "leave_requests", label: "Leave requests", icon: <FileText className="h-3.5 w-3.5" /> },
+  {
+    id: "attendance_queries",
+    label: "Queries",
+    icon: <ClipboardList className="h-3.5 w-3.5" />,
+  },
+];
+
+function EmptyPanelState({ message }: { message: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-[#E2E8F0] bg-[#F8FAFC] px-4 py-10 text-center">
+      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-[#94A3B8] shadow-sm">
+        <Sparkles className="h-5 w-5" aria-hidden />
+      </span>
+      <p className="text-[13px] text-[#64748B]">{message}</p>
+    </div>
+  );
+}
+
+type TimelineEntry = {
+  key: string;
+  title: string;
+  description: string;
+  time: number;
+  timeLabel: string;
+  icon: ReactNode;
+  ring: string;
+};
+
+function buildTimeline(
+  leaveQueries: Record<string, unknown>[],
+  documents: Record<string, unknown>[],
+  assets: Record<string, unknown>[],
+  attendanceLogs: Record<string, unknown>[],
+): TimelineEntry[] {
+  const entries: TimelineEntry[] = [];
+  const ts = (v: unknown) => {
+    const t = new Date(String(v ?? "")).getTime();
+    return Number.isNaN(t) ? 0 : t;
+  };
+
+  for (const row of leaveQueries) {
+    const time = ts(row.updated_at ?? row.created_at ?? row.start_date);
+    entries.push({
+      key: `leave-${String(row.id ?? time)}`,
+      title: `${formatLabel(row.leave_type)} leave ${formatLabel(row.status).toLowerCase()}`,
+      description: `${formatDate(row.start_date)}${row.end_date ? ` – ${formatDate(row.end_date)}` : ""}`,
+      time,
+      timeLabel: formatDate(row.updated_at ?? row.created_at ?? row.start_date),
+      icon: <CalendarCheck className="h-4 w-4" />,
+      ring: "bg-[#ECFDF5] text-[#10B981] ring-[#A7F3D0]",
+    });
+  }
+  for (const doc of documents) {
+    const time = ts(doc.created_at);
+    entries.push({
+      key: `doc-${String(doc.id ?? time)}`,
+      title: "Document uploaded",
+      description: asText(doc.document_name, formatLabel(doc.document_type)),
+      time,
+      timeLabel: formatDate(doc.created_at),
+      icon: <FileText className="h-4 w-4" />,
+      ring: "bg-[#EFF6FF] text-[#2563EB] ring-[#BFDBFE]",
+    });
+  }
+  for (const asset of assets) {
+    const time = ts(asset.assigned_at ?? asset.created_at ?? asset.updated_at);
+    entries.push({
+      key: `asset-${String(asset.id ?? time)}`,
+      title: "Asset assigned",
+      description: asText(asset.asset_name, formatLabel(asset.asset_type)),
+      time,
+      timeLabel: formatDate(asset.assigned_at ?? asset.created_at),
+      icon: <Laptop className="h-4 w-4" />,
+      ring: "bg-[#F5F3FF] text-[#8B5CF6] ring-[#DDD6FE]",
+    });
+  }
+  for (const log of attendanceLogs.slice(0, 10)) {
+    const time = ts(log.timestamp_time);
+    entries.push({
+      key: `att-${String(log.id ?? time)}`,
+      title: `Attendance ${formatLabel(log.action_type).toLowerCase()}`,
+      description: formatDateTime(log.timestamp_time),
+      time,
+      timeLabel: formatDate(log.timestamp_time),
+      icon: <Clock className="h-4 w-4" />,
+      ring: "bg-[#FFFBEB] text-[#F59E0B] ring-[#FDE68A]",
+    });
+  }
+
+  return entries.sort((a, b) => b.time - a.time).slice(0, 14);
+}
+
+function ActivityTimeline({ items }: { items: TimelineEntry[] }) {
+  if (items.length === 0) {
+    return <EmptyPanelState message="No recent activity yet." />;
+  }
+  return (
+    <ol className="relative space-y-4 pl-1">
+      {items.map((item, index) => (
+        <li key={item.key} className="relative flex gap-3">
+          <div className="flex flex-col items-center">
+            <span
+              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ring-1 ring-inset ${item.ring}`}
+            >
+              {item.icon}
+            </span>
+            {index < items.length - 1 ? (
+              <span className="mt-1 w-px flex-1 bg-gradient-to-b from-[#E2E8F0] to-transparent" aria-hidden />
+            ) : null}
+          </div>
+          <div className="min-w-0 flex-1 pb-1">
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-[14px] font-semibold capitalize text-[#0F172A]">{item.title}</p>
+              <span className="shrink-0 text-[12px] text-[#94A3B8]">{item.timeLabel}</span>
+            </div>
+            <p className="mt-0.5 truncate text-[13px] text-[#64748B]">{item.description}</p>
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function EmployeeInsightsPanel({
+  leaveQueries,
+  leaveBalance,
+  documents,
+  attendanceQueries,
+  assets = [],
+  attendanceLogs = [],
+  defaultTab = "recent_activity",
+}: {
+  leaveQueries: Record<string, unknown>[];
+  leaveBalance: Record<string, unknown>[];
+  documents: Record<string, unknown>[];
+  attendanceQueries: Record<string, unknown>[];
+  assets?: Record<string, unknown>[];
+  attendanceLogs?: Record<string, unknown>[];
+  defaultTab?: ActivityPanelTab;
+}) {
+  const [activeTab, setActiveTab] = useState<ActivityPanelTab>(defaultTab);
+
+  const timeline = useMemo(
+    () => buildTimeline(leaveQueries, documents, assets, attendanceLogs),
+    [leaveQueries, documents, assets, attendanceLogs],
+  );
+
+  const tabCounts: Record<ActivityPanelTab, number> = {
+    recent_activity: timeline.length,
+    leave_balance: leaveBalance.length,
+    leave_requests: leaveQueries.length,
+    attendance_queries: attendanceQueries.length,
+  };
+
+  return (
+    <div className={`${GLASS_CARD} flex h-full flex-col`}>
+      <div className="shrink-0 px-5 pt-5">
+        <div className="flex items-center gap-2">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-[#8B5CF6]/15 to-[#A78BFA]/5 text-[#8B5CF6]">
+            <Sparkles className="h-4.5 w-4.5" aria-hidden />
+          </span>
+          <h2 className="text-[16px] font-semibold text-[#0F172A]">Employee insights</h2>
+        </div>
+        <div className="mt-4 overflow-x-auto pb-1">
+          <div className="inline-flex min-w-full gap-1 rounded-2xl bg-[#F1F5F9] p-1" role="tablist">
+            {ACTIVITY_TABS.map((tab) => {
+              const isActive = activeTab === tab.id;
+              const count = tabCounts[tab.id];
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-[13px] font-semibold transition-all ${
+                    isActive
+                      ? "bg-white text-[#2563EB] shadow-[0_2px_8px_rgba(15,23,42,0.08)]"
+                      : "text-[#64748B] hover:text-[#334155]"
+                  }`}
+                >
+                  {tab.icon}
+                  <span className="whitespace-nowrap">{tab.label}</span>
+                  {count > 0 ? (
+                    <span
+                      className={`rounded-full px-1.5 text-[11px] tabular-nums ${
+                        isActive ? "bg-[#EFF6FF] text-[#2563EB]" : "bg-[#E2E8F0] text-[#64748B]"
+                      }`}
+                    >
+                      {count}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4" role="tabpanel">
+        {activeTab === "recent_activity" ? <ActivityTimeline items={timeline} /> : null}
+
+        {activeTab === "leave_balance" ? (
+          leaveBalance.length === 0 ? (
+            <EmptyPanelState message="No leave balance records." />
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {leaveBalance.map((row, index) => (
+                <LeaveBalanceCard key={String(row.id ?? index)} row={row} index={index} />
+              ))}
+            </div>
+          )
+        ) : null}
+
+        {activeTab === "leave_requests" ? (
+          leaveQueries.length === 0 ? (
+            <EmptyPanelState message="No leave requests found." />
+          ) : (
+            <ul className="space-y-3">
+              {leaveQueries.map((row, index) => (
+                <ListItemCard key={String(row.id ?? index)}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-[14px] font-semibold text-[#0F172A]">
+                        {formatLabel(row.leave_type)} leave
+                      </p>
+                      <p className="mt-1 flex items-center gap-1.5 text-[13px] text-[#64748B]">
+                        <CalendarDays className="h-3.5 w-3.5 shrink-0" />
+                        {formatDate(row.start_date)}
+                        {row.end_date ? ` – ${formatDate(row.end_date)}` : ""}
+                      </p>
+                    </div>
+                    <StatusPill value={row.status} />
+                  </div>
+                  {row.reason ? (
+                    <p className="mt-2.5 rounded-xl bg-white px-3 py-2 text-[13px] leading-relaxed text-[#64748B]">
+                      {asText(row.reason)}
+                    </p>
+                  ) : null}
+                </ListItemCard>
+              ))}
+            </ul>
+          )
+        ) : null}
+
+        {activeTab === "attendance_queries" ? (
+          attendanceQueries.length === 0 ? (
+            <EmptyPanelState message="No attendance queries found." />
+          ) : (
+            <ul className="space-y-3">
+              {attendanceQueries.map((row, index) => (
+                <ListItemCard key={String(row.id ?? index)}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-[14px] font-semibold text-[#0F172A]">
+                        {formatLabel(row.category)}
+                      </p>
+                      <p className="mt-1 text-[13px] text-[#64748B]">
+                        {formatDate(row.attendance_date)}
+                      </p>
+                    </div>
+                    <StatusPill value={row.query_status} />
+                  </div>
+                  {row.query_message ? (
+                    <p className="mt-2.5 rounded-xl bg-white px-3 py-2 text-[13px] leading-relaxed text-[#64748B]">
+                      {asText(row.query_message)}
+                    </p>
+                  ) : null}
+                </ListItemCard>
+              ))}
+            </ul>
+          )
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function AttendanceHistoryTable({
+  rows,
+  loading,
+  error,
+  month,
+  year,
+  onMonthChange,
+  onYearChange,
+  onRefresh,
+  refreshing,
+}: {
+  rows: AttendanceHistoryRow[];
+  loading: boolean;
+  error: string | null;
+  month: number;
+  year: number;
+  onMonthChange: (month: number) => void;
+  onYearChange: (year: number) => void;
+  onRefresh: () => void;
+  refreshing: boolean;
+}) {
+  const attendanceRows = useMemo(
+    () => rows.filter((row) => Boolean(row.attendance_date || row.attendance_history)),
+    [rows],
+  );
+
+  const summary = useMemo(() => {
+    let present = 0;
+    let late = 0;
+    let leave = 0;
+    let minutes = 0;
+    for (const row of attendanceRows) {
+      const bucket = normalizeAttendanceStatus(row.attendance_status);
+      if (bucket === "present") present += 1;
+      else if (bucket === "late") late += 1;
+      else if (bucket === "leave") leave += 1;
+      const m = Number(row.working_time);
+      if (Number.isFinite(m) && m > 0) minutes += m;
+    }
+    return { present, late, leave, hours: Math.round((minutes / 60) * 10) / 10 };
+  }, [attendanceRows]);
+
+  const monthOptions = Array.from({ length: 12 }, (_, i) => i + 1);
+  const yearOptions = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
+
+  return (
+    <div className={`${GLASS_CARD} flex max-h-[36rem] flex-col`}>
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 px-5 pt-5">
+        <div className="flex items-center gap-2">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-[#10B981]/15 to-[#34D399]/5 text-[#10B981]">
+            <CalendarCheck className="h-4.5 w-4.5" aria-hidden />
+          </span>
+          <div>
+            <h2 className="text-[16px] font-semibold text-[#0F172A]">Attendance history</h2>
+            <p className="text-[13px] text-[#64748B]">{formatMonthYear(month, year)}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <select
+            value={month}
+            onChange={(e) => onMonthChange(Number(e.target.value))}
+            className="rounded-xl border border-[#E2E8F0] bg-white px-3 py-2 text-[13px] font-medium text-[#0F172A] outline-none transition focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/15"
+            aria-label="Select month"
+          >
+            {monthOptions.map((m) => (
+              <option key={m} value={m}>
+                {new Date(2000, m - 1, 1).toLocaleDateString(undefined, { month: "long" })}
+              </option>
+            ))}
+          </select>
+          <select
+            value={year}
+            onChange={(e) => onYearChange(Number(e.target.value))}
+            className="rounded-xl border border-[#E2E8F0] bg-white px-3 py-2 text-[13px] font-medium text-[#0F172A] outline-none transition focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/15"
+            aria-label="Select year"
+          >
+            {yearOptions.map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={loading || refreshing}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#E2E8F0] bg-white text-[#64748B] transition hover:bg-[#F8FAFC] hover:text-[#0F172A] disabled:opacity-50"
+            aria-label="Refresh attendance"
+          >
+            <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+          </button>
+        </div>
+      </div>
+
+      <div className="grid shrink-0 grid-cols-2 gap-3 px-5 pt-4 sm:grid-cols-4">
+        <AttendanceSummaryPill label="Present" value={summary.present} accent="success" />
+        <AttendanceSummaryPill label="Late" value={summary.late} accent="warning" />
+        <AttendanceSummaryPill label="Leaves" value={summary.leave} accent="danger" />
+        <AttendanceSummaryPill label="Work hrs" value={`${summary.hours}h`} accent="primary" />
+      </div>
+
+      {error ? (
+        <div className="mx-5 mt-3 rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-3 py-2 text-[13px] text-[#DC2626]">
+          {error}
+        </div>
+      ) : null}
+
+      <div className="mt-3 min-h-0 flex-1 overflow-auto px-5 pb-5">
+        {loading ? (
+          <div className="space-y-2 py-2">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="skeleton-shimmer h-10 w-full rounded-xl" />
+            ))}
+          </div>
+        ) : attendanceRows.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-[#E2E8F0] bg-[#F8FAFC] py-10 text-center text-[13px] text-[#64748B]">
+            No attendance records for this period.
+          </div>
+        ) : (
+          <table className="min-w-full border-separate border-spacing-0 text-left text-[13px]">
+            <thead className="sticky top-0 z-10">
+              <tr className="text-[12px] font-semibold uppercase tracking-wide text-[#94A3B8]">
+                <th className="border-b border-[#E2E8F0] bg-white/95 px-3 py-2.5 font-semibold backdrop-blur">Date</th>
+                <th className="border-b border-[#E2E8F0] bg-white/95 px-3 py-2.5 font-semibold backdrop-blur">In</th>
+                <th className="border-b border-[#E2E8F0] bg-white/95 px-3 py-2.5 font-semibold backdrop-blur">Out</th>
+                <th className="border-b border-[#E2E8F0] bg-white/95 px-3 py-2.5 font-semibold backdrop-blur">Hours</th>
+                <th className="border-b border-[#E2E8F0] bg-white/95 px-3 py-2.5 font-semibold backdrop-blur">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {attendanceRows.map((row, index) => (
+                <tr
+                  key={String(row.attendance_id ?? index)}
+                  className={`transition-colors hover:bg-[#EFF6FF] ${index % 2 === 1 ? "bg-[#F8FAFC]" : "bg-transparent"}`}
+                >
+                  <td className="rounded-l-xl px-3 py-2.5 font-medium text-[#0F172A]">
+                    {formatDate(row.attendance_date || row.attendance_history)}
+                  </td>
+                  <td className="px-3 py-2.5 text-[#475569]">{formatTime(row.check_in)}</td>
+                  <td className="px-3 py-2.5 text-[#475569]">{formatTime(row.check_out)}</td>
+                  <td className="px-3 py-2.5 tabular-nums text-[#475569]">
+                    {formatWorkingTime(row.working_time)}
+                  </td>
+                  <td className="rounded-r-xl px-3 py-2.5">
+                    <span
+                      className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase ring-1 ring-inset ${attendanceStatusClass(row.attendance_status)}`}
+                    >
+                      {formatLabel(row.attendance_status)}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AttendanceSummaryPill({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: string | number;
+  accent: "success" | "warning" | "danger" | "primary";
+}) {
+  const accents = {
+    success: "from-[#10B981]/10 to-[#34D399]/5 text-[#059669]",
+    warning: "from-[#F59E0B]/10 to-[#FBBF24]/5 text-[#D97706]",
+    danger: "from-[#EF4444]/10 to-[#F87171]/5 text-[#DC2626]",
+    primary: "from-[#2563EB]/10 to-[#3B82F6]/5 text-[#2563EB]",
+  } as const;
+  return (
+    <div className={`rounded-2xl bg-gradient-to-br ${accents[accent]} px-3 py-2.5`}>
+      <p className="text-[20px] font-bold leading-none tabular-nums">{value}</p>
+      <p className="mt-1 text-[12px] font-medium text-[#64748B]">{label}</p>
+    </div>
+  );
+}
+
+function buildAddressSummary(row: Record<string, unknown>): string {
   const parts = [
-    info.house_number,
-    info.street,
-    info.is_from_village ? info.village_name : null,
-    info.city,
-    info.district,
-    info.state,
-    info.country,
-    info.zip_code,
+    row.house_number,
+    row.street,
+    row.is_from_village === 1 || row.is_from_village === true ? row.village_name : null,
+    row.city,
+    row.district,
+    row.state,
+    row.country,
+    row.zip_code,
   ]
     .map((part) => asText(part, ""))
     .filter(Boolean);
   return parts.length > 0 ? parts.join(", ") : "—";
+}
+
+function CopyButton({ value, label = "address" }: { value: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = useCallback(() => {
+    if (!value || value === "—") return;
+    try {
+      void navigator.clipboard?.writeText(value);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch {
+      setCopied(false);
+    }
+  }, [value]);
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-[12px] font-semibold transition ${
+        copied
+          ? "border-[#A7F3D0] bg-[#ECFDF5] text-[#059669]"
+          : "border-[#E2E8F0] bg-white text-[#64748B] hover:bg-[#F8FAFC] hover:text-[#0F172A]"
+      }`}
+      aria-label={`Copy ${label}`}
+    >
+      {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+      {copied ? "Copied" : "Copy"}
+    </button>
+  );
+}
+
+function AddressDetailCard({ row }: { row: Record<string, unknown> }) {
+  const summary = buildAddressSummary(row);
+  const isVillage = row.is_from_village === 1 || row.is_from_village === true;
+  const label = formatLabel(row.address_type);
+  const isPermanent = label.toLowerCase() === "permanent";
+
+  return (
+    <article className="group flex h-full flex-col overflow-hidden rounded-2xl border border-[#E2E8F0] bg-white p-5 shadow-[0_1px_3px_rgba(15,23,42,0.04)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-3">
+          <span
+            className={`flex h-11 w-11 items-center justify-center rounded-2xl ${
+              isPermanent
+                ? "bg-gradient-to-br from-[#2563EB]/15 to-[#3B82F6]/5 text-[#2563EB]"
+                : "bg-gradient-to-br from-[#10B981]/15 to-[#34D399]/5 text-[#10B981]"
+            }`}
+          >
+            <MapPin className="h-5 w-5" aria-hidden />
+          </span>
+          <div>
+            <h3 className="text-[15px] font-semibold text-[#0F172A]">{label} address</h3>
+            <p className="text-[12px] text-[#94A3B8]">{asText(row.city)}, {asText(row.country)}</p>
+          </div>
+        </div>
+        <CopyButton value={summary} label={`${label} address`} />
+      </div>
+
+      <p className="mt-4 text-[14px] leading-relaxed text-[#334155]">{summary}</p>
+
+      <dl className="mt-4 grid gap-x-4 gap-y-3 border-t border-[#F1F5F9] pt-4 sm:grid-cols-2">
+        <AddressField label="Country" value={asText(row.country)} />
+        <AddressField label="State" value={asText(row.state)} />
+        <AddressField label="District" value={asText(row.district)} />
+        <AddressField label="City" value={asText(row.city)} />
+        {isVillage ? (
+          <AddressField label="Village" value={asText(row.village_name)} full />
+        ) : null}
+        <AddressField label="Street" value={asText(row.street)} />
+        <AddressField label="House no." value={asText(row.house_number)} />
+        <AddressField label="PIN / ZIP" value={asText(row.zip_code)} full />
+      </dl>
+    </article>
+  );
+}
+
+function AddressField({
+  label,
+  value,
+  full = false,
+}: {
+  label: string;
+  value: string;
+  full?: boolean;
+}) {
+  return (
+    <div className={full ? "sm:col-span-2" : ""}>
+      <dt className="text-[12px] font-medium text-[#94A3B8]">{label}</dt>
+      <dd className="mt-0.5 text-[14px] font-semibold text-[#334155]">{value}</dd>
+    </div>
+  );
+}
+
+type AddressDraft = {
+  address_id: string;
+  address_type: "permanent" | "current";
+  country: string;
+  state: string;
+  district: string;
+  city: string;
+  is_from_village: boolean;
+  village_name: string;
+  street: string;
+  house_number: string;
+  zip_code: string;
+};
+
+function makeAddressDraft(row: Record<string, unknown>): AddressDraft {
+  const str = (v: unknown) => (v == null ? "" : String(v));
+  return {
+    address_id: str(row.id ?? row.address_id),
+    address_type:
+      String(row.address_type ?? "").toLowerCase() === "current" ? "current" : "permanent",
+    country: str(row.country),
+    state: str(row.state),
+    district: str(row.district),
+    city: str(row.city),
+    is_from_village: row.is_from_village === 1 || row.is_from_village === true,
+    village_name: str(row.village_name),
+    street: str(row.street),
+    house_number: str(row.house_number),
+    zip_code: str(row.zip_code),
+  };
+}
+
+function makeEmptyAddressDraft(addressType: "permanent" | "current"): AddressDraft {
+  return {
+    address_id: "",
+    address_type: addressType,
+    country: "",
+    state: "",
+    district: "",
+    city: "",
+    is_from_village: false,
+    village_name: "",
+    street: "",
+    house_number: "",
+    zip_code: "",
+  };
+}
+
+function copyAddressFieldValues(
+  source: AddressDraft,
+): Pick<
+  AddressDraft,
+  | "country"
+  | "state"
+  | "district"
+  | "city"
+  | "is_from_village"
+  | "village_name"
+  | "street"
+  | "house_number"
+  | "zip_code"
+> {
+  return {
+    country: source.country,
+    state: source.state,
+    district: source.district,
+    city: source.city,
+    is_from_village: source.is_from_village,
+    village_name: source.village_name,
+    street: source.street,
+    house_number: source.house_number,
+    zip_code: source.zip_code,
+  };
+}
+
+function validateAddressDrafts(drafts: AddressDraft[], requireIds: boolean): string | null {
+  if (drafts.length !== 2) {
+    return "Both permanent and current addresses are required.";
+  }
+
+  for (const draft of drafts) {
+    const required: [keyof AddressDraft, string][] = [
+      ["country", "Country"],
+      ["state", "State"],
+      ["district", "District"],
+      ["city", "City"],
+      ["street", "Street"],
+      ["house_number", "House number"],
+      ["zip_code", "PIN / ZIP"],
+    ];
+    for (const [field, label] of required) {
+      if (!String(draft[field]).trim()) {
+        return `${label} is required for the ${draft.address_type} address.`;
+      }
+    }
+    if (draft.is_from_village && !draft.village_name.trim()) {
+      return `Village name is required for the ${draft.address_type} address.`;
+    }
+    if (requireIds && !draft.address_id) {
+      return "Address reference is missing. Please refresh and try again.";
+    }
+  }
+
+  const hasPermanent = drafts.some((d) => d.address_type === "permanent");
+  const hasCurrent = drafts.some((d) => d.address_type === "current");
+  if (!hasPermanent || !hasCurrent) {
+    return "Both permanent and current addresses are required.";
+  }
+
+  return null;
+}
+
+const ADDRESS_PLACEHOLDER_FIELDS = [
+  "Country",
+  "State",
+  "District",
+  "City",
+  "Street",
+  "House no.",
+  "PIN / ZIP",
+] as const;
+
+function AddressEmptyPlaceholderCard({
+  type,
+  onClick,
+}: {
+  type: "permanent" | "current";
+  onClick: () => void;
+}) {
+  const isPermanent = type === "permanent";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group flex h-full w-full flex-col rounded-2xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] p-5 text-left transition-all duration-300 hover:-translate-y-0.5 hover:border-[#2563EB]/40 hover:bg-[#EFF6FF] hover:shadow-[0_10px_30px_rgba(37,99,235,0.08)]"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-3">
+          <span
+            className={`flex h-11 w-11 items-center justify-center rounded-2xl transition group-hover:scale-105 ${
+              isPermanent
+                ? "bg-gradient-to-br from-[#2563EB]/15 to-[#3B82F6]/5 text-[#2563EB]"
+                : "bg-gradient-to-br from-[#10B981]/15 to-[#34D399]/5 text-[#10B981]"
+            }`}
+          >
+            <MapPin className="h-5 w-5" aria-hidden />
+          </span>
+          <div>
+            <h3 className="text-[15px] font-semibold text-[#0F172A]">
+              {formatLabel(type)} address
+            </h3>
+            <p className="text-[12px] text-[#94A3B8]">Not added yet</p>
+          </div>
+        </div>
+        <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#E2E8F0] bg-white text-[#2563EB] shadow-sm transition group-hover:border-[#BFDBFE] group-hover:bg-[#2563EB] group-hover:text-white">
+          <Plus className="h-4 w-4" aria-hidden />
+        </span>
+      </div>
+
+      <p className="mt-4 text-[14px] text-[#64748B]">
+        Click to add {type} address details for this employee.
+      </p>
+
+      <dl className="mt-4 grid gap-x-4 gap-y-3 border-t border-[#E2E8F0] pt-4 sm:grid-cols-2">
+        {ADDRESS_PLACEHOLDER_FIELDS.map((label) => (
+          <div key={label}>
+            <dt className="text-[12px] font-medium text-[#94A3B8]">{label}</dt>
+            <dd className="mt-1 h-4 rounded-md bg-[#E2E8F0]/70" />
+          </div>
+        ))}
+      </dl>
+    </button>
+  );
+}
+
+function FormField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  maxLength,
+  required = false,
+  full = false,
+  disabled = false,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  maxLength?: number;
+  required?: boolean;
+  full?: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <label className={`flex flex-col gap-1.5 ${full ? "sm:col-span-2" : ""}`}>
+      <span className="text-[12px] font-medium text-[#64748B]">
+        {label}
+        {required ? <span className="ml-0.5 text-[#EF4444]">*</span> : null}
+      </span>
+      <input
+        type="text"
+        value={value}
+        maxLength={maxLength}
+        placeholder={placeholder}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value)}
+        className="rounded-xl border border-[#E2E8F0] bg-white px-3 py-2.5 text-[14px] font-medium text-[#0F172A] outline-none transition placeholder:text-[#94A3B8] focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/15 disabled:cursor-not-allowed disabled:bg-[#F8FAFC] disabled:text-[#64748B]"
+      />
+    </label>
+  );
+}
+
+function AddressEditForm({
+  draft,
+  onChange,
+  mode = "edit",
+  disabled = false,
+}: {
+  draft: AddressDraft;
+  onChange: (field: keyof AddressDraft, value: string | boolean) => void;
+  mode?: "add" | "edit";
+  disabled?: boolean;
+}) {
+  const isPermanent = draft.address_type === "permanent";
+  return (
+    <div
+      className={`rounded-2xl border border-[#E2E8F0] bg-white p-5 shadow-[0_1px_3px_rgba(15,23,42,0.04)] ${
+        disabled ? "opacity-80" : ""
+      }`}
+    >
+      <div className="mb-4 flex items-center gap-3">
+        <span
+          className={`flex h-11 w-11 items-center justify-center rounded-2xl ${
+            isPermanent
+              ? "bg-gradient-to-br from-[#2563EB]/15 to-[#3B82F6]/5 text-[#2563EB]"
+              : "bg-gradient-to-br from-[#10B981]/15 to-[#34D399]/5 text-[#10B981]"
+          }`}
+        >
+          <MapPin className="h-5 w-5" aria-hidden />
+        </span>
+        <div>
+          <h3 className="text-[15px] font-semibold text-[#0F172A]">
+            {formatLabel(draft.address_type)} address
+          </h3>
+          <p className="text-[12px] text-[#94A3B8]">
+            {disabled
+              ? "Auto-filled from permanent address"
+              : mode === "add"
+                ? "Fill in the fields below"
+                : "Edit the fields below"}
+          </p>
+        </div>
+      </div>
+
+      <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
+        <FormField label="Country" value={draft.country} onChange={(v) => onChange("country", v)} maxLength={100} required disabled={disabled} />
+        <FormField label="State" value={draft.state} onChange={(v) => onChange("state", v)} maxLength={100} required disabled={disabled} />
+        <FormField label="District" value={draft.district} onChange={(v) => onChange("district", v)} maxLength={100} required disabled={disabled} />
+        <FormField label="City" value={draft.city} onChange={(v) => onChange("city", v)} maxLength={100} required disabled={disabled} />
+        <FormField label="Street" value={draft.street} onChange={(v) => onChange("street", v)} maxLength={255} required disabled={disabled} />
+        <FormField label="House no." value={draft.house_number} onChange={(v) => onChange("house_number", v)} maxLength={100} required disabled={disabled} />
+        <FormField label="PIN / ZIP" value={draft.zip_code} onChange={(v) => onChange("zip_code", v)} maxLength={20} required disabled={disabled} />
+
+        <label className="flex items-center gap-2.5 self-end pb-2.5 sm:col-span-1">
+          <input
+            type="checkbox"
+            checked={draft.is_from_village}
+            disabled={disabled}
+            onChange={(e) => onChange("is_from_village", e.target.checked)}
+            className="h-4 w-4 rounded border-[#CBD5E1] text-[#2563EB] focus:ring-[#2563EB]/30 disabled:cursor-not-allowed"
+          />
+          <span className="text-[13px] font-medium text-[#334155]">From a village</span>
+        </label>
+
+        {draft.is_from_village ? (
+          <FormField
+            label="Village name"
+            value={draft.village_name}
+            onChange={(v) => onChange("village_name", v)}
+            maxLength={255}
+            required
+            full
+            disabled={disabled}
+          />
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function ZohoDetailGrid({ children }: { children: ReactNode }) {
+  return <dl className="grid grid-cols-1 gap-x-6 gap-y-3.5 sm:grid-cols-2">{children}</dl>;
+}
+
+function ZohoDetailRow({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-[13px] font-medium text-[#94A3B8]">{label}</dt>
+      <dd className="mt-0.5 truncate text-[15px] font-semibold text-[#0F172A]">{value}</dd>
+    </div>
+  );
 }
 
 function maskAccountNumber(value: unknown): string {
@@ -247,54 +1703,55 @@ function maskAccountNumber(value: unknown): string {
   return `•••• ${raw.slice(-4)}`;
 }
 
-function InfoRow({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-0.5 border-b border-[#EEF2F6] py-2 last:border-b-0 max-lg:gap-0 max-lg:py-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4 sm:py-3.5">
-      <dt className={`${mobileLabelCls} sm:text-[13px] sm:font-medium sm:normal-case sm:tracking-normal sm:text-[#6B7280]`}>
-        {label}
-      </dt>
-      <dd className="text-[13px] font-semibold text-[#1F2937] max-lg:text-left sm:max-w-[62%] sm:text-right sm:text-[14px]">
-        {value}
-      </dd>
-    </div>
-  );
-}
-
 function SectionCard({
   title,
   icon,
   children,
   emptyText,
   isEmpty,
+  subtitle,
+  accent = "primary",
+  id,
+  action,
 }: {
   title: string;
   icon: ReactNode;
   children: ReactNode;
   emptyText?: string;
   isEmpty?: boolean;
+  subtitle?: string;
+  accent?: StatAccent;
+  id?: string;
+  action?: ReactNode;
+  compact?: boolean;
 }) {
+  const iconAccent: Record<StatAccent, string> = {
+    primary: "bg-gradient-to-br from-[#2563EB]/15 to-[#3B82F6]/5 text-[#2563EB]",
+    success: "bg-gradient-to-br from-[#10B981]/15 to-[#34D399]/5 text-[#10B981]",
+    warning: "bg-gradient-to-br from-[#F59E0B]/15 to-[#FBBF24]/5 text-[#D97706]",
+    violet: "bg-gradient-to-br from-[#8B5CF6]/15 to-[#A78BFA]/5 text-[#8B5CF6]",
+  };
   return (
-    <section className="overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-sm max-lg:shadow-[0_1px_2px_rgba(15,23,42,0.05)] sm:rounded-2xl sm:shadow-[0_1px_3px_rgba(15,23,42,0.06)]">
-      <div className="flex items-center gap-2 border-b border-[#EEF2F6] bg-[#F9FAFB] px-3 py-2.5 sm:gap-3 sm:bg-gradient-to-r sm:from-[#F8FBFF] sm:to-white sm:px-4 sm:py-3.5 lg:px-5">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#E8F4FB] text-[#008CD3] sm:h-9 sm:w-9 sm:rounded-xl">
+    <section id={id} className={`${GLASS_CARD} scroll-mt-24 p-5 lg:p-6`}>
+      <div className="mb-4 flex items-center gap-3">
+        <span
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${iconAccent[accent]}`}
+        >
           {icon}
         </span>
-        <h2 className="text-[13px] font-semibold tracking-tight text-[#1F2937] sm:text-[15px] lg:text-base">
-          {title}
-        </h2>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-[16px] font-semibold text-[#0F172A]">{title}</h2>
+          {subtitle ? <p className="truncate text-[13px] text-[#64748B]">{subtitle}</p> : null}
+        </div>
+        {action ? <div className="shrink-0">{action}</div> : null}
       </div>
-      <div className="px-3 py-3 sm:px-4 sm:py-4 lg:px-5">
-        {isEmpty ? (
-          <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
-            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#F5F7FA] text-[#9CA3AF]">
-              {icon}
-            </span>
-            <p className="text-[14px] text-[#6B7280]">{emptyText || "No records found."}</p>
-          </div>
-        ) : (
-          children
-        )}
-      </div>
+      {isEmpty ? (
+        <div className="rounded-2xl border border-dashed border-[#E2E8F0] bg-[#F8FAFC] py-8 text-center text-[13px] text-[#64748B]">
+          {emptyText || "No records found."}
+        </div>
+      ) : (
+        children
+      )}
     </section>
   );
 }
@@ -302,138 +1759,18 @@ function SectionCard({
 function StatusPill({ value }: { value: unknown }) {
   const text = formatLabel(value);
   const lower = text.toLowerCase();
-  let cls = "bg-[#F5F7FA] text-[#6B7280] ring-[#E4E7EC]";
-  if (lower.includes("approved") || lower.includes("present") || lower.includes("active")) {
-    cls = "bg-[#E6F4EA] text-[#0F9D58] ring-[#B7E1C1]";
+  let cls = "bg-[#F1F5F9] text-[#64748B] ring-[#E2E8F0]";
+  if (lower.includes("approved") || lower.includes("present") || lower.includes("active") || lower.includes("assigned")) {
+    cls = "bg-[#ECFDF5] text-[#059669] ring-[#A7F3D0]";
   }
-  if (lower.includes("pending")) cls = "bg-[#FEF3E6] text-[#E8710A] ring-[#F9D4A5]";
+  if (lower.includes("pending")) cls = "bg-[#FFFBEB] text-[#D97706] ring-[#FDE68A]";
   if (lower.includes("reject") || lower.includes("damaged") || lower.includes("lost")) {
-    cls = "bg-[#FCE8E6] text-[#D93025] ring-[#F5C6C2]";
+    cls = "bg-[#FEF2F2] text-[#DC2626] ring-[#FECACA]";
   }
   return (
-    <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase ring-1 ring-inset ${cls}`}>
+    <span className={`inline-flex shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase ring-1 ring-inset ${cls}`}>
       {text}
     </span>
-  );
-}
-
-function QuickStat({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="rounded-md border border-[#E4E7EC] bg-white px-2 py-2 text-center shadow-sm sm:rounded-xl sm:px-3 sm:py-2.5">
-      <p className="text-base font-bold tabular-nums text-[#008CD3] sm:text-lg">{value}</p>
-      <p className={`mt-0.5 ${mobileLabelCls}`}>{label}</p>
-    </div>
-  );
-}
-
-function CircularLeaveRing({
-  label,
-  remaining,
-  total,
-}: {
-  label: string;
-  remaining: number;
-  total: number;
-}) {
-  const size = 96;
-  const stroke = 8;
-  const radius = (size - stroke) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const usedPct = total > 0 ? Math.min(100, Math.round((remaining / total) * 100)) : 0;
-  const offset = circumference - (usedPct / 100) * circumference;
-
-  return (
-    <div className="flex flex-col items-center gap-2 text-center">
-      <div className="relative" style={{ width: size, height: size }}>
-        <svg width={size} height={size} className="-rotate-90">
-          <circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            fill="none"
-            stroke="#EEF2F6"
-            strokeWidth={stroke}
-          />
-          <circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            fill="none"
-            stroke="#008CD3"
-            strokeWidth={stroke}
-            strokeLinecap="round"
-            strokeDasharray={circumference}
-            strokeDashoffset={offset}
-          />
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-xl font-bold text-[#1F2937]">{remaining}</span>
-          <span className="text-[10px] font-medium text-[#6B7280]">left</span>
-        </div>
-      </div>
-      <p className="max-w-[100px] text-[12px] font-semibold leading-tight text-[#1F2937]">
-        {label}
-      </p>
-      <p className="text-[11px] text-[#6B7280]">
-        {usedPct}% of {total}
-      </p>
-    </div>
-  );
-}
-
-function DesktopProfileCard({
-  name,
-  role,
-  email,
-  phone,
-  joined,
-  imageUrl,
-  stats,
-  onImageZoom,
-}: {
-  name: string;
-  role: string;
-  email: string;
-  phone: string;
-  joined: string;
-  imageUrl: string | null;
-  stats: { documents: number; assets: number; leaves: number; logs: number };
-  onImageZoom: (url: string, alt: string) => void;
-}) {
-  return (
-    <article className="overflow-hidden rounded-2xl border border-[#E4E7EC] bg-white shadow-[0_4px_24px_rgba(15,23,42,0.06)]">
-      <div className="bg-gradient-to-br from-[#008CD3] via-[#007EBF] to-[#0070AA] px-5 pb-5 pt-5 text-white">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/75">
-          Employee profile
-        </p>
-        <div className="mt-4 flex items-center gap-4">
-          <ProfileAvatarButton
-            name={name}
-            imageUrl={imageUrl}
-            size="lg"
-            onZoom={onImageZoom}
-            className="!h-16 !w-16 !rounded-2xl"
-          />
-          <div className="min-w-0">
-            <p className="text-sm text-white/85">Hello,</p>
-            <h2 className="truncate text-xl font-bold tracking-tight">{name}</h2>
-            <p className="mt-1 text-sm text-white/80">{role}</p>
-          </div>
-        </div>
-      </div>
-      <div className="grid grid-cols-4 gap-2 border-b border-[#EEF2F6] px-4 py-4">
-        <QuickStat label="Docs" value={stats.documents} />
-        <QuickStat label="Assets" value={stats.assets} />
-        <QuickStat label="Leaves" value={stats.leaves} />
-        <QuickStat label="Logs" value={stats.logs} />
-      </div>
-      <dl className="space-y-0 px-4 py-2">
-        <InfoRow label="Email" value={email} />
-        <InfoRow label="Phone" value={phone} />
-        <InfoRow label="Joined" value={joined} />
-        <InfoRow label="Role" value={role} />
-      </dl>
-    </article>
   );
 }
 
@@ -446,35 +1783,26 @@ function LeaveBalanceCard({ row, index }: { row: Record<string, unknown>; index:
   return (
     <div
       key={String(row.id ?? index)}
-      className="rounded-lg border border-[#E4E7EC] bg-gradient-to-br from-white to-[#F8FBFF] p-3 shadow-sm sm:rounded-xl sm:p-4"
+      className="rounded-2xl border border-[#E2E8F0] bg-white p-4 transition hover:shadow-sm"
     >
       <div className="flex items-center justify-between gap-2">
-        <p className="text-[12px] font-semibold text-[#1F2937] sm:text-[13px]">
+        <p className="truncate text-[14px] font-semibold text-[#0F172A]">
           {formatMonthYear(row.month, row.year)}
         </p>
-        <span className="rounded-full bg-[#E8F4FB] px-2 py-0.5 text-[11px] font-semibold text-[#008CD3]">
+        <span className="shrink-0 rounded-full bg-[#EFF6FF] px-2.5 py-1 text-[12px] font-semibold text-[#2563EB]">
           {remaining} left
         </span>
       </div>
-      <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#EEF2F6]">
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#F1F5F9]">
         <div
-          className="h-full rounded-full bg-gradient-to-r from-[#008CD3] to-[#36A2E0]"
+          className="h-full rounded-full bg-gradient-to-r from-[#2563EB] to-[#3B82F6] transition-all duration-500"
           style={{ width: `${usedPct}%` }}
         />
       </div>
-      <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-        <div className="rounded-lg bg-[#F5F7FA] px-2 py-2">
-          <p className="text-base font-bold text-[#1F2937]">{total}</p>
-          <p className="text-[11px] font-medium text-[#6B7280]">Total</p>
-        </div>
-        <div className="rounded-lg bg-[#FEF3E6] px-2 py-2">
-          <p className="text-base font-bold text-[#E8710A]">{used}</p>
-          <p className="text-[11px] font-medium text-[#6B7280]">Used</p>
-        </div>
-        <div className="rounded-lg bg-[#E6F4EA] px-2 py-2">
-          <p className="text-base font-bold text-[#0F9D58]">{remaining}</p>
-          <p className="text-[11px] font-medium text-[#6B7280]">Remaining</p>
-        </div>
+      <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[12px]">
+        <span className="rounded-xl bg-[#F8FAFC] px-1 py-1.5 font-semibold text-[#334155]">{total} total</span>
+        <span className="rounded-xl bg-[#FFFBEB] px-1 py-1.5 font-semibold text-[#D97706]">{used} used</span>
+        <span className="rounded-xl bg-[#ECFDF5] px-1 py-1.5 font-semibold text-[#059669]">{remaining} left</span>
       </div>
     </div>
   );
@@ -482,9 +1810,824 @@ function LeaveBalanceCard({ row, index }: { row: Record<string, unknown>; index:
 
 function ListItemCard({ children }: { children: ReactNode }) {
   return (
-    <li className="rounded-md border border-[#EEF2F6] bg-[#FAFBFC] px-2.5 py-2.5 transition max-lg:hover:border-[#E4E7EC] sm:rounded-xl sm:px-3 sm:py-3 sm:hover:border-[#D6EAF8] sm:hover:bg-white">
+    <li className="rounded-2xl border border-[#E2E8F0] bg-white px-4 py-3 text-[13px] transition hover:shadow-sm">
       {children}
     </li>
+  );
+}
+
+const EMPLOYEE_DOC_UPLOAD_FIELDS: {
+  field: EmployeeOnboardingDocumentField;
+  label: string;
+  hint: string;
+  requiredForInitial: boolean;
+}[] = [
+  {
+    field: "user_image",
+    label: "Employee photo",
+    hint: "Recent photo (PNG, JPG, or PDF).",
+    requiredForInitial: true,
+  },
+  {
+    field: "user_pan_card",
+    label: "PAN card",
+    hint: "PAN card scan or photo.",
+    requiredForInitial: true,
+  },
+  {
+    field: "user_aadhar_front",
+    label: "Aadhaar — front",
+    hint: "Front side of Aadhaar.",
+    requiredForInitial: true,
+  },
+  {
+    field: "user_aadhar_back",
+    label: "Aadhaar — back",
+    hint: "Back side of Aadhaar.",
+    requiredForInitial: true,
+  },
+  {
+    field: "user_passbook",
+    label: "Bank passbook",
+    hint: "Passbook page showing account details.",
+    requiredForInitial: true,
+  },
+  {
+    field: "user_passport_photo",
+    label: "Passport-size photo",
+    hint: "Passport-size photograph.",
+    requiredForInitial: true,
+  },
+  {
+    field: "user_resignation_letter",
+    label: "Resignation letter",
+    hint: "Previous company resignation (optional).",
+    requiredForInitial: false,
+  },
+  {
+    field: "user_appointment_letter",
+    label: "Appointment letter",
+    hint: "Offer or appointment letter (optional).",
+    requiredForInitial: false,
+  },
+  {
+    field: "user_previous_company_leaving_letter",
+    label: "Leaving / relieving letter",
+    hint: "From previous employer (optional).",
+    requiredForInitial: false,
+  },
+  {
+    field: "user_10th_marksheet",
+    label: "10th marksheet",
+    hint: "Board exam certificate (optional).",
+    requiredForInitial: false,
+  },
+  {
+    field: "user_12th_marksheet",
+    label: "12th marksheet",
+    hint: "Board exam certificate (optional).",
+    requiredForInitial: false,
+  },
+  {
+    field: "user_higher_education_marksheet",
+    label: "Higher education marksheet",
+    hint: "Graduation or equivalent (optional).",
+    requiredForInitial: false,
+  },
+  {
+    field: "user_other_certificate",
+    label: "Other certificate",
+    hint: "Any additional certificate (optional).",
+    requiredForInitial: false,
+  },
+  {
+    field: "user_other_document",
+    label: "Other document",
+    hint: "Any other supporting document (optional).",
+    requiredForInitial: false,
+  },
+];
+
+function docFileInputCls() {
+  return "block w-full cursor-pointer rounded-xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] px-3 py-2.5 text-[13px] text-[#334155] outline-none transition file:mr-2 file:cursor-pointer file:rounded-lg file:border-0 file:bg-[#EFF6FF] file:px-2.5 file:py-1 file:text-[12px] file:font-semibold file:text-[#2563EB] hover:border-[#2563EB]/40 focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/15";
+}
+
+function DocumentEmptyPlaceholderCard({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group flex w-full flex-col items-center justify-center rounded-2xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] px-6 py-14 text-center transition-all duration-300 hover:-translate-y-0.5 hover:border-[#2563EB]/40 hover:bg-[#EFF6FF] hover:shadow-[0_10px_30px_rgba(37,99,235,0.08)]"
+    >
+      <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[#F59E0B]/15 to-[#FBBF24]/5 text-[#D97706] transition group-hover:scale-105">
+        <Upload className="h-7 w-7" aria-hidden />
+      </span>
+      <p className="mt-4 text-[17px] font-semibold text-[#0F172A]">No documents uploaded</p>
+      <p className="mt-1.5 max-w-sm text-[14px] text-[#64748B]">
+        Click to upload employee KYC and supporting documents.
+      </p>
+      <span className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-br from-[#2563EB] to-[#3B82F6] px-4 py-2 text-[13px] font-semibold text-white shadow-sm">
+        <Plus className="h-4 w-4" />
+        Upload documents
+      </span>
+    </button>
+  );
+}
+
+function DocumentFileCard({
+  doc,
+  onUpdate,
+  onDelete,
+}: {
+  doc: Record<string, unknown>;
+  onUpdate?: () => void;
+  onDelete?: () => void;
+}) {
+  const url = doc.doc_url ? asText(doc.doc_url) : null;
+  return (
+    <div className="group flex items-center gap-3 rounded-2xl border border-[#E2E8F0] bg-white p-3.5 transition-all duration-300 hover:-translate-y-0.5 hover:border-[#BFDBFE] hover:shadow-[0_8px_24px_rgba(37,99,235,0.1)]">
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#EFF6FF] to-[#DBEAFE] text-[#2563EB]">
+        <FileText className="h-5 w-5" aria-hidden />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[14px] font-semibold text-[#0F172A]">
+          {asText(doc.document_name, "Document")}
+        </p>
+        <p className="truncate text-[12px] text-[#94A3B8]">
+          {formatLabel(doc.document_type)} · {formatDate(doc.created_at)}
+        </p>
+      </div>
+      <div className="flex shrink-0 items-center gap-1">
+        {url ? (
+          <>
+            <Link
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#E2E8F0] bg-white text-[#64748B] transition hover:bg-[#EFF6FF] hover:text-[#2563EB]"
+              aria-label="Preview document"
+            >
+              <Eye className="h-4 w-4" />
+            </Link>
+            <Link
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              download
+              className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#E2E8F0] bg-white text-[#64748B] transition hover:bg-[#F1F5F9] hover:text-[#2563EB]"
+              aria-label="Download document"
+            >
+              <Download className="h-4 w-4" />
+            </Link>
+          </>
+        ) : null}
+        {onUpdate ? (
+          <button
+            type="button"
+            onClick={onUpdate}
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#E2E8F0] bg-white text-[#64748B] transition hover:bg-[#EFF6FF] hover:text-[#2563EB]"
+            aria-label="Update document"
+          >
+            <Pencil className="h-4 w-4" />
+          </button>
+        ) : null}
+        {onDelete ? (
+          <button
+            type="button"
+            onClick={onDelete}
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#FECACA] bg-white text-[#DC2626] transition hover:bg-[#FEF2F2]"
+            aria-label="Delete document"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+const MAX_ASSET_FILE_BYTES = 5 * 1024 * 1024;
+
+type AssetDraftRow = {
+  key: string;
+  asset_name: string;
+  asset_type: string;
+  asset_summary: string;
+  handover_date_time: string;
+  file: File | null;
+};
+
+function createEmptyAssetDraft(): AssetDraftRow {
+  return {
+    key: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+    asset_name: "",
+    asset_type: "other",
+    asset_summary: "",
+    handover_date_time: "",
+    file: null,
+  };
+}
+
+function assetFileInputCls() {
+  return "block w-full cursor-pointer rounded-xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] px-3 py-2.5 text-[13px] text-[#334155] outline-none transition file:mr-2 file:cursor-pointer file:rounded-lg file:border-0 file:bg-[#F3E8FF] file:px-2.5 file:py-1 file:text-[12px] file:font-semibold file:text-[#7C3AED] hover:border-[#8B5CF6]/40 focus:border-[#8B5CF6] focus:ring-2 focus:ring-[#8B5CF6]/15";
+}
+
+function assetRowIsEmpty(row: AssetDraftRow) {
+  return (
+    row.asset_name.trim() === "" &&
+    row.asset_summary.trim() === "" &&
+    row.handover_date_time.trim() === "" &&
+    !row.file
+  );
+}
+
+const BGV_STATUS_OPTIONS: { value: BackgroundVerificationStatus; label: string }[] = [
+  { value: "pending", label: "Pending" },
+  { value: "in_progress", label: "In progress" },
+  { value: "verified", label: "Verified" },
+  { value: "failed", label: "Failed" },
+  { value: "unable_to_contact", label: "Unable to contact" },
+];
+
+type ReferenceEditForm = {
+  previous_company_name: string;
+  company_email: string;
+  employee_code: string;
+  designation: string;
+  employment_start_date: string;
+  employment_end_date: string;
+  person_name: string;
+  person_role: BackgroundVerificationPersonRole;
+  person_contact_number1: string;
+  person_contact_number2: string;
+  person_contact_email: string;
+};
+
+function createEmptyReferenceForm(): ReferenceEditForm {
+  return {
+    previous_company_name: "",
+    company_email: "",
+    employee_code: "",
+    designation: "",
+    employment_start_date: "",
+    employment_end_date: "",
+    person_name: "",
+    person_role: "hr",
+    person_contact_number1: "",
+    person_contact_number2: "",
+    person_contact_email: "",
+  };
+}
+
+function toDateInputValue(value: string | null | undefined): string {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value).slice(0, 10);
+  return d.toISOString().slice(0, 10);
+}
+
+function refItemToEditForm(ref: BackgroundVerificationReferenceItem): ReferenceEditForm {
+  return {
+    previous_company_name: ref.previous_company_name ?? "",
+    company_email: ref.company_email ?? "",
+    employee_code: ref.employee_code ?? "",
+    designation: ref.designation ?? "",
+    employment_start_date: toDateInputValue(ref.employment_start_date),
+    employment_end_date: toDateInputValue(ref.employment_end_date),
+    person_name: ref.person_name ?? "",
+    person_role: ref.person_role ?? "hr",
+    person_contact_number1: ref.person_contact_number1 ?? "",
+    person_contact_number2: ref.person_contact_number2 ?? "",
+    person_contact_email: ref.person_contact_email ?? "",
+  };
+}
+
+function editFormToReferencePayload(form: ReferenceEditForm): BackgroundVerificationInfoPayload {
+  const payload: BackgroundVerificationInfoPayload = {
+    previous_company_name: form.previous_company_name.trim(),
+    person_name: form.person_name.trim(),
+    person_role: form.person_role,
+    person_contact_number1: form.person_contact_number1.trim(),
+    person_contact_email: form.person_contact_email.trim(),
+  };
+  if (form.company_email.trim()) payload.company_email = form.company_email.trim();
+  if (form.employee_code.trim()) payload.employee_code = form.employee_code.trim();
+  if (form.designation.trim()) payload.designation = form.designation.trim();
+  if (form.employment_start_date) payload.employment_start_date = form.employment_start_date;
+  if (form.employment_end_date) payload.employment_end_date = form.employment_end_date;
+  if (form.person_contact_number2.trim()) {
+    payload.person_contact_number2 = form.person_contact_number2.trim();
+  }
+  return payload;
+}
+
+function isValidReferenceEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
+function bgvPersonRoleLabel(role: string): string {
+  if (role === "hr") return "HR";
+  if (role === "reporting_manager") return "Reporting manager";
+  return formatLabel(role);
+}
+
+function bgvStatusLabel(status: string): string {
+  const found = BGV_STATUS_OPTIONS.find((o) => o.value === String(status).toLowerCase());
+  return found?.label ?? formatLabel(status);
+}
+
+function bgvStatusBadgeClass(status: string): string {
+  const s = String(status).toLowerCase();
+  if (s === "verified") return "bg-[#D1FAE5] text-[#059669]";
+  if (s === "failed") return "bg-[#FEE2E2] text-[#DC2626]";
+  if (s === "in_progress") return "bg-[#DBEAFE] text-[#2563EB]";
+  if (s === "unable_to_contact") return "bg-[#F1F5F9] text-[#64748B]";
+  return "bg-[#FEF3C7] text-[#D97706]";
+}
+
+function canShowBgvVerifyButton(status: string): boolean {
+  const s = String(status).toLowerCase();
+  return s !== "verified" && s !== "failed";
+}
+
+function referenceFieldCls() {
+  return "w-full rounded-xl border border-[#E2E8F0] bg-white px-3 py-2.5 text-[14px] text-[#0F172A] outline-none focus:border-[#10B981] focus:ring-2 focus:ring-[#10B981]/15";
+}
+
+function ReferenceFormFields({
+  form,
+  onChange,
+}: {
+  form: ReferenceEditForm;
+  onChange: (patch: Partial<ReferenceEditForm>) => void;
+}) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      <label className="sm:col-span-2">
+        <span className="mb-1.5 block text-[13px] font-medium text-[#64748B]">
+          Previous company name <span className="text-[#EF4444]">*</span>
+        </span>
+        <input
+          value={form.previous_company_name}
+          onChange={(e) => onChange({ previous_company_name: e.target.value })}
+          className={referenceFieldCls()}
+        />
+      </label>
+      <label>
+        <span className="mb-1.5 block text-[13px] font-medium text-[#64748B]">Company email</span>
+        <input
+          type="email"
+          value={form.company_email}
+          onChange={(e) => onChange({ company_email: e.target.value })}
+          className={referenceFieldCls()}
+        />
+      </label>
+      <label>
+        <span className="mb-1.5 block text-[13px] font-medium text-[#64748B]">Employee code</span>
+        <input
+          value={form.employee_code}
+          onChange={(e) => onChange({ employee_code: e.target.value })}
+          className={referenceFieldCls()}
+        />
+      </label>
+      <label>
+        <span className="mb-1.5 block text-[13px] font-medium text-[#64748B]">Designation</span>
+        <input
+          value={form.designation}
+          onChange={(e) => onChange({ designation: e.target.value })}
+          className={referenceFieldCls()}
+        />
+      </label>
+      <label>
+        <span className="mb-1.5 block text-[13px] font-medium text-[#64748B]">Employment start</span>
+        <input
+          type="date"
+          value={form.employment_start_date}
+          onChange={(e) => onChange({ employment_start_date: e.target.value })}
+          className={referenceFieldCls()}
+        />
+      </label>
+      <label>
+        <span className="mb-1.5 block text-[13px] font-medium text-[#64748B]">Employment end</span>
+        <input
+          type="date"
+          value={form.employment_end_date}
+          onChange={(e) => onChange({ employment_end_date: e.target.value })}
+          className={referenceFieldCls()}
+        />
+      </label>
+      <label className="sm:col-span-2">
+        <span className="mb-1.5 block text-[13px] font-medium text-[#64748B]">
+          Reference contact name <span className="text-[#EF4444]">*</span>
+        </span>
+        <input
+          value={form.person_name}
+          onChange={(e) => onChange({ person_name: e.target.value })}
+          className={referenceFieldCls()}
+        />
+      </label>
+      <label>
+        <span className="mb-1.5 block text-[13px] font-medium text-[#64748B]">
+          Contact role <span className="text-[#EF4444]">*</span>
+        </span>
+        <select
+          value={form.person_role}
+          onChange={(e) =>
+            onChange({ person_role: e.target.value as BackgroundVerificationPersonRole })
+          }
+          className={referenceFieldCls()}
+        >
+          <option value="hr">HR</option>
+          <option value="reporting_manager">Reporting manager</option>
+        </select>
+      </label>
+      <label>
+        <span className="mb-1.5 block text-[13px] font-medium text-[#64748B]">
+          Primary phone <span className="text-[#EF4444]">*</span>
+        </span>
+        <input
+          value={form.person_contact_number1}
+          onChange={(e) => onChange({ person_contact_number1: e.target.value })}
+          className={referenceFieldCls()}
+        />
+      </label>
+      <label>
+        <span className="mb-1.5 block text-[13px] font-medium text-[#64748B]">Secondary phone</span>
+        <input
+          value={form.person_contact_number2}
+          onChange={(e) => onChange({ person_contact_number2: e.target.value })}
+          className={referenceFieldCls()}
+        />
+      </label>
+      <label className="sm:col-span-2">
+        <span className="mb-1.5 block text-[13px] font-medium text-[#64748B]">
+          Contact email <span className="text-[#EF4444]">*</span>
+        </span>
+        <input
+          type="email"
+          value={form.person_contact_email}
+          onChange={(e) => onChange({ person_contact_email: e.target.value })}
+          className={referenceFieldCls()}
+        />
+      </label>
+    </div>
+  );
+}
+
+function ReferenceEmptyPlaceholderCard({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group flex w-full flex-col items-center justify-center rounded-2xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] px-6 py-12 text-center transition-all duration-300 hover:-translate-y-0.5 hover:border-[#10B981]/40 hover:bg-[#ECFDF5] hover:shadow-[0_10px_30px_rgba(16,185,129,0.08)]"
+    >
+      <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-[#10B981]/15 to-[#34D399]/5 text-[#059669] transition group-hover:scale-105">
+        <ShieldCheck className="h-6 w-6" aria-hidden />
+      </span>
+      <p className="mt-3 text-[15px] font-semibold text-[#0F172A]">No previous company references</p>
+      <p className="mt-1 max-w-xs text-[13px] text-[#64748B]">
+        Add employer references for background verification.
+      </p>
+      <span className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-br from-[#10B981] to-[#059669] px-3.5 py-2 text-[12px] font-semibold text-white shadow-sm">
+        <Plus className="h-3.5 w-3.5" />
+        Add reference
+      </span>
+    </button>
+  );
+}
+
+function ReferenceGridCard({
+  referenceRow,
+  canUpdateStatus,
+  onView,
+  onEdit,
+  onUpdateStatus,
+}: {
+  referenceRow: BackgroundVerificationReferenceItem;
+  canUpdateStatus?: boolean;
+  onView?: () => void;
+  onEdit?: () => void;
+  onUpdateStatus?: () => void;
+}) {
+  return (
+    <div className="flex flex-col rounded-2xl border border-[#E2E8F0] bg-white p-4 shadow-sm transition hover:shadow-md">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[14px] font-semibold text-[#0F172A]">
+            {referenceRow.previous_company_name}
+          </p>
+          <p className="mt-0.5 truncate text-[12px] text-[#94A3B8]">
+            {referenceRow.person_name} · {bgvPersonRoleLabel(referenceRow.person_role)}
+          </p>
+        </div>
+        <span
+          className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${bgvStatusBadgeClass(referenceRow.verification_status)}`}
+        >
+          {bgvStatusLabel(referenceRow.verification_status)}
+        </span>
+      </div>
+      <p className="mt-2 truncate text-[12px] text-[#64748B]">{referenceRow.person_contact_email}</p>
+      <div className="mt-3 flex flex-wrap gap-1.5 border-t border-[#F1F5F9] pt-3">
+        {onView ? (
+          <button
+            type="button"
+            onClick={onView}
+            className="inline-flex items-center gap-1 rounded-lg border border-[#E2E8F0] bg-white px-2.5 py-1.5 text-[12px] font-semibold text-[#64748B] transition hover:bg-[#EFF6FF] hover:text-[#2563EB]"
+          >
+            <Eye className="h-3.5 w-3.5" />
+            View
+          </button>
+        ) : null}
+        {onEdit ? (
+          <button
+            type="button"
+            onClick={onEdit}
+            className="inline-flex items-center gap-1 rounded-lg border border-[#E2E8F0] bg-white px-2.5 py-1.5 text-[12px] font-semibold text-[#64748B] transition hover:bg-[#F8FAFC] hover:text-[#0F172A]"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+            Edit
+          </button>
+        ) : null}
+        {canUpdateStatus && onUpdateStatus && canShowBgvVerifyButton(referenceRow.verification_status) ? (
+          <button
+            type="button"
+            onClick={onUpdateStatus}
+            className="inline-flex items-center gap-1 rounded-lg border border-[#BBF7D0] bg-[#ECFDF5] px-2.5 py-1.5 text-[12px] font-semibold text-[#059669] transition hover:bg-[#D1FAE5]"
+          >
+            <UserCheck className="h-3.5 w-3.5" />
+            Update status
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function ipAssignmentIpId(row: Record<string, unknown>): number | null {
+  const id = Number(row.ip_id);
+  return Number.isFinite(id) ? id : null;
+}
+
+function ShiftEmptyPlaceholderCard({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group flex w-full flex-col items-center justify-center rounded-2xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] px-6 py-12 text-center transition-all duration-300 hover:-translate-y-0.5 hover:border-[#8B5CF6]/40 hover:bg-[#F5F3FF] hover:shadow-[0_10px_30px_rgba(139,92,246,0.08)]"
+    >
+      <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-[#8B5CF6]/15 to-[#A78BFA]/5 text-[#7C3AED] transition group-hover:scale-105">
+        <Clock className="h-6 w-6" aria-hidden />
+      </span>
+      <p className="mt-3 text-[15px] font-semibold text-[#0F172A]">No shift assigned</p>
+      <p className="mt-1 max-w-xs text-[13px] text-[#64748B]">
+        Assign a work shift to set hours, grace period, and working days.
+      </p>
+      <span className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-br from-[#8B5CF6] to-[#7C3AED] px-3.5 py-2 text-[12px] font-semibold text-white shadow-sm">
+        <Plus className="h-3.5 w-3.5" />
+        Assign to shift
+      </span>
+    </button>
+  );
+}
+
+function ShiftAssignmentCard({
+  shift,
+  onUnassign,
+  onChangeShift,
+}: {
+  shift: CompanyShiftRow;
+  onUnassign: () => void;
+  onChangeShift?: () => void;
+}) {
+  return (
+    <div className="rounded-2xl border border-[#E2E8F0] bg-white p-4 shadow-sm transition hover:shadow-md">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="text-[15px] font-semibold text-[#0F172A]">
+            {asText(shift.shift_name, "Unnamed shift")}
+          </p>
+          <p className="mt-1 text-[13px] text-[#64748B]">
+            {shift.start_time || shift.end_time
+              ? `${asText(shift.start_time)} – ${asText(shift.end_time)}`
+              : "—"}
+          </p>
+        </div>
+        {shift.is_night_shift ? (
+          <span className="shrink-0 rounded-full bg-[#EDE9FE] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#7C3AED]">
+            Night
+          </span>
+        ) : null}
+      </div>
+      <p className="mt-2 text-[12px] text-[#94A3B8]">
+        Working days: {formatWorkingDays(shift.working_days)}
+      </p>
+      <div className="mt-3 flex flex-wrap gap-1.5 border-t border-[#F1F5F9] pt-3">
+        {onChangeShift ? (
+          <button
+            type="button"
+            onClick={onChangeShift}
+            className="inline-flex items-center gap-1 rounded-lg border border-[#E2E8F0] bg-white px-2.5 py-1.5 text-[12px] font-semibold text-[#64748B] transition hover:bg-[#F5F3FF] hover:text-[#7C3AED]"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+            Change shift
+          </button>
+        ) : null}
+        <button
+          type="button"
+          onClick={onUnassign}
+          className="inline-flex items-center gap-1 rounded-lg border border-[#FECACA] bg-[#FEF2F2] px-2.5 py-1.5 text-[12px] font-semibold text-[#DC2626] transition hover:bg-[#FEE2E2]"
+        >
+          <X className="h-3.5 w-3.5" />
+          Unassign
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function IpEmptyPlaceholderCard({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group flex w-full flex-col items-center justify-center rounded-2xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] px-6 py-12 text-center transition-all duration-300 hover:-translate-y-0.5 hover:border-[#2563EB]/40 hover:bg-[#EFF6FF] hover:shadow-[0_10px_30px_rgba(37,99,235,0.08)]"
+    >
+      <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-[#2563EB]/15 to-[#3B82F6]/5 text-[#2563EB] transition group-hover:scale-105">
+        <Globe className="h-6 w-6" aria-hidden />
+      </span>
+      <p className="mt-3 text-[15px] font-semibold text-[#0F172A]">No IP addresses assigned</p>
+      <p className="mt-1 max-w-xs text-[13px] text-[#64748B]">
+        Allow this employee to mark attendance from approved office IPs.
+      </p>
+      <span className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-br from-[#2563EB] to-[#3B82F6] px-3.5 py-2 text-[12px] font-semibold text-white shadow-sm">
+        <Plus className="h-3.5 w-3.5" />
+        Assign IP address
+      </span>
+    </button>
+  );
+}
+
+function IpAssignmentCard({
+  row,
+  onUnassign,
+}: {
+  row: Record<string, unknown>;
+  onUnassign: () => void;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3 rounded-2xl border border-[#E2E8F0] bg-white p-4 shadow-sm transition hover:shadow-md">
+      <div className="min-w-0 flex-1">
+        <p className="font-mono text-[14px] font-semibold text-[#0F172A]">
+          {asText(row.ip_address ?? row.org_ip_address)}
+        </p>
+        <p className="mt-0.5 truncate text-[12px] text-[#94A3B8]">
+          {asText(row.ip_label ?? row.org_ip_label, "No label")}
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={onUnassign}
+        className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-[#FECACA] bg-[#FEF2F2] px-2.5 py-1.5 text-[12px] font-semibold text-[#DC2626] transition hover:bg-[#FEE2E2]"
+      >
+        <X className="h-3.5 w-3.5" />
+        Unassign
+      </button>
+    </div>
+  );
+}
+
+function AssetEmptyPlaceholderCard({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group flex w-full flex-col items-center justify-center rounded-2xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] px-6 py-14 text-center transition-all duration-300 hover:-translate-y-0.5 hover:border-[#8B5CF6]/40 hover:bg-[#F5F3FF] hover:shadow-[0_10px_30px_rgba(139,92,246,0.08)]"
+    >
+      <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[#8B5CF6]/15 to-[#A78BFA]/5 text-[#7C3AED] transition group-hover:scale-105">
+        <Laptop className="h-7 w-7" aria-hidden />
+      </span>
+      <p className="mt-4 text-[17px] font-semibold text-[#0F172A]">No assets assigned</p>
+      <p className="mt-1.5 max-w-sm text-[14px] text-[#64748B]">
+        Click to assign laptops, phones, and other equipment to this employee.
+      </p>
+      <span className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-br from-[#8B5CF6] to-[#7C3AED] px-4 py-2 text-[13px] font-semibold text-white shadow-sm">
+        <Plus className="h-4 w-4" />
+        Add assets
+      </span>
+    </button>
+  );
+}
+
+function AssetGridCard({
+  asset,
+  handoverQuery,
+  showHandoverActions,
+  onView,
+  onEdit,
+  onStatus,
+  onHandover,
+  onReturnCompleted,
+}: {
+  asset: Record<string, unknown>;
+  handoverQuery?: EmployeeExitHandoverQueryRow | null;
+  showHandoverActions?: boolean;
+  onView?: () => void;
+  onEdit?: () => void;
+  onStatus?: () => void;
+  onHandover?: () => void;
+  onReturnCompleted?: () => void;
+}) {
+  const imageUrl = asset.asset_image_url ? asText(asset.asset_image_url) : null;
+  const isActive = String(asset.asset_status ?? "").toLowerCase() === "active";
+  const handoverDone =
+    String(handoverQuery?.handover_status ?? "").toLowerCase() === "handover_completed";
+  const canReturnComplete =
+    showHandoverActions && handoverDone && !asset.is_returned && isActive;
+
+  return (
+    <div className="group flex flex-col gap-3 rounded-2xl border border-[#E2E8F0] bg-white p-4 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
+      <div className="flex items-start justify-between gap-2">
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt={asText(asset.asset_name, "Asset")}
+            className="h-12 w-12 shrink-0 rounded-2xl border border-[#E2E8F0] object-cover"
+          />
+        ) : (
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#8B5CF6]/15 to-[#A78BFA]/5 text-[#8B5CF6]">
+            <Laptop className="h-6 w-6" aria-hidden />
+          </span>
+        )}
+        <StatusPill value={asset.asset_status} />
+      </div>
+      <div className="min-w-0">
+        <p className="truncate text-[15px] font-semibold text-[#0F172A]">
+          {asText(asset.asset_name, "Asset")}
+        </p>
+        <p className="truncate text-[13px] text-[#64748B]">{formatLabel(asset.asset_type)}</p>
+        {asset.asset_summary ? (
+          <p className="mt-1 line-clamp-2 text-[12px] text-[#94A3B8]">
+            {asText(asset.asset_summary)}
+          </p>
+        ) : null}
+      </div>
+      <div className="flex items-center gap-1.5 border-t border-[#F1F5F9] pt-3 text-[12px] text-[#94A3B8]">
+        <CalendarDays className="h-3.5 w-3.5 shrink-0" />
+        Assigned {formatDate(asset.assigned_at ?? asset.created_at)}
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {onView ? (
+          <button
+            type="button"
+            onClick={onView}
+            className="inline-flex items-center gap-1 rounded-lg border border-[#E2E8F0] bg-white px-2.5 py-1.5 text-[12px] font-semibold text-[#64748B] transition hover:bg-[#F5F3FF] hover:text-[#7C3AED]"
+          >
+            <Eye className="h-3.5 w-3.5" />
+            View
+          </button>
+        ) : null}
+        {onEdit ? (
+          <button
+            type="button"
+            onClick={onEdit}
+            className="inline-flex items-center gap-1 rounded-lg border border-[#E2E8F0] bg-white px-2.5 py-1.5 text-[12px] font-semibold text-[#64748B] transition hover:bg-[#EFF6FF] hover:text-[#2563EB]"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+            Edit
+          </button>
+        ) : null}
+        {onStatus ? (
+          <button
+            type="button"
+            onClick={onStatus}
+            className="inline-flex items-center gap-1 rounded-lg border border-[#E2E8F0] bg-white px-2.5 py-1.5 text-[12px] font-semibold text-[#64748B] transition hover:bg-[#F0FDF4] hover:text-[#059669]"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            Status
+          </button>
+        ) : null}
+        {showHandoverActions && onHandover ? (
+          <button
+            type="button"
+            onClick={onHandover}
+            className="inline-flex items-center gap-1 rounded-lg border border-[#E2E8F0] bg-white px-2.5 py-1.5 text-[12px] font-semibold text-[#64748B] transition hover:bg-[#FFF7ED] hover:text-[#D97706]"
+          >
+            <UserRound className="h-3.5 w-3.5" />
+            {asset.returned_to_id || handoverQuery ? "Handover" : "Assign handover"}
+          </button>
+        ) : null}
+        {canReturnComplete && onReturnCompleted ? (
+          <button
+            type="button"
+            onClick={onReturnCompleted}
+            className="inline-flex items-center gap-1 rounded-lg border border-[#BBF7D0] bg-[#ECFDF5] px-2.5 py-1.5 text-[12px] font-semibold text-[#059669] transition hover:bg-[#D1FAE5]"
+          >
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            Return done
+          </button>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -494,16 +2637,13 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
   const orgId = String(params?.org_id ?? "");
   const ctx = useManagementDashboardContext();
   const viewerRole = (ctx?.user?.user_role_name ?? "").trim().toLowerCase();
-  const viewerCanTerminate = viewerRole === "admin" || viewerRole === "hr";
-  const viewerCanManageExit = viewerCanTerminate;
+  const viewerCanManageExit = viewerRole === "admin" || viewerRole === "hr";
 
   const [data, setData] = useState<SingleEmployeeData | null>(null);
   const [exitRow, setExitRow] = useState<EmployeeExitProcessRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [terminateOpen, setTerminateOpen] = useState(false);
-  const [terminateSuccess, setTerminateSuccess] = useState<string | null>(null);
   const [completeOpen, setCompleteOpen] = useState(false);
   const [completeMessage, setCompleteMessage] = useState(
     "Exit approved. Asset handovers are complete.",
@@ -511,11 +2651,109 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
   const [completeBusy, setCompleteBusy] = useState(false);
   const [completeError, setCompleteError] = useState<string | null>(null);
   const [exitActionSuccess, setExitActionSuccess] = useState<string | null>(null);
-  const [mobileTab, setMobileTab] = useState<MobileTab>("overview");
   const [photoZoom, setPhotoZoom] = useState<{
     imageUrl: string;
     alt: string;
   } | null>(null);
+
+  const [addressEditing, setAddressEditing] = useState(false);
+  const [addressAdding, setAddressAdding] = useState(false);
+  const [addressDrafts, setAddressDrafts] = useState<AddressDraft[]>([]);
+  const [sameAsPermanent, setSameAsPermanent] = useState(false);
+  const [addressSaving, setAddressSaving] = useState(false);
+  const [addressError, setAddressError] = useState<string | null>(null);
+  const [addressSuccess, setAddressSuccess] = useState<string | null>(null);
+
+  const [documentUploadOpen, setDocumentUploadOpen] = useState(false);
+  const [documentUploadInitial, setDocumentUploadInitial] = useState(false);
+  const [docFiles, setDocFiles] = useState<Partial<Record<EmployeeOnboardingDocumentField, File>>>({});
+  const [documentUpdateTarget, setDocumentUpdateTarget] = useState<Record<string, unknown> | null>(
+    null,
+  );
+  const [documentUpdateFile, setDocumentUpdateFile] = useState<File | null>(null);
+  const [documentDeleteTarget, setDocumentDeleteTarget] = useState<Record<string, unknown> | null>(
+    null,
+  );
+  const [documentSaving, setDocumentSaving] = useState(false);
+  const [documentError, setDocumentError] = useState<string | null>(null);
+  const [documentSuccess, setDocumentSuccess] = useState<string | null>(null);
+
+  const [assetAddOpen, setAssetAddOpen] = useState(false);
+  const [assetDraftRows, setAssetDraftRows] = useState<AssetDraftRow[]>([createEmptyAssetDraft()]);
+  const [assetViewTarget, setAssetViewTarget] = useState<EmployeeAssetRow | null>(null);
+  const [assetViewLoading, setAssetViewLoading] = useState(false);
+  const [assetEditTarget, setAssetEditTarget] = useState<EmployeeAssetRow | null>(null);
+  const [assetEditDraft, setAssetEditDraft] = useState({
+    asset_name: "",
+    asset_type: "other",
+    asset_summary: "",
+    handover_date_time: "",
+    file: null as File | null,
+  });
+  const [assetStatusTarget, setAssetStatusTarget] = useState<Record<string, unknown> | null>(null);
+  const [assetHandoverTarget, setAssetHandoverTarget] = useState<Record<string, unknown> | null>(
+    null,
+  );
+  const [assetHandoverManagerId, setAssetHandoverManagerId] = useState("");
+  const [assetHandoverRemarks, setAssetHandoverRemarks] = useState("");
+  const [assetReturnTarget, setAssetReturnTarget] = useState<Record<string, unknown> | null>(null);
+  const [assetManagers, setAssetManagers] = useState<{ id: string; name: string }[]>([]);
+  const [assetManagersLoading, setAssetManagersLoading] = useState(false);
+  const [exitDetailHandovers, setExitDetailHandovers] = useState<EmployeeExitHandoverQueryRow[]>(
+    [],
+  );
+  const [assetSaving, setAssetSaving] = useState(false);
+  const [assetError, setAssetError] = useState<string | null>(null);
+  const [assetSuccess, setAssetSuccess] = useState<string | null>(null);
+
+  const [bgvReferences, setBgvReferences] = useState<BackgroundVerificationReferenceItem[]>([]);
+  const [bgvLoading, setBgvLoading] = useState(false);
+  const [referenceAddOpen, setReferenceAddOpen] = useState(false);
+  const [referenceAddForm, setReferenceAddForm] = useState<ReferenceEditForm>(createEmptyReferenceForm);
+  const [referenceViewTarget, setReferenceViewTarget] = useState<BackgroundVerificationDetailRow | null>(
+    null,
+  );
+  const [referenceViewLoading, setReferenceViewLoading] = useState(false);
+  const [referenceEditTarget, setReferenceEditTarget] =
+    useState<BackgroundVerificationReferenceItem | null>(null);
+  const [referenceEditForm, setReferenceEditForm] = useState<ReferenceEditForm | null>(null);
+  const [referenceVerifyTarget, setReferenceVerifyTarget] =
+    useState<BackgroundVerificationReferenceItem | null>(null);
+  const [referenceVerifyStatus, setReferenceVerifyStatus] =
+    useState<BackgroundVerificationStatus>("in_progress");
+  const [referenceVerifyNotes, setReferenceVerifyNotes] = useState("");
+  const [referenceSaving, setReferenceSaving] = useState(false);
+  const [referenceError, setReferenceError] = useState<string | null>(null);
+  const [referenceSuccess, setReferenceSuccess] = useState<string | null>(null);
+
+  const [ipAssignOpen, setIpAssignOpen] = useState(false);
+  const [companyIps, setCompanyIps] = useState<CompanyIpRow[]>([]);
+  const [companyIpsLoading, setCompanyIpsLoading] = useState(false);
+  const [selectedIpId, setSelectedIpId] = useState<string>("");
+  const [ipUnassignTarget, setIpUnassignTarget] = useState<Record<string, unknown> | null>(null);
+  const [ipSaving, setIpSaving] = useState(false);
+  const [ipError, setIpError] = useState<string | null>(null);
+  const [ipSuccess, setIpSuccess] = useState<string | null>(null);
+
+  const [userShifts, setUserShifts] = useState<CompanyShiftRow[]>([]);
+  const [shiftsLoading, setShiftsLoading] = useState(false);
+  const [shiftAssignOpen, setShiftAssignOpen] = useState(false);
+  const [companyShifts, setCompanyShifts] = useState<CompanyShiftRow[]>([]);
+  const [companyShiftsLoading, setCompanyShiftsLoading] = useState(false);
+  const [selectedShiftId, setSelectedShiftId] = useState<string>("");
+  const [shiftUnassignTarget, setShiftUnassignTarget] = useState<CompanyShiftRow | null>(null);
+  const [shiftSaving, setShiftSaving] = useState(false);
+  const [shiftError, setShiftError] = useState<string | null>(null);
+  const [shiftSuccess, setShiftSuccess] = useState<string | null>(null);
+
+  const now = useMemo(() => new Date(), []);
+  const [attendanceMonth, setAttendanceMonth] = useState(now.getMonth() + 1);
+  const [attendanceYear, setAttendanceYear] = useState(now.getFullYear());
+  const [selectedCalendarDay, setSelectedCalendarDay] = useState<number | null>(null);
+  const [attendanceRows, setAttendanceRows] = useState<AttendanceHistoryRow[]>([]);
+  const [attendanceLoading, setAttendanceLoading] = useState(false);
+  const [attendanceRefreshing, setAttendanceRefreshing] = useState(false);
+  const [attendanceError, setAttendanceError] = useState<string | null>(null);
 
   const openPhotoZoom = useCallback((imageUrl: string, alt: string) => {
     setPhotoZoom({ imageUrl, alt });
@@ -565,9 +2803,144 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
     [orgId, userId],
   );
 
+  const loadAttendance = useCallback(
+    async (isRefresh = false) => {
+      if (!orgId || !userId) return;
+      const token = localStorage.getItem("token");
+      if (!token) {
+        setAttendanceError("Not signed in.");
+        return;
+      }
+
+      if (isRefresh) setAttendanceRefreshing(true);
+      else setAttendanceLoading(true);
+      setAttendanceError(null);
+
+      try {
+        const rows = await fetchSingleUserAttendanceHistory(token, orgId, userId, {
+          month: attendanceMonth,
+          year: attendanceYear,
+          date: selectedCalendarDay ?? undefined,
+        });
+        setAttendanceRows(rows);
+      } catch (e) {
+        setAttendanceRows([]);
+        setAttendanceError(
+          e instanceof Error ? e.message : "Could not load attendance history.",
+        );
+      } finally {
+        setAttendanceLoading(false);
+        setAttendanceRefreshing(false);
+      }
+    },
+    [orgId, userId, attendanceMonth, attendanceYear, selectedCalendarDay],
+  );
+
   useEffect(() => {
     void loadEmployee(false);
   }, [loadEmployee]);
+
+  const loadBgvReferences = useCallback(async () => {
+    if (!orgId || !userId) {
+      setBgvReferences([]);
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setBgvReferences([]);
+      return;
+    }
+
+    setBgvLoading(true);
+    try {
+      const listResult = await getAllUserBackgroundVerifications(token, orgId, {
+        employee_id: userId,
+        is_ascending: "DESC",
+      });
+      const group = Array.isArray(listResult.data) ? listResult.data[0] : null;
+      setBgvReferences(group?.references ?? []);
+    } catch {
+      setBgvReferences([]);
+    } finally {
+      setBgvLoading(false);
+    }
+  }, [orgId, userId]);
+
+  useEffect(() => {
+    void loadBgvReferences();
+  }, [loadBgvReferences]);
+
+  const loadUserShifts = useCallback(async () => {
+    if (!orgId || !userId) {
+      setUserShifts([]);
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setUserShifts([]);
+      return;
+    }
+
+    setShiftsLoading(true);
+    try {
+      const shifts = await getUserShifts(token, orgId, userId);
+      setUserShifts(shifts);
+    } catch {
+      setUserShifts([]);
+    } finally {
+      setShiftsLoading(false);
+    }
+  }, [orgId, userId]);
+
+  useEffect(() => {
+    void loadUserShifts();
+  }, [loadUserShifts]);
+
+  useEffect(() => {
+    void loadAttendance(false);
+  }, [loadAttendance]);
+
+  useEffect(() => {
+    if (!exitRow?.id || !orgId) {
+      setExitDetailHandovers([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+      try {
+        const res = await fetchEmployeeExitProcessById(token, orgId, exitRow.id);
+        if (!cancelled) {
+          setExitDetailHandovers(res.data?.handover_queries ?? []);
+        }
+      } catch {
+        if (!cancelled) setExitDetailHandovers([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [exitRow?.id, orgId]);
+
+  const shiftAttendanceMonth = useCallback((delta: number) => {
+    setSelectedCalendarDay(null);
+    setAttendanceMonth((prevMonth) => {
+      let nextMonth = prevMonth + delta;
+      let nextYear = attendanceYear;
+      if (nextMonth > 12) {
+        nextMonth = 1;
+        nextYear += 1;
+      } else if (nextMonth < 1) {
+        nextMonth = 12;
+        nextYear -= 1;
+      }
+      setAttendanceYear(nextYear);
+      return nextMonth;
+    });
+  }, [attendanceYear]);
 
   const info = data?.user_info;
   const employeeName = asText(info?.user_name, "Employee");
@@ -575,7 +2948,6 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
   const hasOpenExit = exitRow != null && isOpenExitStatus(exitRow.application_status);
   const exitPending = exitRow != null && isPendingExitStatus(exitRow.application_status);
   const exitInProgress = exitRow != null && isInProgressExitStatus(exitRow.application_status);
-  const showTerminate = viewerCanTerminate && !loading && data && !hasOpenExit;
 
   const exitDetailHref =
     exitRow != null
@@ -672,260 +3044,1762 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
       </>
     ) : null;
 
-  const stats = useMemo(
-    () => ({
-      documents: data?.documents.length ?? 0,
-      assets: data?.assets.length ?? 0,
-      leaves: data?.leave_queries.length ?? 0,
-      logs: data?.attendance_logs.length ?? 0,
-    }),
-    [data],
+  const latestDocuments = useMemo(() => {
+    const map = new Map<string, Record<string, unknown>>();
+    for (const doc of data?.documents ?? []) {
+      const type = String(doc.document_type ?? doc.id ?? "doc");
+      const existing = map.get(type);
+      const docTime = new Date(String(doc.created_at ?? 0)).getTime();
+      const existingTime = existing
+        ? new Date(String(existing.created_at ?? 0)).getTime()
+        : 0;
+      if (!existing || docTime > existingTime) {
+        map.set(type, doc);
+      }
+    }
+    return Array.from(map.values()).sort(
+      (a, b) =>
+        new Date(String(b.created_at ?? 0)).getTime() -
+        new Date(String(a.created_at ?? 0)).getTime(),
+    );
+  }, [data?.documents]);
+
+  const uploadedDocumentTypes = useMemo(
+    () => new Set(latestDocuments.map((doc) => String(doc.document_type ?? ""))),
+    [latestDocuments],
   );
 
-  const mobileTabs = useMemo(
+  const documentUploadFields = useMemo(() => {
+    if (documentUploadInitial) {
+      return EMPLOYEE_DOC_UPLOAD_FIELDS;
+    }
+    return EMPLOYEE_DOC_UPLOAD_FIELDS.filter((field) => !uploadedDocumentTypes.has(field.field));
+  }, [documentUploadInitial, uploadedDocumentTypes]);
+
+  const handoverByAssetId = useMemo(() => {
+    const map = new Map<number, EmployeeExitHandoverQueryRow>();
+    for (const row of exitDetailHandovers) {
+      if (row.asset_id != null) map.set(Number(row.asset_id), row);
+    }
+    return map;
+  }, [exitDetailHandovers]);
+
+  const employeeAddresses = useMemo(
+    () => data?.addresses ?? [],
+    [data?.addresses],
+  );
+
+  const permanentAddress = useMemo(
+    () =>
+      employeeAddresses.find(
+        (row) => String(row.address_type ?? "").toLowerCase() === "permanent",
+      ),
+    [employeeAddresses],
+  );
+
+  const currentAddress = useMemo(
+    () =>
+      employeeAddresses.find(
+        (row) => String(row.address_type ?? "").toLowerCase() === "current",
+      ),
+    [employeeAddresses],
+  );
+
+  const canEditAddresses = employeeAddresses.length === 2;
+  const canAddAddresses = employeeAddresses.length === 0;
+
+  const startAddressAdd = useCallback(() => {
+    setAddressDrafts([
+      makeEmptyAddressDraft("permanent"),
+      makeEmptyAddressDraft("current"),
+    ]);
+    setSameAsPermanent(false);
+    setAddressError(null);
+    setAddressSuccess(null);
+    setAddressAdding(true);
+    setAddressEditing(false);
+  }, []);
+
+  const startAddressEdit = useCallback(() => {
+    const ordered =
+      permanentAddress && currentAddress
+        ? [permanentAddress, currentAddress]
+        : employeeAddresses;
+    setAddressDrafts(
+      ordered.slice(0, 2).map((row) => makeAddressDraft(row as Record<string, unknown>)),
+    );
+    setSameAsPermanent(false);
+    setAddressError(null);
+    setAddressSuccess(null);
+    setAddressEditing(true);
+    setAddressAdding(false);
+  }, [permanentAddress, currentAddress, employeeAddresses]);
+
+  const cancelAddressForm = useCallback(() => {
+    setAddressEditing(false);
+    setAddressAdding(false);
+    setAddressDrafts([]);
+    setSameAsPermanent(false);
+    setAddressError(null);
+  }, []);
+
+  const toggleSameAsPermanent = useCallback((checked: boolean) => {
+    setSameAsPermanent(checked);
+    if (checked) {
+      setAddressDrafts((prev) => {
+        if (prev.length < 2) return prev;
+        return [prev[0], { ...prev[1], ...copyAddressFieldValues(prev[0]) }];
+      });
+    }
+  }, []);
+
+  const updateAddressDraft = useCallback(
+    (index: number, field: keyof AddressDraft, value: string | boolean) => {
+      setAddressDrafts((prev) => {
+        const next = prev.map((draft, i) =>
+          i === index ? { ...draft, [field]: value } : draft,
+        );
+
+        if (
+          addressAdding &&
+          sameAsPermanent &&
+          index === 0 &&
+          field !== "address_type" &&
+          field !== "address_id" &&
+          next.length >= 2
+        ) {
+          next[1] = { ...next[1], ...copyAddressFieldValues(next[0]) };
+        }
+
+        return next;
+      });
+    },
+    [addressAdding, sameAsPermanent],
+  );
+
+  const buildAddressEntry = useCallback(
+    (draft: AddressDraft): EmployeeAddressEntryPayload => ({
+      address_type: draft.address_type,
+      country: draft.country.trim(),
+      state: draft.state.trim(),
+      district: draft.district.trim(),
+      city: draft.city.trim(),
+      is_from_village: draft.is_from_village,
+      village_name: draft.is_from_village ? draft.village_name.trim() : null,
+      street: draft.street.trim(),
+      house_number: draft.house_number.trim(),
+      zip_code: draft.zip_code.trim(),
+    }),
+    [],
+  );
+
+  const submitAddressAdd = useCallback(async () => {
+    const validationError = validateAddressDrafts(addressDrafts, false);
+    if (validationError) {
+      setAddressError(validationError);
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setAddressError("Not signed in.");
+      return;
+    }
+
+    const permanentEntry = addressDrafts.find((d) => d.address_type === "permanent");
+    const currentEntry = addressDrafts.find((d) => d.address_type === "current");
+    if (!permanentEntry || !currentEntry) {
+      setAddressError("Both permanent and current addresses are required.");
+      return;
+    }
+
+    setAddressSaving(true);
+    setAddressError(null);
+    try {
+      await addUserAddress(token, {
+        employee_id: userId,
+        org_id: orgId,
+        address_info: [buildAddressEntry(permanentEntry), buildAddressEntry(currentEntry)],
+      });
+      setAddressAdding(false);
+      setAddressDrafts([]);
+      setSameAsPermanent(false);
+      setAddressSuccess("Addresses saved successfully.");
+      await loadEmployee(true);
+    } catch (e) {
+      setAddressError(e instanceof Error ? e.message : "Could not save addresses.");
+    } finally {
+      setAddressSaving(false);
+    }
+  }, [addressDrafts, userId, orgId, loadEmployee, buildAddressEntry]);
+
+  const submitAddressEdit = useCallback(async () => {
+    const validationError = validateAddressDrafts(addressDrafts, true);
+    if (validationError) {
+      setAddressError(validationError);
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setAddressError("Not signed in.");
+      return;
+    }
+
+    const entries = addressDrafts.map<EmployeeAddressUpdateEntryPayload>((draft) => ({
+      ...buildAddressEntry(draft),
+      address_id: draft.address_id,
+    }));
+
+    const permanentEntry = entries.find((e) => e.address_type === "permanent");
+    const currentEntry = entries.find((e) => e.address_type === "current");
+    if (!permanentEntry || !currentEntry) {
+      setAddressError("Both permanent and current addresses are required.");
+      return;
+    }
+
+    setAddressSaving(true);
+    setAddressError(null);
+    try {
+      await updateUserAddress(token, {
+        employee_id: userId,
+        org_id: orgId,
+        address_info: [permanentEntry, currentEntry],
+      });
+      setAddressEditing(false);
+      setAddressDrafts([]);
+      setAddressSuccess("Addresses updated successfully.");
+      await loadEmployee(true);
+    } catch (e) {
+      setAddressError(e instanceof Error ? e.message : "Could not update addresses.");
+    } finally {
+      setAddressSaving(false);
+    }
+  }, [addressDrafts, userId, orgId, loadEmployee, buildAddressEntry]);
+
+  const openDocumentUpload = useCallback((initial: boolean) => {
+    setDocumentUploadInitial(initial);
+    setDocFiles({});
+    setDocumentError(null);
+    setDocumentSuccess(null);
+    setDocumentUploadOpen(true);
+  }, []);
+
+  const closeDocumentUpload = useCallback(() => {
+    if (documentSaving) return;
+    setDocumentUploadOpen(false);
+    setDocumentUploadInitial(false);
+    setDocFiles({});
+    setDocumentError(null);
+  }, [documentSaving]);
+
+  const openDocumentUpdate = useCallback((doc: Record<string, unknown>) => {
+    setDocumentUpdateTarget(doc);
+    setDocumentUpdateFile(null);
+    setDocumentError(null);
+  }, []);
+
+  const closeDocumentUpdate = useCallback(() => {
+    if (documentSaving) return;
+    setDocumentUpdateTarget(null);
+    setDocumentUpdateFile(null);
+    setDocumentError(null);
+  }, [documentSaving]);
+
+  const openDocumentDelete = useCallback((doc: Record<string, unknown>) => {
+    setDocumentDeleteTarget(doc);
+    setDocumentError(null);
+  }, []);
+
+  const closeDocumentDelete = useCallback(() => {
+    if (documentSaving) return;
+    setDocumentDeleteTarget(null);
+    setDocumentError(null);
+  }, [documentSaving]);
+
+  const submitDocumentUpload = useCallback(async () => {
+    setDocumentError(null);
+
+    if (documentUploadInitial) {
+      const missing = EMPLOYEE_DOC_UPLOAD_FIELDS.filter(
+        (field) => field.requiredForInitial && !docFiles[field.field],
+      );
+      if (missing.length > 0) {
+        setDocumentError(
+          `Please attach all required documents (${missing.map((m) => m.label).join(", ")}).`,
+        );
+        return;
+      }
+    } else {
+      const selected = Object.values(docFiles).filter(Boolean);
+      if (selected.length === 0) {
+        setDocumentError("Select at least one document to upload.");
+        return;
+      }
+      if (documentUploadFields.length === 0) {
+        setDocumentError("All document types are already on file. Use Update to replace an existing document.");
+        return;
+      }
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setDocumentError("Not signed in.");
+      return;
+    }
+
+    setDocumentSaving(true);
+    try {
+      await uploadEmployeeDocuments(token, {
+        org_id: orgId,
+        employee_user_id: userId,
+        files: docFiles,
+      });
+      setDocumentUploadOpen(false);
+      setDocumentUploadInitial(false);
+      setDocFiles({});
+      setDocumentSuccess(
+        documentUploadInitial ? "Documents uploaded successfully." : "Documents added successfully.",
+      );
+      await loadEmployee(true);
+    } catch (e) {
+      setDocumentError(e instanceof Error ? e.message : "Could not upload documents.");
+    } finally {
+      setDocumentSaving(false);
+    }
+  }, [documentUploadInitial, docFiles, documentUploadFields.length, orgId, userId, loadEmployee]);
+
+  const submitDocumentUpdate = useCallback(async () => {
+    if (!documentUpdateTarget?.id) {
+      setDocumentError("Document reference is missing. Please refresh and try again.");
+      return;
+    }
+    if (!documentUpdateFile) {
+      setDocumentError("Select a new file to replace this document.");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setDocumentError("Not signed in.");
+      return;
+    }
+
+    setDocumentSaving(true);
+    setDocumentError(null);
+    try {
+      await updateEmployeeDocument(token, {
+        org_id: orgId,
+        employee_user_id: userId,
+        document_id: documentUpdateTarget.id as number | string,
+        file: documentUpdateFile,
+      });
+      setDocumentUpdateTarget(null);
+      setDocumentUpdateFile(null);
+      setDocumentSuccess("Document updated successfully.");
+      await loadEmployee(true);
+    } catch (e) {
+      setDocumentError(e instanceof Error ? e.message : "Could not update document.");
+    } finally {
+      setDocumentSaving(false);
+    }
+  }, [documentUpdateTarget, documentUpdateFile, orgId, userId, loadEmployee]);
+
+  const confirmDocumentDelete = useCallback(async () => {
+    if (!documentDeleteTarget?.id) {
+      setDocumentError("Document reference is missing. Please refresh and try again.");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setDocumentError("Not signed in.");
+      return;
+    }
+
+    setDocumentSaving(true);
+    setDocumentError(null);
+    try {
+      await deleteEmployeeDocuments(token, {
+        org_id: orgId,
+        employee_user_id: userId,
+        document_ids: [documentDeleteTarget.id as number | string],
+      });
+      setDocumentDeleteTarget(null);
+      setDocumentSuccess("Document deleted successfully.");
+      await loadEmployee(true);
+    } catch (e) {
+      setDocumentError(e instanceof Error ? e.message : "Could not delete document.");
+    } finally {
+      setDocumentSaving(false);
+    }
+  }, [documentDeleteTarget, orgId, userId, loadEmployee]);
+
+  const actorUserId = ctx?.user?.user_id != null ? String(ctx.user.user_id) : "";
+
+  const openAssetAdd = useCallback(() => {
+    setAssetDraftRows([createEmptyAssetDraft()]);
+    setAssetError(null);
+    setAssetSuccess(null);
+    setAssetAddOpen(true);
+  }, []);
+
+  const closeAssetAdd = useCallback(() => {
+    if (assetSaving) return;
+    setAssetAddOpen(false);
+    setAssetDraftRows([createEmptyAssetDraft()]);
+    setAssetError(null);
+  }, [assetSaving]);
+
+  const loadAssetManagers = useCallback(async () => {
+    const token = localStorage.getItem("token");
+    if (!token || !orgId) return;
+    setAssetManagersLoading(true);
+    try {
+      const res = await getManagementEmployeesPage(token, orgId, 1, 200);
+      setAssetManagers(
+        res.data.map((row) => ({
+          id: String(row.user_id),
+          name: asText(row.user_name, `User ${row.user_id}`),
+        })),
+      );
+    } catch {
+      setAssetManagers([]);
+    } finally {
+      setAssetManagersLoading(false);
+    }
+  }, [orgId]);
+
+  const openAssetView = useCallback(
+    async (asset: Record<string, unknown>) => {
+      const assetId = asset.id;
+      if (assetId == null) return;
+      const token = localStorage.getItem("token");
+      if (!token) {
+        setAssetError("Not signed in.");
+        return;
+      }
+      setAssetViewTarget(null);
+      setAssetViewLoading(true);
+      setAssetError(null);
+      try {
+        const res = await getSingleEmployeeAsset(token, orgId, assetId as number | string);
+        setAssetViewTarget(res.data ?? (asset as EmployeeAssetRow));
+      } catch (e) {
+        setAssetError(e instanceof Error ? e.message : "Could not load asset details.");
+      } finally {
+        setAssetViewLoading(false);
+      }
+    },
+    [orgId],
+  );
+
+  const openAssetEdit = useCallback((asset: Record<string, unknown>) => {
+    const row = asset as EmployeeAssetRow;
+    setAssetEditTarget(row);
+    setAssetEditDraft({
+      asset_name: asText(row.asset_name),
+      asset_type: String(row.asset_type ?? "other").toLowerCase(),
+      asset_summary: asText(row.asset_summary),
+      handover_date_time: row.handover_date_time
+        ? String(row.handover_date_time).slice(0, 16).replace(" ", "T")
+        : "",
+      file: null,
+    });
+    setAssetError(null);
+  }, []);
+
+  const openAssetStatus = useCallback((asset: Record<string, unknown>) => {
+    setAssetStatusTarget(asset);
+    setAssetError(null);
+  }, []);
+
+  const openAssetHandover = useCallback(
+    async (asset: Record<string, unknown>) => {
+      if (!exitRow?.id) {
+        setAssetError("An active exit process is required for handover.");
+        return;
+      }
+      setAssetHandoverTarget(asset);
+      setAssetHandoverManagerId(
+        asset.returned_to_id != null ? String(asset.returned_to_id) : "",
+      );
+      setAssetHandoverRemarks("");
+      setAssetError(null);
+      await loadAssetManagers();
+    },
+    [exitRow?.id, loadAssetManagers],
+  );
+
+  const openAssetReturnCompleted = useCallback((asset: Record<string, unknown>) => {
+    setAssetReturnTarget(asset);
+    setAssetError(null);
+  }, []);
+
+  const submitAssetAdd = useCallback(async () => {
+    setAssetError(null);
+    const candidates = assetDraftRows.filter((row) => !assetRowIsEmpty(row));
+    if (candidates.length === 0) {
+      setAssetError("Add at least one asset with a name and type.");
+      return;
+    }
+
+    const typesSet = new Set<string>([...EMPLOYEE_ASSET_TYPES]);
+    for (let i = 0; i < candidates.length; i++) {
+      const row = candidates[i];
+      if (!row.asset_name.trim()) {
+        setAssetError(`Asset ${i + 1}: name is required.`);
+        return;
+      }
+      if (!typesSet.has(row.asset_type)) {
+        setAssetError(`Asset ${i + 1}: pick a valid asset type.`);
+        return;
+      }
+      if (row.file && row.file.size > MAX_ASSET_FILE_BYTES) {
+        setAssetError(`Asset ${i + 1}: file must be 5 MB or smaller.`);
+        return;
+      }
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setAssetError("Not signed in.");
+      return;
+    }
+
+    setAssetSaving(true);
+    try {
+      await uploadEmployeeAssetsBatch(token, {
+        org_id: orgId,
+        items: candidates.map((row, index) => ({
+          employee_id: userId,
+          asset_name: row.asset_name.trim(),
+          asset_type: row.asset_type,
+          asset_summary: row.asset_summary.trim() || null,
+          handover_date_time: row.handover_date_time.trim()
+            ? `${row.handover_date_time.trim().replace("T", " ")}:00`
+            : null,
+          image_field: `asset_image_${index}`,
+          file: row.file,
+        })),
+      });
+      setAssetAddOpen(false);
+      setAssetDraftRows([createEmptyAssetDraft()]);
+      setAssetSuccess("Assets assigned successfully.");
+      await loadEmployee(true);
+    } catch (e) {
+      setAssetError(e instanceof Error ? e.message : "Could not assign assets.");
+    } finally {
+      setAssetSaving(false);
+    }
+  }, [assetDraftRows, orgId, userId, loadEmployee]);
+
+  const submitAssetEdit = useCallback(async () => {
+    if (!assetEditTarget?.id) {
+      setAssetError("Asset reference is missing.");
+      return;
+    }
+    if (!assetEditDraft.asset_name.trim()) {
+      setAssetError("Asset name is required.");
+      return;
+    }
+    if (!EMPLOYEE_ASSET_TYPES.includes(assetEditDraft.asset_type as (typeof EMPLOYEE_ASSET_TYPES)[number])) {
+      setAssetError("Pick a valid asset type.");
+      return;
+    }
+    if (assetEditDraft.file && assetEditDraft.file.size > MAX_ASSET_FILE_BYTES) {
+      setAssetError("Image file must be 5 MB or smaller.");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setAssetError("Not signed in.");
+      return;
+    }
+
+    setAssetSaving(true);
+    setAssetError(null);
+    try {
+      await updateEmployeeAssetsBatch(token, {
+        org_id: orgId,
+        items: [
+          {
+            id: assetEditTarget.id,
+            asset_name: assetEditDraft.asset_name.trim(),
+            asset_type: assetEditDraft.asset_type,
+            asset_summary: assetEditDraft.asset_summary.trim() || null,
+            handover_date_time: assetEditDraft.handover_date_time.trim()
+              ? `${assetEditDraft.handover_date_time.trim().replace("T", " ")}:00`
+              : null,
+            image_field: "asset_image_0",
+            file: assetEditDraft.file,
+          },
+        ],
+      });
+      setAssetEditTarget(null);
+      setAssetSuccess("Asset updated successfully.");
+      await loadEmployee(true);
+    } catch (e) {
+      setAssetError(e instanceof Error ? e.message : "Could not update asset.");
+    } finally {
+      setAssetSaving(false);
+    }
+  }, [assetEditTarget, assetEditDraft, orgId, loadEmployee]);
+
+  const submitAssetStatus = useCallback(async () => {
+    if (!assetStatusTarget?.id) {
+      setAssetError("Asset reference is missing.");
+      return;
+    }
+    const currentStatus = String(assetStatusTarget.asset_status ?? "").toLowerCase();
+    if (currentStatus !== "active") {
+      setAssetError("Only active assets can be marked as returned from here.");
+      return;
+    }
+    if (!actorUserId) {
+      setAssetError("Could not determine the receiving user.");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setAssetError("Not signed in.");
+      return;
+    }
+
+    setAssetSaving(true);
+    setAssetError(null);
+    try {
+      await returnEmployeeAssets(token, {
+        org_id: orgId,
+        returns: [
+          {
+            asset_id: assetStatusTarget.id as number | string,
+            returned_to_id: actorUserId,
+          },
+        ],
+      });
+      setAssetStatusTarget(null);
+      setAssetSuccess("Asset marked as returned.");
+      await loadEmployee(true);
+    } catch (e) {
+      setAssetError(e instanceof Error ? e.message : "Could not update asset status.");
+    } finally {
+      setAssetSaving(false);
+    }
+  }, [assetStatusTarget, actorUserId, orgId, loadEmployee]);
+
+  const submitAssetHandover = useCallback(async () => {
+    if (!assetHandoverTarget?.id || !exitRow?.id) {
+      setAssetError("Exit process or asset reference is missing.");
+      return;
+    }
+    if (!assetHandoverManagerId) {
+      setAssetError("Select a handover manager.");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setAssetError("Not signed in.");
+      return;
+    }
+
+    const sharedBody = {
+      org_id: orgId,
+      employee_id: userId,
+      manager_id: assetHandoverManagerId,
+      asset_id: assetHandoverTarget.id as number | string,
+      team_id: exitRow.team_id ?? null,
+      remarks: assetHandoverRemarks.trim() || null,
+    };
+
+    setAssetSaving(true);
+    setAssetError(null);
+    try {
+      if (assetHandoverTarget.returned_to_id || handoverByAssetId.has(Number(assetHandoverTarget.id))) {
+        await updateAssignedHandoverManager(token, orgId, exitRow.id, {
+          ...sharedBody,
+          handover_date: handoverDateTimeSqlNow(),
+        });
+        setAssetSuccess("Handover manager updated.");
+      } else {
+        await assignHandoverManager(token, orgId, exitRow.id, {
+          ...sharedBody,
+          handover_date: handoverDateTimeSqlNow(),
+        });
+        setAssetSuccess("Handover manager assigned.");
+      }
+      setAssetHandoverTarget(null);
+      await loadEmployee(true);
+      const res = await fetchEmployeeExitProcessById(token, orgId, exitRow.id);
+      setExitDetailHandovers(res.data?.handover_queries ?? []);
+    } catch (e) {
+      setAssetError(e instanceof Error ? e.message : "Could not save handover.");
+    } finally {
+      setAssetSaving(false);
+    }
+  }, [
+    assetHandoverTarget,
+    assetHandoverManagerId,
+    assetHandoverRemarks,
+    exitRow,
+    orgId,
+    userId,
+    loadEmployee,
+    handoverByAssetId,
+  ]);
+
+  const confirmAssetReturnCompleted = useCallback(async () => {
+    if (!assetReturnTarget?.id) {
+      setAssetError("Asset reference is missing.");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setAssetError("Not signed in.");
+      return;
+    }
+
+    setAssetSaving(true);
+    setAssetError(null);
+    try {
+      await returnAssetsCompleted(token, orgId, {
+        employee_id: userId,
+        assets_ids: [assetReturnTarget.id as number | string],
+      });
+      setAssetReturnTarget(null);
+      setAssetSuccess("Asset return confirmed.");
+      await loadEmployee(true);
+      if (exitRow?.id) {
+        const res = await fetchEmployeeExitProcessById(token, orgId, exitRow.id);
+        setExitDetailHandovers(res.data?.handover_queries ?? []);
+      }
+    } catch (e) {
+      setAssetError(e instanceof Error ? e.message : "Could not confirm asset return.");
+    } finally {
+      setAssetSaving(false);
+    }
+  }, [assetReturnTarget, orgId, userId, loadEmployee, exitRow?.id]);
+
+  const validateReferenceForm = useCallback((form: ReferenceEditForm): string | null => {
+    if (!form.previous_company_name.trim()) return "Previous company name is required.";
+    if (!form.person_name.trim()) return "Reference contact name is required.";
+    if (!form.person_contact_number1.trim()) return "Primary phone number is required.";
+    if (!form.person_contact_email.trim()) return "Reference contact email is required.";
+    if (!isValidReferenceEmail(form.person_contact_email)) {
+      return "Enter a valid reference contact email.";
+    }
+    if (form.company_email.trim() && !isValidReferenceEmail(form.company_email)) {
+      return "Enter a valid company email.";
+    }
+    return null;
+  }, []);
+
+  const openReferenceAdd = useCallback(() => {
+    setReferenceAddForm(createEmptyReferenceForm());
+    setReferenceError(null);
+    setReferenceAddOpen(true);
+  }, []);
+
+  const closeReferenceAdd = useCallback(() => {
+    if (referenceSaving) return;
+    setReferenceAddOpen(false);
+    setReferenceAddForm(createEmptyReferenceForm());
+    setReferenceError(null);
+  }, [referenceSaving]);
+
+  const openReferenceView = useCallback(
+    async (refRow: BackgroundVerificationReferenceItem) => {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        setReferenceError("Not signed in.");
+        return;
+      }
+
+      setReferenceViewLoading(true);
+      setReferenceViewTarget(null);
+      setReferenceError(null);
+      try {
+        const res = await getSingleUserBackgroundVerification(token, orgId, userId, refRow.id);
+        if (res.data) setReferenceViewTarget(res.data);
+        else setReferenceError("Reference not found.");
+      } catch (e) {
+        setReferenceError(e instanceof Error ? e.message : "Could not load reference details.");
+      } finally {
+        setReferenceViewLoading(false);
+      }
+    },
+    [orgId, userId],
+  );
+
+  const closeReferenceView = useCallback(() => {
+    if (referenceViewLoading) return;
+    setReferenceViewTarget(null);
+  }, [referenceViewLoading]);
+
+  const openReferenceEdit = useCallback((refRow: BackgroundVerificationReferenceItem) => {
+    setReferenceEditTarget(refRow);
+    setReferenceEditForm(refItemToEditForm(refRow));
+    setReferenceError(null);
+  }, []);
+
+  const closeReferenceEdit = useCallback(() => {
+    if (referenceSaving) return;
+    setReferenceEditTarget(null);
+    setReferenceEditForm(null);
+    setReferenceError(null);
+  }, [referenceSaving]);
+
+  const openReferenceVerify = useCallback((refRow: BackgroundVerificationReferenceItem) => {
+    setReferenceVerifyTarget(refRow);
+    const current = String(refRow.verification_status).toLowerCase() as BackgroundVerificationStatus;
+    setReferenceVerifyStatus(
+      BGV_STATUS_OPTIONS.some((o) => o.value === current) ? current : "in_progress",
+    );
+    setReferenceVerifyNotes(refRow.verification_notes ?? "");
+    setReferenceError(null);
+  }, []);
+
+  const closeReferenceVerify = useCallback(() => {
+    if (referenceSaving) return;
+    setReferenceVerifyTarget(null);
+    setReferenceVerifyNotes("");
+    setReferenceError(null);
+  }, [referenceSaving]);
+
+  const submitReferenceAdd = useCallback(async () => {
+    const validationError = validateReferenceForm(referenceAddForm);
+    if (validationError) {
+      setReferenceError(validationError);
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setReferenceError("Not signed in.");
+      return;
+    }
+
+    setReferenceSaving(true);
+    setReferenceError(null);
+    try {
+      await createUserBackgroundVerification(token, {
+        org_id: orgId,
+        employee_id: userId,
+        background_verification_info: editFormToReferencePayload(referenceAddForm),
+      });
+      setReferenceAddOpen(false);
+      setReferenceAddForm(createEmptyReferenceForm());
+      setReferenceSuccess("Previous company reference added successfully.");
+      await loadBgvReferences();
+    } catch (e) {
+      setReferenceError(e instanceof Error ? e.message : "Could not add reference.");
+    } finally {
+      setReferenceSaving(false);
+    }
+  }, [referenceAddForm, orgId, userId, validateReferenceForm, loadBgvReferences]);
+
+  const submitReferenceEdit = useCallback(async () => {
+    if (!referenceEditTarget || !referenceEditForm) return;
+
+    const validationError = validateReferenceForm(referenceEditForm);
+    if (validationError) {
+      setReferenceError(validationError);
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setReferenceError("Not signed in.");
+      return;
+    }
+
+    setReferenceSaving(true);
+    setReferenceError(null);
+    try {
+      await updateUserBackgroundVerification(token, {
+        org_id: orgId,
+        employee_id: userId,
+        reference_id: referenceEditTarget.id,
+        background_verification_info: editFormToReferencePayload(referenceEditForm),
+      });
+      setReferenceEditTarget(null);
+      setReferenceEditForm(null);
+      setReferenceSuccess("Reference updated successfully.");
+      await loadBgvReferences();
+    } catch (e) {
+      setReferenceError(e instanceof Error ? e.message : "Could not update reference.");
+    } finally {
+      setReferenceSaving(false);
+    }
+  }, [referenceEditTarget, referenceEditForm, orgId, userId, validateReferenceForm, loadBgvReferences]);
+
+  const submitReferenceVerify = useCallback(async () => {
+    if (!referenceVerifyTarget) return;
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setReferenceError("Not signed in.");
+      return;
+    }
+
+    setReferenceSaving(true);
+    setReferenceError(null);
+    try {
+      await updateEmployeeBackgroundVerificationStatus(token, {
+        org_id: orgId,
+        employee_id: userId,
+        verification_info: {
+          verification_id: referenceVerifyTarget.id,
+          verification_status: referenceVerifyStatus,
+          verification_notes: referenceVerifyNotes.trim() || null,
+        },
+      });
+      setReferenceVerifyTarget(null);
+      setReferenceVerifyNotes("");
+      setReferenceSuccess("Verification status updated successfully.");
+      await loadBgvReferences();
+    } catch (e) {
+      setReferenceError(e instanceof Error ? e.message : "Could not update verification status.");
+    } finally {
+      setReferenceSaving(false);
+    }
+  }, [
+    referenceVerifyTarget,
+    referenceVerifyStatus,
+    referenceVerifyNotes,
+    orgId,
+    userId,
+    loadBgvReferences,
+  ]);
+
+  const assignedIpIds = useMemo(() => {
+    if (!data) return new Set<number>();
+    const ids = data.ip_assignments
+      .map((row) => ipAssignmentIpId(row as Record<string, unknown>))
+      .filter((id): id is number => id != null);
+    return new Set(ids);
+  }, [data]);
+
+  const availableCompanyIps = useMemo(
+    () => companyIps.filter((ip) => !assignedIpIds.has(Number(ip.id))),
+    [companyIps, assignedIpIds],
+  );
+
+  const openIpAssign = useCallback(async () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setIpError("Not signed in.");
+      return;
+    }
+
+    setIpAssignOpen(true);
+    setIpError(null);
+    setSelectedIpId("");
+    setCompanyIpsLoading(true);
+    try {
+      const ips = await getCompanyIPAddresses(token, orgId);
+      setCompanyIps(ips);
+    } catch (e) {
+      setCompanyIps([]);
+      setIpError(e instanceof Error ? e.message : "Could not load IP addresses.");
+    } finally {
+      setCompanyIpsLoading(false);
+    }
+  }, [orgId]);
+
+  const closeIpAssign = useCallback(() => {
+    if (ipSaving) return;
+    setIpAssignOpen(false);
+    setSelectedIpId("");
+    setIpError(null);
+  }, [ipSaving]);
+
+  const submitIpAssign = useCallback(async () => {
+    if (!selectedIpId) {
+      setIpError("Select an IP address to assign.");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setIpError("Not signed in.");
+      return;
+    }
+
+    setIpSaving(true);
+    setIpError(null);
+    try {
+      await assignIpToEmployee(token, { employee_id: userId, ip_id: selectedIpId });
+      setIpAssignOpen(false);
+      setSelectedIpId("");
+      setIpSuccess("IP address assigned successfully.");
+      await loadEmployee(true);
+    } catch (e) {
+      setIpError(e instanceof Error ? e.message : "Could not assign IP address.");
+    } finally {
+      setIpSaving(false);
+    }
+  }, [selectedIpId, userId, loadEmployee]);
+
+  const confirmIpUnassign = useCallback(async () => {
+    if (!ipUnassignTarget) return;
+
+    const ipId = ipAssignmentIpId(ipUnassignTarget);
+    if (ipId == null) {
+      setIpError("IP reference is missing.");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setIpError("Not signed in.");
+      return;
+    }
+
+    setIpSaving(true);
+    setIpError(null);
+    try {
+      await unassignIpFromEmployee(token, { employee_id: userId, ip_id: ipId });
+      setIpUnassignTarget(null);
+      setIpSuccess("IP address unassigned successfully.");
+      await loadEmployee(true);
+    } catch (e) {
+      setIpError(e instanceof Error ? e.message : "Could not unassign IP address.");
+    } finally {
+      setIpSaving(false);
+    }
+  }, [ipUnassignTarget, userId, loadEmployee]);
+
+  const openShiftAssign = useCallback(async () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setShiftError("Not signed in.");
+      return;
+    }
+
+    setShiftAssignOpen(true);
+    setShiftError(null);
+    setSelectedShiftId(userShifts[0] ? String(userShifts[0].id) : "");
+    setCompanyShiftsLoading(true);
+    try {
+      const shifts = await getCompanyShifts(token, orgId);
+      setCompanyShifts(shifts);
+    } catch (e) {
+      setCompanyShifts([]);
+      setShiftError(e instanceof Error ? e.message : "Could not load shifts.");
+    } finally {
+      setCompanyShiftsLoading(false);
+    }
+  }, [orgId, userShifts]);
+
+  const closeShiftAssign = useCallback(() => {
+    if (shiftSaving) return;
+    setShiftAssignOpen(false);
+    setSelectedShiftId("");
+    setShiftError(null);
+  }, [shiftSaving]);
+
+  const submitShiftAssign = useCallback(async () => {
+    if (!selectedShiftId) {
+      setShiftError("Select a shift to assign.");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setShiftError("Not signed in.");
+      return;
+    }
+
+    setShiftSaving(true);
+    setShiftError(null);
+    try {
+      await assignUserToShift(token, {
+        org_id: orgId,
+        user_id: userId,
+        shift_id: selectedShiftId,
+      });
+      setShiftAssignOpen(false);
+      setSelectedShiftId("");
+      setShiftSuccess(
+        userShifts.length > 0 ? "Shift updated successfully." : "Shift assigned successfully.",
+      );
+      await Promise.all([loadUserShifts(), loadEmployee(true)]);
+    } catch (e) {
+      setShiftError(e instanceof Error ? e.message : "Could not assign shift.");
+    } finally {
+      setShiftSaving(false);
+    }
+  }, [selectedShiftId, orgId, userId, userShifts.length, loadUserShifts, loadEmployee]);
+
+  const confirmShiftUnassign = useCallback(async () => {
+    if (!shiftUnassignTarget) return;
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setShiftError("Not signed in.");
+      return;
+    }
+
+    setShiftSaving(true);
+    setShiftError(null);
+    try {
+      await unassignUserFromShift(token, {
+        org_id: orgId,
+        user_id: userId,
+        shift_id: shiftUnassignTarget.id,
+      });
+      setShiftUnassignTarget(null);
+      setShiftSuccess("Shift unassigned successfully.");
+      await Promise.all([loadUserShifts(), loadEmployee(true)]);
+    } catch (e) {
+      setShiftError(e instanceof Error ? e.message : "Could not unassign shift.");
+    } finally {
+      setShiftSaving(false);
+    }
+  }, [shiftUnassignTarget, orgId, userId, loadUserShifts, loadEmployee]);
+
+  const orgName = asText(ctx?.organization?.org_name, "Organization");
+  const employeeIsActive = !hasOpenExit;
+
+  const profileImageUrl =
+    info?.user_image != null && String(info.user_image).trim() !== ""
+      ? String(info.user_image).trim()
+      : null;
+
+  const attendanceRate = useMemo(() => {
+    const rows = attendanceRows.filter(
+      (row) => Boolean(row.attendance_date || row.attendance_history),
+    );
+    if (rows.length === 0) return null;
+    let credited = 0;
+    for (const row of rows) {
+      const bucket = normalizeAttendanceStatus(row.attendance_status);
+      if (bucket === "present" || bucket === "late" || bucket === "half_day" || bucket === "short_leave") {
+        credited += 1;
+      }
+    }
+    return Math.round((credited / rows.length) * 100);
+  }, [attendanceRows]);
+
+  const leaveRemaining = useMemo(() => {
+    if (!data) return 0;
+    return data.leave_balance.reduce(
+      (sum, row) => sum + asNumber(row.remaining_leaves),
+      0,
+    );
+  }, [data]);
+
+  const scrollToSection = useCallback((id: string) => {
+    if (typeof document === "undefined") return;
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
+
+  const quickActions: HeroQuickAction[] = useMemo(
     () => [
-      { id: "overview" as const, label: "Overview" },
-      { id: "work" as const, label: "Work" },
-      { id: "leaves" as const, label: "Leaves" },
-      { id: "more" as const, label: "More" },
+      { id: "section-personal", icon: <User className="h-4 w-4" />, label: "Profile" },
+      { id: "section-attendance", icon: <CalendarCheck className="h-4 w-4" />, label: "Attendance" },
+      { id: "section-payroll", icon: <Wallet className="h-4 w-4" />, label: "Payroll" },
+      { id: "section-assets", icon: <Laptop className="h-4 w-4" />, label: "Assets" },
+      { id: "section-documents", icon: <FileText className="h-4 w-4" />, label: "Documents" },
     ],
     [],
   );
 
-  const overviewSection = data ? (
-    <div className="space-y-2 lg:space-y-4">
-      <SectionCard title="Contact Information" icon={<User className="h-4 w-4" />}>
-        <dl>
-          <InfoRow label="Full name" value={asText(info?.user_name)} />
-          <InfoRow
-            label="Email"
-            value={
-              info?.user_email ? (
-                <a href={`mailto:${info.user_email}`} className="text-[#008CD3] hover:underline">
-                  {asText(info.user_email)}
-                </a>
-              ) : (
-                "—"
-              )
-            }
-          />
-          <InfoRow
-            label="Phone"
-            value={
-              info?.user_phone ? (
-                <a href={`tel:${info.user_phone}`} className="text-[#008CD3] hover:underline">
-                  {asText(info.user_phone)}
-                </a>
-              ) : (
-                "—"
-              )
-            }
-          />
-          <InfoRow label="Joined on" value={formatDate(info?.created_at)} />
-          <InfoRow label="Role" value={formatLabel(info?.role_name)} />
-        </dl>
-      </SectionCard>
+  const insightsPanel = data ? (
+    <EmployeeInsightsPanel
+      leaveQueries={data.leave_queries}
+      leaveBalance={data.leave_balance}
+      documents={latestDocuments}
+      attendanceQueries={data.attendance_related_queries}
+      assets={data.assets}
+      attendanceLogs={data.attendance_logs}
+    />
+  ) : null;
 
-      <SectionCard title="Address" icon={<MapPin className="h-4 w-4" />} isEmpty={buildAddress(info || {}) === "—"}>
-        <p className="rounded-lg bg-[#F8FBFF] px-3 py-2.5 text-[13px] leading-relaxed text-[#1F2937] sm:rounded-xl sm:px-4 sm:py-3 sm:text-[14px]">
-          {buildAddress(info || {})}
-        </p>
-      </SectionCard>
-
-      <SectionCard
-        title="Emergency Contact"
-        icon={<Phone className="h-4 w-4" />}
-        isEmpty={!info?.emergency_contact_name && !info?.emergency_number}
-      >
-        <dl>
-          <InfoRow label="Contact name" value={asText(info?.emergency_contact_name)} />
-          <InfoRow label="Contact number" value={asText(info?.emergency_number)} />
-          <InfoRow label="Relation" value={formatLabel(info?.relation_blood_line)} />
-        </dl>
-      </SectionCard>
+  const calendarCard = (
+    <div className={`${GLASS_CARD} p-5 lg:p-6`}>
+      <AttendanceMiniCalendar
+        month={attendanceMonth}
+        year={attendanceYear}
+        rows={attendanceRows}
+        selectedDay={selectedCalendarDay}
+        onSelectDay={(day) => {
+          setSelectedCalendarDay((prev) => (prev === day ? null : day));
+        }}
+        onPrevMonth={() => shiftAttendanceMonth(-1)}
+        onNextMonth={() => shiftAttendanceMonth(1)}
+      />
+      <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-[#F1F5F9] pt-4">
+        {[
+          { label: "Present", cls: "bg-[#10B981]" },
+          { label: "Late", cls: "bg-[#F59E0B]" },
+          { label: "Leave", cls: "bg-[#EF4444]" },
+          { label: "Half day", cls: "bg-[#8B5CF6]" },
+        ].map((legend) => (
+          <span key={legend.label} className="inline-flex items-center gap-1.5 text-[12px] text-[#64748B]">
+            <span className={`h-2.5 w-2.5 rounded-full ${legend.cls}`} />
+            {legend.label}
+          </span>
+        ))}
+      </div>
     </div>
+  );
+
+  const attendanceTable = (
+    <AttendanceHistoryTable
+      rows={attendanceRows}
+      loading={attendanceLoading}
+      error={attendanceError}
+      month={attendanceMonth}
+      year={attendanceYear}
+      onMonthChange={setAttendanceMonth}
+      onYearChange={setAttendanceYear}
+      onRefresh={() => void loadAttendance(true)}
+      refreshing={attendanceRefreshing}
+    />
+  );
+
+  const personalInfoCard = data ? (
+    <SectionCard
+      id="section-personal"
+      title="Personal information"
+      subtitle="Contact, role and emergency details"
+      icon={<User className="h-5 w-5" />}
+      accent="primary"
+    >
+      <DetailGrid>
+        <DetailItem
+          label="Email"
+          icon={<Mail className="h-4 w-4" />}
+          value={
+            info?.user_email ? (
+              <a href={`mailto:${info.user_email}`} className="text-[#2563EB] hover:underline">
+                {asText(info.user_email)}
+              </a>
+            ) : (
+              "—"
+            )
+          }
+        />
+        <DetailItem
+          label="Phone"
+          icon={<Phone className="h-4 w-4" />}
+          value={
+            info?.user_phone ? (
+              <a href={`tel:${info.user_phone}`} className="text-[#2563EB] hover:underline">
+                {asText(info.user_phone)}
+              </a>
+            ) : (
+              "—"
+            )
+          }
+        />
+        <DetailItem label="Designation" icon={<Briefcase className="h-4 w-4" />} value={formatLabel(info?.role_name)} />
+        <DetailItem label="Joining date" icon={<CalendarDays className="h-4 w-4" />} value={formatDate(info?.created_at)} />
+        <DetailItem label="Emergency contact" icon={<User className="h-4 w-4" />} value={asText(info?.emergency_contact_name)} />
+        <DetailItem label="Emergency number" icon={<Phone className="h-4 w-4" />} value={asText(info?.emergency_number)} />
+        <DetailItem label="Relation" icon={<Users className="h-4 w-4" />} value={formatLabel(info?.relation_blood_line)} />
+        <DetailItem label="Employee ID" icon={<Hash className="h-4 w-4" />} value={asText(info?.id ?? userId)} />
+      </DetailGrid>
+    </SectionCard>
   ) : null;
 
   const workSection = data ? (
-    <div className="space-y-2 lg:space-y-4">
-      <SectionCard title="Shift Details" icon={<Clock className="h-4 w-4" />} isEmpty={!info?.shift_name}>
-        <dl>
-          <InfoRow label="Shift" value={asText(info?.shift_name)} />
-          <InfoRow
-            label="Timing"
-            value={
-              info?.start_time || info?.end_time
-                ? `${asText(info?.start_time)} – ${asText(info?.end_time)}`
-                : "—"
-            }
-          />
-          <InfoRow label="Working days" value={asText(info?.working_days)} />
-          <InfoRow
-            label="Night shift"
-            value={info?.is_night_shift ? "Yes" : info?.is_night_shift === 0 ? "No" : "—"}
-          />
-        </dl>
-      </SectionCard>
-
-      <SectionCard
-        title="Bank Information"
-        icon={<Wallet className="h-4 w-4" />}
-        isEmpty={!info?.bank_name && !info?.account_number}
-      >
-        <dl>
-          <InfoRow label="Account holder" value={asText(info?.account_holder_name)} />
-          <InfoRow label="Bank" value={asText(info?.bank_name)} />
-          <InfoRow label="Branch" value={asText(info?.bank_branch)} />
-          <InfoRow label="Account number" value={maskAccountNumber(info?.account_number)} />
-          <InfoRow label="IFSC" value={asText(info?.ifsc_code)} />
-          <InfoRow label="UAN" value={asText(info?.uan_number)} />
-        </dl>
-      </SectionCard>
-
-      <SectionCard
-        title="Assigned Assets"
-        icon={<Laptop className="h-4 w-4" />}
-        isEmpty={data.assets.length === 0}
-        emptyText="No assets assigned."
-      >
-        <ul className="space-y-2">
-          {data.assets.map((asset, index) => (
-            <ListItemCard key={String(asset.id ?? index)}>
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <p className="text-[13px] font-semibold text-[#1F2937] sm:text-[15px]">
-                    {asText(asset.asset_name, "Asset")}
-                  </p>
-                  <p className="mt-1 text-[13px] text-[#6B7280]">
-                    {formatLabel(asset.asset_type)}
-                  </p>
-                  {asset.asset_summary ? (
-                    <p className="mt-1 text-[13px] text-[#6B7280]">{asText(asset.asset_summary)}</p>
-                  ) : null}
-                </div>
-                <StatusPill value={asset.asset_status} />
-              </div>
-            </ListItemCard>
-          ))}
-        </ul>
-      </SectionCard>
-
-      <SectionCard
-        title="IP Assignments"
-        icon={<Globe className="h-4 w-4" />}
-        isEmpty={data.ip_assignments.length === 0}
-        emptyText="No IP addresses assigned."
-      >
-        <ul className="space-y-2">
-          {data.ip_assignments.map((row, index) => (
-            <ListItemCard key={String(row.id ?? index)}>
-              <p className="font-mono text-[14px] font-semibold text-[#1F2937]">
-                {asText(row.ip_address ?? row.org_ip_address)}
-              </p>
-              <p className="mt-1 text-[13px] text-[#6B7280]">
-                {asText(row.ip_label ?? row.org_ip_label, "No label")}
-              </p>
-            </ListItemCard>
-          ))}
-        </ul>
-      </SectionCard>
-    </div>
+    <SectionCard
+      id="section-payroll"
+      title="Work & payroll"
+      subtitle="Shift schedule and banking details"
+      icon={<Wallet className="h-5 w-5" />}
+      accent="success"
+      isEmpty={!info?.shift_name && !info?.bank_name && !info?.account_number}
+      emptyText="No work or bank details on file."
+    >
+      <DetailGrid>
+        <DetailItem label="Shift" icon={<Clock className="h-4 w-4" />} value={asText(info?.shift_name)} />
+        <DetailItem
+          label="Timing"
+          icon={<Clock className="h-4 w-4" />}
+          value={
+            info?.start_time || info?.end_time
+              ? `${asText(info?.start_time)} – ${asText(info?.end_time)}`
+              : "—"
+          }
+        />
+        <DetailItem label="Working days" icon={<CalendarDays className="h-4 w-4" />} value={formatWorkingDays(info?.working_days)} />
+        <DetailItem
+          label="Night shift"
+          icon={<Clock className="h-4 w-4" />}
+          value={info?.is_night_shift ? "Yes" : info?.is_night_shift === 0 ? "No" : "—"}
+        />
+        <DetailItem label="Account holder" icon={<User className="h-4 w-4" />} value={asText(info?.account_holder_name)} />
+        <DetailItem label="Bank" icon={<Wallet className="h-4 w-4" />} value={asText(info?.bank_name)} />
+        <DetailItem label="Branch" icon={<Building2 className="h-4 w-4" />} value={asText(info?.bank_branch)} />
+        <DetailItem label="Account" icon={<Hash className="h-4 w-4" />} value={maskAccountNumber(info?.account_number)} />
+        <DetailItem label="IFSC" icon={<Hash className="h-4 w-4" />} value={asText(info?.ifsc_code)} />
+        <DetailItem label="UAN" icon={<Hash className="h-4 w-4" />} value={asText(info?.uan_number)} />
+      </DetailGrid>
+    </SectionCard>
   ) : null;
 
-  const leavesSection = data ? (
-    <div className="space-y-2 lg:space-y-4">
-      <SectionCard
-        title="Leave Balance"
-        icon={<Briefcase className="h-4 w-4" />}
-        isEmpty={data.leave_balance.length === 0}
-        emptyText="No leave balance records."
+  const addressesAction = data ? (
+    addressAdding ? (
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={cancelAddressForm}
+          disabled={addressSaving}
+          className="inline-flex items-center gap-1.5 rounded-xl border border-[#E2E8F0] bg-white px-3 py-2 text-[13px] font-semibold text-[#64748B] transition hover:bg-[#F8FAFC] hover:text-[#0F172A] disabled:opacity-50"
+        >
+          <X className="h-4 w-4" />
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={() => void submitAddressAdd()}
+          disabled={addressSaving}
+          className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-br from-[#2563EB] to-[#3B82F6] px-3.5 py-2 text-[13px] font-semibold text-white shadow-sm transition hover:shadow-md disabled:opacity-60"
+        >
+          {addressSaving ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Save className="h-4 w-4" />
+          )}
+          {addressSaving ? "Saving…" : "Save addresses"}
+        </button>
+      </div>
+    ) : addressEditing ? (
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={cancelAddressForm}
+          disabled={addressSaving}
+          className="inline-flex items-center gap-1.5 rounded-xl border border-[#E2E8F0] bg-white px-3 py-2 text-[13px] font-semibold text-[#64748B] transition hover:bg-[#F8FAFC] hover:text-[#0F172A] disabled:opacity-50"
+        >
+          <X className="h-4 w-4" />
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={() => void submitAddressEdit()}
+          disabled={addressSaving}
+          className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-br from-[#2563EB] to-[#3B82F6] px-3.5 py-2 text-[13px] font-semibold text-white shadow-sm transition hover:shadow-md disabled:opacity-60"
+        >
+          {addressSaving ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Save className="h-4 w-4" />
+          )}
+          {addressSaving ? "Saving…" : "Save changes"}
+        </button>
+      </div>
+    ) : canEditAddresses ? (
+      <button
+        type="button"
+        onClick={startAddressEdit}
+        className="inline-flex items-center gap-1.5 rounded-xl border border-[#E2E8F0] bg-white px-3.5 py-2 text-[13px] font-semibold text-[#334155] shadow-sm transition hover:-translate-y-0.5 hover:text-[#2563EB] hover:shadow-md"
       >
-        <div className="hidden flex-wrap items-start justify-center gap-6 pb-2 lg:flex">
-          {data.leave_balance.map((row, index) => {
-            const total = asNumber(row.total_leaves);
-            const remaining = asNumber(row.remaining_leaves);
-            const label =
-              asText(row.leave_type_name, "") !== "—"
-                ? asText(row.leave_type_name)
-                : formatMonthYear(row.month, row.year);
+        <Pencil className="h-4 w-4" />
+        Edit addresses
+      </button>
+    ) : null
+  ) : null;
+
+  const permanentDraft = addressDrafts.find((d) => d.address_type === "permanent");
+  const currentDraft = addressDrafts.find((d) => d.address_type === "current");
+
+  const addressesSection = data ? (
+    <SectionCard
+      title="Addresses"
+      subtitle={
+        canAddAddresses && !addressAdding
+          ? "Add permanent and current residence"
+          : "Permanent and current residence on file"
+      }
+      icon={<MapPin className="h-5 w-5" />}
+      accent="primary"
+      action={addressesAction}
+    >
+      {addressSuccess && !addressEditing && !addressAdding ? (
+        <div className="mb-4 flex items-start gap-2 rounded-xl border border-[#A7F3D0] bg-[#ECFDF5] px-3 py-2 text-[13px] text-[#059669]">
+          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+          <span className="flex-1">{addressSuccess}</span>
+          <button
+            type="button"
+            onClick={() => setAddressSuccess(null)}
+            className="shrink-0 rounded p-0.5 hover:bg-[#D1FAE5]"
+            aria-label="Dismiss"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      ) : null}
+
+      {addressError && (addressEditing || addressAdding) ? (
+        <div className="mb-4 flex items-start gap-2 rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-3 py-2 text-[13px] text-[#DC2626]">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{addressError}</span>
+        </div>
+      ) : null}
+
+      {addressAdding && permanentDraft && currentDraft ? (
+        <div className="space-y-4">
+          <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] px-4 py-3 transition hover:border-[#BFDBFE] hover:bg-[#EFF6FF]">
+            <input
+              type="checkbox"
+              checked={sameAsPermanent}
+              onChange={(e) => toggleSameAsPermanent(e.target.checked)}
+              className="h-4 w-4 rounded border-[#CBD5E1] text-[#2563EB] focus:ring-[#2563EB]/30"
+            />
+            <span className="text-[14px] font-medium text-[#334155]">
+              Permanent address is also current address
+            </span>
+          </label>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <AddressEditForm
+              draft={permanentDraft}
+              mode="add"
+              onChange={(field, value) => updateAddressDraft(0, field, value)}
+            />
+            <AddressEditForm
+              draft={currentDraft}
+              mode="add"
+              disabled={sameAsPermanent}
+              onChange={(field, value) => updateAddressDraft(1, field, value)}
+            />
+          </div>
+        </div>
+      ) : addressEditing ? (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {addressDrafts.map((draft, index) => (
+            <AddressEditForm
+              key={draft.address_id || index}
+              draft={draft}
+              onChange={(field, value) => updateAddressDraft(index, field, value)}
+            />
+          ))}
+        </div>
+      ) : canAddAddresses ? (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <AddressEmptyPlaceholderCard type="permanent" onClick={startAddressAdd} />
+          <AddressEmptyPlaceholderCard type="current" onClick={startAddressAdd} />
+        </div>
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {permanentAddress ? (
+            <AddressDetailCard row={permanentAddress as Record<string, unknown>} />
+          ) : null}
+          {currentAddress ? (
+            <AddressDetailCard row={currentAddress as Record<string, unknown>} />
+          ) : null}
+          {!permanentAddress && !currentAddress
+            ? employeeAddresses.map((row, index) => (
+                <AddressDetailCard
+                  key={String(row.id ?? row.address_id ?? index)}
+                  row={row as Record<string, unknown>}
+                />
+              ))
+            : null}
+        </div>
+      )}
+    </SectionCard>
+  ) : null;
+
+  const showAssetHandoverActions = hasOpenExit && exitRow != null;
+
+  const assetsAction =
+    data && data.assets.length > 0 ? (
+      <button
+        type="button"
+        onClick={openAssetAdd}
+        className="inline-flex items-center gap-1.5 rounded-xl border border-[#E2E8F0] bg-white px-3.5 py-2 text-[13px] font-semibold text-[#334155] shadow-sm transition hover:-translate-y-0.5 hover:text-[#7C3AED] hover:shadow-md"
+      >
+        <Plus className="h-4 w-4" />
+        Add more assets
+      </button>
+    ) : null;
+
+  const assetsSection = data ? (
+    <SectionCard
+      id="section-assets"
+      title="Assets"
+      subtitle={
+        data.assets.length === 0
+          ? "Assign equipment and devices to this employee"
+          : `${data.assets.length} assigned`
+      }
+      icon={<Laptop className="h-5 w-5" />}
+      accent="violet"
+      action={assetsAction}
+    >
+      {assetSuccess &&
+      !assetAddOpen &&
+      !assetViewTarget &&
+      !assetEditTarget &&
+      !assetStatusTarget &&
+      !assetHandoverTarget &&
+      !assetReturnTarget ? (
+        <div className="mb-4 flex items-start gap-2 rounded-xl border border-[#A7F3D0] bg-[#ECFDF5] px-3 py-2 text-[13px] text-[#059669]">
+          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+          <span className="flex-1">{assetSuccess}</span>
+          <button
+            type="button"
+            onClick={() => setAssetSuccess(null)}
+            className="shrink-0 rounded p-0.5 hover:bg-[#D1FAE5]"
+            aria-label="Dismiss"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      ) : null}
+
+      {assetError &&
+      !assetAddOpen &&
+      !assetViewTarget &&
+      !assetEditTarget &&
+      !assetStatusTarget &&
+      !assetHandoverTarget &&
+      !assetReturnTarget ? (
+        <div className="mb-4 flex items-start gap-2 rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-3 py-2 text-[13px] text-[#DC2626]">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{assetError}</span>
+        </div>
+      ) : null}
+
+      {data.assets.length === 0 ? (
+        <AssetEmptyPlaceholderCard onClick={openAssetAdd} />
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {data.assets.map((asset, index) => {
+            const assetId = Number(asset.id);
+            const handoverQuery = Number.isFinite(assetId)
+              ? handoverByAssetId.get(assetId) ?? null
+              : null;
             return (
-              <CircularLeaveRing
-                key={String(row.id ?? index)}
-                label={label}
-                remaining={remaining}
-                total={total}
+              <AssetGridCard
+                key={String(asset.id ?? index)}
+                asset={asset as Record<string, unknown>}
+                handoverQuery={handoverQuery}
+                showHandoverActions={showAssetHandoverActions}
+                onView={() => void openAssetView(asset as Record<string, unknown>)}
+                onEdit={() => openAssetEdit(asset as Record<string, unknown>)}
+                onStatus={() => openAssetStatus(asset as Record<string, unknown>)}
+                onHandover={() => void openAssetHandover(asset as Record<string, unknown>)}
+                onReturnCompleted={() => openAssetReturnCompleted(asset as Record<string, unknown>)}
               />
             );
           })}
         </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:hidden">
-          {data.leave_balance.map((row, index) => (
-            <LeaveBalanceCard key={String(row.id ?? index)} row={row} index={index} />
-          ))}
-        </div>
-      </SectionCard>
-
-      <SectionCard
-        title="Leave Requests"
-        icon={<FileText className="h-4 w-4" />}
-        isEmpty={data.leave_queries.length === 0}
-        emptyText="No leave requests found."
-      >
-        <ul className="space-y-2">
-          {data.leave_queries.map((row, index) => (
-            <ListItemCard key={String(row.id ?? index)}>
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <p className="text-[13px] font-semibold text-[#1F2937] sm:text-[15px]">
-                    {formatLabel(row.leave_type)} leave
-                  </p>
-                  <p className="mt-1 flex items-center gap-1 text-[13px] text-[#6B7280]">
-                    <CalendarDays className="h-3.5 w-3.5" />
-                    {formatDate(row.start_date)}
-                    {row.end_date ? ` – ${formatDate(row.end_date)}` : ""}
-                  </p>
-                </div>
-                <StatusPill value={row.status} />
-              </div>
-              {row.reason ? (
-                <p className="mt-2 rounded-lg bg-white px-3 py-2 text-[13px] text-[#6B7280]">
-                  {asText(row.reason)}
-                </p>
-              ) : null}
-            </ListItemCard>
-          ))}
-        </ul>
-      </SectionCard>
-    </div>
+      )}
+    </SectionCard>
   ) : null;
+
+  const documentsAction =
+    data && latestDocuments.length > 0 ? (
+      <button
+        type="button"
+        onClick={() => openDocumentUpload(false)}
+        className="inline-flex items-center gap-1.5 rounded-xl border border-[#E2E8F0] bg-white px-3.5 py-2 text-[13px] font-semibold text-[#334155] shadow-sm transition hover:-translate-y-0.5 hover:text-[#2563EB] hover:shadow-md"
+      >
+        <Plus className="h-4 w-4" />
+        Add more
+      </button>
+    ) : null;
 
   const documentsSection = data ? (
     <SectionCard
+      id="section-documents"
       title="Documents"
-      icon={<FileText className="h-4 w-4" />}
-      isEmpty={data.documents.length === 0}
-      emptyText="No documents uploaded."
+      subtitle={
+        latestDocuments.length === 0
+          ? "Upload employee KYC and supporting files"
+          : `${latestDocuments.length} on file`
+      }
+      icon={<FileText className="h-5 w-5" />}
+      accent="warning"
+      action={documentsAction}
     >
-      <ul className="space-y-2">
-        {data.documents.map((doc, index) => (
-          <ListItemCard key={String(doc.id ?? index)}>
-            <div className="flex items-center justify-between gap-3">
+      {documentSuccess &&
+      !documentUploadOpen &&
+      !documentUpdateTarget &&
+      !documentDeleteTarget ? (
+        <div className="mb-4 flex items-start gap-2 rounded-xl border border-[#A7F3D0] bg-[#ECFDF5] px-3 py-2 text-[13px] text-[#059669]">
+          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+          <span className="flex-1">{documentSuccess}</span>
+          <button
+            type="button"
+            onClick={() => setDocumentSuccess(null)}
+            className="shrink-0 rounded p-0.5 hover:bg-[#D1FAE5]"
+            aria-label="Dismiss"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      ) : null}
+
+      {latestDocuments.length === 0 ? (
+        <DocumentEmptyPlaceholderCard onClick={() => openDocumentUpload(true)} />
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {latestDocuments.map((doc, index) => (
+            <DocumentFileCard
+              key={String(doc.id ?? index)}
+              doc={doc as Record<string, unknown>}
+              onUpdate={() => openDocumentUpdate(doc as Record<string, unknown>)}
+              onDelete={() => openDocumentDelete(doc as Record<string, unknown>)}
+            />
+          ))}
+        </div>
+      )}
+    </SectionCard>
+  ) : null;
+
+  const shiftSection = data ? (
+    <SectionCard
+      title="Shift assignment"
+      subtitle={
+        shiftsLoading
+          ? "Loading assigned shift…"
+          : userShifts.length === 0
+            ? "Assign work hours and schedule for this employee"
+            : `${userShifts.length} assigned`
+      }
+      icon={<Clock className="h-5 w-5" />}
+      accent="violet"
+    >
+      {shiftSuccess && !shiftAssignOpen && !shiftUnassignTarget ? (
+        <div className="mb-4 flex items-start gap-2 rounded-xl border border-[#A7F3D0] bg-[#ECFDF5] px-3 py-2 text-[13px] text-[#059669]">
+          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+          <span className="flex-1">{shiftSuccess}</span>
+          <button
+            type="button"
+            onClick={() => setShiftSuccess(null)}
+            className="shrink-0 rounded p-0.5 hover:bg-[#D1FAE5]"
+            aria-label="Dismiss"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      ) : null}
+
+      {shiftError && !shiftAssignOpen && !shiftUnassignTarget ? (
+        <div className="mb-4 flex items-start gap-2 rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-3 py-2 text-[13px] text-[#DC2626]">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{shiftError}</span>
+        </div>
+      ) : null}
+
+      {shiftsLoading ? (
+        <div className="skeleton-shimmer h-28 rounded-2xl" />
+      ) : userShifts.length === 0 ? (
+        <ShiftEmptyPlaceholderCard onClick={() => void openShiftAssign()} />
+      ) : (
+        <div className="space-y-2.5">
+          {userShifts.map((shift) => (
+            <ShiftAssignmentCard
+              key={shift.id}
+              shift={shift}
+              onChangeShift={() => void openShiftAssign()}
+              onUnassign={() => {
+                setShiftError(null);
+                setShiftUnassignTarget(shift);
+              }}
+            />
+          ))}
+        </div>
+      )}
+    </SectionCard>
+  ) : null;
+
+  const ipAction =
+    data && data.ip_assignments.length > 0 ? (
+      <button
+        type="button"
+        onClick={() => void openIpAssign()}
+        className="inline-flex items-center gap-1.5 rounded-xl border border-[#E2E8F0] bg-white px-3.5 py-2 text-[13px] font-semibold text-[#334155] shadow-sm transition hover:-translate-y-0.5 hover:text-[#2563EB] hover:shadow-md"
+      >
+        <Plus className="h-4 w-4" />
+        Assign more
+      </button>
+    ) : null;
+
+  const ipSection = data ? (
+    <SectionCard
+      title="IP assignments"
+      subtitle={
+        data.ip_assignments.length === 0
+          ? "Map approved office IPs for attendance"
+          : `${data.ip_assignments.length} mapped`
+      }
+      icon={<Globe className="h-5 w-5" />}
+      accent="primary"
+      action={ipAction}
+    >
+      {ipSuccess && !ipAssignOpen && !ipUnassignTarget ? (
+        <div className="mb-4 flex items-start gap-2 rounded-xl border border-[#A7F3D0] bg-[#ECFDF5] px-3 py-2 text-[13px] text-[#059669]">
+          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+          <span className="flex-1">{ipSuccess}</span>
+          <button
+            type="button"
+            onClick={() => setIpSuccess(null)}
+            className="shrink-0 rounded p-0.5 hover:bg-[#D1FAE5]"
+            aria-label="Dismiss"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      ) : null}
+
+      {ipError && !ipAssignOpen && !ipUnassignTarget ? (
+        <div className="mb-4 flex items-start gap-2 rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-3 py-2 text-[13px] text-[#DC2626]">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{ipError}</span>
+        </div>
+      ) : null}
+
+      {data.ip_assignments.length === 0 ? (
+        <IpEmptyPlaceholderCard onClick={() => void openIpAssign()} />
+      ) : (
+        <ul className="space-y-2.5">
+          {data.ip_assignments.map((row, index) => (
+            <li key={String(row.id ?? index)}>
+              <IpAssignmentCard
+                row={row as Record<string, unknown>}
+                onUnassign={() => {
+                  setIpError(null);
+                  setIpUnassignTarget(row as Record<string, unknown>);
+                }}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+    </SectionCard>
+  ) : null;
+
+  const attendanceLogsSection = data ? (
+    <SectionCard
+      title="Attendance logs"
+      subtitle="Recent punch activity"
+      icon={<Clock className="h-5 w-5" />}
+      accent="warning"
+      isEmpty={data.attendance_logs.length === 0}
+      emptyText="No attendance logs found."
+    >
+      <ul className="max-h-[18rem] space-y-2.5 overflow-y-auto pr-1">
+        {data.attendance_logs.slice(0, 20).map((row, index) => (
+          <ListItemCard key={String(row.id ?? index)}>
+            <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
-                <p className="truncate text-[13px] font-semibold text-[#1F2937] sm:text-[15px]">
-                  {asText(doc.document_name ?? doc.document_type, "Document")}
-                </p>
-                <p className="text-[12px] text-[#6B7280]">{formatDate(doc.created_at)}</p>
+                <p className="text-[14px] font-semibold text-[#0F172A]">{formatLabel(row.action_type)}</p>
+                <p className="text-[12px] text-[#94A3B8]">{formatDateTime(row.timestamp_time)}</p>
               </div>
-              {doc.doc_url ? (
-                <Link
-                  href={asText(doc.doc_url)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="shrink-0 rounded-lg bg-[#008CD3] px-3 py-1.5 text-[12px] font-semibold text-white shadow-sm transition hover:bg-[#0070AA]"
-                >
-                  View
-                </Link>
-              ) : null}
+              <StatusPill value={row.action_type} />
             </div>
           </ListItemCard>
         ))}
@@ -933,341 +4807,233 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
     </SectionCard>
   ) : null;
 
-  const moreSectionRest = data ? (
-    <div className="space-y-2 lg:space-y-4">
-      <SectionCard
-        title="Attendance Logs"
-        icon={<Clock className="h-4 w-4" />}
-        isEmpty={data.attendance_logs.length === 0}
-        emptyText="No attendance logs found."
+  const referencesAction =
+    bgvReferences.length > 0 ? (
+      <button
+        type="button"
+        onClick={openReferenceAdd}
+        className="inline-flex items-center gap-1.5 rounded-xl border border-[#E2E8F0] bg-white px-3.5 py-2 text-[13px] font-semibold text-[#334155] shadow-sm transition hover:-translate-y-0.5 hover:text-[#059669] hover:shadow-md"
       >
-        <ul className="space-y-2">
-          {data.attendance_logs.slice(0, 20).map((row, index) => (
-            <ListItemCard key={String(row.id ?? index)}>
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-[14px] font-semibold text-[#1F2937]">
-                    {formatLabel(row.action_type)}
-                  </p>
-                  <p className="text-[12px] text-[#6B7280]">{formatDateTime(row.timestamp_time)}</p>
-                </div>
-                <StatusPill value={row.action_type} />
-              </div>
-            </ListItemCard>
-          ))}
-        </ul>
-      </SectionCard>
+        <Plus className="h-4 w-4" />
+        Add more
+      </button>
+    ) : null;
 
-      <SectionCard
-        title="Attendance Queries"
-        icon={<Building2 className="h-4 w-4" />}
-        isEmpty={data.attendance_related_queries.length === 0}
-        emptyText="No attendance queries found."
-      >
-        <ul className="space-y-2">
-          {data.attendance_related_queries.map((row, index) => (
-            <ListItemCard key={String(row.id ?? index)}>
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <p className="text-[13px] font-semibold text-[#1F2937] sm:text-[15px]">
-                    {formatLabel(row.category)}
-                  </p>
-                  <p className="mt-1 text-[13px] text-[#6B7280]">{formatDate(row.attendance_date)}</p>
-                </div>
-                <StatusPill value={row.query_status} />
-              </div>
-              {row.query_message ? (
-                <p className="mt-2 rounded-lg bg-white px-3 py-2 text-[13px] text-[#6B7280]">
-                  {asText(row.query_message)}
-                </p>
-              ) : null}
-            </ListItemCard>
-          ))}
-        </ul>
-      </SectionCard>
+  const referencesSection = data ? (
+    <SectionCard
+      title="References"
+      subtitle={
+        bgvLoading
+          ? "Loading previous company references…"
+          : bgvReferences.length === 0
+            ? "Add employer references for background verification"
+            : `${bgvReferences.length} on record`
+      }
+      icon={<ShieldCheck className="h-5 w-5" />}
+      accent="success"
+      action={referencesAction}
+    >
+      {referenceSuccess &&
+      !referenceAddOpen &&
+      !referenceViewTarget &&
+      !referenceEditTarget &&
+      !referenceVerifyTarget ? (
+        <div className="mb-4 flex items-start gap-2 rounded-xl border border-[#A7F3D0] bg-[#ECFDF5] px-3 py-2 text-[13px] text-[#059669]">
+          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+          <span className="flex-1">{referenceSuccess}</span>
+          <button
+            type="button"
+            onClick={() => setReferenceSuccess(null)}
+            className="shrink-0 rounded p-0.5 hover:bg-[#D1FAE5]"
+            aria-label="Dismiss"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      ) : null}
 
-      <SectionCard
-        title="Feature Overrides"
-        icon={<Shield className="h-4 w-4" />}
-        isEmpty={data.feature_overrides.length === 0}
-        emptyText="No feature overrides."
-      >
-        <ul className="space-y-2">
-          {data.feature_overrides.map((row, index) => (
-            <ListItemCard key={String(row.id ?? index)}>
-              <p className="text-[13px] font-semibold text-[#1F2937] sm:text-[15px]">
-                {asText(row.feature_name ?? row.feature_val, "Feature")}
-              </p>
-              <p className="mt-1 text-[13px] text-[#6B7280]">
-                {asText(row.feature_val, "Custom access override")}
-              </p>
-            </ListItemCard>
-          ))}
-        </ul>
-      </SectionCard>
+      {referenceError &&
+      !referenceAddOpen &&
+      !referenceViewTarget &&
+      !referenceEditTarget &&
+      !referenceVerifyTarget ? (
+        <div className="mb-4 flex items-start gap-2 rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-3 py-2 text-[13px] text-[#DC2626]">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{referenceError}</span>
+        </div>
+      ) : null}
 
-      <SectionCard
-        title="References"
-        icon={<Users className="h-4 w-4" />}
-        isEmpty={data.references.length === 0}
-        emptyText="No employee references."
-      >
-        <ul className="space-y-2">
-          {data.references.map((row, index) => (
-            <ListItemCard key={String(row.id ?? index)}>
-              <p className="text-[13px] font-semibold text-[#1F2937] sm:text-[15px]">
-                {asText(row.referred_by_name, "Referrer")}
-              </p>
-              <p className="mt-1 text-[13px] text-[#6B7280]">
-                {asText(row.referred_by_email)} · {asText(row.referred_by_phone)}
-              </p>
-            </ListItemCard>
+      {bgvLoading ? (
+        <div className="skeleton-shimmer h-28 rounded-2xl" />
+      ) : bgvReferences.length === 0 ? (
+        <ReferenceEmptyPlaceholderCard onClick={openReferenceAdd} />
+      ) : (
+        <div className="space-y-2.5">
+          {bgvReferences.map((refRow) => (
+            <ReferenceGridCard
+              key={refRow.id}
+              referenceRow={refRow}
+              canUpdateStatus={viewerCanManageExit}
+              onView={() => void openReferenceView(refRow)}
+              onEdit={() => openReferenceEdit(refRow)}
+              onUpdateStatus={() => openReferenceVerify(refRow)}
+            />
           ))}
-        </ul>
-      </SectionCard>
-    </div>
+        </div>
+      )}
+    </SectionCard>
   ) : null;
 
-  const moreSection = data ? (
-    <div className="space-y-2 lg:space-y-4">
-      {documentsSection}
-      {moreSectionRest}
-    </div>
-  ) : null;
+  const dashboard = data ? (
+    <div className="space-y-5">
+      <ProfileHeroCard
+        name={employeeName}
+        role={formatLabel(info?.role_name)}
+        department={orgName}
+        isActive={employeeIsActive}
+        imageUrl={profileImageUrl}
+        onImageZoom={openPhotoZoom}
+        employeeId={asText(info?.id ?? userId)}
+        joined={formatDate(info?.created_at)}
+        workDuration={workedForDuration(info?.created_at)}
+        company={orgName}
+        email={asText(info?.user_email)}
+        phone={asText(info?.user_phone)}
+        quickActions={quickActions}
+        onQuickAction={scrollToSection}
+      />
 
-  const profileImageUrl =
-    info?.user_image != null && String(info.user_image).trim() !== ""
-      ? String(info.user_image).trim()
-      : null;
-
-  const desktopDashboard = data ? (
-    <div className="grid grid-cols-12 gap-5">
-      <div className="col-span-12 space-y-5 xl:col-span-4">
-        <DesktopProfileCard
-          name={employeeName}
-          role={formatLabel(info?.role_name)}
-          email={asText(info?.user_email)}
-          phone={asText(info?.user_phone)}
-          joined={formatDate(info?.created_at)}
-          imageUrl={profileImageUrl}
-          stats={stats}
-          onImageZoom={openPhotoZoom}
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+        <StatCard
+          accent="success"
+          icon={<CalendarCheck className="h-5 w-5" />}
+          label="Attendance rate"
+          value={attendanceRate == null ? "—" : `${attendanceRate}%`}
+          sub={formatMonthYear(attendanceMonth, attendanceYear)}
+          delay={0}
         />
-        {overviewSection}
+        <StatCard
+          accent="primary"
+          icon={<Briefcase className="h-5 w-5" />}
+          label="Leave balance"
+          value={leaveRemaining}
+          sub="Days remaining"
+          delay={70}
+        />
+        <StatCard
+          accent="violet"
+          icon={<Laptop className="h-5 w-5" />}
+          label="Assets assigned"
+          value={data.assets.length}
+          sub={data.assets.length === 1 ? "Device" : "Devices"}
+          delay={140}
+        />
+        <StatCard
+          accent="warning"
+          icon={<FileText className="h-5 w-5" />}
+          label="Documents"
+          value={latestDocuments.length}
+          sub="Uploaded"
+          delay={210}
+        />
       </div>
 
-      <div className="col-span-12 space-y-5 xl:col-span-4">
+      <div id="section-attendance" className="grid scroll-mt-24 grid-cols-1 gap-5 xl:grid-cols-12">
+        <div className="space-y-5 xl:col-span-8">
+          {calendarCard}
+          {attendanceTable}
+        </div>
+        <div className="xl:col-span-4">{insightsPanel}</div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+        {personalInfoCard}
         {workSection}
-        {leavesSection}
       </div>
 
-      <div className="col-span-12 space-y-5 xl:col-span-4">
+      {addressesSection}
+
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+        {assetsSection}
         {documentsSection}
-        {moreSectionRest}
+      </div>
+
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+        {shiftSection}
+        {ipSection}
+        {attendanceLogsSection}
+        {referencesSection}
       </div>
     </div>
   ) : null;
 
-  const mobileContent =
-    mobileTab === "overview"
-      ? overviewSection
-      : mobileTab === "work"
-        ? workSection
-        : mobileTab === "leaves"
-          ? leavesSection
-          : moreSection;
-
-  const terminateButtonCls =
-    "inline-flex min-h-[40px] shrink-0 items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[13px] font-semibold text-rose-800 shadow-sm transition hover:bg-rose-100 active:scale-[0.98] disabled:opacity-50 sm:px-4 sm:text-sm";
+  const loadingSkeleton = (
+    <div className="space-y-5">
+      <div className="skeleton-shimmer h-44 w-full rounded-[24px]" />
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="skeleton-shimmer h-28 rounded-[20px]" />
+        ))}
+      </div>
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
+        <div className="skeleton-shimmer h-96 rounded-[20px] xl:col-span-8" />
+        <div className="skeleton-shimmer h-96 rounded-[20px] xl:col-span-4" />
+      </div>
+    </div>
+  );
 
   return (
-    <div className="min-h-full bg-[#F5F7FA] lg:bg-[#F8FAFC]">
-      {/* Mobile / tablet */}
-      <div className="lg:hidden">
-        <div className="sticky top-0 z-20 border-b border-[#E4E7EC] bg-white/95 shadow-sm backdrop-blur">
-          <div className="bg-gradient-to-r from-[#008CD3] via-[#007EBF] to-[#0070AA] px-3 pb-3 pt-2.5 text-white">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => router.back()}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/15 text-white active:bg-white/25"
-                aria-label="Go back"
-              >
-                <ChevronLeft className="h-[18px] w-[18px]" />
-              </button>
-              <div className="min-w-0 flex-1">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-white/75">
-                  Employee profile
-                </p>
-                <h1 className="truncate text-[16px] font-bold leading-tight tracking-tight">
-                  {employeeName}
-                </h1>
-              </div>
-              <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
-                {showTerminate ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTerminateOpen(true);
-                      setTerminateSuccess(null);
-                    }}
-                    className="inline-flex h-9 items-center gap-1 rounded-lg bg-white/15 px-2 text-[11px] font-semibold text-white active:bg-white/25"
-                  >
-                    <UserX className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                    End
-                  </button>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={() => void loadEmployee(true)}
-                  disabled={loading || refreshing}
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/15 text-white active:bg-white/25 disabled:opacity-50"
-                  aria-label="Refresh"
-                >
-                  <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-                </button>
-              </div>
-            </div>
-
-            {!loading && data ? (
-              <div className="mt-3 flex items-center gap-2.5">
-                <ProfileAvatarButton
-                  name={employeeName}
-                  imageUrl={profileImageUrl}
-                  size="lg"
-                  onZoom={openPhotoZoom}
-                  className="!h-12 !w-12 !rounded-lg ring-2 ring-white/35"
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[12px] text-white/90">{asText(info?.user_email)}</p>
-                  <p className="mt-0.5 truncate text-[12px] text-white/75">{asText(info?.user_phone)}</p>
-                  <span className="mt-1.5 inline-flex max-w-full truncate rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-semibold">
-                    {formatLabel(info?.role_name)}
-                  </span>
-                </div>
-              </div>
-            ) : null}
-          </div>
-
-          {!loading && data ? (
-            <div className="grid grid-cols-4 gap-1.5 border-b border-[#E4E7EC] bg-white px-3 py-2.5">
-              <QuickStat label="Docs" value={stats.documents} />
-              <QuickStat label="Assets" value={stats.assets} />
-              <QuickStat label="Leaves" value={stats.leaves} />
-              <QuickStat label="Logs" value={stats.logs} />
-            </div>
-          ) : null}
-
-          <div className="bg-white px-3 pb-2.5 pt-2">
-            <div className="flex rounded-lg bg-[#F5F7FA] p-0.5">
-              {mobileTabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setMobileTab(tab.id)}
-                  className={`flex flex-1 items-center justify-center rounded-md py-2 text-[11px] font-semibold transition ${
-                    mobileTab === tab.id
-                      ? "bg-white text-[#008CD3] shadow-sm ring-1 ring-[#E4E7EC]"
-                      : "text-[#6B7280]"
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
+    <div className="relative min-h-full bg-gradient-to-b from-[#F8FAFC] via-[#F1F5F9] to-[#EEF2F9]">
+      <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden" aria-hidden>
+        <div className="absolute -left-32 top-0 h-72 w-72 rounded-full bg-[#2563EB]/5 blur-3xl" />
+        <div className="absolute right-0 top-40 h-80 w-80 rounded-full bg-[#8B5CF6]/5 blur-3xl" />
+      </div>
+      <div className="mx-auto w-full max-w-[1440px] px-3 py-4 sm:px-6 sm:py-6 lg:px-8">
+        <header className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => router.back()}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/70 bg-white/80 text-[#334155] shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:text-[#2563EB] hover:shadow-md"
+              aria-label="Back to employees"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <div className="min-w-0">
+              <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-[#94A3B8]">
+                Employee profile
+              </p>
+              <h1 className="truncate text-[26px] font-bold tracking-tight text-[#0F172A] sm:text-[32px]">
+                {employeeName}
+              </h1>
             </div>
           </div>
-        </div>
-
-        {exitRow && viewerCanManageExit && !loading ? (
-          <div className="mx-4 mt-3 flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {exitActionButtons}
-          </div>
-        ) : null}
-
-        {terminateSuccess || exitActionSuccess ? (
-          <div className="mx-3 mt-2 flex items-start gap-2 rounded-lg border border-[#C8E6C9] bg-[#E6F4EA] px-3 py-2.5 text-[12px] leading-snug text-[#0F9D58]">
-            <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            <span className="flex-1">{terminateSuccess ?? exitActionSuccess}</span>
             <button
               type="button"
               onClick={() => {
-                setTerminateSuccess(null);
-                setExitActionSuccess(null);
+                void loadEmployee(true);
+                void loadBgvReferences();
+                void loadUserShifts();
               }}
-              className="shrink-0 rounded p-0.5"
-              aria-label="Dismiss"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        ) : null}
-
-        {error ? (
-          <div className="mx-3 mt-2 flex items-start gap-2 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2.5 text-[12px] leading-snug text-[#D93025]">
-            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            <span>{error}</span>
-          </div>
-        ) : null}
-
-        {loading ? (
-          <div className="flex flex-col items-center justify-center gap-2 py-20 text-[#6B7280]">
-            <Loader2 className="h-7 w-7 animate-spin text-[#008CD3]" />
-            <p className="text-[13px]">Loading employee profile…</p>
-          </div>
-        ) : (
-          <div className="space-y-2 p-3">{mobileContent}</div>
-        )}
-      </div>
-
-      {/* Desktop */}
-      <section className="hidden space-y-6 p-4 sm:p-6 lg:block">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="inline-flex items-center gap-2 rounded-xl border border-[#E4E7EC] bg-white px-4 py-2.5 text-sm font-semibold text-[#1F2937] shadow-sm transition hover:bg-[#F8FBFF]"
-          >
-            <ChevronLeft className="h-4 w-4" />
-            Back to employees
-          </button>
-          <div className="flex flex-wrap items-center gap-2">
-            {exitActionButtons}
-            {showTerminate ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setTerminateOpen(true);
-                  setTerminateSuccess(null);
-                }}
-                className={terminateButtonCls}
-              >
-                <UserX className="h-4 w-4 shrink-0" aria-hidden />
-                Employee termination
-              </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => void loadEmployee(true)}
               disabled={loading || refreshing}
-              className="inline-flex items-center gap-2 rounded-xl border border-[#E4E7EC] bg-white px-4 py-2.5 text-sm font-semibold text-[#1F2937] shadow-sm transition hover:bg-[#F8FBFF] disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-2xl border border-white/70 bg-white/80 px-4 py-2.5 text-[14px] font-semibold text-[#334155] shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:text-[#2563EB] hover:shadow-md disabled:opacity-60"
             >
               <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
               Refresh
             </button>
           </div>
-        </div>
+        </header>
 
-        {terminateSuccess || exitActionSuccess ? (
-          <div className="flex items-start gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-            <span className="flex-1">{terminateSuccess ?? exitActionSuccess}</span>
+        {exitActionSuccess ? (
+          <div className="mt-4 flex items-start gap-2 rounded-2xl border border-[#A7F3D0] bg-[#ECFDF5] px-4 py-3 text-[14px] text-[#059669]">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+            <span className="flex-1">{exitActionSuccess}</span>
             <button
               type="button"
-              onClick={() => {
-                setTerminateSuccess(null);
-                setExitActionSuccess(null);
-              }}
-              className="shrink-0 rounded p-1 hover:bg-emerald-100"
+              onClick={() => setExitActionSuccess(null)}
+              className="shrink-0 rounded-lg p-1 hover:bg-[#D1FAE5]"
               aria-label="Dismiss"
             >
               <X className="h-4 w-4" />
@@ -1275,39 +5041,17 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
           </div>
         ) : null}
 
-        {loading ? (
-          <div className="rounded-2xl border border-[#E4E7EC] bg-white p-10 text-center text-sm text-[#6B7280]">
-            <Loader2 className="mx-auto mb-3 h-8 w-8 animate-spin text-[#008CD3]" />
-            Loading employee profile…
+        {error && !loading ? (
+          <div className="mt-4 flex items-start gap-2 rounded-2xl border border-[#FECACA] bg-[#FEF2F2] px-4 py-3 text-[14px] text-[#DC2626]">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{error}</span>
           </div>
         ) : null}
 
-        {error ? (
-          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
-        ) : null}
-
-        {!loading && !error ? desktopDashboard : null}
-      </section>
-
-      <TerminateEmployeeModal
-        open={terminateOpen}
-        orgId={orgId}
-        employee={
-          data
-            ? {
-                userId,
-                userName: employeeName,
-                userEmail: info?.user_email,
-                subtitle: formatLabel(info?.role_name),
-              }
-            : null
-        }
-        onClose={() => setTerminateOpen(false)}
-        onSuccess={(message) => {
-          setTerminateSuccess(message);
-          void loadEmployee(true);
-        }}
-      />
+        <div className="mt-5">
+          {loading ? loadingSkeleton : !error ? dashboard : null}
+        </div>
+      </div>
 
       {photoZoom ? (
         <ProfilePhotoZoomModal
@@ -1400,6 +5144,1560 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
                     Confirm completion
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {documentUploadOpen ? (
+        <div
+          className="fixed inset-0 z-[99999] flex items-end justify-center p-0 sm:items-center sm:p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="upload-documents-title"
+        >
+          <button
+            type="button"
+            className="absolute inset-0 bg-[#0F172A]/45 backdrop-blur-sm"
+            aria-label="Close dialog"
+            onClick={closeDocumentUpload}
+          />
+          <div className="card-fade-in relative z-10 flex max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-[24px] border border-white/60 bg-white shadow-[0_24px_70px_rgba(15,23,42,0.25)] sm:rounded-[24px]">
+            <div className="shrink-0 border-b border-[#EEF2F6] px-5 py-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#F59E0B] to-[#FBBF24] text-white shadow-sm">
+                    <Upload className="h-5 w-5" aria-hidden />
+                  </span>
+                  <div>
+                    <h2 id="upload-documents-title" className="text-[18px] font-bold text-[#0F172A]">
+                      {documentUploadInitial ? "Upload documents" : "Add more documents"}
+                    </h2>
+                    <p className="mt-0.5 text-[13px] text-[#64748B]">
+                      PNG, JPG, or PDF · max 5 MB per file
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={documentSaving}
+                  onClick={closeDocumentUpload}
+                  className="flex h-9 w-9 items-center justify-center rounded-xl text-[#94A3B8] transition hover:bg-[#F1F5F9] hover:text-[#0F172A]"
+                  aria-label="Close"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+              {documentError && documentUploadOpen ? (
+                <div className="mb-4 flex items-start gap-2 rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-3.5 py-2.5 text-[14px] font-medium text-[#DC2626]">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                  {documentError}
+                </div>
+              ) : null}
+
+              {documentUploadFields.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] px-4 py-8 text-center text-[14px] text-[#64748B]">
+                  All document types are already on file. Use Update on a document card to replace
+                  an existing file.
+                </p>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {documentUploadFields.map(({ field, label, hint, requiredForInitial }) => (
+                    <div key={field} className={field === "user_image" ? "sm:col-span-2" : ""}>
+                      <label htmlFor={`profile-doc-${field}`} className="mb-1.5 block text-[13px] font-medium text-[#64748B]">
+                        {label}
+                        {documentUploadInitial && requiredForInitial ? (
+                          <span className="ml-0.5 text-[#EF4444]">*</span>
+                        ) : null}
+                      </label>
+                      <input
+                        id={`profile-doc-${field}`}
+                        name={field}
+                        type="file"
+                        accept="image/png,image/jpeg,image/jpg,application/pdf"
+                        className={docFileInputCls()}
+                        disabled={documentSaving}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          setDocFiles((prev) => {
+                            const next = { ...prev };
+                            if (file) next[field] = file;
+                            else delete next[field];
+                            return next;
+                          });
+                        }}
+                      />
+                      <p className="mt-1 text-[12px] text-[#94A3B8]">{hint}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col-reverse gap-2.5 border-t border-[#EEF2F6] px-5 py-4 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                disabled={documentSaving}
+                onClick={closeDocumentUpload}
+                className="inline-flex min-h-[42px] w-full items-center justify-center rounded-xl border border-[#E2E8F0] bg-white px-4 py-2.5 text-[14px] font-semibold text-[#334155] transition hover:bg-[#F8FAFC] sm:w-auto"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={documentSaving || documentUploadFields.length === 0}
+                onClick={() => void submitDocumentUpload()}
+                className="inline-flex min-h-[42px] w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-[#2563EB] to-[#3B82F6] px-4 py-2.5 text-[14px] font-semibold text-white shadow-sm transition hover:shadow-md disabled:opacity-60 sm:w-auto"
+              >
+                {documentSaving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    Uploading…
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-4 w-4" aria-hidden />
+                    {documentUploadInitial ? "Upload documents" : "Add documents"}
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {documentUpdateTarget ? (
+        <div
+          className="fixed inset-0 z-[99999] flex items-end justify-center p-0 sm:items-center sm:p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="update-document-title"
+        >
+          <button
+            type="button"
+            className="absolute inset-0 bg-[#0F172A]/45 backdrop-blur-sm"
+            aria-label="Close dialog"
+            onClick={closeDocumentUpdate}
+          />
+          <div className="card-fade-in relative z-10 w-full max-w-md rounded-t-[24px] border border-white/60 bg-white shadow-[0_24px_70px_rgba(15,23,42,0.25)] sm:rounded-[24px]">
+            <div className="border-b border-[#EEF2F6] px-5 py-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#2563EB] to-[#3B82F6] text-white shadow-sm">
+                    <Pencil className="h-5 w-5" aria-hidden />
+                  </span>
+                  <div>
+                    <h2 id="update-document-title" className="text-[18px] font-bold text-[#0F172A]">
+                      Update document
+                    </h2>
+                    <p className="mt-0.5 text-[13px] text-[#64748B]">
+                      {formatLabel(documentUpdateTarget.document_type)} ·{" "}
+                      {asText(documentUpdateTarget.document_name, "Document")}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={documentSaving}
+                  onClick={closeDocumentUpdate}
+                  className="flex h-9 w-9 items-center justify-center rounded-xl text-[#94A3B8] transition hover:bg-[#F1F5F9] hover:text-[#0F172A]"
+                  aria-label="Close"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="px-5 py-5">
+              {documentError && documentUpdateTarget ? (
+                <div className="mb-4 flex items-start gap-2 rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-3.5 py-2.5 text-[14px] font-medium text-[#DC2626]">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                  {documentError}
+                </div>
+              ) : null}
+
+              <label htmlFor="update-document-file" className="mb-1.5 block text-[13px] font-medium text-[#64748B]">
+                New file <span className="text-[#EF4444]">*</span>
+              </label>
+              <input
+                id="update-document-file"
+                type="file"
+                accept="image/png,image/jpeg,image/jpg,application/pdf"
+                className={docFileInputCls()}
+                disabled={documentSaving}
+                onChange={(e) => setDocumentUpdateFile(e.target.files?.[0] ?? null)}
+              />
+              <p className="mt-1 text-[12px] text-[#94A3B8]">
+                This will replace the current file. PNG, JPG, or PDF.
+              </p>
+            </div>
+
+            <div className="flex flex-col-reverse gap-2.5 border-t border-[#EEF2F6] px-5 py-4 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                disabled={documentSaving}
+                onClick={closeDocumentUpdate}
+                className="inline-flex min-h-[42px] w-full items-center justify-center rounded-xl border border-[#E2E8F0] bg-white px-4 py-2.5 text-[14px] font-semibold text-[#334155] transition hover:bg-[#F8FAFC] sm:w-auto"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={documentSaving}
+                onClick={() => void submitDocumentUpdate()}
+                className="inline-flex min-h-[42px] w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-[#2563EB] to-[#3B82F6] px-4 py-2.5 text-[14px] font-semibold text-white shadow-sm transition hover:shadow-md disabled:opacity-60 sm:w-auto"
+              >
+                {documentSaving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    Updating…
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4" aria-hidden />
+                    Save changes
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {documentDeleteTarget ? (
+        <div
+          className="fixed inset-0 z-[99999] flex items-end justify-center p-0 sm:items-center sm:p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-document-title"
+        >
+          <button
+            type="button"
+            className="absolute inset-0 bg-[#0F172A]/45 backdrop-blur-sm"
+            aria-label="Close dialog"
+            onClick={closeDocumentDelete}
+          />
+          <div className="card-fade-in relative z-10 w-full max-w-md rounded-t-[24px] border border-white/60 bg-white p-5 shadow-[0_24px_70px_rgba(15,23,42,0.25)] sm:rounded-[24px] sm:p-6">
+            <div className="mb-4 flex gap-3.5">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#EF4444] to-[#F87171] text-white shadow-sm">
+                <AlertTriangle className="h-5 w-5" aria-hidden />
+              </span>
+              <div>
+                <h2 id="delete-document-title" className="text-[18px] font-bold text-[#0F172A]">
+                  Delete document?
+                </h2>
+                <p className="mt-1.5 text-[14px] leading-relaxed text-[#64748B]">
+                  This will permanently remove{" "}
+                  <strong className="font-semibold text-[#0F172A]">
+                    {asText(documentDeleteTarget.document_name, "this document")}
+                  </strong>{" "}
+                  ({formatLabel(documentDeleteTarget.document_type)}). This action cannot be undone.
+                </p>
+              </div>
+            </div>
+
+            {documentError && documentDeleteTarget ? (
+              <div className="mb-4 flex items-start gap-2 rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-3.5 py-2.5 text-[14px] font-medium text-[#DC2626]">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                {documentError}
+              </div>
+            ) : null}
+
+            <div className="flex flex-col-reverse gap-2.5 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                disabled={documentSaving}
+                onClick={closeDocumentDelete}
+                className="inline-flex min-h-[42px] w-full items-center justify-center rounded-xl border border-[#E2E8F0] bg-white px-4 py-2.5 text-[14px] font-semibold text-[#334155] transition hover:bg-[#F8FAFC] sm:w-auto"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={documentSaving}
+                onClick={() => void confirmDocumentDelete()}
+                className="inline-flex min-h-[42px] w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-[#EF4444] to-[#DC2626] px-4 py-2.5 text-[14px] font-semibold text-white shadow-sm transition hover:shadow-md active:scale-[0.98] disabled:opacity-60 sm:w-auto"
+              >
+                {documentSaving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    Deleting…
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-4 w-4" aria-hidden />
+                    Yes, delete document
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {(assetAddOpen || assetViewLoading || assetViewTarget) && (
+        <div
+          className="fixed inset-0 z-[99999] flex items-end justify-center p-0 sm:items-center sm:p-4"
+          role="dialog"
+          aria-modal="true"
+        >
+          {assetAddOpen ? (
+            <>
+              <button
+                type="button"
+                className="absolute inset-0 bg-[#0F172A]/45 backdrop-blur-sm"
+                aria-label="Close dialog"
+                onClick={closeAssetAdd}
+              />
+              <div className="card-fade-in relative z-10 flex max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-[24px] border border-white/60 bg-white shadow-[0_24px_70px_rgba(15,23,42,0.25)] sm:rounded-[24px]">
+                <div className="shrink-0 border-b border-[#EEF2F6] px-5 py-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#8B5CF6] to-[#7C3AED] text-white shadow-sm">
+                        <Laptop className="h-5 w-5" aria-hidden />
+                      </span>
+                      <div>
+                        <h2 className="text-[18px] font-bold text-[#0F172A]">Assign assets</h2>
+                        <p className="mt-0.5 text-[13px] text-[#64748B]">
+                          Add one or more assets for {employeeName}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={assetSaving}
+                      onClick={closeAssetAdd}
+                      className="flex h-9 w-9 items-center justify-center rounded-xl text-[#94A3B8] transition hover:bg-[#F1F5F9]"
+                      aria-label="Close"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+                  {assetError && assetAddOpen ? (
+                    <div className="mb-4 flex items-start gap-2 rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-3.5 py-2.5 text-[14px] font-medium text-[#DC2626]">
+                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                      {assetError}
+                    </div>
+                  ) : null}
+                  <div className="space-y-4">
+                    {assetDraftRows.map((row, index) => (
+                      <div
+                        key={row.key}
+                        className="rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] p-4"
+                      >
+                        <div className="mb-3 flex items-center justify-between">
+                          <p className="text-[14px] font-semibold text-[#0F172A]">Asset {index + 1}</p>
+                          {assetDraftRows.length > 1 ? (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setAssetDraftRows((prev) => prev.filter((r) => r.key !== row.key))
+                              }
+                              className="text-[12px] font-semibold text-[#DC2626] hover:underline"
+                            >
+                              Remove
+                            </button>
+                          ) : null}
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <label className="sm:col-span-2">
+                            <span className="mb-1.5 block text-[13px] font-medium text-[#64748B]">
+                              Asset name <span className="text-[#EF4444]">*</span>
+                            </span>
+                            <input
+                              value={row.asset_name}
+                              onChange={(e) =>
+                                setAssetDraftRows((prev) =>
+                                  prev.map((r) =>
+                                    r.key === row.key ? { ...r, asset_name: e.target.value } : r,
+                                  ),
+                                )
+                              }
+                              className="w-full rounded-xl border border-[#E2E8F0] bg-white px-3 py-2.5 text-[14px] text-[#0F172A] outline-none focus:border-[#8B5CF6] focus:ring-2 focus:ring-[#8B5CF6]/15"
+                            />
+                          </label>
+                          <label>
+                            <span className="mb-1.5 block text-[13px] font-medium text-[#64748B]">
+                              Type <span className="text-[#EF4444]">*</span>
+                            </span>
+                            <select
+                              value={row.asset_type}
+                              onChange={(e) =>
+                                setAssetDraftRows((prev) =>
+                                  prev.map((r) =>
+                                    r.key === row.key ? { ...r, asset_type: e.target.value } : r,
+                                  ),
+                                )
+                              }
+                              className="w-full rounded-xl border border-[#E2E8F0] bg-white px-3 py-2.5 text-[14px] text-[#0F172A] outline-none focus:border-[#8B5CF6] focus:ring-2 focus:ring-[#8B5CF6]/15"
+                            >
+                              {EMPLOYEE_ASSET_TYPES.map((type) => (
+                                <option key={type} value={type}>
+                                  {formatLabel(type)}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label>
+                            <span className="mb-1.5 block text-[13px] font-medium text-[#64748B]">
+                              Handover date
+                            </span>
+                            <input
+                              type="datetime-local"
+                              value={row.handover_date_time}
+                              onChange={(e) =>
+                                setAssetDraftRows((prev) =>
+                                  prev.map((r) =>
+                                    r.key === row.key
+                                      ? { ...r, handover_date_time: e.target.value }
+                                      : r,
+                                  ),
+                                )
+                              }
+                              className="w-full rounded-xl border border-[#E2E8F0] bg-white px-3 py-2.5 text-[14px] text-[#0F172A] outline-none focus:border-[#8B5CF6] focus:ring-2 focus:ring-[#8B5CF6]/15"
+                            />
+                          </label>
+                          <label className="sm:col-span-2">
+                            <span className="mb-1.5 block text-[13px] font-medium text-[#64748B]">
+                              Summary
+                            </span>
+                            <textarea
+                              value={row.asset_summary}
+                              onChange={(e) =>
+                                setAssetDraftRows((prev) =>
+                                  prev.map((r) =>
+                                    r.key === row.key ? { ...r, asset_summary: e.target.value } : r,
+                                  ),
+                                )
+                              }
+                              rows={2}
+                              className="w-full rounded-xl border border-[#E2E8F0] bg-white px-3 py-2.5 text-[14px] text-[#0F172A] outline-none focus:border-[#8B5CF6] focus:ring-2 focus:ring-[#8B5CF6]/15"
+                            />
+                          </label>
+                          <label className="sm:col-span-2">
+                            <span className="mb-1.5 block text-[13px] font-medium text-[#64748B]">
+                              Image / PDF
+                            </span>
+                            <input
+                              type="file"
+                              accept="image/png,image/jpeg,image/jpg,image/webp,application/pdf"
+                              className={assetFileInputCls()}
+                              onChange={(e) =>
+                                setAssetDraftRows((prev) =>
+                                  prev.map((r) =>
+                                    r.key === row.key
+                                      ? { ...r, file: e.target.files?.[0] ?? null }
+                                      : r,
+                                  ),
+                                )
+                              }
+                            />
+                          </label>
+                        </div>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setAssetDraftRows((prev) => [...prev, createEmptyAssetDraft()])
+                      }
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-[#CBD5E1] bg-white px-3.5 py-2 text-[13px] font-semibold text-[#64748B] transition hover:border-[#8B5CF6]/40 hover:text-[#7C3AED]"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add another asset
+                    </button>
+                  </div>
+                </div>
+                <div className="flex flex-col-reverse gap-2.5 border-t border-[#EEF2F6] px-5 py-4 sm:flex-row sm:justify-end">
+                  <button
+                    type="button"
+                    disabled={assetSaving}
+                    onClick={closeAssetAdd}
+                    className="inline-flex min-h-[42px] w-full items-center justify-center rounded-xl border border-[#E2E8F0] bg-white px-4 py-2.5 text-[14px] font-semibold text-[#334155] sm:w-auto"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={assetSaving}
+                    onClick={() => void submitAssetAdd()}
+                    className="inline-flex min-h-[42px] w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-[#8B5CF6] to-[#7C3AED] px-4 py-2.5 text-[14px] font-semibold text-white shadow-sm disabled:opacity-60 sm:w-auto"
+                  >
+                    {assetSaving ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="h-4 w-4" />
+                    )}
+                    {assetSaving ? "Saving…" : "Assign assets"}
+                  </button>
+                </div>
+              </div>
+            </>
+          ) : null}
+
+          {assetViewLoading || assetViewTarget ? (
+            <>
+              <button
+                type="button"
+                className="absolute inset-0 bg-[#0F172A]/45 backdrop-blur-sm"
+                aria-label="Close dialog"
+                onClick={() => {
+                  setAssetViewTarget(null);
+                  setAssetViewLoading(false);
+                }}
+              />
+              <div className="card-fade-in relative z-10 w-full max-w-lg rounded-t-[24px] border border-white/60 bg-white shadow-[0_24px_70px_rgba(15,23,42,0.25)] sm:rounded-[24px]">
+                <div className="border-b border-[#EEF2F6] px-5 py-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h2 className="text-[18px] font-bold text-[#0F172A]">Asset details</h2>
+                      <p className="mt-0.5 text-[13px] text-[#64748B]">Full information from server</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAssetViewTarget(null);
+                        setAssetViewLoading(false);
+                      }}
+                      className="flex h-9 w-9 items-center justify-center rounded-xl text-[#94A3B8] hover:bg-[#F1F5F9]"
+                      aria-label="Close"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
+                </div>
+                <div className="max-h-[70dvh] overflow-y-auto px-5 py-5">
+                  {assetViewLoading ? (
+                    <div className="flex items-center justify-center gap-2 py-12 text-[#64748B]">
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                      Loading asset…
+                    </div>
+                  ) : assetViewTarget ? (
+                    <div className="space-y-4">
+                      {assetViewTarget.asset_image_url ? (
+                        <img
+                          src={String(assetViewTarget.asset_image_url)}
+                          alt={asText(assetViewTarget.asset_name, "Asset")}
+                          className="max-h-48 w-full rounded-2xl border border-[#E2E8F0] object-contain"
+                        />
+                      ) : null}
+                      <DetailGrid>
+                        <DetailItem label="Name" value={asText(assetViewTarget.asset_name)} />
+                        <DetailItem label="Type" value={formatLabel(assetViewTarget.asset_type)} />
+                        <DetailItem label="Status" value={formatLabel(assetViewTarget.asset_status)} />
+                        <DetailItem
+                          label="Returned"
+                          value={assetViewTarget.is_returned ? "Yes" : "No"}
+                        />
+                        <DetailItem
+                          label="Summary"
+                          value={asText(assetViewTarget.asset_summary, "—")}
+                        />
+                        <DetailItem
+                          label="Handover date"
+                          value={formatDateTime(assetViewTarget.handover_date_time)}
+                        />
+                        <DetailItem
+                          label="Created"
+                          value={formatDateTime(assetViewTarget.created_at)}
+                        />
+                        <DetailItem
+                          label="Updated"
+                          value={formatDateTime(assetViewTarget.updated_at)}
+                        />
+                      </DetailGrid>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </>
+          ) : null}
+        </div>
+      )}
+
+      {assetEditTarget ? (
+        <div className="fixed inset-0 z-[99999] flex items-end justify-center p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true">
+          <button type="button" className="absolute inset-0 bg-[#0F172A]/45 backdrop-blur-sm" aria-label="Close" onClick={() => !assetSaving && setAssetEditTarget(null)} />
+          <div className="card-fade-in relative z-10 w-full max-w-lg rounded-t-[24px] border border-white/60 bg-white shadow-[0_24px_70px_rgba(15,23,42,0.25)] sm:rounded-[24px]">
+            <div className="border-b border-[#EEF2F6] px-5 py-4">
+              <h2 className="text-[18px] font-bold text-[#0F172A]">Edit asset</h2>
+              <p className="mt-0.5 text-[13px] text-[#64748B]">{asText(assetEditTarget.asset_name)}</p>
+            </div>
+            <div className="space-y-3 px-5 py-5">
+              {assetError && assetEditTarget ? (
+                <div className="flex items-start gap-2 rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-3.5 py-2.5 text-[14px] text-[#DC2626]">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  {assetError}
+                </div>
+              ) : null}
+              <label className="block">
+                <span className="mb-1.5 block text-[13px] font-medium text-[#64748B]">Asset name</span>
+                <input
+                  value={assetEditDraft.asset_name}
+                  onChange={(e) => setAssetEditDraft((d) => ({ ...d, asset_name: e.target.value }))}
+                  className="w-full rounded-xl border border-[#E2E8F0] px-3 py-2.5 text-[14px] outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/15"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-[13px] font-medium text-[#64748B]">Type</span>
+                <select
+                  value={assetEditDraft.asset_type}
+                  onChange={(e) => setAssetEditDraft((d) => ({ ...d, asset_type: e.target.value }))}
+                  className="w-full rounded-xl border border-[#E2E8F0] px-3 py-2.5 text-[14px] outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/15"
+                >
+                  {EMPLOYEE_ASSET_TYPES.map((type) => (
+                    <option key={type} value={type}>{formatLabel(type)}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-[13px] font-medium text-[#64748B]">Summary</span>
+                <textarea
+                  value={assetEditDraft.asset_summary}
+                  onChange={(e) => setAssetEditDraft((d) => ({ ...d, asset_summary: e.target.value }))}
+                  rows={2}
+                  className="w-full rounded-xl border border-[#E2E8F0] px-3 py-2.5 text-[14px] outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/15"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-[13px] font-medium text-[#64748B]">Replace image / PDF</span>
+                <input type="file" accept="image/png,image/jpeg,image/jpg,image/webp,application/pdf" className={assetFileInputCls()} onChange={(e) => setAssetEditDraft((d) => ({ ...d, file: e.target.files?.[0] ?? null }))} />
+              </label>
+            </div>
+            <div className="flex flex-col-reverse gap-2.5 border-t border-[#EEF2F6] px-5 py-4 sm:flex-row sm:justify-end">
+              <button type="button" disabled={assetSaving} onClick={() => setAssetEditTarget(null)} className="inline-flex min-h-[42px] w-full items-center justify-center rounded-xl border border-[#E2E8F0] bg-white px-4 py-2.5 text-[14px] font-semibold sm:w-auto">Cancel</button>
+              <button type="button" disabled={assetSaving} onClick={() => void submitAssetEdit()} className="inline-flex min-h-[42px] w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-[#2563EB] to-[#3B82F6] px-4 py-2.5 text-[14px] font-semibold text-white sm:w-auto">
+                {assetSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                Save changes
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {assetStatusTarget ? (
+        <div className="fixed inset-0 z-[99999] flex items-end justify-center p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true">
+          <button type="button" className="absolute inset-0 bg-[#0F172A]/45 backdrop-blur-sm" aria-label="Close" onClick={() => !assetSaving && setAssetStatusTarget(null)} />
+          <div className="card-fade-in relative z-10 w-full max-w-md rounded-t-[24px] border border-white/60 bg-white p-5 shadow-[0_24px_70px_rgba(15,23,42,0.25)] sm:rounded-[24px]">
+            <div className="mb-4 flex gap-3.5">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#10B981] to-[#34D399] text-white shadow-sm">
+                <RefreshCw className="h-5 w-5" />
+              </span>
+              <div>
+                <h2 className="text-[18px] font-bold text-[#0F172A]">Update asset status</h2>
+                <p className="mt-1.5 text-[14px] text-[#64748B]">
+                  <strong className="text-[#0F172A]">{asText(assetStatusTarget.asset_name)}</strong> is currently{" "}
+                  <strong className="text-[#0F172A]">{formatLabel(assetStatusTarget.asset_status)}</strong>.
+                </p>
+              </div>
+            </div>
+            {assetError && assetStatusTarget ? (
+              <div className="mb-4 flex items-start gap-2 rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-3.5 py-2.5 text-[14px] text-[#DC2626]">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                {assetError}
+              </div>
+            ) : null}
+            {String(assetStatusTarget.asset_status ?? "").toLowerCase() === "active" ? (
+              <p className="mb-4 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3.5 py-3 text-[13px] text-[#64748B]">
+                Mark this asset as <strong className="text-[#0F172A]">returned</strong> (inactive). It will be received by you as the logged-in user.
+              </p>
+            ) : (
+              <p className="mb-4 rounded-xl border border-[#FEF2F8] bg-[#F8FAFC] px-3.5 py-3 text-[13px] text-[#64748B]">
+                Status changes back to active are not supported from this screen.
+              </p>
+            )}
+            <div className="flex flex-col-reverse gap-2.5 sm:flex-row sm:justify-end">
+              <button type="button" disabled={assetSaving} onClick={() => setAssetStatusTarget(null)} className="inline-flex min-h-[42px] w-full items-center justify-center rounded-xl border border-[#E2E8F0] bg-white px-4 py-2.5 text-[14px] font-semibold sm:w-auto">Cancel</button>
+              {String(assetStatusTarget.asset_status ?? "").toLowerCase() === "active" ? (
+                <button type="button" disabled={assetSaving} onClick={() => void submitAssetStatus()} className="inline-flex min-h-[42px] w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-[#10B981] to-[#059669] px-4 py-2.5 text-[14px] font-semibold text-white sm:w-auto">
+                  {assetSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                  Mark as returned
+                </button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {assetHandoverTarget ? (
+        <div className="fixed inset-0 z-[99999] flex items-end justify-center p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true">
+          <button type="button" className="absolute inset-0 bg-[#0F172A]/45 backdrop-blur-sm" aria-label="Close" onClick={() => !assetSaving && setAssetHandoverTarget(null)} />
+          <div className="card-fade-in relative z-10 w-full max-w-md rounded-t-[24px] border border-white/60 bg-white shadow-[0_24px_70px_rgba(15,23,42,0.25)] sm:rounded-[24px]">
+            <div className="border-b border-[#EEF2F6] px-5 py-4">
+              <h2 className="text-[18px] font-bold text-[#0F172A]">
+                {assetHandoverTarget.returned_to_id || handoverByAssetId.has(Number(assetHandoverTarget.id))
+                  ? "Update handover manager"
+                  : "Assign handover manager"}
+              </h2>
+              <p className="mt-0.5 text-[13px] text-[#64748B]">{asText(assetHandoverTarget.asset_name)}</p>
+            </div>
+            <div className="space-y-3 px-5 py-5">
+              {assetError && assetHandoverTarget ? (
+                <div className="flex items-start gap-2 rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-3.5 py-2.5 text-[14px] text-[#DC2626]">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  {assetError}
+                </div>
+              ) : null}
+              <label className="block">
+                <span className="mb-1.5 block text-[13px] font-medium text-[#64748B]">Handover manager</span>
+                <select
+                  value={assetHandoverManagerId}
+                  onChange={(e) => setAssetHandoverManagerId(e.target.value)}
+                  disabled={assetManagersLoading}
+                  className="w-full rounded-xl border border-[#E2E8F0] px-3 py-2.5 text-[14px] outline-none focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/15"
+                >
+                  <option value="">Select manager</option>
+                  {assetManagers.map((m) => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-[13px] font-medium text-[#64748B]">Remarks</span>
+                <textarea
+                  value={assetHandoverRemarks}
+                  onChange={(e) => setAssetHandoverRemarks(e.target.value)}
+                  rows={2}
+                  className="w-full rounded-xl border border-[#E2E8F0] px-3 py-2.5 text-[14px] outline-none focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/15"
+                />
+              </label>
+            </div>
+            <div className="flex flex-col-reverse gap-2.5 border-t border-[#EEF2F6] px-5 py-4 sm:flex-row sm:justify-end">
+              <button type="button" disabled={assetSaving} onClick={() => setAssetHandoverTarget(null)} className="inline-flex min-h-[42px] w-full items-center justify-center rounded-xl border border-[#E2E8F0] bg-white px-4 py-2.5 text-[14px] font-semibold sm:w-auto">Cancel</button>
+              <button type="button" disabled={assetSaving || assetManagersLoading} onClick={() => void submitAssetHandover()} className="inline-flex min-h-[42px] w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-[#F59E0B] to-[#D97706] px-4 py-2.5 text-[14px] font-semibold text-white sm:w-auto">
+                {assetSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserRound className="h-4 w-4" />}
+                Save handover
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {assetReturnTarget ? (
+        <div className="fixed inset-0 z-[99999] flex items-end justify-center p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true">
+          <button type="button" className="absolute inset-0 bg-[#0F172A]/45 backdrop-blur-sm" aria-label="Close" onClick={() => !assetSaving && setAssetReturnTarget(null)} />
+          <div className="card-fade-in relative z-10 w-full max-w-md rounded-t-[24px] border border-white/60 bg-white p-5 shadow-[0_24px_70px_rgba(15,23,42,0.25)] sm:rounded-[24px]">
+            <div className="mb-4 flex gap-3.5">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#10B981] to-[#34D399] text-white shadow-sm">
+                <AlertTriangle className="h-5 w-5" />
+              </span>
+              <div>
+                <h2 className="text-[18px] font-bold text-[#0F172A]">Confirm asset return?</h2>
+                <p className="mt-1.5 text-[14px] leading-relaxed text-[#64748B]">
+                  Confirm that <strong className="text-[#0F172A]">{asText(assetReturnTarget.asset_name)}</strong> has been fully handed over and returned. Handover must already be completed.
+                </p>
+              </div>
+            </div>
+            {assetError && assetReturnTarget ? (
+              <div className="mb-4 flex items-start gap-2 rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-3.5 py-2.5 text-[14px] text-[#DC2626]">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                {assetError}
+              </div>
+            ) : null}
+            <div className="flex flex-col-reverse gap-2.5 sm:flex-row sm:justify-end">
+              <button type="button" disabled={assetSaving} onClick={() => setAssetReturnTarget(null)} className="inline-flex min-h-[42px] w-full items-center justify-center rounded-xl border border-[#E2E8F0] bg-white px-4 py-2.5 text-[14px] font-semibold sm:w-auto">Cancel</button>
+              <button type="button" disabled={assetSaving} onClick={() => void confirmAssetReturnCompleted()} className="inline-flex min-h-[42px] w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-[#10B981] to-[#059669] px-4 py-2.5 text-[14px] font-semibold text-white sm:w-auto">
+                {assetSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                Yes, confirm return
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {(referenceAddOpen || referenceViewLoading || referenceViewTarget) && (
+        <div
+          className="fixed inset-0 z-[99999] flex items-end justify-center p-0 sm:items-center sm:p-4"
+          role="dialog"
+          aria-modal="true"
+        >
+          {referenceAddOpen ? (
+            <>
+              <button
+                type="button"
+                className="absolute inset-0 bg-[#0F172A]/45 backdrop-blur-sm"
+                aria-label="Close dialog"
+                onClick={closeReferenceAdd}
+              />
+              <div className="card-fade-in relative z-10 flex max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-[24px] border border-white/60 bg-white shadow-[0_24px_70px_rgba(15,23,42,0.25)] sm:rounded-[24px]">
+                <div className="shrink-0 border-b border-[#EEF2F6] px-5 py-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#10B981] to-[#059669] text-white shadow-sm">
+                        <ShieldCheck className="h-5 w-5" aria-hidden />
+                      </span>
+                      <div>
+                        <h2 className="text-[18px] font-bold text-[#0F172A]">Add reference</h2>
+                        <p className="mt-0.5 text-[13px] text-[#64748B]">
+                          Previous company reference for {employeeName}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={referenceSaving}
+                      onClick={closeReferenceAdd}
+                      className="flex h-9 w-9 items-center justify-center rounded-xl text-[#94A3B8] transition hover:bg-[#F1F5F9]"
+                      aria-label="Close"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+                  {referenceError && referenceAddOpen ? (
+                    <div className="mb-4 flex items-start gap-2 rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-3.5 py-2.5 text-[14px] font-medium text-[#DC2626]">
+                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                      {referenceError}
+                    </div>
+                  ) : null}
+                  <ReferenceFormFields
+                    form={referenceAddForm}
+                    onChange={(patch) => setReferenceAddForm((prev) => ({ ...prev, ...patch }))}
+                  />
+                </div>
+                <div className="flex flex-col-reverse gap-2.5 border-t border-[#EEF2F6] px-5 py-4 sm:flex-row sm:justify-end">
+                  <button
+                    type="button"
+                    disabled={referenceSaving}
+                    onClick={closeReferenceAdd}
+                    className="inline-flex min-h-[42px] w-full items-center justify-center rounded-xl border border-[#E2E8F0] bg-white px-4 py-2.5 text-[14px] font-semibold sm:w-auto"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={referenceSaving}
+                    onClick={() => void submitReferenceAdd()}
+                    className="inline-flex min-h-[42px] w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-[#10B981] to-[#059669] px-4 py-2.5 text-[14px] font-semibold text-white sm:w-auto"
+                  >
+                    {referenceSaving ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="h-4 w-4" />
+                    )}
+                    {referenceSaving ? "Saving…" : "Save reference"}
+                  </button>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                className="absolute inset-0 bg-[#0F172A]/45 backdrop-blur-sm"
+                aria-label="Close dialog"
+                onClick={closeReferenceView}
+              />
+              <div className="card-fade-in relative z-10 flex max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-[24px] border border-white/60 bg-white shadow-[0_24px_70px_rgba(15,23,42,0.25)] sm:rounded-[24px]">
+                <div className="shrink-0 border-b border-[#EEF2F6] px-5 py-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#10B981] to-[#059669] text-white shadow-sm">
+                        <Building2 className="h-5 w-5" aria-hidden />
+                      </span>
+                      <div>
+                        <h2 className="text-[18px] font-bold text-[#0F172A]">
+                          {referenceViewTarget?.previous_company_name ?? "Reference details"}
+                        </h2>
+                        {referenceViewTarget ? (
+                          <span
+                            className={`mt-1 inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${bgvStatusBadgeClass(referenceViewTarget.verification_status)}`}
+                          >
+                            {bgvStatusLabel(referenceViewTarget.verification_status)}
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={referenceViewLoading}
+                      onClick={closeReferenceView}
+                      className="flex h-9 w-9 items-center justify-center rounded-xl text-[#94A3B8] transition hover:bg-[#F1F5F9]"
+                      aria-label="Close"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+                  {referenceViewLoading ? (
+                    <div className="flex items-center justify-center py-16">
+                      <Loader2 className="h-8 w-8 animate-spin text-[#10B981]" />
+                    </div>
+                  ) : referenceViewTarget ? (
+                    <div className="space-y-5">
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#94A3B8]">
+                            Company email
+                          </p>
+                          <p className="mt-0.5 text-[14px] font-medium text-[#0F172A]">
+                            {asText(referenceViewTarget.company_email)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#94A3B8]">
+                            Employee code
+                          </p>
+                          <p className="mt-0.5 text-[14px] font-medium text-[#0F172A]">
+                            {asText(referenceViewTarget.employee_code)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#94A3B8]">
+                            Designation
+                          </p>
+                          <p className="mt-0.5 text-[14px] font-medium text-[#0F172A]">
+                            {asText(referenceViewTarget.designation)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#94A3B8]">
+                            Employment period
+                          </p>
+                          <p className="mt-0.5 text-[14px] font-medium text-[#0F172A]">
+                            {formatDate(referenceViewTarget.employment_start_date)} –{" "}
+                            {formatDate(referenceViewTarget.employment_end_date)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] p-4">
+                        <p className="text-[13px] font-semibold text-[#0F172A]">Reference contact</p>
+                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                          <div>
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-[#94A3B8]">
+                              Name
+                            </p>
+                            <p className="mt-0.5 text-[14px] font-medium text-[#0F172A]">
+                              {asText(referenceViewTarget.person_name)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-[#94A3B8]">
+                              Role
+                            </p>
+                            <p className="mt-0.5 text-[14px] font-medium text-[#0F172A]">
+                              {bgvPersonRoleLabel(referenceViewTarget.person_role)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-[#94A3B8]">
+                              Phone
+                            </p>
+                            <p className="mt-0.5 text-[14px] font-medium text-[#0F172A]">
+                              {asText(referenceViewTarget.person_contact_number1)}
+                              {referenceViewTarget.person_contact_number2
+                                ? ` · ${referenceViewTarget.person_contact_number2}`
+                                : ""}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-[#94A3B8]">
+                              Email
+                            </p>
+                            <p className="mt-0.5 text-[14px] font-medium text-[#0F172A]">
+                              {asText(referenceViewTarget.person_contact_email)}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      {referenceViewTarget.verification_by_name ||
+                      referenceViewTarget.verified_at ? (
+                        <div className="rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] p-4">
+                          <p className="text-[13px] font-semibold text-[#0F172A]">Verification</p>
+                          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                            <div>
+                              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#94A3B8]">
+                                Verified by
+                              </p>
+                              <p className="mt-0.5 text-[14px] font-medium text-[#0F172A]">
+                                {asText(referenceViewTarget.verification_by_name)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#94A3B8]">
+                                Verified at
+                              </p>
+                              <p className="mt-0.5 text-[14px] font-medium text-[#0F172A]">
+                                {formatDateTime(referenceViewTarget.verified_at)}
+                              </p>
+                            </div>
+                            {referenceViewTarget.verification_notes ? (
+                              <div className="sm:col-span-2">
+                                <p className="text-[11px] font-semibold uppercase tracking-wide text-[#94A3B8]">
+                                  Notes
+                                </p>
+                                <p className="mt-0.5 text-[14px] text-[#334155]">
+                                  {referenceViewTarget.verification_notes}
+                                </p>
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {referenceEditTarget && referenceEditForm ? (
+        <div
+          className="fixed inset-0 z-[99999] flex items-end justify-center p-0 sm:items-center sm:p-4"
+          role="dialog"
+          aria-modal="true"
+        >
+          <button
+            type="button"
+            className="absolute inset-0 bg-[#0F172A]/45 backdrop-blur-sm"
+            aria-label="Close dialog"
+            onClick={closeReferenceEdit}
+          />
+          <div className="card-fade-in relative z-10 flex max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-[24px] border border-white/60 bg-white shadow-[0_24px_70px_rgba(15,23,42,0.25)] sm:rounded-[24px]">
+            <div className="shrink-0 border-b border-[#EEF2F6] px-5 py-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#10B981] to-[#059669] text-white shadow-sm">
+                    <Pencil className="h-5 w-5" aria-hidden />
+                  </span>
+                  <div>
+                    <h2 className="text-[18px] font-bold text-[#0F172A]">Edit reference</h2>
+                    <p className="mt-0.5 text-[13px] text-[#64748B]">
+                      {referenceEditTarget.previous_company_name}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={referenceSaving}
+                  onClick={closeReferenceEdit}
+                  className="flex h-9 w-9 items-center justify-center rounded-xl text-[#94A3B8] transition hover:bg-[#F1F5F9]"
+                  aria-label="Close"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+              {referenceError && referenceEditTarget ? (
+                <div className="mb-4 flex items-start gap-2 rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-3.5 py-2.5 text-[14px] font-medium text-[#DC2626]">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  {referenceError}
+                </div>
+              ) : null}
+              <ReferenceFormFields
+                form={referenceEditForm}
+                onChange={(patch) =>
+                  setReferenceEditForm((prev) => (prev ? { ...prev, ...patch } : prev))
+                }
+              />
+            </div>
+            <div className="flex flex-col-reverse gap-2.5 border-t border-[#EEF2F6] px-5 py-4 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                disabled={referenceSaving}
+                onClick={closeReferenceEdit}
+                className="inline-flex min-h-[42px] w-full items-center justify-center rounded-xl border border-[#E2E8F0] bg-white px-4 py-2.5 text-[14px] font-semibold sm:w-auto"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={referenceSaving}
+                onClick={() => void submitReferenceEdit()}
+                className="inline-flex min-h-[42px] w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-[#10B981] to-[#059669] px-4 py-2.5 text-[14px] font-semibold text-white sm:w-auto"
+              >
+                {referenceSaving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                {referenceSaving ? "Saving…" : "Save changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {referenceVerifyTarget ? (
+        <div
+          className="fixed inset-0 z-[99999] flex items-end justify-center p-0 sm:items-center sm:p-4"
+          role="dialog"
+          aria-modal="true"
+        >
+          <button
+            type="button"
+            className="absolute inset-0 bg-[#0F172A]/45 backdrop-blur-sm"
+            aria-label="Close dialog"
+            onClick={closeReferenceVerify}
+          />
+          <div className="card-fade-in relative z-10 w-full max-w-md rounded-t-[24px] border border-white/60 bg-white p-5 shadow-[0_24px_70px_rgba(15,23,42,0.25)] sm:rounded-[24px]">
+            <div className="mb-4 flex gap-3.5">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#10B981] to-[#059669] text-white shadow-sm">
+                <UserCheck className="h-5 w-5" />
+              </span>
+              <div>
+                <h2 className="text-[18px] font-bold text-[#0F172A]">Update verification status</h2>
+                <p className="mt-1 text-[14px] text-[#64748B]">
+                  {referenceVerifyTarget.previous_company_name}
+                </p>
+              </div>
+            </div>
+            {referenceError && referenceVerifyTarget ? (
+              <div className="mb-4 flex items-start gap-2 rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-3.5 py-2.5 text-[14px] text-[#DC2626]">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                {referenceError}
+              </div>
+            ) : null}
+            <div className="space-y-4">
+              <label>
+                <span className="mb-1.5 block text-[13px] font-medium text-[#64748B]">Status</span>
+                <select
+                  value={referenceVerifyStatus}
+                  onChange={(e) =>
+                    setReferenceVerifyStatus(e.target.value as BackgroundVerificationStatus)
+                  }
+                  className={referenceFieldCls()}
+                >
+                  {BGV_STATUS_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span className="mb-1.5 block text-[13px] font-medium text-[#64748B]">
+                  Verification notes
+                </span>
+                <textarea
+                  value={referenceVerifyNotes}
+                  onChange={(e) => setReferenceVerifyNotes(e.target.value)}
+                  rows={3}
+                  className={referenceFieldCls()}
+                  placeholder="Optional notes about the verification outcome"
+                />
+              </label>
+            </div>
+            <div className="mt-5 flex flex-col-reverse gap-2.5 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                disabled={referenceSaving}
+                onClick={closeReferenceVerify}
+                className="inline-flex min-h-[42px] w-full items-center justify-center rounded-xl border border-[#E2E8F0] bg-white px-4 py-2.5 text-[14px] font-semibold sm:w-auto"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={referenceSaving}
+                onClick={() => void submitReferenceVerify()}
+                className="inline-flex min-h-[42px] w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-[#10B981] to-[#059669] px-4 py-2.5 text-[14px] font-semibold text-white sm:w-auto"
+              >
+                {referenceSaving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <UserCheck className="h-4 w-4" />
+                )}
+                {referenceSaving ? "Updating…" : "Update status"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {ipAssignOpen ? (
+        <div
+          className="fixed inset-0 z-[99999] flex items-end justify-center p-0 sm:items-center sm:p-4"
+          role="dialog"
+          aria-modal="true"
+        >
+          <button
+            type="button"
+            className="absolute inset-0 bg-[#0F172A]/45 backdrop-blur-sm"
+            aria-label="Close dialog"
+            onClick={closeIpAssign}
+          />
+          <div className="card-fade-in relative z-10 flex max-h-[92dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-[24px] border border-white/60 bg-white shadow-[0_24px_70px_rgba(15,23,42,0.25)] sm:rounded-[24px]">
+            <div className="shrink-0 border-b border-[#EEF2F6] px-5 py-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#2563EB] to-[#3B82F6] text-white shadow-sm">
+                    <Globe className="h-5 w-5" aria-hidden />
+                  </span>
+                  <div>
+                    <h2 className="text-[18px] font-bold text-[#0F172A]">Assign IP address</h2>
+                    <p className="mt-0.5 text-[13px] text-[#64748B]">
+                      Select an organization IP for {employeeName}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={ipSaving}
+                  onClick={closeIpAssign}
+                  className="flex h-9 w-9 items-center justify-center rounded-xl text-[#94A3B8] transition hover:bg-[#F1F5F9]"
+                  aria-label="Close"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+              {ipError && ipAssignOpen ? (
+                <div className="mb-4 flex items-start gap-2 rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-3.5 py-2.5 text-[14px] font-medium text-[#DC2626]">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  {ipError}
+                </div>
+              ) : null}
+
+              {companyIpsLoading ? (
+                <div className="flex items-center justify-center py-16">
+                  <Loader2 className="h-8 w-8 animate-spin text-[#2563EB]" />
+                </div>
+              ) : availableCompanyIps.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] px-4 py-10 text-center">
+                  <Globe className="mx-auto h-8 w-8 text-[#94A3B8]" aria-hidden />
+                  <p className="mt-3 text-[14px] font-semibold text-[#0F172A]">
+                    {companyIps.length === 0
+                      ? "No organization IP addresses found"
+                      : "All organization IPs are already assigned"}
+                  </p>
+                  <p className="mt-1 text-[13px] text-[#64748B]">
+                    {companyIps.length === 0
+                      ? "Add IPs under Organization settings first."
+                      : "Unassign an existing IP or add a new one in settings."}
+                  </p>
+                </div>
+              ) : (
+                <ul className="space-y-2">
+                  {availableCompanyIps.map((ip) => {
+                    const ipIdStr = String(ip.id);
+                    const selected = selectedIpId === ipIdStr;
+                    return (
+                      <li key={ipIdStr}>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedIpId(ipIdStr)}
+                          className={`flex w-full items-start gap-3 rounded-2xl border px-4 py-3 text-left transition ${
+                            selected
+                              ? "border-[#2563EB] bg-[#EFF6FF] ring-2 ring-[#2563EB]/20"
+                              : "border-[#E2E8F0] bg-white hover:border-[#BFDBFE] hover:bg-[#F8FAFC]"
+                          }`}
+                        >
+                          <span
+                            className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
+                              selected
+                                ? "border-[#2563EB] bg-[#2563EB] text-white"
+                                : "border-[#CBD5E1] bg-white"
+                            }`}
+                          >
+                            {selected ? <Check className="h-3 w-3" /> : null}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block font-mono text-[14px] font-semibold text-[#0F172A]">
+                              {ip.ip_address}
+                            </span>
+                            <span className="mt-0.5 block text-[12px] text-[#94A3B8]">
+                              {ip.label?.trim() ? ip.label.trim() : "No label"}
+                            </span>
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+            <div className="flex flex-col-reverse gap-2.5 border-t border-[#EEF2F6] px-5 py-4 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                disabled={ipSaving}
+                onClick={closeIpAssign}
+                className="inline-flex min-h-[42px] w-full items-center justify-center rounded-xl border border-[#E2E8F0] bg-white px-4 py-2.5 text-[14px] font-semibold sm:w-auto"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={ipSaving || companyIpsLoading || availableCompanyIps.length === 0}
+                onClick={() => void submitIpAssign()}
+                className="inline-flex min-h-[42px] w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-[#2563EB] to-[#3B82F6] px-4 py-2.5 text-[14px] font-semibold text-white sm:w-auto disabled:opacity-60"
+              >
+                {ipSaving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Globe className="h-4 w-4" />
+                )}
+                {ipSaving ? "Assigning…" : "Assign IP"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {shiftAssignOpen ? (
+        <div
+          className="fixed inset-0 z-[99999] flex items-end justify-center p-0 sm:items-center sm:p-4"
+          role="dialog"
+          aria-modal="true"
+        >
+          <button
+            type="button"
+            className="absolute inset-0 bg-[#0F172A]/45 backdrop-blur-sm"
+            aria-label="Close dialog"
+            onClick={closeShiftAssign}
+          />
+          <div className="card-fade-in relative z-10 flex max-h-[92dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-[24px] border border-white/60 bg-white shadow-[0_24px_70px_rgba(15,23,42,0.25)] sm:rounded-[24px]">
+            <div className="shrink-0 border-b border-[#EEF2F6] px-5 py-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#8B5CF6] to-[#7C3AED] text-white shadow-sm">
+                    <Clock className="h-5 w-5" aria-hidden />
+                  </span>
+                  <div>
+                    <h2 className="text-[18px] font-bold text-[#0F172A]">
+                      {userShifts.length > 0 ? "Change shift" : "Assign to shift"}
+                    </h2>
+                    <p className="mt-0.5 text-[13px] text-[#64748B]">
+                      Select a shift for {employeeName}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={shiftSaving}
+                  onClick={closeShiftAssign}
+                  className="flex h-9 w-9 items-center justify-center rounded-xl text-[#94A3B8] transition hover:bg-[#F1F5F9]"
+                  aria-label="Close"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+              {shiftError && shiftAssignOpen ? (
+                <div className="mb-4 flex items-start gap-2 rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-3.5 py-2.5 text-[14px] font-medium text-[#DC2626]">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  {shiftError}
+                </div>
+              ) : null}
+
+              {companyShiftsLoading ? (
+                <div className="flex items-center justify-center py-16">
+                  <Loader2 className="h-8 w-8 animate-spin text-[#8B5CF6]" />
+                </div>
+              ) : companyShifts.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] px-4 py-10 text-center">
+                  <Clock className="mx-auto h-8 w-8 text-[#94A3B8]" aria-hidden />
+                  <p className="mt-3 text-[14px] font-semibold text-[#0F172A]">
+                    No organization shifts found
+                  </p>
+                  <p className="mt-1 text-[13px] text-[#64748B]">
+                    Create shifts under Organization settings first.
+                  </p>
+                </div>
+              ) : (
+                <ul className="space-y-2">
+                  {companyShifts.map((shift) => {
+                    const shiftIdStr = String(shift.id);
+                    const selected = selectedShiftId === shiftIdStr;
+                    return (
+                      <li key={shiftIdStr}>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedShiftId(shiftIdStr)}
+                          className={`flex w-full items-start gap-3 rounded-2xl border px-4 py-3 text-left transition ${
+                            selected
+                              ? "border-[#8B5CF6] bg-[#F5F3FF] ring-2 ring-[#8B5CF6]/20"
+                              : "border-[#E2E8F0] bg-white hover:border-[#DDD6FE] hover:bg-[#FAF5FF]"
+                          }`}
+                        >
+                          <span
+                            className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
+                              selected
+                                ? "border-[#8B5CF6] bg-[#8B5CF6] text-white"
+                                : "border-[#CBD5E1] bg-white"
+                            }`}
+                          >
+                            {selected ? <Check className="h-3 w-3" /> : null}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-[14px] font-semibold text-[#0F172A]">
+                              {asText(shift.shift_name, "Unnamed shift")}
+                            </span>
+                            <span className="mt-0.5 block text-[12px] text-[#94A3B8]">
+                              {shift.start_time || shift.end_time
+                                ? `${asText(shift.start_time)} – ${asText(shift.end_time)}`
+                                : "—"}
+                              {" · "}
+                              {formatWorkingDays(shift.working_days)}
+                            </span>
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+            <div className="flex flex-col-reverse gap-2.5 border-t border-[#EEF2F6] px-5 py-4 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                disabled={shiftSaving}
+                onClick={closeShiftAssign}
+                className="inline-flex min-h-[42px] w-full items-center justify-center rounded-xl border border-[#E2E8F0] bg-white px-4 py-2.5 text-[14px] font-semibold sm:w-auto"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={shiftSaving || companyShiftsLoading || companyShifts.length === 0}
+                onClick={() => void submitShiftAssign()}
+                className="inline-flex min-h-[42px] w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-[#8B5CF6] to-[#7C3AED] px-4 py-2.5 text-[14px] font-semibold text-white sm:w-auto disabled:opacity-60"
+              >
+                {shiftSaving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Clock className="h-4 w-4" />
+                )}
+                {shiftSaving
+                  ? "Saving…"
+                  : userShifts.length > 0
+                    ? "Update shift"
+                    : "Assign shift"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {shiftUnassignTarget ? (
+        <div
+          className="fixed inset-0 z-[99999] flex items-end justify-center p-0 sm:items-center sm:p-4"
+          role="dialog"
+          aria-modal="true"
+        >
+          <button
+            type="button"
+            className="absolute inset-0 bg-[#0F172A]/45 backdrop-blur-sm"
+            aria-label="Close dialog"
+            onClick={() => !shiftSaving && setShiftUnassignTarget(null)}
+          />
+          <div className="card-fade-in relative z-10 w-full max-w-md rounded-t-[24px] border border-white/60 bg-white p-5 shadow-[0_24px_70px_rgba(15,23,42,0.25)] sm:rounded-[24px]">
+            <div className="mb-4 flex gap-3.5">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#EF4444] to-[#DC2626] text-white shadow-sm">
+                <Clock className="h-5 w-5" />
+              </span>
+              <div>
+                <h2 className="text-[18px] font-bold text-[#0F172A]">Unassign shift?</h2>
+                <p className="mt-1.5 text-[14px] leading-relaxed text-[#64748B]">
+                  Remove{" "}
+                  <strong className="font-semibold text-[#0F172A]">
+                    {asText(shiftUnassignTarget.shift_name, "this shift")}
+                  </strong>{" "}
+                  from {employeeName}. Attendance rules for this shift will no longer apply.
+                </p>
+              </div>
+            </div>
+            {shiftError && shiftUnassignTarget ? (
+              <div className="mb-4 flex items-start gap-2 rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-3.5 py-2.5 text-[14px] text-[#DC2626]">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                {shiftError}
+              </div>
+            ) : null}
+            <div className="flex flex-col-reverse gap-2.5 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                disabled={shiftSaving}
+                onClick={() => setShiftUnassignTarget(null)}
+                className="inline-flex min-h-[42px] w-full items-center justify-center rounded-xl border border-[#E2E8F0] bg-white px-4 py-2.5 text-[14px] font-semibold sm:w-auto"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={shiftSaving}
+                onClick={() => void confirmShiftUnassign()}
+                className="inline-flex min-h-[42px] w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-[#EF4444] to-[#DC2626] px-4 py-2.5 text-[14px] font-semibold text-white sm:w-auto"
+              >
+                {shiftSaving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <X className="h-4 w-4" />
+                )}
+                {shiftSaving ? "Removing…" : "Yes, unassign"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {ipUnassignTarget ? (
+        <div
+          className="fixed inset-0 z-[99999] flex items-end justify-center p-0 sm:items-center sm:p-4"
+          role="dialog"
+          aria-modal="true"
+        >
+          <button
+            type="button"
+            className="absolute inset-0 bg-[#0F172A]/45 backdrop-blur-sm"
+            aria-label="Close dialog"
+            onClick={() => !ipSaving && setIpUnassignTarget(null)}
+          />
+          <div className="card-fade-in relative z-10 w-full max-w-md rounded-t-[24px] border border-white/60 bg-white p-5 shadow-[0_24px_70px_rgba(15,23,42,0.25)] sm:rounded-[24px]">
+            <div className="mb-4 flex gap-3.5">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#EF4444] to-[#DC2626] text-white shadow-sm">
+                <Globe className="h-5 w-5" />
+              </span>
+              <div>
+                <h2 className="text-[18px] font-bold text-[#0F172A]">Unassign IP address?</h2>
+                <p className="mt-1.5 text-[14px] leading-relaxed text-[#64748B]">
+                  Remove{" "}
+                  <strong className="font-mono font-semibold text-[#0F172A]">
+                    {asText(ipUnassignTarget.ip_address ?? ipUnassignTarget.org_ip_address)}
+                  </strong>{" "}
+                  from {employeeName}. They will no longer be able to punch in from this IP.
+                </p>
+              </div>
+            </div>
+            {ipError && ipUnassignTarget ? (
+              <div className="mb-4 flex items-start gap-2 rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-3.5 py-2.5 text-[14px] text-[#DC2626]">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                {ipError}
+              </div>
+            ) : null}
+            <div className="flex flex-col-reverse gap-2.5 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                disabled={ipSaving}
+                onClick={() => setIpUnassignTarget(null)}
+                className="inline-flex min-h-[42px] w-full items-center justify-center rounded-xl border border-[#E2E8F0] bg-white px-4 py-2.5 text-[14px] font-semibold sm:w-auto"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={ipSaving}
+                onClick={() => void confirmIpUnassign()}
+                className="inline-flex min-h-[42px] w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-[#EF4444] to-[#DC2626] px-4 py-2.5 text-[14px] font-semibold text-white sm:w-auto"
+              >
+                {ipSaving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <X className="h-4 w-4" />
+                )}
+                {ipSaving ? "Removing…" : "Yes, unassign"}
               </button>
             </div>
           </div>

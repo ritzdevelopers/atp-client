@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { MdGroups, MdNotificationsNone, MdSearch } from "react-icons/md";
+import { MdNotificationsNone, MdSearch } from "react-icons/md";
 import {
   RefreshCw,
   Loader2,
@@ -11,10 +11,11 @@ import {
   Info,
   MapPin,
   CalendarCheck,
-  Users,
   Pencil,
   X,
   Package,
+  ChevronRight,
+  UsersRound,
 } from "lucide-react";
 import {
   countPendingHandoverItems,
@@ -39,8 +40,21 @@ import {
 } from "@/lib/leaveBalanceDisplay";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
-const DEFAULT_PROFILE_IMAGE = "https://i.pravatar.cc/120?img=12";
 const MAX_PROFILE_IMAGE_BYTES = 5 * 1024 * 1024;
+
+type EmployeeTeamAssignment = {
+  id?: number | string;
+  user_id?: number | string;
+  team_id: number | string;
+  org_id?: number | string;
+  joined_date?: string | null;
+  leave_date?: string | null;
+  team_name?: string | null;
+  team_info?: string | null;
+  total_number_of_members?: number | null;
+  team_admin_name?: string | null;
+  added_by_name?: string | null;
+};
 
 type AttendanceHistoryRow = {
   id?: number | string;
@@ -105,6 +119,7 @@ type EmployeeDashboardResponse = {
   leave_summary?: LeaveSummary;
   employee_leave_balances?: EmployeeLeaveBalanceRow[];
   attendance_history?: AttendanceHistoryRow[];
+  teams?: EmployeeTeamAssignment[];
 };
 
 function formatElapsedDuration(ms: number): string {
@@ -129,6 +144,36 @@ function formatMinutesAsHours(
   if (h === 0) return `${m}m`;
   if (m === 0) return `${h}h`;
   return `${h}h ${m}m`;
+}
+
+function formatJoinedDate(value: string | Date | null | undefined): string {
+  if (value == null || value === "") return "—";
+  const d = typeof value === "string" ? new Date(value) : value;
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function displayTeamTitle(raw: string | null | undefined): string {
+  if (!raw?.trim()) return "Team";
+  return raw
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+function userMyTeamHref(orgId: number, teamId: number | string): string {
+  return `/user-dashboard/${orgId}/my-team?team_id=${encodeURIComponent(String(teamId))}`;
+}
+
+function activeTeamAssignments(
+  teams: EmployeeTeamAssignment[] | undefined,
+): EmployeeTeamAssignment[] {
+  return (teams ?? []).filter((team) => team.leave_date == null || team.leave_date === "");
 }
 
 function historyByLocalYmd(
@@ -482,8 +527,113 @@ function userColorClass(name: string) {
 function userInitials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  if (parts.length === 1) {
+    const word = parts[0];
+    if (/^\d/.test(word)) return word.slice(0, 2);
+    return word.slice(0, 2).toUpperCase();
+  }
+  const first = parts[0][0] ?? "";
+  const last = parts[parts.length - 1][0] ?? "";
+  return (first + last).toUpperCase() || "?";
+}
+
+function MyTeamsSection({
+  teams,
+  orgId,
+}: {
+  teams: EmployeeTeamAssignment[];
+  orgId: number;
+}) {
+  const activeTeams = activeTeamAssignments(teams);
+
+  return (
+    <section className="overflow-hidden rounded-lg border border-[#008CD3]/20 bg-white shadow-sm ring-1 ring-[#E4E7EC] lg:rounded-2xl lg:border-[#008CD3]/15 lg:shadow-md lg:ring-0">
+      <div className="border-b border-[#E4E7EC] bg-gradient-to-r from-[#E8F4FB] via-white to-[#E6F4EA] px-3 py-3.5 lg:px-5 lg:py-4">
+        <div className="flex items-start gap-2.5 lg:gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#008CD3] text-white shadow-sm lg:h-11 lg:w-11 lg:rounded-xl">
+            <UsersRound className="h-5 w-5 lg:h-6 lg:w-6" aria-hidden />
+          </span>
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-[#008CD3]">
+              My teams
+            </p>
+            <h2 className="mt-0.5 text-[15px] font-semibold text-[#1F2937] lg:text-lg">
+              {activeTeams.length === 1
+                ? "1 team assigned"
+                : `${activeTeams.length} teams assigned`}
+            </h2>
+            <p className={`mt-0.5 ${mobileCaptionCls} lg:text-sm`}>
+              Open a team to view members, leave requests, and attendance queries.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="p-3 lg:p-5">
+        {activeTeams.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-[#E4E7EC] bg-[#F9FAFB] px-4 py-8 text-center">
+            <UsersRound className="mx-auto h-9 w-9 text-[#9CA3AF]" aria-hidden />
+            <p className="mt-2 text-[14px] font-semibold text-[#1F2937]">No team assigned yet</p>
+            <p className={`mt-1 ${mobileCaptionCls}`}>
+              Your reporting manager or HR will add you to a team.
+            </p>
+          </div>
+        ) : (
+          <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
+            {activeTeams.map((team) => {
+              const teamId = team.team_id;
+              const title = displayTeamTitle(team.team_name);
+              const managerName = team.team_admin_name?.trim() || "—";
+              const memberCount = Number(team.total_number_of_members ?? 0);
+
+              return (
+                <li
+                  key={String(team.id ?? teamId)}
+                  className="flex h-full flex-col overflow-hidden rounded-xl border border-[#E4E7EC] bg-white shadow-sm transition hover:border-[#008CD3]/35 hover:shadow-md"
+                >
+                  <div className="border-t-[3px] border-t-[#008CD3] px-4 pb-4 pt-3.5">
+                    <div className="min-w-0">
+                      <h3 className="truncate text-[15px] font-semibold text-[#1F2937]">
+                        {title}
+                      </h3>
+                      <p className="mt-1 line-clamp-2 text-[12px] leading-snug text-[#6B7280]">
+                        {team.team_info?.trim() || "No team description added yet."}
+                      </p>
+                    </div>
+
+                    <dl className="mt-3 grid grid-cols-2 gap-2">
+                      <div className="rounded-lg bg-[#F9FAFB] px-2.5 py-2">
+                        <dt className={mobileLabelCls}>Reporting manager</dt>
+                        <dd className={`mt-0.5 ${mobileValueCls} truncate`}>{managerName}</dd>
+                      </div>
+                      <div className="rounded-lg bg-[#F9FAFB] px-2.5 py-2">
+                        <dt className={mobileLabelCls}>Members</dt>
+                        <dd className={`mt-0.5 ${mobileValueCls}`}>{memberCount || "—"}</dd>
+                      </div>
+                      <div className="col-span-2 rounded-lg bg-[#F9FAFB] px-2.5 py-2">
+                        <dt className={mobileLabelCls}>Joined on</dt>
+                        <dd className={`mt-0.5 ${mobileValueCls}`}>
+                          {formatJoinedDate(team.joined_date)}
+                        </dd>
+                      </div>
+                    </dl>
+
+                    <Link
+                      href={userMyTeamHref(orgId, teamId)}
+                      className={`mt-4 ${mobileActionPrimaryBtnCls(true)} !min-h-[40px] !rounded-lg !text-[13px] !font-semibold lg:!rounded-xl`}
+                    >
+                      Open {title}
+                      <ChevronRight className="h-4 w-4" aria-hidden />
+                    </Link>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </section>
+  );
 }
 
 function patchEmployeeUserImage(
@@ -564,13 +714,15 @@ function ProfilePhotoZoomModal({
 
 function ProfilePhotoWithEdit({
   imageUrl,
+  displayName,
   alt,
   size = "md",
   uploading,
   onImageClick,
   onEditClick,
 }: {
-  imageUrl: string;
+  imageUrl: string | null;
+  displayName: string;
   alt: string;
   size?: "sm" | "md" | "lg";
   uploading?: boolean;
@@ -585,21 +737,26 @@ function ProfilePhotoWithEdit({
       : size === "sm"
         ? "h-6 w-6 -bottom-0.5 -right-0.5"
         : "h-7 w-7 -bottom-1 -right-1";
+  const textSize =
+    size === "lg" ? "text-lg" : size === "sm" ? "text-xs" : "text-sm";
 
   return (
     <div className={`relative shrink-0 ${box}`}>
       <button
         type="button"
         onClick={onImageClick}
-        className={`${box} block overflow-hidden rounded-xl ring-1 ring-[#E4E7EC] transition active:opacity-90`}
-        aria-label={`View ${alt} profile photo`}
+        disabled={!imageUrl}
+        className={`${box} flex items-center justify-center overflow-hidden rounded-xl ring-1 ring-[#E4E7EC] transition active:opacity-90 disabled:cursor-default ${!imageUrl ? userColorClass(displayName) : ""}`}
+        aria-label={
+          imageUrl ? `View ${alt} profile photo` : `${alt} profile initials`
+        }
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={imageUrl}
-          alt=""
-          className="h-full w-full object-cover"
-        />
+        {imageUrl ? (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img src={imageUrl} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <span className={`font-semibold ${textSize}`}>{userInitials(displayName)}</span>
+        )}
       </button>
       <button
         type="button"
@@ -855,8 +1012,8 @@ function Home() {
     emp?.user_image != null && String(emp.user_image).trim() !== ""
       ? String(emp.user_image).trim()
       : null;
-  const imgSrc =
-    profilePhotoPreview ?? storedProfileImage ?? DEFAULT_PROFILE_IMAGE;
+  const profileImageUrl = profilePhotoPreview ?? storedProfileImage ?? null;
+  const hasProfileImage = profileImageUrl != null;
 
   useEffect(() => {
     return () => {
@@ -871,8 +1028,9 @@ function Home() {
   }, []);
 
   const openProfilePhotoZoom = useCallback(() => {
+    if (!profileImageUrl) return;
     setProfilePhotoZoomOpen(true);
-  }, []);
+  }, [profileImageUrl]);
 
   const handleProfileImagePick = useCallback(
     async (file: File | null) => {
@@ -1209,15 +1367,24 @@ function Home() {
               <button
                 type="button"
                 onClick={openProfilePhotoZoom}
-                className="relative h-9 w-9 shrink-0 overflow-hidden rounded-md ring-1 ring-[#E4E7EC] transition active:opacity-90"
-                aria-label={`View ${employeeName} profile photo`}
+                disabled={!hasProfileImage}
+                className={`relative h-9 w-9 shrink-0 overflow-hidden rounded-md ring-1 ring-[#E4E7EC] transition active:opacity-90 ${!hasProfileImage ? `flex items-center justify-center ${userColorClass(employeeName)}` : ""}`}
+                aria-label={
+                  hasProfileImage
+                    ? `View ${employeeName} profile photo`
+                    : `${employeeName} profile initials`
+                }
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={imgSrc}
-                  alt=""
-                  className="h-full w-full object-cover"
-                />
+                {hasProfileImage ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={profileImageUrl!}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <span className="text-xs font-semibold">{userInitials(employeeName)}</span>
+                )}
               </button>
             )}
             <div className="min-w-0 flex-1">
@@ -1436,7 +1603,8 @@ function Home() {
             <div className={mobileCardCls}>
               <div className="flex items-start gap-2.5">
                 <ProfilePhotoWithEdit
-                  imageUrl={imgSrc}
+                  imageUrl={profileImageUrl}
+                  displayName={employeeName}
                   alt={employeeName}
                   size="sm"
                   uploading={profileImageUploading}
@@ -1448,7 +1616,9 @@ function Home() {
                   <p className="text-[12px] text-[#6B7280]">{employeeCode}</p>
                   <p className="mt-0.5 text-[11px] text-[#9CA3AF]">{roleName}</p>
                   <p className={`mt-1 ${mobileCaptionCls}`}>
-                    Tap photo to enlarge · pencil to update image.
+                    {hasProfileImage
+                      ? "Tap photo to enlarge · pencil to update image."
+                      : "Initials shown until you upload a photo · pencil to update."}
                   </p>
                 </div>
               </div>
@@ -1575,25 +1745,7 @@ function Home() {
               </ul>
             </div>
 
-            <div className={mobileCardCls}>
-              <div className="flex items-start gap-2.5">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#E8F4FB] text-[#008CD3]">
-                  <Users className="h-4 w-4" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[13px] font-semibold text-[#1F2937]">My team</p>
-                  <p className={`mt-0.5 ${mobileCaptionCls}`}>
-                    Roster, leave requests, and attendance corrections.
-                  </p>
-                  <Link
-                    href={`/user-dashboard/${orgId}/my-team`}
-                    className={`mt-2 ${mobileActionPrimaryBtnCls(true)}`}
-                  >
-                    Go to team
-                  </Link>
-                </div>
-              </div>
-            </div>
+            <MyTeamsSection teams={data?.teams ?? []} orgId={orgId} />
 
             <div className={mobileCardCls}>
               <div className="flex items-start gap-2.5">
@@ -1659,26 +1811,7 @@ function Home() {
       </header>
 
       <div className="border-b border-slate-200 bg-white px-6 py-4">
-        <div className="flex flex-col gap-4 rounded-xl border border-indigo-100 bg-gradient-to-r from-indigo-50 to-white p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-white">
-              <MdGroups className="text-xl" aria-hidden />
-            </span>
-            <div>
-              <h2 className="text-sm font-semibold text-slate-800">My team</h2>
-              <p className="mt-0.5 text-xs leading-relaxed text-slate-600">
-                View your team roster, raise leave requests, and track approval
-                status in one place.
-              </p>
-            </div>
-          </div>
-          <Link
-            href={`/user-dashboard/${orgId}/my-team`}
-            className="inline-flex w-full items-center justify-center rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 sm:w-auto"
-          >
-            Go to team
-          </Link>
-        </div>
+        <MyTeamsSection teams={data?.teams ?? []} orgId={orgId} />
         <div className="mt-3 flex flex-col gap-4 rounded-xl border border-amber-100 bg-gradient-to-r from-amber-50 to-white p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
             <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-600 text-white">
@@ -1724,7 +1857,8 @@ function Home() {
           <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex flex-wrap items-start gap-4">
               <ProfilePhotoWithEdit
-                imageUrl={imgSrc}
+                imageUrl={profileImageUrl}
+                displayName={employeeName}
                 alt={employeeName}
                 size="lg"
                 uploading={profileImageUploading}
@@ -2061,8 +2195,8 @@ function Home() {
       </div>
       </section>
       <ProfilePhotoZoomModal
-        open={profilePhotoZoomOpen}
-        imageUrl={imgSrc}
+        open={profilePhotoZoomOpen && hasProfileImage}
+        imageUrl={profileImageUrl ?? ""}
         alt={employeeName}
         onClose={() => setProfilePhotoZoomOpen(false)}
       />
