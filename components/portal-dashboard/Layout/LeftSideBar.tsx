@@ -12,7 +12,7 @@ import { useManagementDashboardContext } from "@/components/portal-dashboard/Lay
 import { useRouter, useParams, usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { BiSolidUserPlus } from "react-icons/bi";
+import { BiSolidUserPlus, BiTask } from "react-icons/bi";
 import {
   MdAdminPanelSettings,
   MdEvent,
@@ -35,7 +35,10 @@ import {
 /** Desktop (lg+) nav icons — mobile keeps `NavItem.icon` unchanged. */
 const LG_ICON = "shrink-0 text-[17px] leading-none";
 
-function desktopNavIcon(id: string, fallback: React.ReactNode): React.ReactNode {
+function desktopNavIcon(
+  id: string,
+  fallback: React.ReactNode,
+): React.ReactNode {
   switch (id) {
     case "home":
       return <MdHome className={LG_ICON} aria-hidden />;
@@ -112,7 +115,10 @@ function shortBottomLabel(item: NavItem): string {
     "company-holiday-management": "Holidays",
     "company-attendance-management": "Attendance",
   };
-  return short[item.id] ?? (item.name.length > 14 ? `${item.name.slice(0, 12)}…` : item.name);
+  return (
+    short[item.id] ??
+    (item.name.length > 14 ? `${item.name.slice(0, 12)}…` : item.name)
+  );
 }
 
 function readRoleNameFromToken(): string | null {
@@ -170,10 +176,14 @@ function LeftSideBar({
     dashboardCtx?.user?.user_role_name ?? readRoleNameFromToken();
   const isAdmin =
     roleHydrated &&
-    String(effectiveRoleName || "").trim().toLowerCase() === "admin";
+    String(effectiveRoleName || "")
+      .trim()
+      .toLowerCase() === "admin";
   const myHistoryActive = Boolean(pathname?.includes("/my-attendance-history"));
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const [orgFeatureGroups, setOrgFeatureGroups] = useState<OrgFeatureGroup[]>([]);
+  const [orgFeatureGroups, setOrgFeatureGroups] = useState<OrgFeatureGroup[]>(
+    [],
+  );
   const [featuresLoaded, setFeaturesLoaded] = useState(false);
 
   useEffect(() => {
@@ -209,13 +219,18 @@ function LeftSideBar({
   }, [orgId]);
 
   const hasFeatureAccess = useCallback(
-    (requiredFeature?: string) => organizationHasParentFeature(orgFeatureGroups, requiredFeature),
+    (requiredFeature?: string) =>
+      organizationHasParentFeature(orgFeatureGroups, requiredFeature),
     [orgFeatureGroups],
   );
 
   const hasSubFeatureAccess = useCallback(
     (parentFeature?: string, subFeaturePath?: string) =>
-      organizationHasSubFeature(orgFeatureGroups, parentFeature, subFeaturePath),
+      organizationHasSubFeature(
+        orgFeatureGroups,
+        parentFeature,
+        subFeaturePath,
+      ),
     [orgFeatureGroups],
   );
 
@@ -230,7 +245,7 @@ function LeftSideBar({
         path: `${base}/home`,
         requiredFeature: "get-organization-info",
       },
-    
+
       {
         id: "employee-management",
         name: "Employee Management",
@@ -269,7 +284,7 @@ function LeftSideBar({
             path: `${base}/organization-employees/manage-teams`,
           },
         ],
-        requiredFeature: "employee-management", 
+        requiredFeature: "employee-management",
       },
       // employees-roles-management (either feature slug may grant access)
       {
@@ -291,7 +306,7 @@ function LeftSideBar({
         ],
         path: `${base}/organization-roles/create-new-role`,
         requiredFeatureAny: [
-          "employees-roles-management", 
+          "employees-roles-management",
           "organization-roles",
         ],
       },
@@ -302,7 +317,7 @@ function LeftSideBar({
         value: "employees-features-management",
         icon: <MdVpnKey />,
         path: `${base}/organization-features/manage-organization-features`,
-        requiredFeature: "employees-features-management", 
+        requiredFeature: "employees-features-management",
         children: [
           {
             id: "manage-organization-features",
@@ -365,7 +380,7 @@ function LeftSideBar({
             path: `${base}/organization-settings/manage-ip-addresses`,
           },
         ],
-        requiredFeature: "company-ip-addresses-management", 
+        requiredFeature: "company-ip-addresses-management",
       },
 
       // company-shift-management
@@ -387,7 +402,7 @@ function LeftSideBar({
             path: `${base}/organization-settings/create-company-shifts`,
           },
         ],
-        requiredFeature: "company-shift-management", 
+        requiredFeature: "company-shift-management",
       },
 
       // company-holiday-management
@@ -402,9 +417,9 @@ function LeftSideBar({
             id: "manage-holidays",
             name: "Manage Holidays",
             path: `${base}/organization-settings/organization-holidays`,
-          },    
+          },
         ],
-        requiredFeature: "company-holiday-management", 
+        requiredFeature: "company-holiday-management",
       },
 
       // company-attendance-management
@@ -421,7 +436,7 @@ function LeftSideBar({
             path: `${base}/attendance-management/manage-attendance`,
           },
         ],
-        requiredFeature: "company-attendance-management", 
+        requiredFeature: "company-attendance-management",
       },
 
       // company-leave-management
@@ -432,13 +447,13 @@ function LeftSideBar({
         icon: <MdEvent />,
         path: `${base}/organization-leave/manage-leave-types`,
         children: [
-        {
-          id: "manage-leave-types",
-          name: "Manage Leave Types",
-          path: `${base}/organization-leave/manage-leave-types`,
-        },
-      ],
-      requiredFeature: "company-leave-management",
+          {
+            id: "manage-leave-types",
+            name: "Manage Leave Types",
+            path: `${base}/organization-leave/manage-leave-types`,
+          },
+        ],
+        requiredFeature: "company-leave-management",
       },
 
       {
@@ -448,13 +463,32 @@ function LeftSideBar({
         icon: <MdEvent />,
         path: `${base}/organization-payroll-management/manage-employee-salary`,
         children: [
-        {
-          id: "manage-salary",
-          name: "Manage Salary",
-          path: `${base}/organization-payroll-management/manage-employee-salary`,
-        },
-      ],
-      requiredFeature: "payroll-management",
+          {
+            id: "manage-salary",
+            name: "Manage Salary",
+            path: `${base}/organization-payroll-management/manage-employee-salary`,
+          },
+        ],
+        requiredFeature: "payroll-management",
+      },
+      {
+        id: "task-management",
+        name: "Task Management",
+        value: "task-management",
+        icon: <BiTask />,
+        children: [
+          {
+            id: "manage-employees-tasks",
+            name: "Manage Employees Tasks",
+            path: `${base}/tasks-management/manage-employees-tasks`,
+          },
+          {
+            id: "assign-task-to-employees",
+            name: "Assign Task To Employees",
+            path: `${base}/tasks-management/assign-task-to-employees`,
+          },
+        ], 
+        requiredFeature: "task-management",
       },
       {
         id: "manage-organization-information",
@@ -464,7 +498,7 @@ function LeftSideBar({
         children: [],
         path: `${base}/organization-settings/manage-organization-information`,
         requiredFeature: "manage-organization-information",
-    }
+      },
     ],
     [base],
   );
@@ -483,7 +517,10 @@ function LeftSideBar({
 
       const parentFeatureKey =
         matchedParentSlug || item.requiredFeature || item.value || item.id;
-      const parentGroup = getOrganizationParentGroup(orgFeatureGroups, parentFeatureKey);
+      const parentGroup = getOrganizationParentGroup(
+        orgFeatureGroups,
+        parentFeatureKey,
+      );
       const assignedSubCount = parentGroup?.sub_features?.length ?? 0;
 
       let children: NavSubItem[] = [];
@@ -505,7 +542,13 @@ function LeftSideBar({
       });
     }
     return result;
-  }, [navItems, featuresLoaded, orgFeatureGroups, hasFeatureAccess, hasSubFeatureAccess]);
+  }, [
+    navItems,
+    featuresLoaded,
+    orgFeatureGroups,
+    hasFeatureAccess,
+    hasSubFeatureAccess,
+  ]);
 
   useEffect(() => {
     if (!featuresLoaded) return;
@@ -517,7 +560,7 @@ function LeftSideBar({
       }
     }
     persistOrganizationFeatureAccess(orgId, orgFeatureGroups, allowedPaths);
-  }, [orgId, orgFeatureGroups, filteredNavItems, featuresLoaded]);
+  }, [orgId, orgFeatureGroups, filteredNavItems, featuresLoaded, pathname]);
 
   const [activeMain, setActiveMain] = useState("organization");
   const [activeSub, setActiveSub] = useState("employee");
@@ -576,7 +619,8 @@ function LeftSideBar({
     }
     if (bestMain) {
       setActiveMain((prev) => (prev === bestMain ? prev : bestMain!));
-      if (bestSubId) setActiveSub((prev) => (prev === bestSubId ? prev : bestSubId));
+      if (bestSubId)
+        setActiveSub((prev) => (prev === bestSubId ? prev : bestSubId));
     }
   }, [pathname, filteredNavItems]);
 
@@ -673,9 +717,7 @@ function LeftSideBar({
       const item = slot.item;
       if (!pathname) return false;
       if (item.path && pathname.startsWith(item.path)) return true;
-      return item.children.some(
-        (c) => c.path && pathname.startsWith(c.path),
-      );
+      return item.children.some((c) => c.path && pathname.startsWith(c.path));
     },
     [pathname, myHistoryActive],
   );
@@ -699,12 +741,15 @@ function LeftSideBar({
         aria-labelledby="logout-dialog-title"
       >
         <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-5 shadow-xl">
-          <h2 id="logout-dialog-title" className="text-base font-semibold text-slate-900">
+          <h2
+            id="logout-dialog-title"
+            className="text-base font-semibold text-slate-900"
+          >
             Sign out?
           </h2>
           <p className="mt-2 text-sm text-slate-600">
-            You will be signed out of the portal. Unsaved work may be lost. You must sign in again to
-            continue.
+            You will be signed out of the portal. Unsaved work may be lost. You
+            must sign in again to continue.
           </p>
           <div className="mt-5 flex justify-end gap-2">
             <button
@@ -733,16 +778,16 @@ function LeftSideBar({
         <style dangerouslySetInnerHTML={{ __html: LG_SIDEBAR_STYLES }} />
         {/* ── LEFT RAIL ── */}
         <div className="lg-sidebar-rail-in flex w-[58px] flex-shrink-0 flex-col items-center overflow-y-auto overflow-x-hidden border-r border-[#E4E7EC] bg-white py-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-        <div className="flex w-full flex-1 flex-col items-center">
-          {filteredNavItems.map((item) => {
-            const isActive = activeMain === item.id;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => handleMainClick(item)}
-                title={item.name}
-                className={`
+          <div className="flex w-full flex-1 flex-col items-center">
+            {filteredNavItems.map((item) => {
+              const isActive = activeMain === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => handleMainClick(item)}
+                  title={item.name}
+                  className={`
                   relative flex w-full cursor-pointer flex-col items-center justify-center gap-0.5 border-0 bg-transparent px-0.5 py-1.5 outline-none transition-colors duration-150
                   ${
                     isActive
@@ -750,27 +795,27 @@ function LeftSideBar({
                       : "text-[#6B7280] hover:bg-[#F9FAFB] hover:text-[#374151]"
                   }
                 `}
-              >
-                {isActive && (
-                  <span className="absolute left-0 top-1/2 h-[50%] w-[3px] -translate-y-1/2 rounded-r-sm bg-[#008CD3]" />
-                )}
+                >
+                  {isActive && (
+                    <span className="absolute left-0 top-1/2 h-[50%] w-[3px] -translate-y-1/2 rounded-r-sm bg-[#008CD3]" />
+                  )}
 
-                <span className="flex h-[26px] w-[26px] items-center justify-center">
-                  {desktopNavIcon(item.id, item.icon)}
-                </span>
+                  <span className="flex h-[26px] w-[26px] items-center justify-center">
+                    {desktopNavIcon(item.id, item.icon)}
+                  </span>
 
-                <span className="line-clamp-2 w-full px-0.5 text-center text-[8.5px] font-medium leading-[1.15] tracking-tight">
-                  {item.name}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+                  <span className="line-clamp-2 w-full px-0.5 text-center text-[8.5px] font-medium leading-[1.15] tracking-tight">
+                    {item.name}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
 
-        <div className="mt-1 flex w-full flex-col items-center border-t border-[#E4E7EC] pt-1">
-          {isAdmin ? (
-            <>
-              {/* <button
+          <div className="mt-1 flex w-full flex-col items-center border-t border-[#E4E7EC] pt-1">
+            {isAdmin ? (
+              <>
+                {/* <button
                 type="button"
                 onClick={handleMoreClick}
                 className={`
@@ -829,12 +874,12 @@ function LeftSideBar({
                   <MdMenu />
                 </span>
               </button> */}
-            </>
-          ) : (
-            <button
-              type="button"
-              onClick={() => router.push(`${base}/my-attendance-history`)}
-              className={`
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => router.push(`${base}/my-attendance-history`)}
+                className={`
               relative flex w-full cursor-pointer flex-col items-center justify-center gap-0.5 border-0 bg-transparent px-0.5 py-1.5 outline-none transition-colors duration-150
               ${
                 myHistoryActive
@@ -842,55 +887,55 @@ function LeftSideBar({
                   : "text-[#6B7280] hover:bg-[#F9FAFB] hover:text-[#374151]"
               }
             `}
-              title="View your own attendance history (read-only)"
+                title="View your own attendance history (read-only)"
+              >
+                {myHistoryActive && (
+                  <span className="absolute left-0 top-1/2 h-[50%] w-[3px] -translate-y-1/2 rounded-r-sm bg-[#008CD3]" />
+                )}
+                <span className="flex h-[26px] w-[26px] items-center justify-center">
+                  <MdHistory className={LG_ICON} aria-hidden />
+                </span>
+                <span className="line-clamp-2 w-full px-0.5 text-center text-[8.5px] font-medium leading-[1.15]">
+                  My attendance
+                </span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setShowLogoutConfirm(true)}
+              className="flex w-full cursor-pointer flex-col items-center justify-center gap-0.5 border-0 bg-transparent px-0.5 py-1.5 text-[#6B7280] outline-none transition-colors duration-150 hover:bg-[#FCE8E6] hover:text-[#D93025]"
+              title="Sign out"
             >
-              {myHistoryActive && (
-                <span className="absolute left-0 top-1/2 h-[50%] w-[3px] -translate-y-1/2 rounded-r-sm bg-[#008CD3]" />
-              )}
               <span className="flex h-[26px] w-[26px] items-center justify-center">
-                <MdHistory className={LG_ICON} aria-hidden />
+                <MdLogout className={LG_ICON} aria-hidden />
               </span>
               <span className="line-clamp-2 w-full px-0.5 text-center text-[8.5px] font-medium leading-[1.15]">
-                My attendance
+                Log out
               </span>
             </button>
-          )}
-
-          <button
-            type="button"
-            onClick={() => setShowLogoutConfirm(true)}
-            className="flex w-full cursor-pointer flex-col items-center justify-center gap-0.5 border-0 bg-transparent px-0.5 py-1.5 text-[#6B7280] outline-none transition-colors duration-150 hover:bg-[#FCE8E6] hover:text-[#D93025]"
-            title="Sign out"
-          >
-            <span className="flex h-[26px] w-[26px] items-center justify-center">
-              <MdLogout className={LG_ICON} aria-hidden />
-            </span>
-            <span className="line-clamp-2 w-full px-0.5 text-center text-[8.5px] font-medium leading-[1.15]">
-              Log out
-            </span>
-          </button>
+          </div>
         </div>
-      </div>
 
-      {subItems.length > 0 && (
-        <aside
-          key={activeMain}
-          className="lg-sidebar-sub-in flex w-[11rem] flex-shrink-0 flex-col overflow-y-auto border-r border-[#E4E7EC] bg-[#F9FAFB] py-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
-          aria-label={activeItem ? `${activeItem.name} submenu` : "Submenu"}
-        >
-          {activeItem && (
-            <p className="mb-1 truncate px-3 text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
-              {activeItem.name}
-            </p>
-          )}
-          {subItems.map((sub) => {
-            const isSubActive = activeSub === sub.id;
-            return (
-              <button
-                key={sub.id}
-                type="button"
-                onClick={() => handleSubClick(sub)}
-                className={`
+        {subItems.length > 0 && (
+          <aside
+            key={activeMain}
+            className="lg-sidebar-sub-in flex w-[11rem] flex-shrink-0 flex-col overflow-y-auto border-r border-[#E4E7EC] bg-[#F9FAFB] py-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+            aria-label={activeItem ? `${activeItem.name} submenu` : "Submenu"}
+          >
+            {activeItem && (
+              <p className="mb-1 truncate px-3 text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
+                {activeItem.name}
+              </p>
+            )}
+            {subItems.map((sub) => {
+              const isSubActive = activeSub === sub.id;
+              return (
+                <button
+                  key={sub.id}
+                  type="button"
+                  onClick={() => handleSubClick(sub)}
+                  className={`
                   mx-1.5 w-[calc(100%-0.75rem)] cursor-pointer rounded-md border-0 px-2.5 py-1.5 text-left text-[12px] font-medium outline-none transition-colors duration-150
                   ${
                     isSubActive
@@ -898,13 +943,13 @@ function LeftSideBar({
                       : "bg-transparent text-[#374151] hover:bg-white hover:text-[#008CD3]"
                   }
                 `}
-              >
-                <span className="line-clamp-2 leading-snug">{sub.name}</span>
-              </button>
-            );
-          })}
-        </aside>
-      )}
+                >
+                  <span className="line-clamp-2 leading-snug">{sub.name}</span>
+                </button>
+              );
+            })}
+          </aside>
+        )}
       </div>
 
       {/* Bottom tab bar (< lg): quick tabs + Menu */}
@@ -972,7 +1017,9 @@ function LeftSideBar({
           >
             <span
               className={`text-[22px] leading-none transition-transform duration-300 ${
-                mobileFullMenuOpen ? "rotate-90 text-amber-800" : "text-slate-700"
+                mobileFullMenuOpen
+                  ? "rotate-90 text-amber-800"
+                  : "text-slate-700"
               }`}
             >
               {mobileFullMenuOpen ? <MdClose /> : <MdMenu />}
@@ -985,7 +1032,10 @@ function LeftSideBar({
       </nav>
 
       {/* Left sheet: all accessible features (animated) */}
-      <div className="lg:hidden" aria-hidden={!mobileFullMenuOpen && !mobileSubParent}>
+      <div
+        className="lg:hidden"
+        aria-hidden={!mobileFullMenuOpen && !mobileSubParent}
+      >
         <div
           className={`fixed inset-0 z-[10045] bg-slate-900/30 transition-opacity duration-300 ease-out ${
             mobileFullMenuOpen
@@ -1006,127 +1056,135 @@ function LeftSideBar({
           aria-label="Navigation menu"
           aria-hidden={!mobileFullMenuOpen}
         >
-            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-              <span className="text-sm font-semibold text-slate-900">All features</span>
-              <button
-                type="button"
-                onClick={() => setMobileFullMenuOpen(false)}
-                className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition active:scale-95"
-                aria-label="Close menu"
-              >
-                <MdClose className="text-xl" />
-              </button>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-              {filteredNavItems.length === 0 ? (
-                <p className="border-b border-slate-200 px-4 py-3 text-sm text-slate-500">
-                  No features available for your role.
-                </p>
-              ) : (
-                filteredNavItems.map((item) => {
-                  const itemActive =
-                    activeMain === item.id ||
-                    Boolean(
-                      item.path && pathname?.startsWith(item.path),
-                    ) ||
-                    item.children.some(
-                      (c) => c.path && pathname?.startsWith(c.path),
-                    );
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => selectMobileNavItem(item)}
-                      className={`flex w-full items-center gap-3 border-b border-slate-200 px-4 py-3 text-left text-sm font-medium transition-colors duration-150 ${
-                        itemActive
-                          ? "bg-amber-50/80 text-amber-900"
-                          : "text-slate-800 active:bg-slate-100"
-                      }`}
-                    >
-                      <span className="text-xl text-slate-600">{item.icon}</span>
-                      <span className="min-w-0 flex-1 leading-snug">{item.name}</span>
-                      {item.children.length > 0 ? (
-                        <MdChevronRight className="shrink-0 text-lg text-slate-400" aria-hidden />
-                      ) : null}
-                    </button>
-                  );
-                })
-              )}
-              <button
-                type="button"
-                onClick={() => {
-                  setMobileFullMenuOpen(false);
-                  setShowLogoutConfirm(true);
-                }}
-                className="flex w-full items-center gap-3 border-b border-slate-200 px-4 py-3 text-left text-sm font-medium text-rose-700 transition-colors duration-150 active:bg-rose-50"
-              >
-                <span className="text-xl">
-                  <MdLogout />
-                </span>
-                Sign out
-              </button>
-            </div>
+          <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+            <span className="text-sm font-semibold text-slate-900">
+              All features
+            </span>
+            <button
+              type="button"
+              onClick={() => setMobileFullMenuOpen(false)}
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition active:scale-95"
+              aria-label="Close menu"
+            >
+              <MdClose className="text-xl" />
+            </button>
           </div>
-
-      {/* Right sheet: submenu when a section has children (animated) */}
-          <div
-            className={`fixed inset-0 z-[10047] bg-slate-900/30 transition-opacity duration-300 ease-out ${
-              mobileSubParent && mobileSubParent.children.length > 0
-                ? "pointer-events-auto opacity-100"
-                : "pointer-events-none opacity-0"
-            }`}
-            onClick={() => setMobileSubParent(null)}
-            aria-hidden={!mobileSubParent}
-          />
-          <aside
-            className={`fixed right-0 top-0 z-[10048] flex h-full flex-col transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] will-change-transform lg:hidden ${MOBILE_DRAWER_PANEL} ${
-              mobileSubParent && mobileSubParent.children.length > 0
-                ? "pointer-events-auto translate-x-0"
-                : "pointer-events-none translate-x-full"
-            }`}
-            style={{
-              width: "min(80vw, 22rem)",
-            }}
-            aria-label={
-              mobileSubParent ? `${mobileSubParent.name} links` : "Submenu"
-            }
-            aria-hidden={!mobileSubParent}
-          >
-            <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-3 py-3">
-              <span className="min-w-0 truncate text-sm font-semibold text-slate-900">
-                {mobileSubParent?.name ?? ""}
-              </span>
-              <button
-                type="button"
-                onClick={() => setMobileSubParent(null)}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition active:scale-95"
-                aria-label="Close submenu"
-              >
-                <MdClose className="text-xl" />
-              </button>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-              {(mobileSubParent?.children ?? []).map((sub) => {
-                const subActive =
-                  Boolean(sub.path && pathname?.startsWith(sub.path));
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+            {filteredNavItems.length === 0 ? (
+              <p className="border-b border-slate-200 px-4 py-3 text-sm text-slate-500">
+                No features available for your role.
+              </p>
+            ) : (
+              filteredNavItems.map((item) => {
+                const itemActive =
+                  activeMain === item.id ||
+                  Boolean(item.path && pathname?.startsWith(item.path)) ||
+                  item.children.some(
+                    (c) => c.path && pathname?.startsWith(c.path),
+                  );
                 return (
                   <button
-                    key={sub.id}
+                    key={item.id}
                     type="button"
-                    onClick={() => {
-                      handleSubClick(sub);
-                      setMobileSubParent(null);
-                    }}
-                    className={`w-full border-b border-slate-200 px-4 py-3 text-left text-sm font-medium transition-colors duration-150 ${
-                      subActive ? "bg-slate-100 text-amber-900" : "text-slate-800 active:bg-slate-50"
+                    onClick={() => selectMobileNavItem(item)}
+                    className={`flex w-full items-center gap-3 border-b border-slate-200 px-4 py-3 text-left text-sm font-medium transition-colors duration-150 ${
+                      itemActive
+                        ? "bg-amber-50/80 text-amber-900"
+                        : "text-slate-800 active:bg-slate-100"
                     }`}
                   >
-                    {sub.name}
+                    <span className="text-xl text-slate-600">{item.icon}</span>
+                    <span className="min-w-0 flex-1 leading-snug">
+                      {item.name}
+                    </span>
+                    {item.children.length > 0 ? (
+                      <MdChevronRight
+                        className="shrink-0 text-lg text-slate-400"
+                        aria-hidden
+                      />
+                    ) : null}
                   </button>
                 );
-              })}
-            </div>
-          </aside>
+              })
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setMobileFullMenuOpen(false);
+                setShowLogoutConfirm(true);
+              }}
+              className="flex w-full items-center gap-3 border-b border-slate-200 px-4 py-3 text-left text-sm font-medium text-rose-700 transition-colors duration-150 active:bg-rose-50"
+            >
+              <span className="text-xl">
+                <MdLogout />
+              </span>
+              Sign out
+            </button>
+          </div>
+        </div>
+
+        {/* Right sheet: submenu when a section has children (animated) */}
+        <div
+          className={`fixed inset-0 z-[10047] bg-slate-900/30 transition-opacity duration-300 ease-out ${
+            mobileSubParent && mobileSubParent.children.length > 0
+              ? "pointer-events-auto opacity-100"
+              : "pointer-events-none opacity-0"
+          }`}
+          onClick={() => setMobileSubParent(null)}
+          aria-hidden={!mobileSubParent}
+        />
+        <aside
+          className={`fixed right-0 top-0 z-[10048] flex h-full flex-col transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] will-change-transform lg:hidden ${MOBILE_DRAWER_PANEL} ${
+            mobileSubParent && mobileSubParent.children.length > 0
+              ? "pointer-events-auto translate-x-0"
+              : "pointer-events-none translate-x-full"
+          }`}
+          style={{
+            width: "min(80vw, 22rem)",
+          }}
+          aria-label={
+            mobileSubParent ? `${mobileSubParent.name} links` : "Submenu"
+          }
+          aria-hidden={!mobileSubParent}
+        >
+          <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-3 py-3">
+            <span className="min-w-0 truncate text-sm font-semibold text-slate-900">
+              {mobileSubParent?.name ?? ""}
+            </span>
+            <button
+              type="button"
+              onClick={() => setMobileSubParent(null)}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition active:scale-95"
+              aria-label="Close submenu"
+            >
+              <MdClose className="text-xl" />
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+            {(mobileSubParent?.children ?? []).map((sub) => {
+              const subActive = Boolean(
+                sub.path && pathname?.startsWith(sub.path),
+              );
+              return (
+                <button
+                  key={sub.id}
+                  type="button"
+                  onClick={() => {
+                    handleSubClick(sub);
+                    setMobileSubParent(null);
+                  }}
+                  className={`w-full border-b border-slate-200 px-4 py-3 text-left text-sm font-medium transition-colors duration-150 ${
+                    subActive
+                      ? "bg-slate-100 text-amber-900"
+                      : "text-slate-800 active:bg-slate-50"
+                  }`}
+                >
+                  {sub.name}
+                </button>
+              );
+            })}
+          </div>
+        </aside>
       </div>
 
       {logoutDialog ? createPortal(logoutDialog, document.body) : null}
