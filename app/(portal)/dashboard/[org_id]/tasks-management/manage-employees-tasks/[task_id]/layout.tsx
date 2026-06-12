@@ -10,4 +10,5 @@ export default function ManageTaskDetailLayout({
   children: React.ReactNode;
 }) {
   return children;
+  
 }
