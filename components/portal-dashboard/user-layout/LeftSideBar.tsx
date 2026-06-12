@@ -21,6 +21,7 @@ import {
   isUnpaidLeaveTypeId,
   validateLeaveApplication,
 } from "@/services/employeeLeaves";
+import { BiTask } from "react-icons/bi";
 
 type NavIcon = ComponentType<{ className?: string }>;
 
@@ -49,6 +50,12 @@ const navigationItems: { id: string; label: string; icon: NavIcon; href: string 
       label: "Attendance History",
       icon: LuFileSpreadsheet,
       href: "/user-dashboard/[org_id]/attendance-history",
+    },
+    {
+      id: "tasks-management",
+      label: "Tasks Management",
+      icon: BiTask,
+      href: "/user-dashboard/[org_id]/tasks-management",
     },
     {
       id: "exit-process",
@@ -86,6 +93,8 @@ function bottomTabShortLabel(item: (typeof navigationItems)[number]): string {
       return "Handover";
     case "attendance-history":
       return "History";
+    case "tasks-management":
+      return "Tasks";
     case "exit-process":
       return "Exit";
     default:

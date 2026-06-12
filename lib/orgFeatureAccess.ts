@@ -102,10 +102,16 @@ export function persistOrganizationFeatureAccess(
 ): void {
   if (typeof window === "undefined") return;
 
+  const existing = readOrganizationFeatureSnapshot(orgId);
+  const pathsToStore =
+    allowedPaths.length > 0
+      ? allowedPaths
+      : (existing?.allowedPaths ?? []);
+
   const snapshot: OrgFeatureAccessSnapshot = {
     orgId,
     groups,
-    allowedPaths,
+    allowedPaths: pathsToStore,
     updatedAt: Date.now(),
   };
 
@@ -118,7 +124,7 @@ export function persistOrganizationFeatureAccess(
   try {
     const cookiePayload = {
       orgId,
-      allowedPaths,
+      allowedPaths: pathsToStore,
       updatedAt: snapshot.updatedAt,
     };
     const encoded = encodeURIComponent(JSON.stringify(cookiePayload));

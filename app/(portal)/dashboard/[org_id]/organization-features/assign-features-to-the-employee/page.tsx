@@ -145,7 +145,8 @@ export default function AssignFeaturesToEmployeePage() {
       if (!token) throw new Error("Not signed in.");
       const groups = await fetchOrganizationFeatureGroups(orgId, token);
       setOrgFeatures(groups);
-      persistOrganizationFeatureAccess(orgId, groups, []);
+      // Cache feature groups only — keep sidebar-computed allowedPaths intact.
+      persistOrganizationFeatureAccess(orgId, groups, readOrganizationFeatureSnapshot(orgId)?.allowedPaths ?? []);
     } catch (e) {
       if (!hadCache) {
         setFeatureError(e instanceof Error ? e.message : "Could not load features");
