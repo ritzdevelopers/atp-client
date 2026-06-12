@@ -330,7 +330,8 @@ function TeamMemberExitProcessReportPageContent() {
   const searchParams = useSearchParams();
   const orgId = String(params?.org_id ?? "");
   const userIdParam =
-    searchParams.get("user_id") || String(params?.user_id ?? "");
+    searchParams.get("user_id") ||
+    (String(params?.user_id ?? "") !== "0" ? String(params?.user_id ?? "") : "");
 
   const [data, setData] = useState<TeamMemberExitProcessReportData | null>(null);
   const [loading, setLoading] = useState(true);

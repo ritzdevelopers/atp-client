@@ -243,7 +243,10 @@ function BackgroundVerificationEmployeeClientContent() {
   const searchParams = useSearchParams();
   const orgId = String(params?.org_id ?? "");
   const employeeId =
-    searchParams.get("employee_id") || String(params?.employee_id ?? "");
+    searchParams.get("employee_id") ||
+    (String(params?.employee_id ?? "") !== "0"
+      ? String(params?.employee_id ?? "")
+      : "");
 
   const [references, setReferences] = useState<BackgroundVerificationDetailRow[]>([]);
   const [loading, setLoading] = useState(true);
