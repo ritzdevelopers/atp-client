@@ -24,6 +24,10 @@ import PortalResponseModal, {
 } from "@/components/portal-dashboard/ui/PortalResponseModal";
 import { getAllOrgUsers, type OrgUserRow } from "@/services/adminUser";
 import { fetchAllOrgTeams, type OrgTeamRow } from "@/services/orgTeams";
+import {
+  resolveStaticExportId,
+  STATIC_EXPORT_PLACEHOLDER_ID,
+} from "@/lib/static-export";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
@@ -137,8 +141,14 @@ function TaskDetailContent() {
   const router = useRouter();
 
   const orgId = String(params?.org_id ?? "");
-  const taskId = String(params?.task_id ?? "");
-  const employeeId = searchParams.get("employee_id") ?? "";
+  const taskId = resolveStaticExportId(
+    searchParams,
+    "task_id",
+    String(params?.task_id ?? ""),
+  );
+  const employeeId =
+    searchParams.get("employee_id") ||
+    resolveStaticExportId(searchParams, "employee_id", "");
 
   const [task, setTask] = useState<TaskDetail | null>(null);
   const [employees, setEmployees] = useState<OrgUserRow[]>([]);
@@ -410,10 +420,15 @@ function TaskDetailContent() {
     }
   };
 
-  if (!employeeId) {
+  if (
+    !taskId ||
+    taskId === STATIC_EXPORT_PLACEHOLDER_ID ||
+    !employeeId ||
+    employeeId === STATIC_EXPORT_PLACEHOLDER_ID
+  ) {
     return (
       <div className="p-6 text-center text-sm text-[#6B7280]">
-        Employee context missing. Open this task from the task list.
+        Task context missing. Open this task from the task list.
       </div>
     );
   }

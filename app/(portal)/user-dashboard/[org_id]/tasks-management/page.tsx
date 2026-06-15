@@ -19,6 +19,7 @@ import PortalPageLoader from "@/components/portal-dashboard/ui/PortalPageLoader"
 import PortalResponseModal, {
   type PortalResponseVariant,
 } from "@/components/portal-dashboard/ui/PortalResponseModal";
+import { buildStaticDetailHref } from "@/lib/static-export";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
@@ -256,7 +257,11 @@ export default function MyTasksPage() {
   }, [tasks, filters.search]);
 
   const openTask = (task: TaskRow) => {
-    router.push(`/user-dashboard/${orgId}/tasks-management/${task.task_id}`);
+    router.push(
+      buildStaticDetailHref(`/user-dashboard/${orgId}/tasks-management`, {
+        task_id: task.task_id,
+      }),
+    );
   };
 
   if (loading && tasks.length === 0) {

@@ -1,0 +1,44 @@
+{
+  "rewrites": [
+    {
+      "source": "/dashboard/:org_id/organization-employees/teams/:team_id((?!0$)[^/]+)/exit/:exit_process_id((?!0$)[^/]+)",
+      "destination": "/dashboard/1/organization-employees/teams/0/exit/0?team_id=:team_id&exit_process_id=:exit_process_id"
+    },
+    {
+      "source": "/dashboard/:org_id/organization-employees/teams/:team_id((?!0$)[^/]+)",
+      "destination": "/dashboard/1/organization-employees/teams/0?team_id=:team_id"
+    },
+    {
+      "source": "/dashboard/:org_id/attendance-management/manage-attendance/:employee_id((?!0$)[^/]+)",
+      "destination": "/dashboard/1/attendance-management/manage-attendance/0?employee_id=:employee_id"
+    },
+    {
+      "source": "/dashboard/:org_id/organization-employees/background-verification/:employee_id((?!0$)[^/]+)",
+      "destination": "/dashboard/1/organization-employees/background-verification/0?employee_id=:employee_id"
+    },
+    {
+      "source": "/dashboard/:org_id/organization-payroll-management/manage-employee-salary/:employee_id((?!0$)[^/]+)",
+      "destination": "/dashboard/1/organization-payroll-management/manage-employee-salary/0?employee_id=:employee_id"
+    },
+    {
+      "source": "/dashboard/:org_id/organization-employees/team-group/exit-process-report/:user_id((?!0$)[^/]+)",
+      "destination": "/dashboard/1/organization-employees/team-group/exit-process-report/0?user_id=:user_id"
+    },
+    {
+      "source": "/dashboard/:org_id/tasks-management/manage-employees-tasks/:task_id((?!0$)[^/]+)",
+      "destination": "/dashboard/1/tasks-management/manage-employees-tasks/0?task_id=:task_id"
+    },
+    {
+      "source": "/user-dashboard/:org_id/tasks-management/:task_id((?!0$)[^/]+)",
+      "destination": "/user-dashboard/1/tasks-management/0?task_id=:task_id"
+    },
+    {
+      "source": "/dashboard/:org_id((?!1$)[^/]+)/:path*",
+      "destination": "/dashboard/1/:path*"
+    },
+    {
+      "source": "/user-dashboard/:org_id((?!1$)[^/]+)/:path*",
+      "destination": "/user-dashboard/1/:path*"
+    }
+  ]
+}

@@ -446,7 +446,9 @@ function TeamDetailPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const orgId = String(params?.org_id ?? "");
-  const teamId = searchParams.get("team_id") || String(params?.team_id ?? "");
+  const teamId =
+    searchParams.get("team_id") ||
+    (String(params?.team_id ?? "") !== "0" ? String(params?.team_id ?? "") : "");
 
   const [detail, setDetail] = useState<OrgTeamDetail | null>(null);
   const [orgUsers, setOrgUsers] = useState<OrgUserRow[]>([]);

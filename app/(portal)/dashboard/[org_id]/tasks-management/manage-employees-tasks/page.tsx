@@ -22,6 +22,7 @@ import PortalResponseModal, {
   type PortalResponseVariant,
 } from "@/components/portal-dashboard/ui/PortalResponseModal";
 import { getAllOrgUsers, type OrgUserRow } from "@/services/adminUser";
+import { buildStaticDetailHref } from "@/lib/static-export";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
@@ -344,7 +345,10 @@ export default function ManageEmployeesTasksPage() {
 
   const openTask = (task: TaskRow) => {
     router.push(
-      `/dashboard/${orgId}/tasks-management/manage-employees-tasks/${task.task_id}?employee_id=${task.employee_id}`,
+      buildStaticDetailHref(
+        `/dashboard/${orgId}/tasks-management/manage-employees-tasks`,
+        { task_id: task.task_id, employee_id: task.employee_id },
+      ),
     );
   };
 

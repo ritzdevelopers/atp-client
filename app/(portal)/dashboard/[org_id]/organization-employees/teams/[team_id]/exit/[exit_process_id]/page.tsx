@@ -423,9 +423,14 @@ function EmployeeExitDetailPageContent() {
   const params = useParams();
   const searchParams = useSearchParams();
   const orgId = String(params?.org_id ?? "");
-  const teamId = searchParams.get("team_id") || String(params?.team_id ?? "");
+  const teamId =
+    searchParams.get("team_id") ||
+    (String(params?.team_id ?? "") !== "0" ? String(params?.team_id ?? "") : "");
   const exitProcessId =
-    searchParams.get("exit_process_id") || String(params?.exit_process_id ?? "");
+    searchParams.get("exit_process_id") ||
+    (String(params?.exit_process_id ?? "") !== "0"
+      ? String(params?.exit_process_id ?? "")
+      : "");
   const tabFromUrl = searchParams.get("tab");
 
   const [data, setData] = useState<EmployeeExitProcessDetail | null>(null);

@@ -10,7 +10,10 @@ function EmployeeAttendancePageContent() {
   const params = useParams();
   const searchParams = useSearchParams();
   const employeeId =
-    searchParams.get("employee_id") || String(params?.employee_id ?? "");
+    searchParams.get("employee_id") ||
+    (String(params?.employee_id ?? "") !== "0"
+      ? String(params?.employee_id ?? "")
+      : "");
 
   if (!employeeId) {
     return (

@@ -16,6 +16,10 @@ import PortalPageLoader from "@/components/portal-dashboard/ui/PortalPageLoader"
 import PortalResponseModal, {
   type PortalResponseVariant,
 } from "@/components/portal-dashboard/ui/PortalResponseModal";
+import {
+  resolveStaticExportId,
+  STATIC_EXPORT_PLACEHOLDER_ID,
+} from "@/lib/static-export";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
@@ -87,9 +91,14 @@ function formatDateTime(value?: string | null) {
 
 function MyTaskDetailContent() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const router = useRouter();
   const orgId = String(params?.org_id ?? "");
-  const taskId = String(params?.task_id ?? "");
+  const taskId = resolveStaticExportId(
+    searchParams,
+    "task_id",
+    String(params?.task_id ?? ""),
+  );
 
   const [task, setTask] = useState<TaskDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -252,6 +261,14 @@ function MyTaskDetailContent() {
       );
     }
   };
+
+  if (!taskId || taskId === STATIC_EXPORT_PLACEHOLDER_ID) {
+    return (
+      <div className="p-6 text-center text-sm text-[#6B7280]">
+        Task not specified. Open this task from your task list.
+      </div>
+    );
+  }
 
   if (loading) {
     return <PortalPageLoader message="Loading task…" />;
