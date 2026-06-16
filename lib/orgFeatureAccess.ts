@@ -20,13 +20,14 @@ export type OrgFeatureAccessSnapshot = {
   updatedAt: number;
 };
 
-/** Nav sub-item id → backend sub_feature_path aliases */
+/**
+ * Nav sub-item id → backend sub_feature_path aliases (same capability, different slug).
+ * Do not alias unrelated nav entries onto a parent sub-feature (e.g. onboarding → manage-employee).
+ */
 export const SUB_FEATURE_ALIASES: Record<string, string[]> = {
   "manage-employees": ["manage-employee"],
   "manage-employee-leaves": ["employee-leave-management"],
   "manage-teams": ["team-management"],
-  "create-team": ["team-management"],
-  "employee-onboarding": ["manage-employee"],
   "organization-holidays": ["manage-holidays"],
   "manage-company-shifts": ["manage-shifts"],
   "create-company-shifts": ["create-new-shift"],
@@ -197,7 +198,7 @@ export function organizationHasSubFeature(
   if (!parent) return false;
 
   const assigned = parent.sub_features || [];
-  if (assigned.length === 0) return true;
+  if (assigned.length === 0) return false;
 
   const assignedPaths = new Set(
     assigned.map((sf) => String(sf.sub_feature_path || "").trim().toLowerCase()),

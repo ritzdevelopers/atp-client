@@ -1,7 +1,6 @@
 import { PortalFeature } from "@/services/organization";
 import {
   fetchOrganizationFeatureGroups,
-  getOrganizationParentGroup,
   organizationHasParentFeature,
   organizationHasSubFeature,
   persistOrganizationFeatureAccess,
@@ -517,22 +516,12 @@ function LeftSideBar({
 
       const parentFeatureKey =
         matchedParentSlug || item.requiredFeature || item.value || item.id;
-      const parentGroup = getOrganizationParentGroup(
-        orgFeatureGroups,
-        parentFeatureKey,
-      );
-      const assignedSubCount = parentGroup?.sub_features?.length ?? 0;
-
       let children: NavSubItem[] = [];
       if (item.children.length > 0) {
-        if (assignedSubCount === 0) {
-          children = item.children;
-        } else {
-          children = item.children.filter((sub) =>
-            hasSubFeatureAccess(parentFeatureKey, sub.id),
-          );
-        }
-        if (assignedSubCount > 0 && children.length === 0) continue;
+        children = item.children.filter((sub) =>
+          hasSubFeatureAccess(parentFeatureKey, sub.id),
+        );
+        if (children.length === 0) continue;
       }
 
       result.push({
