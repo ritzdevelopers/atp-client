@@ -30,7 +30,32 @@ import {
 } from "@/services/chatApplication";
 import ChatAvatar from "./ChatAvatar";
 import { useChatContext } from "./ChatContext";
+import MobileEmojiPicker from "./MobileEmojiPicker";
 import type { ChatMessage } from "./types";
+
+function useClickOutside(
+  ref: React.RefObject<HTMLElement | null>,
+  onClose: () => void,
+  enabled: boolean,
+) {
+  useEffect(() => {
+    if (!enabled) return;
+
+    function handlePointerDown(event: MouseEvent | TouchEvent) {
+      const target = event.target as Node;
+      if (ref.current && !ref.current.contains(target)) {
+        onClose();
+      }
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+    };
+  }, [ref, onClose, enabled]);
+}
 
 export default function RightChatInterface() {
   const params = useParams();
@@ -42,8 +67,18 @@ export default function RightChatInterface() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatId, setChatId] = useState<string | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [chatSearchQuery, setChatSearchQuery] = useState("");
+  const [callMenuOpen, setCallMenuOpen] = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const callMenuRef = useRef<HTMLDivElement>(null);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
+  const mobileInputRef = useRef<HTMLInputElement>(null);
+
+  useClickOutside(callMenuRef, () => setCallMenuOpen(false), callMenuOpen);
+  useClickOutside(moreMenuRef, () => setMoreMenuOpen(false), moreMenuOpen);
 
   const currentUserId = useMemo(() => {
     if (typeof window === "undefined") return null;
@@ -51,6 +86,17 @@ export default function RightChatInterface() {
   }, []);
 
   const contactUserId = selectedChat ? Number(selectedChat.user_id) : null;
+
+  const displayedMessages = useMemo(() => {
+    const q = chatSearchQuery.trim().toLowerCase();
+    if (!q) return messages;
+    return messages.filter((msg) => msg.text.toLowerCase().includes(q));
+  }, [messages, chatSearchQuery]);
+
+  const handleEmojiSelect = useCallback((emoji: string) => {
+    setMessage((prev) => prev + emoji);
+    mobileInputRef.current?.focus();
+  }, []);
 
   useEffect(() => {
     if (!socket || !isConnected || currentUserId == null) return;
@@ -61,6 +107,10 @@ export default function RightChatInterface() {
     if (!selectedChat) {
       setMessages([]);
       setChatId(null);
+      setChatSearchQuery("");
+      setCallMenuOpen(false);
+      setMoreMenuOpen(false);
+      setEmojiPickerOpen(false);
       return;
     }
 
@@ -232,22 +282,89 @@ export default function RightChatInterface() {
         </div>
 
         <div className="flex items-center gap-0.5">
-          <IconButton
-            label="Search in chat"
-            icon={<MdSearch className="text-xl" />}
-          />
-          <IconButton
-            label="Voice call"
-            icon={<MdCall className="text-xl" />}
-          />
-          <IconButton
-            label="Video call"
-            icon={<MdVideocam className="text-xl" />}
-          />
-          <IconButton
-            label="More options"
-            icon={<MdMoreVert className="text-xl" />}
-          />
+          {/* Desktop header actions — unchanged at md+ */}
+          <div className="hidden items-center gap-0.5 md:flex">
+            <IconButton
+              label="Search in chat"
+              icon={<MdSearch className="text-xl" />}
+            />
+            <IconButton
+              label="Voice call"
+              icon={<MdCall className="text-xl" />}
+            />
+            <IconButton
+              label="Video call"
+              icon={<MdVideocam className="text-xl" />}
+            />
+            <IconButton
+              label="More options"
+              icon={<MdMoreVert className="text-xl" />}
+            />
+          </div>
+
+          {/* Mobile header — single call dropdown + menu with search */}
+          <div className="flex items-center gap-0.5 md:hidden">
+            <div ref={callMenuRef} className="relative">
+              <IconButton
+                label="Call"
+                icon={<MdCall className="text-xl" />}
+                onClick={() => {
+                  setCallMenuOpen((open) => !open);
+                  setMoreMenuOpen(false);
+                }}
+              />
+              {callMenuOpen && (
+                <div className="absolute right-0 top-full z-50 mt-1 min-w-[10.5rem] overflow-hidden rounded-xl border border-[#E4E7EC] bg-white py-1 shadow-lg">
+                  <MobileMenuItem
+                    icon={<MdCall className="text-lg text-[#008CD3]" />}
+                    label="Voice call"
+                    onClick={() => setCallMenuOpen(false)}
+                  />
+                  <MobileMenuItem
+                    icon={<MdVideocam className="text-lg text-[#008CD3]" />}
+                    label="Video call"
+                    onClick={() => setCallMenuOpen(false)}
+                  />
+                </div>
+              )}
+            </div>
+
+            <div ref={moreMenuRef} className="relative">
+              <IconButton
+                label="More options"
+                icon={<MdMoreVert className="text-xl" />}
+                onClick={() => {
+                  setMoreMenuOpen((open) => !open);
+                  setCallMenuOpen(false);
+                }}
+              />
+              {moreMenuOpen && (
+                <div className="absolute right-0 top-full z-50 mt-1 w-56 overflow-hidden rounded-xl border border-[#E4E7EC] bg-white p-2 shadow-lg">
+                  <div className="relative">
+                    <MdSearch className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-lg text-[#9CA3AF]" />
+                    <input
+                      type="search"
+                      value={chatSearchQuery}
+                      onChange={(e) => setChatSearchQuery(e.target.value)}
+                      placeholder="Search messages"
+                      className="w-full rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] py-2 pl-9 pr-3 text-sm text-[#111827] outline-none placeholder:text-[#9CA3AF] focus:border-[#008CD3]"
+                      aria-label="Search in chat"
+                      autoFocus
+                    />
+                  </div>
+                  {chatSearchQuery.trim() && (
+                    <button
+                      type="button"
+                      onClick={() => setChatSearchQuery("")}
+                      className="mt-2 w-full cursor-pointer rounded-lg border-0 bg-transparent py-1.5 text-left text-xs text-[#008CD3] outline-none hover:bg-[#F3F4F6]"
+                    >
+                      Clear search
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </header>
 
@@ -262,14 +379,16 @@ export default function RightChatInterface() {
             <p className="py-8 text-center text-sm text-[#6B7280]">
               Loading messages…
             </p>
-          ) : messages.length === 0 ? (
+          ) : displayedMessages.length === 0 ? (
             <p className="py-8 text-center text-sm text-[#6B7280]">
-              No messages yet. Say hello!
+              {chatSearchQuery.trim()
+                ? "No messages match your search"
+                : "No messages yet. Say hello!"}
             </p>
           ) : (
             <>
               <DateDivider label="Today" />
-              {messages.map((msg) => (
+              {displayedMessages.map((msg) => (
                 <MessageBubble
                   key={msg.message_id}
                   message={msg}
@@ -284,7 +403,8 @@ export default function RightChatInterface() {
       </div>
 
       <footer className="shrink-0 border-t border-[#E4E7EC] bg-[#F9FAFB] px-3 py-3 sm:px-4">
-        <div className="mx-auto flex max-w-3xl items-end gap-2">
+        {/* Desktop footer — unchanged at md+ */}
+        <div className="mx-auto hidden max-w-3xl items-end gap-2 md:flex">
           <IconButton
             label="Emoji"
             icon={<MdEmojiEmotions className="text-xl text-[#6B7280]" />}
@@ -317,6 +437,58 @@ export default function RightChatInterface() {
             <MdSend className="text-xl" />
           </button>
         </div>
+
+        {/* Mobile footer — WhatsApp-style inline icons */}
+        <div className="relative mx-auto flex max-w-3xl items-end gap-2 md:hidden">
+          {emojiPickerOpen && (
+            <MobileEmojiPicker
+              onSelect={handleEmojiSelect}
+              onClose={() => setEmojiPickerOpen(false)}
+            />
+          )}
+
+          <div className="flex min-w-0 flex-1 items-center gap-1 rounded-full border border-[#E4E7EC] bg-white px-1.5 py-1 shadow-sm">
+            <button
+              type="button"
+              onClick={() => setEmojiPickerOpen((open) => !open)}
+              className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-[#6B7280] outline-none transition hover:bg-[#F3F4F6]"
+              aria-label="Emoji"
+            >
+              <MdEmojiEmotions className="text-[22px]" />
+            </button>
+
+            <input
+              ref={mobileInputRef}
+              type="text"
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onFocus={() => setEmojiPickerOpen(false)}
+              placeholder="Message"
+              disabled={!isConnected}
+              className="min-w-0 flex-1 border-0 bg-transparent py-2 text-sm text-[#111827] outline-none placeholder:text-[#9CA3AF] disabled:cursor-not-allowed disabled:opacity-70"
+              aria-label="Message input"
+            />
+
+            <button
+              type="button"
+              className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-[#6B7280] outline-none transition hover:bg-[#F3F4F6]"
+              aria-label="Attach file"
+            >
+              <MdAttachFile className="text-[22px]" />
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleSendMessage}
+            disabled={!isConnected || message.trim() === ""}
+            className="mb-0.5 flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-[#008CD3] text-white outline-none transition hover:bg-[#0070AA] disabled:cursor-not-allowed disabled:opacity-50"
+            aria-label="Send message"
+          >
+            <MdSend className="text-xl" />
+          </button>
+        </div>
       </footer>
     </section>
   );
@@ -324,7 +496,7 @@ export default function RightChatInterface() {
 
 function EmptyWorkspace() {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
+    <div className="hidden lg:flex flex-1 flex-col items-center justify-center px-6 text-center">
       <div className="mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-white shadow-md ring-1 ring-[#E4E7EC]">
         <svg
           className="h-12 w-12 text-[#008CD3]/60"
@@ -418,18 +590,42 @@ function MessageBubble({
   );
 }
 
-function IconButton({
-  label,
+function MobileMenuItem({
   icon,
-  className = "",
+  label,
+  onClick,
 }: {
-  label: string;
   icon: React.ReactNode;
-  className?: string;
+  label: string;
+  onClick: () => void;
 }) {
   return (
     <button
       type="button"
+      onClick={onClick}
+      className="flex w-full cursor-pointer items-center gap-3 border-0 bg-transparent px-3 py-2.5 text-left text-sm text-[#111827] outline-none transition hover:bg-[#F3F4F6]"
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
+  );
+}
+
+function IconButton({
+  label,
+  icon,
+  className = "",
+  onClick,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  className?: string;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
       className={`flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg border-0 bg-transparent text-[#6B7280] outline-none transition hover:bg-[#F3F4F6] hover:text-[#374151] ${className}`}
       aria-label={label}
     >
