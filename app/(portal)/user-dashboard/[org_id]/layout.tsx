@@ -1,3 +1,4 @@
+import SocketProvider from "@/components/sockets/Socket.Provider";
 import UserDashboardOrgClientLayout from "./UserDashboardOrgClientLayout";
 import { generateOrgStaticParams } from "@/lib/static-export";
 
@@ -6,5 +7,9 @@ export function generateStaticParams() {
 }
 
 export default function UserDashboardOrgLayout({ children }: { children: React.ReactNode }) {
-  return <UserDashboardOrgClientLayout>{children}</UserDashboardOrgClientLayout>;
+  return (
+    <UserDashboardOrgClientLayout>
+      <SocketProvider>{children}</SocketProvider>
+    </UserDashboardOrgClientLayout>
+  );
 }

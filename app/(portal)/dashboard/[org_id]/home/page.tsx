@@ -1,9 +1,24 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { BarChart3, Building2, ChevronRight, MapPin, Package, Plus, UserCircle, UsersRound } from "lucide-react";
+import {
+  BarChart3,
+  Building2,
+  ChevronRight,
+  MapPin,
+  Package,
+  Plus,
+  UserCircle,
+  UsersRound,
+} from "lucide-react";
 import {
   countPendingHandoverItems,
   fetchHandoverAssignedToMe,
@@ -24,6 +39,7 @@ import {
   localYmdFromAttendanceValue,
   parseAttendanceNaiveLocal,
 } from "@/lib/attendanceDates";
+import { socket } from "@/lib/socket.io";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
@@ -96,8 +112,12 @@ function teamGroupHref(orgId: number, teamId: number | string): string {
   return `/dashboard/${orgId}/organization-employees/team-group?team_id=${encodeURIComponent(String(teamId))}`;
 }
 
-function activeTeamAssignments(teams: EmployeeTeamAssignment[] | undefined): EmployeeTeamAssignment[] {
-  return (teams ?? []).filter((team) => team.leave_date == null || team.leave_date === "");
+function activeTeamAssignments(
+  teams: EmployeeTeamAssignment[] | undefined,
+): EmployeeTeamAssignment[] {
+  return (teams ?? []).filter(
+    (team) => team.leave_date == null || team.leave_date === "",
+  );
 }
 
 function greetingForHour(): string {
@@ -127,7 +147,10 @@ function formatOrganizationAddress(addr: OrganizationAddress): string {
   return parts.join("\n");
 }
 
-function addressLocationLabel(addr: OrganizationAddress, index: number): string {
+function addressLocationLabel(
+  addr: OrganizationAddress,
+  index: number,
+): string {
   const cityState = [addr.city, addr.state].filter(Boolean).join(", ");
   return cityState.trim() || `Location ${index + 1}`;
 }
@@ -198,7 +221,8 @@ function MyTeamsSection({
                   : `${activeTeams.length} teams assigned`}
               </h2>
               <p className={`mt-0.5 ${mobileCaptionCls} lg:text-sm`}>
-                Open a team workspace to view members, activity, and HR requests.
+                Open a team workspace to view members, activity, and HR
+                requests.
               </p>
             </div>
           </div>
@@ -208,8 +232,13 @@ function MyTeamsSection({
       <div className="p-3 lg:p-5">
         {activeTeams.length === 0 ? (
           <div className="rounded-xl border border-dashed border-[#E4E7EC] bg-[#F9FAFB] px-4 py-8 text-center">
-            <UsersRound className="mx-auto h-9 w-9 text-[#9CA3AF]" aria-hidden />
-            <p className="mt-2 text-[14px] font-semibold text-[#1F2937]">No team assigned yet</p>
+            <UsersRound
+              className="mx-auto h-9 w-9 text-[#9CA3AF]"
+              aria-hidden
+            />
+            <p className="mt-2 text-[14px] font-semibold text-[#1F2937]">
+              No team assigned yet
+            </p>
             <p className={`mt-1 ${mobileCaptionCls}`}>
               Your reporting manager or HR will add you to a team.
             </p>
@@ -223,7 +252,8 @@ function MyTeamsSection({
               const isReportingManager =
                 !!currentUserName &&
                 !!managerName &&
-                currentUserName.trim().toLowerCase() === managerName.toLowerCase();
+                currentUserName.trim().toLowerCase() ===
+                  managerName.toLowerCase();
               const memberCount = Number(team.total_number_of_members ?? 0);
 
               return (
@@ -238,7 +268,8 @@ function MyTeamsSection({
                           {title}
                         </h3>
                         <p className="mt-1 line-clamp-2 text-[12px] leading-snug text-[#6B7280]">
-                          {team.team_info?.trim() || "No team description added yet."}
+                          {team.team_info?.trim() ||
+                            "No team description added yet."}
                         </p>
                       </div>
                       {isReportingManager ? (
@@ -251,11 +282,15 @@ function MyTeamsSection({
                     <dl className="mt-3 grid grid-cols-2 gap-2">
                       <div className="rounded-lg bg-[#F9FAFB] px-2.5 py-2">
                         <dt className={mobileLabelCls}>Reporting manager</dt>
-                        <dd className={`mt-0.5 ${mobileValueCls} truncate`}>{managerName}</dd>
+                        <dd className={`mt-0.5 ${mobileValueCls} truncate`}>
+                          {managerName}
+                        </dd>
                       </div>
                       <div className="rounded-lg bg-[#F9FAFB] px-2.5 py-2">
                         <dt className={mobileLabelCls}>Members</dt>
-                        <dd className={`mt-0.5 ${mobileValueCls}`}>{memberCount || "—"}</dd>
+                        <dd className={`mt-0.5 ${mobileValueCls}`}>
+                          {memberCount || "—"}
+                        </dd>
                       </div>
                       <div className="col-span-2 rounded-lg bg-[#F9FAFB] px-2.5 py-2">
                         <dt className={mobileLabelCls}>Joined on</dt>
@@ -290,7 +325,8 @@ function InfoRow({
   label: string;
   value: string | number | null | undefined;
 }) {
-  const display = value != null && String(value).length > 0 ? String(value) : "—";
+  const display =
+    value != null && String(value).length > 0 ? String(value) : "—";
   return (
     <div className="flex items-center justify-between gap-2 border-b border-slate-100/90 py-3 last:border-b-0 last:pb-0 first:pt-0 max-lg:rounded-md max-lg:border-0 max-lg:bg-[#F9FAFB] max-lg:px-2.5 max-lg:py-2 max-lg:first:mt-0 max-lg:last:mb-0 lg:flex-row lg:gap-3 lg:py-3">
       <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF] lg:text-xs lg:font-medium lg:normal-case lg:tracking-normal lg:text-slate-500">
@@ -325,9 +361,15 @@ function DashboardCard({
     >
       <div className="flex items-center gap-2 border-b border-[#E4E7EC] px-3 py-2.5 max-lg:bg-[#F9FAFB] lg:gap-3 lg:border-slate-100/80 lg:px-0 lg:py-0 lg:bg-transparent">
         <span className="flex h-8 w-8 items-center justify-center rounded-md bg-[#C99237]/15 lg:h-10 lg:w-10 lg:rounded-xl">
-          <Icon className="h-4 w-4 shrink-0 text-[#C99237] lg:h-5 lg:w-5" aria-hidden />
+          <Icon
+            className="h-4 w-4 shrink-0 text-[#C99237] lg:h-5 lg:w-5"
+            aria-hidden
+          />
         </span>
-        <h2 id={`${id}-title`} className="text-[13px] font-semibold text-[#1F2937] lg:text-base lg:text-[#0C123A]">
+        <h2
+          id={`${id}-title`}
+          className="text-[13px] font-semibold text-[#1F2937] lg:text-base lg:text-[#0C123A]"
+        >
           {title}
         </h2>
       </div>
@@ -361,7 +403,10 @@ function OrganizationAddressesSection({
       <div className="flex items-center justify-between gap-2 border-b border-[#E4E7EC] px-3 py-2.5 max-lg:bg-[#F9FAFB] lg:gap-3 lg:border-slate-100/80 lg:px-0 lg:py-0 lg:pb-4">
         <div className="flex items-center gap-2 lg:gap-3">
           <span className="flex h-8 w-8 items-center justify-center rounded-md bg-[#C99237]/15 lg:h-10 lg:w-10 lg:rounded-xl">
-            <MapPin className="h-4 w-4 shrink-0 text-[#C99237] lg:h-5 lg:w-5" aria-hidden />
+            <MapPin
+              className="h-4 w-4 shrink-0 text-[#C99237] lg:h-5 lg:w-5"
+              aria-hidden
+            />
           </span>
           <div>
             <h2
@@ -390,14 +435,22 @@ function OrganizationAddressesSection({
       <div className="px-2.5 py-2.5 max-lg:pb-3 lg:px-0 lg:py-0">
         {!hasAddresses ? (
           <div className="rounded-lg border border-dashed border-[#E4E7EC] bg-[#F9FAFB] px-3 py-8 text-center max-lg:mx-0 lg:rounded-2xl lg:border-slate-200 lg:py-10">
-            <MapPin className="mx-auto h-8 w-8 text-[#9CA3AF] lg:h-9 lg:w-9 lg:text-slate-300" aria-hidden />
+            <MapPin
+              className="mx-auto h-8 w-8 text-[#9CA3AF] lg:h-9 lg:w-9 lg:text-slate-300"
+              aria-hidden
+            />
             <p className="mt-2 text-[13px] font-semibold text-[#1F2937] lg:mt-3 lg:text-sm lg:text-[#0C123A]">
               No address added yet
             </p>
-            <p className={`mt-1 ${mobileCaptionCls} lg:text-sm lg:text-slate-500`}>
+            <p
+              className={`mt-1 ${mobileCaptionCls} lg:text-sm lg:text-slate-500`}
+            >
               Add your office or branch locations for this organization.
             </p>
-            <Link href={manageHref} className={`mt-4 ${mobileGoldBtnCls()} lg:mt-5 lg:min-h-[44px] lg:rounded-xl lg:px-5 lg:py-2.5 lg:text-sm lg:font-bold`}>
+            <Link
+              href={manageHref}
+              className={`mt-4 ${mobileGoldBtnCls()} lg:mt-5 lg:min-h-[44px] lg:rounded-xl lg:px-5 lg:py-2.5 lg:text-sm lg:font-bold`}
+            >
               <Plus className="h-3.5 w-3.5 lg:h-4 lg:w-4" aria-hidden />
               Add organization address
             </Link>
@@ -409,7 +462,9 @@ function OrganizationAddressesSection({
                 key={String(addr.id ?? index)}
                 className="rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] p-3 lg:rounded-xl lg:border-slate-200/90 lg:bg-slate-50/60 lg:p-4"
               >
-                <p className={mobileLabelCls}>{addressLocationLabel(addr, index)}</p>
+                <p className={mobileLabelCls}>
+                  {addressLocationLabel(addr, index)}
+                </p>
                 <p className="mt-1.5 whitespace-pre-line text-[12px] leading-snug text-[#1F2937] lg:mt-2 lg:text-sm lg:leading-relaxed lg:text-[#0C123A]">
                   {formatOrganizationAddress(addr)}
                 </p>
@@ -444,28 +499,41 @@ function HomeOverview({
 }) {
   const roleKey = user.user_role_name?.trim().toLowerCase() ?? "";
   const roleBadgeLabel = formatRoleLabel(user.user_role_name);
-  const displayName = user.user_name?.trim() || displayNameFromEmail(user.user_email);
+  const displayName =
+    user.user_name?.trim() || displayNameFromEmail(user.user_email);
   const orgTitle = organization.org_name?.trim() || "Your organization";
   const ownerName = organization.owner_name ?? organization.owner_info?.name;
   const ownerEmail = organization.owner_email ?? organization.owner_info?.email;
   const ownerPhone = organization.owner_phone;
 
-  const normalized = (v: string | number | null | undefined) => String(v ?? "").trim().toLowerCase();
+  const normalized = (v: string | number | null | undefined) =>
+    String(v ?? "")
+      .trim()
+      .toLowerCase();
   const ownerMatchesUser =
-    (organization.owner_id != null && String(organization.owner_id) === String(user.user_id)) ||
-    (!!normalized(ownerEmail) && normalized(ownerEmail) === normalized(user.user_email)) ||
-    (!!normalized(ownerPhone) && normalized(ownerPhone) === normalized(user.user_phone)) ||
-    (!!normalized(ownerName) && normalized(ownerName) === normalized(user.user_name));
+    (organization.owner_id != null &&
+      String(organization.owner_id) === String(user.user_id)) ||
+    (!!normalized(ownerEmail) &&
+      normalized(ownerEmail) === normalized(user.user_email)) ||
+    (!!normalized(ownerPhone) &&
+      normalized(ownerPhone) === normalized(user.user_phone)) ||
+    (!!normalized(ownerName) &&
+      normalized(ownerName) === normalized(user.user_name));
   const showAttendance = roleKey !== "admin";
 
   const [attendanceLoading, setAttendanceLoading] = useState(false);
   const [attendanceError, setAttendanceError] = useState<string | null>(null);
-  const [attendanceActionError, setAttendanceActionError] = useState<string | null>(null);
-  const [attendanceData, setAttendanceData] = useState<EmployeeDashboardResponse | null>(null);
+  const [attendanceActionError, setAttendanceActionError] = useState<
+    string | null
+  >(null);
+  const [attendanceData, setAttendanceData] =
+    useState<EmployeeDashboardResponse | null>(null);
   const [checkInSubmitting, setCheckInSubmitting] = useState(false);
   const [checkOutSubmitting, setCheckOutSubmitting] = useState(false);
   const [logSubmitting, setLogSubmitting] = useState(false);
-  const [logSuccessMessage, setLogSuccessMessage] = useState<string | null>(null);
+  const [logSuccessMessage, setLogSuccessMessage] = useState<string | null>(
+    null,
+  );
   const [tick, setTick] = useState(0);
   const [handoverPendingCount, setHandoverPendingCount] = useState(0);
 
@@ -499,15 +567,23 @@ function HomeOverview({
       setAttendanceError(null);
       try {
         const q = encodeURIComponent(String(orgId));
-        const res = await fetch(`${API_URL}/api/employees/get-employees-full-information?org_id=${q}`, {
-          method: "GET",
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const result = (await res.json()) as EmployeeDashboardResponse & { message?: string };
-        if (!res.ok) throw new Error(result.message || "Could not load attendance");
+        const res = await fetch(
+          `${API_URL}/api/employees/get-employees-full-information?org_id=${q}`,
+          {
+            method: "GET",
+            headers: { Authorization: `Bearer ${token}` },
+          },
+        );
+        const result = (await res.json()) as EmployeeDashboardResponse & {
+          message?: string;
+        };
+        if (!res.ok)
+          throw new Error(result.message || "Could not load attendance");
         setAttendanceData(result);
       } catch (e) {
-        setAttendanceError(e instanceof Error ? e.message : "Could not load attendance");
+        setAttendanceError(
+          e instanceof Error ? e.message : "Could not load attendance",
+        );
       } finally {
         setAttendanceLoading(false);
       }
@@ -528,8 +604,11 @@ function HomeOverview({
   const hasCheckedInToday = Boolean(todayRecord?.check_in);
   const hasCheckedOutToday = Boolean(todayRecord?.check_out);
   const checkInInstant = parseAttendanceNaiveLocal(todayRecord?.check_in);
-  const checkInValid = checkInInstant && !Number.isNaN(checkInInstant.getTime());
-  const showLiveTimer = Boolean(checkInValid && hasCheckedInToday && !hasCheckedOutToday);
+  const checkInValid =
+    checkInInstant && !Number.isNaN(checkInInstant.getTime());
+  const showLiveTimer = Boolean(
+    checkInValid && hasCheckedInToday && !hasCheckedOutToday,
+  );
 
   useEffect(() => {
     if (!showLiveTimer) return;
@@ -542,11 +621,14 @@ function HomeOverview({
   }, [showLiveTimer]);
 
   const liveElapsedMs =
-    showLiveTimer && checkInValid && tick > 0 ? tick - checkInInstant.getTime() : 0;
+    showLiveTimer && checkInValid && tick > 0
+      ? tick - checkInInstant.getTime()
+      : 0;
   const workingHoursDisplay = showLiveTimer
     ? formatElapsedDuration(liveElapsedMs)
     : formatWorkingTimeDisplay(todayRecord?.working_time);
-  const attendanceEmployee = attendanceData?.employee ?? attendanceData?.employees;
+  const attendanceEmployee =
+    attendanceData?.employee ?? attendanceData?.employees;
   const lateAfter = attendanceEmployee?.mark_attendance_late_after
     ? String(attendanceEmployee.mark_attendance_late_after).slice(0, 5)
     : "—";
@@ -565,25 +647,40 @@ function HomeOverview({
       const dd = String(n.getDate()).padStart(2, "0");
       const hh = String(n.getHours()).padStart(2, "0");
       const min = String(n.getMinutes()).padStart(2, "0");
-      const res = await fetch(`${API_URL}/api/employees/mark-attendance-check-in`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+      const res = await fetch(
+        `${API_URL}/api/employees/mark-attendance-check-in`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            org_id: orgId,
+            user_date: `${yyyy}-${mm}-${dd}`,
+            user_time: `${hh}:${min}`,
+          }),
         },
-        body: JSON.stringify({ org_id: orgId, user_date: `${yyyy}-${mm}-${dd}`, user_time: `${hh}:${min}` }),
-      });
+      );
       const result = (await res.json()) as { message?: string };
       if (!res.ok) throw new Error(result.message || "Could not mark check-in");
       const q = encodeURIComponent(String(orgId));
-      const refresh = await fetch(`${API_URL}/api/employees/get-employees-full-information?org_id=${q}`, {
-        method: "GET",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const refreshData = (await refresh.json()) as EmployeeDashboardResponse & { message?: string };
+      const refresh = await fetch(
+        `${API_URL}/api/employees/get-employees-full-information?org_id=${q}`,
+        {
+          method: "GET",
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+      const refreshData =
+        (await refresh.json()) as EmployeeDashboardResponse & {
+          message?: string;
+        };
       if (refresh.ok) setAttendanceData(refreshData);
     } catch (e) {
-      setAttendanceActionError(e instanceof Error ? e.message : "Could not mark check-in.");
+      setAttendanceActionError(
+        e instanceof Error ? e.message : "Could not mark check-in.",
+      );
     } finally {
       setCheckInSubmitting(false);
     }
@@ -603,25 +700,41 @@ function HomeOverview({
       const dd = String(n.getDate()).padStart(2, "0");
       const hh = String(n.getHours()).padStart(2, "0");
       const min = String(n.getMinutes()).padStart(2, "0");
-      const res = await fetch(`${API_URL}/api/employees/mark-attendance-check-out`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+      const res = await fetch(
+        `${API_URL}/api/employees/mark-attendance-check-out`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            org_id: orgId,
+            user_date: `${yyyy}-${mm}-${dd}`,
+            user_time: `${hh}:${min}`,
+          }),
         },
-        body: JSON.stringify({ org_id: orgId, user_date: `${yyyy}-${mm}-${dd}`, user_time: `${hh}:${min}` }),
-      });
+      );
       const result = (await res.json()) as { message?: string };
-      if (!res.ok) throw new Error(result.message || "Could not mark check-out");
+      if (!res.ok)
+        throw new Error(result.message || "Could not mark check-out");
       const q = encodeURIComponent(String(orgId));
-      const refresh = await fetch(`${API_URL}/api/employees/get-employees-full-information?org_id=${q}`, {
-        method: "GET",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const refreshData = (await refresh.json()) as EmployeeDashboardResponse & { message?: string };
+      const refresh = await fetch(
+        `${API_URL}/api/employees/get-employees-full-information?org_id=${q}`,
+        {
+          method: "GET",
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+      const refreshData =
+        (await refresh.json()) as EmployeeDashboardResponse & {
+          message?: string;
+        };
       if (refresh.ok) setAttendanceData(refreshData);
     } catch (e) {
-      setAttendanceActionError(e instanceof Error ? e.message : "Could not mark check-out.");
+      setAttendanceActionError(
+        e instanceof Error ? e.message : "Could not mark check-out.",
+      );
     } finally {
       setCheckOutSubmitting(false);
     }
@@ -653,13 +766,18 @@ function HomeOverview({
         message?: string;
         data?: { action_type?: string; message?: string };
       };
-      if (!res.ok) throw new Error(result.message || "Could not mark attendance log");
+      if (!res.ok)
+        throw new Error(result.message || "Could not mark attendance log");
       const action = result.data?.action_type;
       setLogSuccessMessage(
-        action ? `Recorded: ${action}` : (result.data?.message ?? result.message ?? "Log saved."),
+        action
+          ? `Recorded: ${action}`
+          : (result.data?.message ?? result.message ?? "Log saved."),
       );
     } catch (e) {
-      setAttendanceActionError(e instanceof Error ? e.message : "Could not mark attendance log.");
+      setAttendanceActionError(
+        e instanceof Error ? e.message : "Could not mark attendance log.",
+      );
     } finally {
       setLogSubmitting(false);
     }
@@ -702,9 +820,14 @@ function HomeOverview({
             </p>
             <h1 className="mt-0.5 flex items-center gap-1.5 text-[16px] font-bold leading-tight text-white">
               <span className="truncate">{displayName}</span>
-              <MdWorkspacePremium className="h-5 w-5 shrink-0 text-[#C99237]" aria-hidden />
+              <MdWorkspacePremium
+                className="h-5 w-5 shrink-0 text-[#C99237]"
+                aria-hidden
+              />
             </h1>
-            <p className="mt-0.5 truncate text-[11px] text-slate-300">{orgTitle}</p>
+            <p className="mt-0.5 truncate text-[11px] text-slate-300">
+              {orgTitle}
+            </p>
             <p className="mt-1 text-[10px] text-slate-400">
               Management dashboard · quick overview
             </p>
@@ -791,14 +914,24 @@ function HomeOverview({
       <div
         className={`grid grid-cols-1 gap-2 sm:gap-2.5 lg:gap-6 ${ownerMatchesUser ? "lg:grid-cols-2" : "lg:grid-cols-3"}`}
       >
-        <DashboardCard icon={Building2} title="Organization" delayMs={100} id="dash-org-card">
+        <DashboardCard
+          icon={Building2}
+          title="Organization"
+          delayMs={100}
+          id="dash-org-card"
+        >
           <InfoRow label="Name" value={organization.org_name} />
           <InfoRow label="Email" value={organization.org_email} />
           <InfoRow label="Phone" value={organization.org_phone} />
         </DashboardCard>
 
         {!ownerMatchesUser ? (
-          <DashboardCard icon={UserCircle} title="Owner" delayMs={200} id="dash-owner-card">
+          <DashboardCard
+            icon={UserCircle}
+            title="Owner"
+            delayMs={200}
+            id="dash-owner-card"
+          >
             <InfoRow label="Name" value={ownerName} />
             <InfoRow label="Email" value={ownerEmail} />
             <InfoRow label="Phone" value={ownerPhone} />
@@ -815,7 +948,10 @@ function HomeOverview({
           <InfoRow label="Email" value={user.user_email} />
           <InfoRow label="Phone" value={user.user_phone} />
           <InfoRow label="Role" value={formatRoleLabel(user.user_role_name)} />
-          <InfoRow label="Member since" value={formatJoinedDate(user.user_created_at)} />
+          <InfoRow
+            label="Member since"
+            value={formatJoinedDate(user.user_created_at)}
+          />
         </DashboardCard>
       </div>
 
@@ -835,8 +971,12 @@ function HomeOverview({
             <div className="border-b border-[#E4E7EC] bg-gradient-to-br from-[#0C123A] via-[#151f52] to-[#0C123A] px-3 py-3.5">
               <div className="flex items-center justify-between gap-2">
                 <div>
-                  <h2 className="text-[13px] font-semibold text-white">Today&apos;s attendance</h2>
-                  <p className="mt-0.5 text-[10px] text-slate-400">Mark in, out, or break logs</p>
+                  <h2 className="text-[13px] font-semibold text-white">
+                    Today&apos;s attendance
+                  </h2>
+                  <p className="mt-0.5 text-[10px] text-slate-400">
+                    Mark in, out, or break logs
+                  </p>
                 </div>
                 <span
                   className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${statusTone}`}
@@ -856,10 +996,14 @@ function HomeOverview({
                 </p>
               ) : null}
               {attendanceLoading ? (
-                <p className={`mt-1 ${mobileCaptionCls} !text-slate-400`}>Loading attendance…</p>
+                <p className={`mt-1 ${mobileCaptionCls} !text-slate-400`}>
+                  Loading attendance…
+                </p>
               ) : null}
               {attendanceError ? (
-                <p className="mt-1 text-[11px] text-rose-300">{attendanceError}</p>
+                <p className="mt-1 text-[11px] text-rose-300">
+                  {attendanceError}
+                </p>
               ) : null}
             </div>
 
@@ -867,7 +1011,9 @@ function HomeOverview({
               <div className="rounded-md border border-[#E4E7EC] bg-[#F9FAFB] px-2.5 py-2">
                 <p className={mobileLabelCls}>Check in</p>
                 <p className={`mt-0.5 ${mobileValueCls}`}>
-                  {hasCheckedInToday ? formatAttendanceLogLocal(todayRecord?.check_in) : "—"}
+                  {hasCheckedInToday
+                    ? formatAttendanceLogLocal(todayRecord?.check_in)
+                    : "—"}
                 </p>
               </div>
               <div className="rounded-md border border-[#E4E7EC] bg-[#F9FAFB] px-2.5 py-2">
@@ -880,7 +1026,9 @@ function HomeOverview({
               </div>
               <div className="rounded-md border border-[#E4E7EC] bg-[#F9FAFB] px-2.5 py-2">
                 <p className={mobileLabelCls}>Late after</p>
-                <p className="mt-0.5 text-[13px] font-semibold text-[#E8710A]">{lateAfter}</p>
+                <p className="mt-0.5 text-[13px] font-semibold text-[#E8710A]">
+                  {lateAfter}
+                </p>
               </div>
               <div className="rounded-md border border-[#E4E7EC] bg-[#F9FAFB] px-2.5 py-2">
                 <p className={mobileLabelCls}>Day status</p>
@@ -899,12 +1047,18 @@ function HomeOverview({
                 disabled={hasCheckedInToday || checkInSubmitting}
                 className={mobilePrimaryBtnCls(true)}
               >
-                {checkInSubmitting ? "Marking…" : hasCheckedInToday ? "Checked in" : "Check in"}
+                {checkInSubmitting
+                  ? "Marking…"
+                  : hasCheckedInToday
+                    ? "Checked in"
+                    : "Check in"}
               </button>
               <button
                 type="button"
                 onClick={() => void markCheckOut()}
-                disabled={!hasCheckedInToday || hasCheckedOutToday || checkOutSubmitting}
+                disabled={
+                  !hasCheckedInToday || hasCheckedOutToday || checkOutSubmitting
+                }
                 className={mobileDangerBtnCls(true)}
               >
                 {checkOutSubmitting
@@ -944,10 +1098,14 @@ function HomeOverview({
           {/* Desktop: original attendance panel */}
           <div className="hidden p-6 lg:block">
             <div className="flex items-center justify-between gap-3">
-              <h2 className="text-base font-semibold text-[#0C123A]">Attendance</h2>
+              <h2 className="text-base font-semibold text-[#0C123A]">
+                Attendance
+              </h2>
               <span
                 className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                  String(todayRecord?.attendance_status || "").toLowerCase().includes("late")
+                  String(todayRecord?.attendance_status || "")
+                    .toLowerCase()
+                    .includes("late")
                     ? "bg-orange-100 text-orange-700"
                     : String(todayRecord?.attendance_status || "")
                           .toLowerCase()
@@ -957,21 +1115,29 @@ function HomeOverview({
                 }`}
               >
                 {todayRecord?.attendance_status
-                  ? String(todayRecord.attendance_status).replace(/_/g, " ").toUpperCase()
+                  ? String(todayRecord.attendance_status)
+                      .replace(/_/g, " ")
+                      .toUpperCase()
                   : "NO STATUS"}
               </span>
             </div>
             {attendanceLoading ? (
-              <p className="mt-3 text-sm text-slate-500">Loading attendance...</p>
+              <p className="mt-3 text-sm text-slate-500">
+                Loading attendance...
+              </p>
             ) : null}
             {attendanceError ? (
               <p className="mt-3 text-sm text-red-600">{attendanceError}</p>
             ) : null}
             <div className="mt-4 grid gap-3 sm:grid-cols-5">
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <p className="text-[11px] uppercase tracking-wide text-slate-400">Today Log</p>
+                <p className="text-[11px] uppercase tracking-wide text-slate-400">
+                  Today Log
+                </p>
                 <p className="mt-1 text-sm font-semibold text-slate-800">
-                  {hasCheckedInToday ? formatAttendanceLogLocal(todayRecord?.check_in) : "—"}
+                  {hasCheckedInToday
+                    ? formatAttendanceLogLocal(todayRecord?.check_in)
+                    : "—"}
                 </p>
               </div>
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
@@ -982,21 +1148,33 @@ function HomeOverview({
                   {String(workingHoursDisplay)}
                 </p>
                 {showLiveTimer ? (
-                  <p className="mt-1 text-[10px] text-slate-500">Timer runs until you check out</p>
+                  <p className="mt-1 text-[10px] text-slate-500">
+                    Timer runs until you check out
+                  </p>
                 ) : null}
               </div>
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <p className="text-[11px] uppercase tracking-wide text-slate-400">Late After</p>
-                <p className="mt-1 text-sm font-semibold text-rose-500">{lateAfter}</p>
-              </div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <p className="text-[11px] uppercase tracking-wide text-slate-400">Check Out Time</p>
-                <p className="mt-1 text-sm font-semibold text-slate-800">
-                  {hasCheckedOutToday ? formatAttendanceTimeLocal(todayRecord?.check_out) : "—"}
+                <p className="text-[11px] uppercase tracking-wide text-slate-400">
+                  Late After
+                </p>
+                <p className="mt-1 text-sm font-semibold text-rose-500">
+                  {lateAfter}
                 </p>
               </div>
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <p className="text-[11px] uppercase tracking-wide text-slate-400">Day Color</p>
+                <p className="text-[11px] uppercase tracking-wide text-slate-400">
+                  Check Out Time
+                </p>
+                <p className="mt-1 text-sm font-semibold text-slate-800">
+                  {hasCheckedOutToday
+                    ? formatAttendanceTimeLocal(todayRecord?.check_out)
+                    : "—"}
+                </p>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="text-[11px] uppercase tracking-wide text-slate-400">
+                  Day Color
+                </p>
                 <span
                   className={`mt-1 inline-block rounded px-2 py-0.5 text-xs font-semibold ${dayVisual.boxClass}`}
                 >
@@ -1016,7 +1194,9 @@ function HomeOverview({
               <button
                 type="button"
                 onClick={() => void markCheckOut()}
-                disabled={!hasCheckedInToday || hasCheckedOutToday || checkOutSubmitting}
+                disabled={
+                  !hasCheckedInToday || hasCheckedOutToday || checkOutSubmitting
+                }
                 className="rounded-md bg-rose-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {checkOutSubmitting
@@ -1042,10 +1222,14 @@ function HomeOverview({
               </button>
             </div>
             {logSuccessMessage ? (
-              <p className="mt-2 text-sm text-emerald-700">{logSuccessMessage}</p>
+              <p className="mt-2 text-sm text-emerald-700">
+                {logSuccessMessage}
+              </p>
             ) : null}
             {attendanceActionError ? (
-              <p className="mt-3 text-sm text-red-600">{attendanceActionError}</p>
+              <p className="mt-3 text-sm text-red-600">
+                {attendanceActionError}
+              </p>
             ) : null}
           </div>
         </section>
@@ -1058,7 +1242,7 @@ export default function HomePage() {
   const ctx = useManagementDashboardContext();
   const params = useParams();
   const orgId = Number(params?.org_id);
-
+ 
   if (!ctx) {
     return (
       <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
