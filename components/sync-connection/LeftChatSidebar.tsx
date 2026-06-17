@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   MdAdd,
+  MdArrowBack,
   MdCall,
   MdGroups,
   MdOutlineSearch,
@@ -22,6 +23,11 @@ import {
 import { useChatContext } from "./ChatContext";
 import type { ChatTab } from "./types";
 import ChatAvatar from "./ChatAvatar";
+import {
+  fetchChatOrgUsers,
+  jwtUserId,
+  type ChatOrgUser,
+} from "@/services/chatApplication";
 
 const TABS: { id: ChatTab; label: string; path: string; icon: React.ReactNode }[] =
   [
@@ -76,8 +82,45 @@ export default function LeftChatSidebar() {
   } = useChatContext();
 
   const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [showNewChatPicker, setShowNewChatPicker] = useState(false);
+  const [orgUsers, setOrgUsers] = useState<ChatOrgUser[]>([]);
+  const [loadingOrgUsers, setLoadingOrgUsers] = useState(false);
 
   const activeTab = tabFromPathname(pathname, base);
+
+  const loadOrgUsers = useCallback(async () => {
+    setLoadingOrgUsers(true);
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+      const users = await fetchChatOrgUsers(token, orgId);
+      const currentUserId = jwtUserId(token);
+      setOrgUsers(
+        users.filter((u) => Number(u.user_id) !== Number(currentUserId ?? -1)),
+      );
+    } catch {
+      setOrgUsers([]);
+    } finally {
+      setLoadingOrgUsers(false);
+    }
+  }, [orgId]);
+
+  const openNewChatPicker = useCallback(() => {
+    setShowNewChatPicker(true);
+    setSearchQuery("");
+    void loadOrgUsers();
+  }, [loadOrgUsers, setSearchQuery]);
+
+  const closeNewChatPicker = useCallback(() => {
+    setShowNewChatPicker(false);
+    setSearchQuery("");
+  }, [setSearchQuery]);
+
+  useEffect(() => {
+    if (activeTab !== "individual") {
+      setShowNewChatPicker(false);
+    }
+  }, [activeTab]);
 
   const filteredIndividuals = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -114,6 +157,27 @@ export default function LeftChatSidebar() {
         s.preview_text?.toLowerCase().includes(q),
     );
   }, [searchQuery]);
+
+  const filteredOrgUsers = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return orgUsers;
+    return orgUsers.filter(
+      (u) =>
+        u.user_name.toLowerCase().includes(q) ||
+        u.user_email.toLowerCase().includes(q),
+    );
+  }, [orgUsers, searchQuery]);
+
+  const searchPlaceholder =
+    activeTab === "individual" && showNewChatPicker
+      ? "Search users"
+      : activeTab === "individual"
+        ? "Search chats"
+        : activeTab === "groups"
+          ? "Search groups"
+          : activeTab === "calls"
+            ? "Search calls"
+            : "Search status";
 
   return (
     <aside
@@ -159,9 +223,20 @@ export default function LeftChatSidebar() {
         })}
       </nav>
 
+      {(activeTab !== "individual" || showNewChatPicker || individualChats.length > 0) && (
       <div className="shrink-0 border-b border-[#E4E7EC] bg-white px-3 py-2.5">
+        {activeTab === "individual" && showNewChatPicker && (
+          <button
+            type="button"
+            onClick={closeNewChatPicker}
+            className="mb-2 flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-sm font-medium text-[#008CD3] outline-none"
+          >
+            <MdArrowBack className="text-base" aria-hidden />
+            Back to chats
+          </button>
+        )}
         <label className="relative block">
-          <span className="sr-only">Search conversations</span>
+          <span className="sr-only">Search</span>
           <MdOutlineSearch
             className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-lg text-[#9CA3AF]"
             aria-hidden
@@ -170,25 +245,48 @@ export default function LeftChatSidebar() {
             type="search"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={
-              activeTab === "individual"
-                ? "Search chats"
-                : activeTab === "groups"
-                  ? "Search groups"
-                  : activeTab === "calls"
-                    ? "Search calls"
-                    : "Search status"
-            }
+            placeholder={searchPlaceholder}
             className="w-full rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] py-2 pl-9 pr-3 text-sm text-[#111827] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:bg-white focus:ring-2 focus:ring-[#008CD3]/15"
           />
         </label>
       </div>
+      )}
 
       <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-width:thin]">
-        {activeTab === "individual" && (
+        {activeTab === "individual" && showNewChatPicker && (
+          <div role="list" aria-label="Select user to chat">
+            {loadingOrgUsers ? (
+              <EmptyState message="Loading users…" />
+            ) : filteredOrgUsers.length === 0 ? (
+              <EmptyState message="No users match your search" />
+            ) : (
+              filteredOrgUsers.map((user) => (
+                <OrgUserListItem key={user.user_id} user={user} />
+              ))
+            )}
+          </div>
+        )}
+
+        {activeTab === "individual" && !showNewChatPicker && (
           <div role="list" aria-label="Individual chats">
+            <div className="border-b border-[#E4E7EC] px-3 py-2.5">
+              <button
+                type="button"
+                onClick={openNewChatPicker}
+                className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-[#008CD3]/50 bg-[#E8F4FB]/60 px-3 py-2.5 text-sm font-medium text-[#008CD3] outline-none transition hover:bg-[#E8F4FB]"
+              >
+                <MdAdd className="text-lg" aria-hidden />
+                Start new chat
+              </button>
+            </div>
             {filteredIndividuals.length === 0 ? (
-              <EmptyState message="No chats match your search" />
+              <EmptyState
+                message={
+                  individualChats.length === 0
+                    ? "No chat found"
+                    : "No chats match your search"
+                }
+              />
             ) : (
               filteredIndividuals.map((chat) => (
                 <ChatListItem
@@ -343,6 +441,27 @@ export default function LeftChatSidebar() {
         onCreated={() => void refreshGroupChats()}
       />
     </aside>
+  );
+}
+
+function OrgUserListItem({ user }: { user: ChatOrgUser }) {
+  return (
+    <div
+      role="listitem"
+      className="flex w-full items-center gap-3 border-b border-[#F3F4F6] bg-white px-4 py-3"
+    >
+      <ChatAvatar
+        name={user.user_name}
+        imageUrl={user.user_profile}
+        size="md"
+      />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[15px] font-semibold text-[#111827]">
+          {user.user_name}
+        </p>
+        <p className="truncate text-[13px] text-[#6B7280]">{user.user_email}</p>
+      </div>
+    </div>
   );
 }
 

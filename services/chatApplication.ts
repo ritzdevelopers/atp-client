@@ -152,7 +152,81 @@ export async function fetchMyChatGroups(
   return Array.isArray(result.data) ? result.data : [];
 }
 
-import type { GroupChat } from "@/components/sync-connection/types";
+import type { ChatParticipant, GroupChat } from "@/components/sync-connection/types";
+
+export type PrivateChatRecord = {
+  _id: string;
+  participant_info: {
+    receiver_profile_img?: string | null;
+    receiver_name: string;
+    receiver_email: string;
+    receiver_id: number | string;
+  };
+  last_message?: string;
+  last_message_status?: string;
+  last_message_time?: string | null;
+};
+
+function formatChatTimestamp(value: string | null | undefined): string | undefined {
+  if (!value) return undefined;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return undefined;
+  const now = new Date();
+  const isToday = date.toDateString() === now.toDateString();
+  if (isToday) {
+    return date.toLocaleTimeString(undefined, {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  }
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+export function mapPrivateChatToParticipant(
+  chat: PrivateChatRecord,
+): ChatParticipant {
+  return {
+    user_id: String(chat.participant_info.receiver_id),
+    user_name: chat.participant_info.receiver_name,
+    user_profile: chat.participant_info.receiver_profile_img || null,
+    user_last_message: chat.last_message || undefined,
+    last_message_at: formatChatTimestamp(chat.last_message_time),
+    unread_count: 0,
+  };
+}
+
+export async function fetchMyIndividualChats(
+  token: string,
+  orgId: string,
+): Promise<ChatParticipant[]> {
+  const q = encodeURIComponent(orgId);
+  const res = await fetch(
+    `${API_URL}/api/chat-application/get-my-all-chats?org_id=${q}`,
+    {
+      method: "GET",
+      headers: authHeaders(token),
+    },
+  );
+
+  const result = (await res.json()) as {
+    success?: boolean;
+    message?: string;
+    data?: PrivateChatRecord[];
+  };
+
+  if (res.status === 404) return [];
+  if (!res.ok) {
+    const error: ApiError = new Error(
+      result.message || "Failed to load chats",
+    );
+    error.status = res.status;
+    throw error;
+  }
+
+  return Array.isArray(result.data)
+    ? result.data.map(mapPrivateChatToParticipant)
+    : [];
+}
 
 export function mapGroupToChatParticipant(group: ChatGroupRecord): GroupChat {
   return {

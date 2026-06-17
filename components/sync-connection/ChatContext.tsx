@@ -11,9 +11,9 @@ import {
 import { useParams } from "next/navigation";
 import {
   fetchMyChatGroups,
+  fetchMyIndividualChats,
   mapGroupToChatParticipant,
 } from "@/services/chatApplication";
-import { DUMMY_INDIVIDUAL_CHATS } from "./dummyData";
 import type { ChatParticipant, ChatTab, GroupChat } from "./types";
 
 type AvatarPreview = {
@@ -30,6 +30,7 @@ type ChatContextValue = {
   groupChats: GroupChat[];
   setGroupChats: (chats: GroupChat[]) => void;
   refreshGroupChats: () => Promise<void>;
+  refreshIndividualChats: () => Promise<void>;
   selectedChat: ChatParticipant | null;
   selectChat: (chat: ChatParticipant | null) => void;
   searchQuery: string;
@@ -48,9 +49,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const orgId = String(params?.org_id ?? "");
 
   const [activeTab, setActiveTab] = useState<ChatTab>("individual");
-  const [individualChats, setIndividualChats] = useState<ChatParticipant[]>(
-    DUMMY_INDIVIDUAL_CHATS,
-  );
+  const [individualChats, setIndividualChats] = useState<ChatParticipant[]>([]);
   const [groupChats, setGroupChats] = useState<GroupChat[]>([]);
   const [selectedChat, setSelectedChat] = useState<ChatParticipant | null>(
     null,
@@ -74,6 +73,18 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setAvatarPreview(null);
   }, []);
 
+  const refreshIndividualChats = useCallback(async () => {
+    if (!orgId) return;
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    try {
+      const chats = await fetchMyIndividualChats(token, orgId);
+      setIndividualChats(chats);
+    } catch {
+      /* keep existing list on failure */
+    }
+  }, [orgId]);
+
   const refreshGroupChats = useCallback(async () => {
     if (!orgId) return;
     const token = localStorage.getItem("token");
@@ -95,6 +106,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       groupChats,
       setGroupChats,
       refreshGroupChats,
+      refreshIndividualChats,
       selectedChat,
       selectChat,
       searchQuery,
@@ -110,6 +122,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       individualChats,
       groupChats,
       refreshGroupChats,
+      refreshIndividualChats,
       selectedChat,
       selectChat,
       searchQuery,
