@@ -8,6 +8,7 @@ const ALWAYS_ALLOWED_SUFFIXES = [
   "/my-attendance-history",
   "/organization-employees/team-group",
   "/asset-handover",
+  "/sync-connection",
 ];
 
 /** Users with these nav paths may also open team detail / exit routes. */

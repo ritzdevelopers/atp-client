@@ -29,6 +29,7 @@ import {
   MdOutlineEventNote,
   MdOutlineManageAccounts,
   MdSpaceDashboard,
+  MdOutlineChat,
 } from "react-icons/md";
 
 /** Desktop (lg+) nav icons — mobile keeps `NavItem.icon` unchanged. */
@@ -179,6 +180,7 @@ function LeftSideBar({
       .trim()
       .toLowerCase() === "admin";
   const myHistoryActive = Boolean(pathname?.includes("/my-attendance-history"));
+  const chatActive = Boolean(pathname?.includes("/sync-connection"));
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [orgFeatureGroups, setOrgFeatureGroups] = useState<OrgFeatureGroup[]>(
     [],
@@ -486,7 +488,7 @@ function LeftSideBar({
             name: "Assign Task To Employees",
             path: `${base}/tasks-management/assign-task-to-employees`,
           },
-        ], 
+        ],
         requiredFeature: "task-management",
       },
       {
@@ -892,6 +894,30 @@ function LeftSideBar({
 
             <button
               type="button"
+              onClick={() => router.push(`${base}/sync-connection`)}
+              className={`
+              relative flex w-full cursor-pointer flex-col items-center justify-center gap-0.5 border-0 bg-transparent px-0.5 py-1.5 outline-none transition-colors duration-150
+              ${
+                chatActive
+                  ? "bg-[#E8F4FB] text-[#008CD3]"
+                  : "text-[#6B7280] hover:bg-[#F9FAFB] hover:text-[#374151]"
+              }
+            `}
+              title="Team chat"
+            >
+              {chatActive && (
+                <span className="absolute left-0 top-1/2 h-[50%] w-[3px] -translate-y-1/2 rounded-r-sm bg-[#008CD3]" />
+              )}
+              <span className="flex h-[26px] w-[26px] items-center justify-center">
+                <MdOutlineChat className={LG_ICON} aria-hidden />
+              </span>
+              <span className="line-clamp-2 w-full px-0.5 text-center text-[8.5px] font-medium leading-[1.15]">
+                Chat
+              </span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => setShowLogoutConfirm(true)}
               className="flex w-full cursor-pointer flex-col items-center justify-center gap-0.5 border-0 bg-transparent px-0.5 py-1.5 text-[#6B7280] outline-none transition-colors duration-150 hover:bg-[#FCE8E6] hover:text-[#D93025]"
               title="Sign out"
@@ -1096,6 +1122,23 @@ function LeftSideBar({
                 );
               })
             )}
+            <button
+              type="button"
+              onClick={() => {
+                setMobileFullMenuOpen(false);
+                router.push(`${base}/sync-connection`);
+              }}
+              className={`flex w-full items-center gap-3 border-b border-slate-200 px-4 py-3 text-left text-sm font-medium transition-colors duration-150 active:bg-slate-100 ${
+                chatActive
+                  ? "bg-amber-50/80 text-amber-900"
+                  : "text-slate-800"
+              }`}
+            >
+              <span className="text-xl text-slate-600">
+                <MdOutlineChat />
+              </span>
+              Team chat
+            </button>
             <button
               type="button"
               onClick={() => {
