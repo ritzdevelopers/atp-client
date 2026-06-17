@@ -1,5 +1,6 @@
 type RightMainSideProps = {
   children: React.ReactNode;
+  containScroll?: boolean;
 };
 
 export type RightMainSideOrganization = {
@@ -25,14 +26,18 @@ export type RightMainSideUser = {
   user_role_name?: string | null;
 };
 
-function RightMainSide({ children }: RightMainSideProps) {
-  /** Tighter gutters on phones, scale up through tablet (`md`) to desktop (`lg`). */
-  const shell =
-    "min-h-screen w-full min-w-0 bg-slate-50 px-3 py-4 [font-family:var(--font-inter),system-ui,sans-serif] sm:px-5 sm:py-6 md:px-6 md:py-8 lg:px-10 lg:py-10";
+function RightMainSide({ children, containScroll = false }: RightMainSideProps) {
+  const shell = containScroll
+    ? "flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden bg-slate-50 px-3 py-3 [font-family:var(--font-inter),system-ui,sans-serif] sm:px-5 sm:py-4 md:px-6 lg:px-8 lg:py-5"
+    : "min-h-screen w-full min-w-0 bg-slate-50 px-3 py-4 [font-family:var(--font-inter),system-ui,sans-serif] sm:px-5 sm:py-6 md:px-6 md:py-8 lg:px-10 lg:py-10";
+
+  const inner = containScroll
+    ? "flex h-full min-h-0 w-full min-w-0 max-w-full flex-col overflow-hidden"
+    : "mx-auto w-full min-w-0 max-w-8xl";
 
   return (
     <div className={shell}>
-      <div className="mx-auto w-full min-w-0 max-w-8xl">{children}</div>
+      <div className={inner}>{children}</div>
     </div>
   );
 }

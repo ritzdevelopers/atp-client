@@ -162,8 +162,7 @@ export default function RightChatInterface() {
       is_outgoing: true,
       status: "sent",
     };
-
-    setMessages((prev) => [...prev, optimisticMessage]);
+ 
     setMessage("");
 
     socket.emit("send_private_message", {

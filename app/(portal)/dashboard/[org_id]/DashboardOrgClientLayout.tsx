@@ -9,8 +9,15 @@ import { ManagementDashboardProvider } from "@/components/portal-dashboard/Layou
 import UserDashboard from "@/components/portal-dashboard/user-layout/Dashboard";
 import { useManagementDashboardData } from "@/components/portal-dashboard/Layout/useManagementDashboardData";
 import OrgFeatureRouteGuard from "@/components/portal-dashboard/Layout/OrgFeatureRouteGuard";
+import { useIsSyncConnectionRoute } from "@/lib/useIsSyncConnectionRoute";
 
-function ManagementDashboardLayout({ children }: { children: React.ReactNode }) {
+function ManagementDashboardLayout({
+  children,
+  containScroll,
+}: {
+  children: React.ReactNode;
+  containScroll: boolean;
+}) {
   const { organization, user, organizationAddresses, loading, accessableFeatures } =
     useManagementDashboardData();
 
@@ -28,13 +35,23 @@ function ManagementDashboardLayout({ children }: { children: React.ReactNode }) 
 
   return (
     <ManagementDashboardProvider value={{ organization, user, organizationAddresses, loading }}>
-      <main className="relative w-full">
-        <div className="relative z-5 flex w-full">
+      <main
+        className={`relative w-full ${containScroll ? "flex h-dvh max-h-dvh overflow-hidden" : ""}`}
+      >
+        <div
+          className={`relative z-5 flex w-full ${containScroll ? "min-h-0 flex-1 overflow-hidden" : ""}`}
+        >
           <LeftSideBar accessableFeatures={accessableFeatures} />
-          <section className="w-full pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-0">
+          <section
+            className={
+              containScroll
+                ? "flex min-h-0 w-full flex-1 flex-col overflow-hidden pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] lg:pb-0"
+                : "w-full pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-0"
+            }
+          >
             <Header />
-            <div className="flex-1">
-              <RightMainSide>{children}</RightMainSide>
+            <div className={containScroll ? "min-h-0 flex-1 overflow-hidden" : "flex-1"}>
+              <RightMainSide containScroll={containScroll}>{children}</RightMainSide>
             </div>
           </section>
         </div>
@@ -58,14 +75,36 @@ function readStoredDashboardType(): "management" | "employee" {
   return stored === "management" ? "management" : "employee";
 }
 
-export default function DashboardOrgClientLayout({ children }: { children: React.ReactNode }) {
+export default function DashboardOrgClientLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const params = useParams();
   const orgId = params?.org_id;
   const [dashboardType, setDashboardType] = useState<"management" | "employee">("employee");
+  const isSyncConnection = useIsSyncConnectionRoute();
 
   useEffect(() => {
     setDashboardType(readStoredDashboardType());
   }, [orgId]);
+
+  useEffect(() => {
+    if (!isSyncConnection) return;
+
+    const html = document.documentElement;
+    const body = document.body;
+    const prevHtmlOverflow = html.style.overflow;
+    const prevBodyOverflow = body.style.overflow;
+
+    html.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+
+    return () => {
+      html.style.overflow = prevHtmlOverflow;
+      body.style.overflow = prevBodyOverflow;
+    };
+  }, [isSyncConnection]);
 
   const isManagement = dashboardType === "management";
 
@@ -73,9 +112,11 @@ export default function DashboardOrgClientLayout({ children }: { children: React
     <>
       <OrgFeatureRouteGuard />
       {isManagement ? (
-        <ManagementDashboardLayout>{children}</ManagementDashboardLayout>
+        <ManagementDashboardLayout containScroll={isSyncConnection}>
+          {children}
+        </ManagementDashboardLayout>
       ) : (
-        <UserDashboard>{children}</UserDashboard>
+        <UserDashboard containScroll={isSyncConnection}>{children}</UserDashboard>
       )}
     </>
   );
