@@ -4,6 +4,7 @@ export type ChatParticipant = {
   user_id: string;
   user_name: string;
   user_profile?: string | null;
+  chat_id?: string | null;
   user_last_message?: string | null;
   last_message_at?: string | null;
   unread_count?: number;

@@ -21,7 +21,7 @@ import {
   getInitials,
 } from "./dummyData";
 import { useChatContext } from "./ChatContext";
-import type { ChatTab } from "./types";
+import type { ChatParticipant, ChatTab } from "./types";
 import ChatAvatar from "./ChatAvatar";
 import {
   fetchChatOrgUsers,
@@ -29,33 +29,37 @@ import {
   type ChatOrgUser,
 } from "@/services/chatApplication";
 
-const TABS: { id: ChatTab; label: string; path: string; icon: React.ReactNode }[] =
-  [
-    {
-      id: "individual",
-      label: "Chats",
-      path: "",
-      icon: <MdPerson className="text-[18px]" aria-hidden />,
-    },
-    {
-      id: "groups",
-      label: "Groups",
-      path: "/groups",
-      icon: <MdGroups className="text-[18px]" aria-hidden />,
-    },
-    {
-      id: "calls",
-      label: "Calls",
-      path: "/calls",
-      icon: <MdCall className="text-[18px]" aria-hidden />,
-    },
-    {
-      id: "status",
-      label: "Status",
-      path: "/status",
-      icon: <MdRadioButtonChecked className="text-[18px]" aria-hidden />,
-    },
-  ];
+const TABS: {
+  id: ChatTab;
+  label: string;
+  path: string;
+  icon: React.ReactNode;
+}[] = [
+  {
+    id: "individual",
+    label: "Chats",
+    path: "",
+    icon: <MdPerson className="text-[18px]" aria-hidden />,
+  },
+  {
+    id: "groups",
+    label: "Groups",
+    path: "/groups",
+    icon: <MdGroups className="text-[18px]" aria-hidden />,
+  },
+  {
+    id: "calls",
+    label: "Calls",
+    path: "/calls",
+    icon: <MdCall className="text-[18px]" aria-hidden />,
+  },
+  {
+    id: "status",
+    label: "Status",
+    path: "/status",
+    icon: <MdRadioButtonChecked className="text-[18px]" aria-hidden />,
+  },
+];
 
 function tabFromPathname(pathname: string | null, base: string): ChatTab {
   if (pathname?.startsWith(`${base}/groups`)) return "groups";
@@ -79,6 +83,7 @@ export default function LeftChatSidebar() {
     setSearchQuery,
     setActiveTab,
     mobileShowChat,
+    selectChat,
   } = useChatContext();
 
   const [showCreateGroup, setShowCreateGroup] = useState(false);
@@ -223,33 +228,35 @@ export default function LeftChatSidebar() {
         })}
       </nav>
 
-      {(activeTab !== "individual" || showNewChatPicker || individualChats.length > 0) && (
-      <div className="shrink-0 border-b border-[#E4E7EC] bg-white px-3 py-2.5">
-        {activeTab === "individual" && showNewChatPicker && (
-          <button
-            type="button"
-            onClick={closeNewChatPicker}
-            className="mb-2 flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-sm font-medium text-[#008CD3] outline-none"
-          >
-            <MdArrowBack className="text-base" aria-hidden />
-            Back to chats
-          </button>
-        )}
-        <label className="relative block">
-          <span className="sr-only">Search</span>
-          <MdOutlineSearch
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-lg text-[#9CA3AF]"
-            aria-hidden
-          />
-          <input
-            type="search"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={searchPlaceholder}
-            className="w-full rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] py-2 pl-9 pr-3 text-sm text-[#111827] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:bg-white focus:ring-2 focus:ring-[#008CD3]/15"
-          />
-        </label>
-      </div>
+      {(activeTab !== "individual" ||
+        showNewChatPicker ||
+        individualChats.length > 0) && (
+        <div className="shrink-0 border-b border-[#E4E7EC] bg-white px-3 py-2.5">
+          {activeTab === "individual" && showNewChatPicker && (
+            <button
+              type="button"
+              onClick={closeNewChatPicker}
+              className="mb-2 flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-sm font-medium text-[#008CD3] outline-none"
+            >
+              <MdArrowBack className="text-base" aria-hidden />
+              Back to chats
+            </button>
+          )}
+          <label className="relative block">
+            <span className="sr-only">Search</span>
+            <MdOutlineSearch
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-lg text-[#9CA3AF]"
+              aria-hidden
+            />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={searchPlaceholder}
+              className="w-full rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] py-2 pl-9 pr-3 text-sm text-[#111827] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:bg-white focus:ring-2 focus:ring-[#008CD3]/15"
+            />
+          </label>
+        </div>
       )}
 
       <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-width:thin]">
@@ -261,7 +268,11 @@ export default function LeftChatSidebar() {
               <EmptyState message="No users match your search" />
             ) : (
               filteredOrgUsers.map((user) => (
-                <OrgUserListItem key={user.user_id} user={user} />
+                <OrgUserListItem
+                  key={user.user_id}
+                  user={user}
+                  selectChat={selectChat}
+                />
               ))
             )}
           </div>
@@ -444,9 +455,26 @@ export default function LeftChatSidebar() {
   );
 }
 
-function OrgUserListItem({ user }: { user: ChatOrgUser }) {
+function OrgUserListItem({
+  user,
+  selectChat,
+}: {
+  user: ChatOrgUser;
+  selectChat: (user: ChatParticipant) => void;
+}) {
+  const chatParticipant: ChatParticipant = {
+    user_id: user.user_id.toString(),
+    user_name: user.user_name,
+    user_profile: user.user_profile,
+    user_last_message: null,
+    last_message_at: null,
+    unread_count: 0,
+    is_online: false,
+    is_typing: false,
+  };
   return (
     <div
+      onClick={() => selectChat(chatParticipant)}
       role="listitem"
       className="flex w-full items-center gap-3 border-b border-[#F3F4F6] bg-white px-4 py-3"
     >

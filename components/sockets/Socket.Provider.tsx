@@ -13,7 +13,9 @@ function SocketProvider({ children }: { children: React.ReactNode }) {
   const [socket_id, setSocket_id] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   useEffect(() => {
-    const socket = io(process.env.NEXT_PUBLIC_SOCKET_URL as string);
+    const socket = io(process.env.NEXT_PUBLIC_SOCKET_URL as string, {
+        transports: ["websocket","polling"],
+    });
     if(!isConnected) {
     socket.on("connect", () => {
       setIsConnected(true);

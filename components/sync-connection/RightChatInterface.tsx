@@ -1,24 +1,188 @@
 "use client";
 
 import {
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { useParams } from "next/navigation";
+import {
   MdArrowBack,
   MdAttachFile,
   MdCall,
   MdDone,
   MdDoneAll,
   MdEmojiEmotions,
-  MdMic,
   MdMoreVert,
   MdSearch,
+  MdSend,
   MdVideocam,
 } from "react-icons/md";
+import { SocketContext } from "@/components/sockets/Socket.Provider";
+import {
+  fetchPrivateChatHistory,
+  jwtUserId,
+  mapSocketMessageToChatMessage,
+  type SocketMessageRecord,
+} from "@/services/chatApplication";
 import ChatAvatar from "./ChatAvatar";
-import { DUMMY_CHAT_HISTORY } from "./dummyData";
 import { useChatContext } from "./ChatContext";
 import type { ChatMessage } from "./types";
 
 export default function RightChatInterface() {
+  const params = useParams();
+  const orgId = String(params?.org_id ?? "");
   const { selectedChat, mobileShowChat, setMobileShowChat } = useChatContext();
+  const { socket, isConnected } = useContext(SocketContext);
+
+  const [message, setMessage] = useState("");
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [chatId, setChatId] = useState<string | null>(null);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const currentUserId = useMemo(() => {
+    if (typeof window === "undefined") return null;
+    return jwtUserId(localStorage.getItem("token"));
+  }, []);
+
+  const contactUserId = selectedChat ? Number(selectedChat.user_id) : null;
+
+  useEffect(() => {
+    if (!socket || !isConnected || currentUserId == null) return;
+    socket.emit("join_user_room", currentUserId);
+  }, [socket, isConnected, currentUserId]);
+
+  useEffect(() => {
+    if (!selectedChat) {
+      setMessages([]);
+      setChatId(null);
+      return;
+    }
+
+    const nextChatId = selectedChat.chat_id ?? null;
+    setChatId(nextChatId);
+
+    if (!nextChatId) {
+      setMessages([]);
+      return;
+    }
+
+    const chatIdToLoad = nextChatId;
+    let cancelled = false;
+    async function loadHistory() {
+      setLoadingHistory(true);
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) return;
+        const history = await fetchPrivateChatHistory(
+          token,
+          orgId,
+          chatIdToLoad,
+        );
+        if (!cancelled) setMessages(history);
+      } catch {
+        if (!cancelled) setMessages([]);
+      } finally {
+        if (!cancelled) setLoadingHistory(false);
+      }
+    }
+
+    void loadHistory();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedChat, orgId]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  useEffect(() => {
+    if (!socket || !selectedChat || currentUserId == null || contactUserId == null) {
+      return;
+    }
+
+    const handleReceive = (raw: SocketMessageRecord) => {
+      const incomingChatId = raw.chat_id ? String(raw.chat_id) : null;
+      const activeChatId = chatId ?? selectedChat.chat_id ?? null;
+
+      if (
+        activeChatId &&
+        incomingChatId &&
+        incomingChatId !== activeChatId
+      ) {
+        return;
+      }
+
+      const mapped = mapSocketMessageToChatMessage(
+        raw,
+        currentUserId,
+        contactUserId,
+        selectedChat.user_profile,
+      );
+      if (!mapped) return;
+
+      if (!activeChatId && incomingChatId) {
+        setChatId(incomingChatId);
+      }
+
+      setMessages((prev) => {
+        if (prev.some((m) => m.message_id === mapped.message_id)) {
+          return prev.map((m) =>
+            m.message_id === mapped.message_id ? mapped : m,
+          );
+        }
+        return [...prev, mapped];
+      });
+    };
+
+    socket.on("receive_private_message", handleReceive);
+    return () => {
+      socket.off("receive_private_message", handleReceive);
+    };
+  }, [socket, selectedChat, currentUserId, contactUserId, chatId]);
+
+  const handleSendMessage = useCallback(() => {
+    const text = message.trim();
+    if (!text || !socket || !selectedChat || currentUserId == null) return;
+
+    const optimisticId = `temp-${Date.now()}`;
+    const optimisticMessage: ChatMessage = {
+      message_id: optimisticId,
+      text,
+      timestamp: new Date().toLocaleTimeString(undefined, {
+        hour: "numeric",
+        minute: "2-digit",
+      }),
+      is_outgoing: true,
+      status: "sent",
+    };
+
+    setMessages((prev) => [...prev, optimisticMessage]);
+    setMessage("");
+
+    socket.emit("send_private_message", {
+      sender: currentUserId,
+      delivered_to: Number(selectedChat.user_id),
+      type: "text",
+      content: text,
+      company_id: Number(orgId),
+      chat_type: "private",
+      ...(chatId ? { chat_id: chatId } : {}),
+    });
+  }, [message, socket, selectedChat, currentUserId, orgId, chatId]);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
 
   if (!selectedChat) {
     return (
@@ -32,9 +196,6 @@ export default function RightChatInterface() {
       </section>
     );
   }
-
-  const messages =
-    DUMMY_CHAT_HISTORY[selectedChat.user_id] ?? getDefaultMessages(selectedChat.user_name);
 
   return (
     <section
@@ -66,15 +227,27 @@ export default function RightChatInterface() {
             {selectedChat.user_name}
           </h2>
           <p className="text-xs text-[#6B7280]">
-            {selectedChat.is_online ? "Online" : "Last seen recently"}
+            {isConnected ? "Connected" : "Connecting…"}
           </p>
         </div>
 
         <div className="flex items-center gap-0.5">
-          <IconButton label="Search in chat" icon={<MdSearch className="text-xl" />} />
-          <IconButton label="Voice call" icon={<MdCall className="text-xl" />} />
-          <IconButton label="Video call" icon={<MdVideocam className="text-xl" />} />
-          <IconButton label="More options" icon={<MdMoreVert className="text-xl" />} />
+          <IconButton
+            label="Search in chat"
+            icon={<MdSearch className="text-xl" />}
+          />
+          <IconButton
+            label="Voice call"
+            icon={<MdCall className="text-xl" />}
+          />
+          <IconButton
+            label="Video call"
+            icon={<MdVideocam className="text-xl" />}
+          />
+          <IconButton
+            label="More options"
+            icon={<MdMoreVert className="text-xl" />}
+          />
         </div>
       </header>
 
@@ -85,15 +258,28 @@ export default function RightChatInterface() {
         }}
       >
         <div className="mx-auto flex max-w-3xl flex-col gap-2">
-          <DateDivider label="Today" />
-          {messages.map((msg) => (
-            <MessageBubble
-              key={msg.message_id}
-              message={msg}
-              contactName={selectedChat.user_name}
-              contactProfile={selectedChat.user_profile}
-            />
-          ))}
+          {loadingHistory ? (
+            <p className="py-8 text-center text-sm text-[#6B7280]">
+              Loading messages…
+            </p>
+          ) : messages.length === 0 ? (
+            <p className="py-8 text-center text-sm text-[#6B7280]">
+              No messages yet. Say hello!
+            </p>
+          ) : (
+            <>
+              <DateDivider label="Today" />
+              {messages.map((msg) => (
+                <MessageBubble
+                  key={msg.message_id}
+                  message={msg}
+                  contactName={selectedChat.user_name}
+                  contactProfile={selectedChat.user_profile}
+                />
+              ))}
+            </>
+          )}
+          <div ref={messagesEndRef} />
         </div>
       </div>
 
@@ -112,19 +298,23 @@ export default function RightChatInterface() {
           <div className="min-w-0 flex-1">
             <input
               type="text"
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyDown={handleKeyDown}
               placeholder="Type a message"
-              disabled
+              disabled={!isConnected}
               className="w-full rounded-xl border border-[#E4E7EC] bg-white px-4 py-2.5 text-sm text-[#111827] outline-none placeholder:text-[#9CA3AF] disabled:cursor-not-allowed disabled:opacity-70"
-              aria-label="Message input (coming soon)"
+              aria-label="Message input"
             />
           </div>
           <button
             type="button"
-            disabled
-            className="mb-0.5 flex h-10 w-10 shrink-0 cursor-not-allowed items-center justify-center rounded-full border-0 bg-[#008CD3] text-white opacity-70 outline-none"
-            aria-label="Send message (coming soon)"
+            onClick={handleSendMessage}
+            disabled={!isConnected || message.trim() === ""}
+            className="mb-0.5 flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-[#008CD3] text-white outline-none transition hover:bg-[#0070AA] disabled:cursor-not-allowed disabled:opacity-50"
+            aria-label="Send message"
           >
-            <MdMic className="text-xl" />
+            <MdSend className="text-xl" />
           </button>
         </div>
       </footer>
@@ -151,9 +341,7 @@ function EmptyWorkspace() {
           />
         </svg>
       </div>
-      <h2 className="text-xl font-semibold text-[#111827]">
-        Team messaging
-      </h2>
+      <h2 className="text-xl font-semibold text-[#111827]">Team messaging</h2>
       <p className="mt-2 max-w-sm text-sm leading-relaxed text-[#6B7280]">
         Select a conversation from the sidebar to view messages. Your chats are
         end-to-end ready for real-time sync.
@@ -198,9 +386,7 @@ function MessageBubble({
       )}
       <div
         className={`relative max-w-[85%] rounded-xl px-3 py-2 shadow-sm sm:max-w-[70%] ${
-          isOutgoing
-            ? "rounded-br-sm bg-[#DCF8C6]"
-            : "rounded-bl-sm bg-white"
+          isOutgoing ? "rounded-br-sm bg-[#DCF8C6]" : "rounded-bl-sm bg-white"
         }`}
       >
         <p className="whitespace-pre-wrap break-words text-[14px] leading-relaxed text-[#111827]">
@@ -245,15 +431,4 @@ function IconButton({
       {icon}
     </button>
   );
-}
-
-function getDefaultMessages(userName: string) {
-  return [
-    {
-      message_id: "default-1",
-      text: `Start a conversation with ${userName}.`,
-      timestamp: "Now",
-      is_outgoing: false,
-    },
-  ];
 }

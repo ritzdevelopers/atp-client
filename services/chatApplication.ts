@@ -187,12 +187,101 @@ export function mapPrivateChatToParticipant(
 ): ChatParticipant {
   return {
     user_id: String(chat.participant_info.receiver_id),
+    chat_id: String(chat._id),
     user_name: chat.participant_info.receiver_name,
     user_profile: chat.participant_info.receiver_profile_img || null,
     user_last_message: chat.last_message || undefined,
     last_message_at: formatChatTimestamp(chat.last_message_time),
     unread_count: 0,
   };
+}
+
+export type PrivateChatMessageRecord = {
+  _id: string;
+  content?: string;
+  sent_by_me?: boolean;
+  created_at?: string | null;
+  sender?: {
+    id?: number | string;
+    profile_picture?: string | null;
+  };
+};
+
+export function mapPrivateChatMessage(
+  msg: PrivateChatMessageRecord,
+): import("@/components/sync-connection/types").ChatMessage {
+  return {
+    message_id: String(msg._id),
+    text: msg.content ?? "",
+    timestamp: formatChatTimestamp(msg.created_at) ?? "Now",
+    is_outgoing: Boolean(msg.sent_by_me),
+    user_profile: msg.sender?.profile_picture ?? null,
+    status: msg.sent_by_me ? "sent" : undefined,
+  };
+}
+
+export type SocketMessageRecord = {
+  _id: string;
+  sender: number | string;
+  content?: string;
+  chat_id?: string;
+  createdAt?: string;
+  created_at?: string;
+};
+
+export function mapSocketMessageToChatMessage(
+  msg: SocketMessageRecord,
+  currentUserId: number,
+  contactUserId: number,
+  contactProfile?: string | null,
+): import("@/components/sync-connection/types").ChatMessage | null {
+  const senderId = Number(msg.sender);
+  const isOutgoing = senderId === currentUserId;
+  const isIncoming = senderId === contactUserId;
+
+  if (!isOutgoing && !isIncoming) return null;
+
+  return {
+    message_id: String(msg._id),
+    text: msg.content ?? "",
+    timestamp:
+      formatChatTimestamp(msg.createdAt ?? msg.created_at) ?? "Now",
+    is_outgoing: isOutgoing,
+    user_profile: isIncoming ? contactProfile : null,
+    status: isOutgoing ? "sent" : undefined,
+  };
+}
+
+export async function fetchPrivateChatHistory(
+  token: string,
+  orgId: string,
+  chatId: string,
+): Promise<import("@/components/sync-connection/types").ChatMessage[]> {
+  const orgQ = encodeURIComponent(orgId);
+  const res = await fetch(
+    `${API_URL}/api/chat-application/get-my-single-chat/${encodeURIComponent(chatId)}?org_id=${orgQ}`,
+    {
+      method: "GET",
+      headers: authHeaders(token),
+    },
+  );
+
+  const result = (await res.json()) as {
+    success?: boolean;
+    message?: string;
+    data?: { messages?: PrivateChatMessageRecord[] };
+  };
+
+  if (!res.ok) {
+    const error: ApiError = new Error(
+      result.message || "Failed to load chat history",
+    );
+    error.status = res.status;
+    throw error;
+  }
+
+  const rows = result.data?.messages;
+  return Array.isArray(rows) ? rows.map(mapPrivateChatMessage) : [];
 }
 
 export async function fetchMyIndividualChats(
