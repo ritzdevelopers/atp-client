@@ -205,10 +205,31 @@ export type PrivateChatMessageRecord = {
     id?: number | string;
     profile_picture?: string | null;
   };
+  seen_by?: Array<{ id?: number | string }>;
+  delivered_to?: Array<{ id?: number | string }>;
 };
+
+function resolveOutgoingMessageStatus(
+  msg: PrivateChatMessageRecord,
+  contactUserId?: number | null,
+): "sent" | "read" {
+  const recipientId =
+    contactUserId ??
+    (msg.delivered_to?.[0]?.id != null
+      ? Number(msg.delivered_to[0].id)
+      : null);
+  if (recipientId == null || Number.isNaN(recipientId)) return "sent";
+
+  const seenByIds = (msg.seen_by ?? [])
+    .map((user) => Number(user.id))
+    .filter((id) => !Number.isNaN(id));
+
+  return seenByIds.includes(recipientId) ? "read" : "sent";
+}
 
 export function mapPrivateChatMessage(
   msg: PrivateChatMessageRecord,
+  contactUserId?: number | null,
 ): import("@/components/sync-connection/types").ChatMessage {
   return {
     message_id: String(msg._id),
@@ -216,7 +237,9 @@ export function mapPrivateChatMessage(
     timestamp: formatChatTimestamp(msg.created_at) ?? "Now",
     is_outgoing: Boolean(msg.sent_by_me),
     user_profile: msg.sender?.profile_picture ?? null,
-    status: msg.sent_by_me ? "sent" : undefined,
+    status: msg.sent_by_me
+      ? resolveOutgoingMessageStatus(msg, contactUserId)
+      : undefined,
   };
 }
 
@@ -227,6 +250,8 @@ export type SocketMessageRecord = {
   chat_id?: string;
   createdAt?: string;
   created_at?: string;
+  seen_by?: Array<number | string>;
+  delivered_to?: Array<number | string>;
 };
 
 export function mapSocketMessageToChatMessage(
@@ -241,6 +266,10 @@ export function mapSocketMessageToChatMessage(
 
   if (!isOutgoing && !isIncoming) return null;
 
+  const seenByIds = (msg.seen_by ?? []).map(Number);
+  const isRead =
+    isOutgoing && seenByIds.includes(Number(contactUserId));
+
   return {
     message_id: String(msg._id),
     text: msg.content ?? "",
@@ -248,7 +277,7 @@ export function mapSocketMessageToChatMessage(
       formatChatTimestamp(msg.createdAt ?? msg.created_at) ?? "Now",
     is_outgoing: isOutgoing,
     user_profile: isIncoming ? contactProfile : null,
-    status: isOutgoing ? "sent" : undefined,
+    status: isOutgoing ? (isRead ? "read" : "sent") : undefined,
   };
 }
 
@@ -256,6 +285,7 @@ export async function fetchPrivateChatHistory(
   token: string,
   orgId: string,
   chatId: string,
+  contactUserId?: number | null,
 ): Promise<import("@/components/sync-connection/types").ChatMessage[]> {
   const orgQ = encodeURIComponent(orgId);
   const res = await fetch(
@@ -281,7 +311,9 @@ export async function fetchPrivateChatHistory(
   }
 
   const rows = result.data?.messages;
-  return Array.isArray(rows) ? rows.map(mapPrivateChatMessage) : [];
+  return Array.isArray(rows)
+    ? rows.map((msg) => mapPrivateChatMessage(msg, contactUserId))
+    : [];
 }
 
 export async function fetchMyIndividualChats(

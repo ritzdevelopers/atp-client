@@ -83,6 +83,7 @@ export default function RightChatInterface() {
           token,
           orgId,
           chatIdToLoad,
+          contactUserId,
         );
         if (!cancelled) setMessages(history);
       } catch {
@@ -96,7 +97,7 @@ export default function RightChatInterface() {
     return () => {
       cancelled = true;
     };
-  }, [selectedChat, orgId]);
+  }, [selectedChat, orgId, contactUserId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -397,8 +398,13 @@ function MessageBubble({
           }`}
         >
           <span className="text-[10px]">{message.timestamp}</span>
-          {isOutgoing && message.status && (
-            <span className="text-[#53BDEB]" aria-label={message.status}>
+          {isOutgoing && (
+            <span
+              className={
+                message.status === "read" ? "text-[#53BDEB]" : "text-[#9CA3AF]"
+              }
+              aria-label={message.status === "read" ? "Read" : "Sent"}
+            >
               {message.status === "read" ? (
                 <MdDoneAll className="text-sm" />
               ) : (
