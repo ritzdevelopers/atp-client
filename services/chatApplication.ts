@@ -405,16 +405,41 @@ export type ChatListUpdateSocketResponse = {
   data?: PrivateChatRecord;
 };
 
+export function getIndividualChatKey(chat: ChatParticipant): string {
+  return chat.chat_id ? String(chat.chat_id) : `user-${chat.user_id}`;
+}
+
+export function dedupeIndividualChats(
+  chats: ChatParticipant[],
+): ChatParticipant[] {
+  const byUserId = new Map<string, ChatParticipant>();
+
+  for (const chat of chats) {
+    const userKey = String(chat.user_id);
+    const existing = byUserId.get(userKey);
+    if (!existing) {
+      byUserId.set(userKey, chat);
+      continue;
+    }
+    if (chat.chat_id && !existing.chat_id) {
+      byUserId.set(userKey, chat);
+    }
+  }
+
+  return Array.from(byUserId.values());
+}
+
 export function mergeChatListUpdate(
   chats: ChatParticipant[],
   update: PrivateChatRecord,
 ): ChatParticipant[] {
   const mapped = mapPrivateChatToParticipant(update);
-  const without = chats.filter(
-    (chat) =>
-      chat.chat_id !== mapped.chat_id && chat.user_id !== mapped.user_id,
-  );
-  return [mapped, ...without];
+  const without = chats.filter((chat) => {
+    if (mapped.chat_id && chat.chat_id === mapped.chat_id) return false;
+    if (chat.user_id === mapped.user_id) return false;
+    return true;
+  });
+  return dedupeIndividualChats([mapped, ...without]);
 }
 
 export function fetchMyIndividualChatsViaSocket(
@@ -446,7 +471,7 @@ export function fetchMyIndividualChatsViaSocket(
       const rows = payload.data ?? [];
       settled = true;
       cleanup();
-      resolve(rows.map(mapPrivateChatToParticipant));
+      resolve(dedupeIndividualChats(rows.map(mapPrivateChatToParticipant)));
     };
 
     const onError = (err: { message?: string }) => {
@@ -503,8 +528,41 @@ export async function fetchMyIndividualChats(
   }
 
   return Array.isArray(result.data)
-    ? result.data.map(mapPrivateChatToParticipant)
+    ? dedupeIndividualChats(result.data.map(mapPrivateChatToParticipant))
     : [];
+}
+
+export async function deletePrivateMessages(
+  token: string,
+  orgId: string,
+  chatId: string,
+  messageIds: string[],
+): Promise<string[]> {
+  const orgQ = encodeURIComponent(orgId);
+  const res = await fetch(
+    `${API_URL}/api/chat-application/delete-my-messages/${encodeURIComponent(chatId)}?org_id=${orgQ}`,
+    {
+      method: "DELETE",
+      headers: authHeaders(token),
+      body: JSON.stringify({ message_ids: messageIds }),
+    },
+  );
+
+  const result = (await res.json()) as {
+    success?: boolean;
+    message?: string;
+    data?: { deleted_message_ids?: string[] };
+  };
+
+  if (!res.ok) {
+    const error: ApiError = new Error(
+      result.message || "Failed to delete messages",
+    );
+    error.status = res.status;
+    throw error;
+  }
+
+  return result.data?.deleted_message_ids ?? messageIds;
 }
 
 export function mapGroupToChatParticipant(group: ChatGroupRecord): GroupChat {

@@ -25,8 +25,10 @@ import type { ChatParticipant, ChatTab } from "./types";
 import ChatAvatar from "./ChatAvatar";
 import { SocketContext } from "@/components/sockets/Socket.Provider";
 import {
+  dedupeIndividualChats,
   fetchChatOrgUsers,
   fetchMyIndividualChatsViaSocket,
+  getIndividualChatKey,
   jwtUserId,
   mergeChatListUpdate,
   type ChatListUpdateSocketResponse,
@@ -120,7 +122,9 @@ export default function LeftChatSidebar() {
 
     const onChatListUpdate = (payload: ChatListUpdateSocketResponse) => {
       if (!payload.success || !payload.data) return;
-      setIndividualChats((prev) => mergeChatListUpdate(prev, payload.data!));
+      setIndividualChats((prev) =>
+        mergeChatListUpdate(prev, payload.data!),
+      );
     };
 
     socket.on("receive_chat_list_update", onChatListUpdate);
@@ -132,7 +136,7 @@ export default function LeftChatSidebar() {
       Number(orgId),
     )
       .then((chats) => {
-        if (!cancelled) setIndividualChats(chats);
+        if (!cancelled) setIndividualChats(dedupeIndividualChats(chats));
       })
       .catch(() => {
         if (!cancelled) setIndividualChats([]);
@@ -364,9 +368,13 @@ export default function LeftChatSidebar() {
             ) : (
               filteredIndividuals.map((chat) => (
                 <ChatListItem
-                  key={chat.user_id}
+                  key={getIndividualChatKey(chat)}
                   chat={chat}
-                  isActive={selectedChat?.user_id === chat.user_id}
+                  isActive={
+                    selectedChat != null &&
+                    getIndividualChatKey(selectedChat) ===
+                      getIndividualChatKey(chat)
+                  }
                 />
               ))
             )}
