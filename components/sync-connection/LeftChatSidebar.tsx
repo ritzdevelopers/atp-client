@@ -31,6 +31,7 @@ import {
   getIndividualChatKey,
   jwtUserId,
   mergeChatListUpdate,
+  sortIndividualChatsByLastMessage,
   type ChatListUpdateSocketResponse,
   type ChatOrgUser,
   type TypingIndicatorPayload,
@@ -299,12 +300,14 @@ export default function LeftChatSidebar() {
 
   const filteredIndividuals = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return individualChats;
-    return individualChats.filter(
-      (c) =>
-        c.user_name.toLowerCase().includes(q) ||
-        c.user_last_message?.toLowerCase().includes(q),
-    );
+    const list = !q
+      ? individualChats
+      : individualChats.filter(
+          (c) =>
+            c.user_name.toLowerCase().includes(q) ||
+            c.user_last_message?.toLowerCase().includes(q),
+        );
+    return sortIndividualChatsByLastMessage(list);
   }, [individualChats, searchQuery]);
 
   const filteredGroups = useMemo(() => {
@@ -638,6 +641,9 @@ function OrgUserListItem({
   user: ChatOrgUser;
   selectChat: (user: ChatParticipant) => void;
 }) {
+  const { getUserActiveStatus } = useContext(SocketContext);
+  const { isOnline } = getUserActiveStatus(user.user_id);
+
   const chatParticipant: ChatParticipant = {
     user_id: user.user_id.toString(),
     user_name: user.user_name,
@@ -645,7 +651,7 @@ function OrgUserListItem({
     user_last_message: null,
     last_message_at: null,
     unread_count: 0,
-    is_online: false,
+    is_online: isOnline,
     is_typing: false,
   };
   return (
@@ -658,6 +664,8 @@ function OrgUserListItem({
         name={user.user_name}
         imageUrl={user.user_profile}
         size="md"
+        showOnline
+        isOnline={isOnline}
       />
       <div className="min-w-0 flex-1">
         <p className="truncate text-[15px] font-semibold text-[#111827]">

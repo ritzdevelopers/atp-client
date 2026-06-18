@@ -195,6 +195,7 @@ export function mapPrivateChatToParticipant(
     user_profile: chat.participant_info.receiver_profile_img || null,
     user_last_message: chat.last_message || undefined,
     last_message_at: formatChatTimestamp(chat.last_message_time),
+    last_message_time: chat.last_message_time ?? null,
     unread_count: chat.unread_count ?? 0,
   };
 }
@@ -312,6 +313,54 @@ export type TypingIndicatorPayload = {
   typing?: boolean;
 };
 
+export type UserActiveStatusRecord = {
+  user_id: number;
+  org_id?: number;
+  is_online: boolean;
+  last_active_time?: string | Date | null;
+};
+
+export function formatLastActiveLabel(
+  lastActive: string | Date | null | undefined,
+  isOnline: boolean,
+): string {
+  if (isOnline) return "online";
+  if (!lastActive) return "offline";
+
+  const date =
+    typeof lastActive === "string" ? new Date(lastActive) : lastActive;
+  if (Number.isNaN(date.getTime())) return "offline";
+
+  const now = new Date();
+  const timeStr = date.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+  const isToday = date.toDateString() === now.toDateString();
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const isYesterday = date.toDateString() === yesterday.toDateString();
+
+  if (isToday) return `last seen today at ${timeStr}`;
+  if (isYesterday) return `last seen yesterday at ${timeStr}`;
+
+  const daysDiff = Math.floor(
+    (now.getTime() - date.getTime()) / (24 * 60 * 60 * 1000),
+  );
+  if (daysDiff < 7) {
+    const dayName = date.toLocaleDateString(undefined, { weekday: "long" });
+    return `last seen ${dayName} at ${timeStr}`;
+  }
+
+  const dateStr = date.toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+  return `last seen ${dateStr} at ${timeStr}`;
+}
+
 export type SingleChatHistorySocketResponse = {
   success?: boolean;
   message?: string;
@@ -415,6 +464,21 @@ export function getIndividualChatKey(chat: ChatParticipant): string {
   return chat.chat_id ? String(chat.chat_id) : `user-${chat.user_id}`;
 }
 
+export function sortIndividualChatsByLastMessage(
+  chats: ChatParticipant[],
+): ChatParticipant[] {
+  return [...chats].sort((a, b) => {
+    const aTime = a.last_message_time
+      ? new Date(a.last_message_time).getTime()
+      : 0;
+    const bTime = b.last_message_time
+      ? new Date(b.last_message_time).getTime()
+      : 0;
+    if (bTime !== aTime) return bTime - aTime;
+    return a.user_name.localeCompare(b.user_name);
+  });
+}
+
 export function dedupeIndividualChats(
   chats: ChatParticipant[],
 ): ChatParticipant[] {
@@ -432,7 +496,7 @@ export function dedupeIndividualChats(
     }
   }
 
-  return Array.from(byUserId.values());
+  return sortIndividualChatsByLastMessage(Array.from(byUserId.values()));
 }
 
 export function mergeChatListUpdate(
@@ -445,7 +509,7 @@ export function mergeChatListUpdate(
     if (chat.user_id === mapped.user_id) return false;
     return true;
   });
-  return dedupeIndividualChats([mapped, ...without]);
+  return dedupeIndividualChats([...without, mapped]);
 }
 
 export function fetchMyIndividualChatsViaSocket(

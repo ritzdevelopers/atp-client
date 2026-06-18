@@ -27,6 +27,7 @@ import { SocketContext } from "@/components/sockets/Socket.Provider";
 import {
   deletePrivateMessages,
   fetchPrivateChatHistory,
+  formatLastActiveLabel,
   jwtUserId,
   mapSocketMessageToChatMessage,
   type SeenPrivateMessagePayload,
@@ -94,7 +95,7 @@ export default function RightChatInterface() {
   );
   const isLgScreen = useIsLgScreen();
   const { selectedChat, mobileShowChat, setMobileShowChat } = useChatContext();
-  const { socket, isConnected } = useContext(SocketContext);
+  const { socket, isConnected, getUserActiveStatus } = useContext(SocketContext);
 
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -141,6 +142,13 @@ export default function RightChatInterface() {
   }, []);
 
   const contactUserId = selectedChat ? Number(selectedChat.user_id) : null;
+
+  const contactActiveStatus = useMemo(() => {
+    if (!selectedChat) {
+      return { isOnline: false, lastActiveTime: null };
+    }
+    return getUserActiveStatus(selectedChat.user_id);
+  }, [selectedChat, getUserActiveStatus]);
 
   const deletableMessages = useMemo(
     () =>
@@ -680,20 +688,29 @@ export default function RightChatInterface() {
           imageUrl={selectedChat.user_profile}
           size="sm"
           showOnline
-          isOnline={selectedChat.is_online}
+          isOnline={contactActiveStatus.isOnline}
         />
 
         <div className="min-w-0 flex-1">
           <h2 className="truncate text-[15px] font-semibold text-[#111827]">
             {selectedChat.user_name}
           </h2>
-          <p className="text-xs text-[#6B7280]">
+          <p className="text-xs">
             {contactIsTyping ? (
               <span className="font-medium text-[#008CD3]">typing…</span>
-            ) : isConnected ? (
-              "Connected"
+            ) : !isConnected ? (
+              <span className="text-[#6B7280]">Connecting…</span>
+            ) : contactActiveStatus.isOnline ? (
+              <span className="font-medium text-emerald-600">online</span>
             ) : (
-              "Connecting…"
+              <span className="text-[#9CA3AF]">
+                {contactActiveStatus.lastActiveTime
+                  ? formatLastActiveLabel(
+                      contactActiveStatus.lastActiveTime,
+                      false,
+                    )
+                  : "offline"}
+              </span>
             )}
           </p>
         </div>

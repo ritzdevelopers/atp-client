@@ -7,6 +7,8 @@ export type ChatParticipant = {
   chat_id?: string | null;
   user_last_message?: string | null;
   last_message_at?: string | null;
+  /** Raw ISO timestamp for sorting — not for display */
+  last_message_time?: string | null;
   unread_count?: number;
   is_online?: boolean;
   is_typing?: boolean;
