@@ -30,6 +30,7 @@ import {
   jwtUserId,
   mapSocketMessageToChatMessage,
   type SeenPrivateMessagePayload,
+  type TypingIndicatorPayload,
   type SocketMessageRecord,
 } from "@/services/chatApplication";
 import ChatAvatar from "./ChatAvatar";
@@ -110,6 +111,7 @@ export default function RightChatInterface() {
   const [selectedDeleteIds, setSelectedDeleteIds] = useState<string[]>([]);
   const [deletingMessages, setDeletingMessages] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [contactIsTyping, setContactIsTyping] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const callMenuRef = useRef<HTMLDivElement>(null);
@@ -117,6 +119,13 @@ export default function RightChatInterface() {
   const mobileInputRef = useRef<HTMLInputElement>(null);
   const joinedChatIdRef = useRef<string | null>(null);
   const messageMenuRef = useRef<HTMLDivElement>(null);
+  const isTypingActiveRef = useRef(false);
+  const typingStopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const contactTypingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
 
   useClickOutside(callMenuRef, () => setCallMenuOpen(false), callMenuOpen);
   useClickOutside(moreMenuRef, () => setMoreMenuOpen(false), moreMenuOpen);
@@ -215,11 +224,6 @@ export default function RightChatInterface() {
     return messages.filter((msg) => msg.text.toLowerCase().includes(q));
   }, [messages, chatSearchQuery]);
 
-  const handleEmojiSelect = useCallback((emoji: string) => {
-    setMessage((prev) => prev + emoji);
-    mobileInputRef.current?.focus();
-  }, []);
-
   const leaveChatRoom = useCallback(
     (roomId?: string | null) => {
       if (!socket) return;
@@ -240,10 +244,177 @@ export default function RightChatInterface() {
       (isLgScreen || mobileShowChat),
   );
 
+  const emitTypingStop = useCallback(() => {
+    if (
+      !socket ||
+      !chatId ||
+      currentUserId == null ||
+      contactUserId == null ||
+      !isTypingActiveRef.current
+    ) {
+      return;
+    }
+
+    isTypingActiveRef.current = false;
+    socket.emit("typing_stop", {
+      chat_id: chatId,
+      user_id: currentUserId,
+      receiver_id: contactUserId,
+    });
+  }, [socket, chatId, currentUserId, contactUserId]);
+
+  const handleMessageChange = useCallback(
+    (value: string) => {
+      setMessage(value);
+
+      if (
+        deleteMode ||
+        !socket ||
+        !chatId ||
+        currentUserId == null ||
+        contactUserId == null ||
+        !isViewingChat
+      ) {
+        return;
+      }
+
+      const trimmed = value.trim();
+      if (!trimmed) {
+        if (typingStopTimeoutRef.current) {
+          clearTimeout(typingStopTimeoutRef.current);
+          typingStopTimeoutRef.current = null;
+        }
+        emitTypingStop();
+        return;
+      }
+
+      if (!isTypingActiveRef.current) {
+        isTypingActiveRef.current = true;
+        socket.emit("typing_indicator", {
+          chat_id: chatId,
+          user_id: currentUserId,
+          receiver_id: contactUserId,
+        });
+      }
+
+      if (typingStopTimeoutRef.current) {
+        clearTimeout(typingStopTimeoutRef.current);
+      }
+      typingStopTimeoutRef.current = setTimeout(() => {
+        emitTypingStop();
+        typingStopTimeoutRef.current = null;
+      }, 2000);
+    },
+    [
+      socket,
+      chatId,
+      currentUserId,
+      contactUserId,
+      isViewingChat,
+      deleteMode,
+      emitTypingStop,
+    ],
+  );
+
+  const handleMessageBlur = useCallback(() => {
+    if (typingStopTimeoutRef.current) {
+      clearTimeout(typingStopTimeoutRef.current);
+      typingStopTimeoutRef.current = null;
+    }
+    emitTypingStop();
+  }, [emitTypingStop]);
+
+  const handleEmojiSelect = useCallback(
+    (emoji: string) => {
+      handleMessageChange(message + emoji);
+      mobileInputRef.current?.focus();
+    },
+    [handleMessageChange, message],
+  );
+
+  useEffect(() => {
+    setContactIsTyping(false);
+    isTypingActiveRef.current = false;
+    if (typingStopTimeoutRef.current) {
+      clearTimeout(typingStopTimeoutRef.current);
+      typingStopTimeoutRef.current = null;
+    }
+  }, [selectedChat?.user_id, chatId]);
+
+  useEffect(() => {
+    return () => {
+      if (typingStopTimeoutRef.current) {
+        clearTimeout(typingStopTimeoutRef.current);
+      }
+      if (contactTypingTimeoutRef.current) {
+        clearTimeout(contactTypingTimeoutRef.current);
+      }
+      emitTypingStop();
+    };
+  }, [emitTypingStop]);
+
   useEffect(() => {
     if (!socket || !isConnected || currentUserId == null) return;
     socket.emit("join_user_room", currentUserId);
   }, [socket, isConnected, currentUserId]);
+
+  useEffect(() => {
+    if (!socket || currentUserId == null) return;
+
+    const clearContactTypingLater = () => {
+      if (contactTypingTimeoutRef.current) {
+        clearTimeout(contactTypingTimeoutRef.current);
+      }
+      contactTypingTimeoutRef.current = setTimeout(() => {
+        setContactIsTyping(false);
+        contactTypingTimeoutRef.current = null;
+      }, 3000);
+    };
+
+    const handleTyping = (payload: TypingIndicatorPayload) => {
+      if (Number(payload.user_id) === currentUserId) return;
+
+      const typerUserId = String(payload.user_id);
+      const activeChatId = chatId ?? selectedChat?.chat_id ?? null;
+
+      if (
+        !selectedChat ||
+        !isViewingChat ||
+        !activeChatId ||
+        String(payload.chat_id) !== String(activeChatId) ||
+        typerUserId !== String(selectedChat.user_id)
+      ) {
+        return;
+      }
+
+      setContactIsTyping(true);
+      clearContactTypingLater();
+    };
+
+    const handleTypingStop = (payload: TypingIndicatorPayload) => {
+      if (Number(payload.user_id) === currentUserId) return;
+      if (String(payload.user_id) !== String(selectedChat?.user_id ?? "")) {
+        return;
+      }
+
+      if (contactTypingTimeoutRef.current) {
+        clearTimeout(contactTypingTimeoutRef.current);
+        contactTypingTimeoutRef.current = null;
+      }
+      setContactIsTyping(false);
+    };
+
+    socket.on("typing_indicator", handleTyping);
+    socket.on("typing_stop", handleTypingStop);
+
+    return () => {
+      socket.off("typing_indicator", handleTyping);
+      socket.off("typing_stop", handleTypingStop);
+      if (contactTypingTimeoutRef.current) {
+        clearTimeout(contactTypingTimeoutRef.current);
+      }
+    };
+  }, [socket, currentUserId, selectedChat, chatId, isViewingChat]);
 
   useEffect(() => {
     if (!socket || currentUserId == null) {
@@ -435,6 +606,12 @@ export default function RightChatInterface() {
     const text = message.trim();
     if (!text || !socket || !selectedChat || currentUserId == null) return;
 
+    if (typingStopTimeoutRef.current) {
+      clearTimeout(typingStopTimeoutRef.current);
+      typingStopTimeoutRef.current = null;
+    }
+    emitTypingStop();
+
     const optimisticId = `temp-${Date.now()}`;
     const optimisticMessage: ChatMessage = {
       message_id: optimisticId,
@@ -459,7 +636,7 @@ export default function RightChatInterface() {
       chat_type: "private",
       ...(chatId ? { chat_id: chatId } : {}),
     });
-  }, [message, socket, selectedChat, currentUserId, orgId, chatId]);
+  }, [message, socket, selectedChat, currentUserId, orgId, chatId, emitTypingStop]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -511,7 +688,13 @@ export default function RightChatInterface() {
             {selectedChat.user_name}
           </h2>
           <p className="text-xs text-[#6B7280]">
-            {isConnected ? "Connected" : "Connecting…"}
+            {contactIsTyping ? (
+              <span className="font-medium text-[#008CD3]">typing…</span>
+            ) : isConnected ? (
+              "Connected"
+            ) : (
+              "Connecting…"
+            )}
           </p>
         </div>
 
@@ -718,7 +901,8 @@ export default function RightChatInterface() {
             <input
               type="text"
               value={message}
-              onChange={(e) => setMessage(e.target.value)}
+              onChange={(e) => handleMessageChange(e.target.value)}
+              onBlur={handleMessageBlur}
               onKeyDown={handleKeyDown}
               placeholder="Type a message"
               disabled={!isConnected}
@@ -760,7 +944,8 @@ export default function RightChatInterface() {
               ref={mobileInputRef}
               type="text"
               value={message}
-              onChange={(e) => setMessage(e.target.value)}
+              onChange={(e) => handleMessageChange(e.target.value)}
+              onBlur={handleMessageBlur}
               onKeyDown={handleKeyDown}
               onFocus={() => setEmojiPickerOpen(false)}
               placeholder="Message"

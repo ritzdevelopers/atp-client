@@ -306,6 +306,12 @@ export type SeenPrivateMessagePayload = {
   sender_ids: number[];
 };
 
+export type TypingIndicatorPayload = {
+  chat_id: string;
+  user_id: number | string;
+  typing?: boolean;
+};
+
 export type SingleChatHistorySocketResponse = {
   success?: boolean;
   message?: string;
