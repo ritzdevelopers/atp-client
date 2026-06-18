@@ -6,7 +6,9 @@ import {
   useContext,
   useMemo,
   useState,
+  type Dispatch,
   type ReactNode,
+  type SetStateAction,
 } from "react";
 import { useParams } from "next/navigation";
 import {
@@ -26,7 +28,7 @@ type ChatContextValue = {
   activeTab: ChatTab;
   setActiveTab: (tab: ChatTab) => void;
   individualChats: ChatParticipant[];
-  setIndividualChats: (chats: ChatParticipant[]) => void;
+  setIndividualChats: Dispatch<SetStateAction<ChatParticipant[]>>;
   groupChats: GroupChat[];
   setGroupChats: (chats: GroupChat[]) => void;
   refreshGroupChats: () => Promise<void>;
@@ -62,7 +64,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const selectChat = useCallback((chat: ChatParticipant | null) => {
     setSelectedChat(chat);
-    if (chat) setMobileShowChat(true);
+    if (chat) {
+      setMobileShowChat(true);
+      setIndividualChats((prev) =>
+        prev.map((item) =>
+          item.user_id === chat.user_id ? { ...item, unread_count: 0 } : item,
+        ),
+      );
+    }
   }, []);
 
   const openAvatarPreview = useCallback((preview: AvatarPreview) => {

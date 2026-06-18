@@ -1,3 +1,5 @@
+import type { Socket } from "socket.io-client";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
 export type ApiError = Error & { status?: number };
@@ -165,6 +167,7 @@ export type PrivateChatRecord = {
   last_message?: string;
   last_message_status?: string;
   last_message_time?: string | null;
+  unread_count?: number;
 };
 
 function formatChatTimestamp(value: string | null | undefined): string | undefined {
@@ -192,7 +195,7 @@ export function mapPrivateChatToParticipant(
     user_profile: chat.participant_info.receiver_profile_img || null,
     user_last_message: chat.last_message || undefined,
     last_message_at: formatChatTimestamp(chat.last_message_time),
-    unread_count: 0,
+    unread_count: chat.unread_count ?? 0,
   };
 }
 
@@ -212,7 +215,7 @@ export type PrivateChatMessageRecord = {
 function resolveOutgoingMessageStatus(
   msg: PrivateChatMessageRecord,
   contactUserId?: number | null,
-): "sent" | "read" {
+): "sent" | "delivered" | "read" {
   const recipientId =
     contactUserId ??
     (msg.delivered_to?.[0]?.id != null
@@ -224,7 +227,13 @@ function resolveOutgoingMessageStatus(
     .map((user) => Number(user.id))
     .filter((id) => !Number.isNaN(id));
 
-  return seenByIds.includes(recipientId) ? "read" : "sent";
+  if (seenByIds.includes(recipientId)) return "read";
+
+  const deliveredToIds = (msg.delivered_to ?? [])
+    .map((user) => Number(user.id))
+    .filter((id) => !Number.isNaN(id));
+
+  return deliveredToIds.includes(recipientId) ? "delivered" : "sent";
 }
 
 export function mapPrivateChatMessage(
@@ -267,8 +276,11 @@ export function mapSocketMessageToChatMessage(
   if (!isOutgoing && !isIncoming) return null;
 
   const seenByIds = (msg.seen_by ?? []).map(Number);
-  const isRead =
-    isOutgoing && seenByIds.includes(Number(contactUserId));
+  const deliveredToIds = (msg.delivered_to ?? []).map(Number);
+  const recipientId = Number(contactUserId);
+  const isRead = isOutgoing && seenByIds.includes(recipientId);
+  const isDelivered =
+    isOutgoing && !isRead && deliveredToIds.includes(recipientId);
 
   return {
     message_id: String(msg._id),
@@ -277,43 +289,189 @@ export function mapSocketMessageToChatMessage(
       formatChatTimestamp(msg.createdAt ?? msg.created_at) ?? "Now",
     is_outgoing: isOutgoing,
     user_profile: isIncoming ? contactProfile : null,
-    status: isOutgoing ? (isRead ? "read" : "sent") : undefined,
+    status: isOutgoing
+      ? isRead
+        ? "read"
+        : isDelivered
+          ? "delivered"
+          : "sent"
+      : undefined,
   };
 }
 
-export async function fetchPrivateChatHistory(
-  token: string,
-  orgId: string,
-  chatId: string,
-  contactUserId?: number | null,
-): Promise<import("@/components/sync-connection/types").ChatMessage[]> {
-  const orgQ = encodeURIComponent(orgId);
-  const res = await fetch(
-    `${API_URL}/api/chat-application/get-my-single-chat/${encodeURIComponent(chatId)}?org_id=${orgQ}`,
-    {
-      method: "GET",
-      headers: authHeaders(token),
-    },
-  );
+export type SeenPrivateMessagePayload = {
+  chat_id: string;
+  seen_by: number;
+  message_ids: string[];
+  sender_ids: number[];
+};
 
-  const result = (await res.json()) as {
-    success?: boolean;
-    message?: string;
-    data?: { messages?: PrivateChatMessageRecord[] };
+export type SingleChatHistorySocketResponse = {
+  success?: boolean;
+  message?: string;
+  data?: {
+    chat?: { _id?: string };
+    messages?: SocketMessageRecord[];
   };
+};
 
-  if (!res.ok) {
-    const error: ApiError = new Error(
-      result.message || "Failed to load chat history",
-    );
-    error.status = res.status;
-    throw error;
-  }
+export function fetchPrivateChatHistory(
+  socket: Socket,
+  chatId: string,
+  userId: number,
+  contactUserId: number,
+  contactProfile?: string | null,
+  options: { page?: number; limit?: number } = {},
+): Promise<import("@/components/sync-connection/types").ChatMessage[]> {
+  return new Promise((resolve, reject) => {
+    const timeoutMs = 15000;
+    let settled = false;
 
-  const rows = result.data?.messages;
-  return Array.isArray(rows)
-    ? rows.map((msg) => mapPrivateChatMessage(msg, contactUserId))
-    : [];
+    const cleanup = () => {
+      clearTimeout(timeoutId);
+      socket.off("receive_single_chat_history", onHistory);
+      socket.off("error", onError);
+    };
+
+    const onHistory = (payload: SingleChatHistorySocketResponse) => {
+      if (settled) return;
+
+      const responseChatId = payload.data?.chat?._id;
+      if (!responseChatId || String(responseChatId) !== String(chatId)) return;
+
+      if (!payload.success) {
+        settled = true;
+        cleanup();
+        reject(new Error(payload.message || "Failed to load chat history"));
+        return;
+      }
+
+      const rows = payload.data?.messages ?? [];
+      const mapped = rows
+        .map((msg) =>
+          mapSocketMessageToChatMessage(
+            { ...msg, chat_id: chatId },
+            userId,
+            contactUserId,
+            contactProfile,
+          ),
+        )
+        .filter(
+          (
+            msg,
+          ): msg is import("@/components/sync-connection/types").ChatMessage =>
+            msg != null,
+        );
+
+      settled = true;
+      cleanup();
+      resolve(mapped);
+    };
+
+    const onError = (err: { message?: string }) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new Error(err?.message || "Failed to load chat history"));
+    };
+
+    const timeoutId = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new Error("Chat history request timed out"));
+    }, timeoutMs);
+
+    socket.on("receive_single_chat_history", onHistory);
+    socket.on("error", onError);
+    socket.emit("get_single_chat_history", {
+      chat_id: chatId,
+      user_id: userId,
+      page: options.page ?? 1,
+      limit: options.limit ?? 50,
+    });
+  });
+}
+
+export type AllMessagesSocketResponse = {
+  success?: boolean;
+  message?: string;
+  data?: PrivateChatRecord[];
+  pagination?: { page: number; limit: number; returned: number };
+};
+
+export type ChatListUpdateSocketResponse = {
+  success?: boolean;
+  data?: PrivateChatRecord;
+};
+
+export function mergeChatListUpdate(
+  chats: ChatParticipant[],
+  update: PrivateChatRecord,
+): ChatParticipant[] {
+  const mapped = mapPrivateChatToParticipant(update);
+  const without = chats.filter(
+    (chat) =>
+      chat.chat_id !== mapped.chat_id && chat.user_id !== mapped.user_id,
+  );
+  return [mapped, ...without];
+}
+
+export function fetchMyIndividualChatsViaSocket(
+  socket: Socket,
+  userId: number,
+  companyId: number,
+  options: { page?: number; limit?: number } = {},
+): Promise<ChatParticipant[]> {
+  return new Promise((resolve, reject) => {
+    const timeoutMs = 15000;
+    let settled = false;
+
+    const cleanup = () => {
+      clearTimeout(timeoutId);
+      socket.off("receive_all_messages", onMessages);
+      socket.off("error", onError);
+    };
+
+    const onMessages = (payload: AllMessagesSocketResponse) => {
+      if (settled) return;
+
+      if (!payload.success) {
+        settled = true;
+        cleanup();
+        reject(new Error(payload.message || "Failed to load chats"));
+        return;
+      }
+
+      const rows = payload.data ?? [];
+      settled = true;
+      cleanup();
+      resolve(rows.map(mapPrivateChatToParticipant));
+    };
+
+    const onError = (err: { message?: string }) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new Error(err?.message || "Failed to load chats"));
+    };
+
+    const timeoutId = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new Error("Chat list request timed out"));
+    }, timeoutMs);
+
+    socket.on("receive_all_messages", onMessages);
+    socket.on("error", onError);
+    socket.emit("get_all_messages", {
+      user_id: userId,
+      company_id: companyId,
+      page: options.page ?? 1,
+      limit: options.limit ?? 50,
+    });
+  });
 }
 
 export async function fetchMyIndividualChats(

@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useParams } from "next/navigation";
+import { useParams, usePathname } from "next/navigation";
 import {
   MdArrowBack,
   MdAttachFile,
@@ -26,12 +26,34 @@ import {
   fetchPrivateChatHistory,
   jwtUserId,
   mapSocketMessageToChatMessage,
+  type SeenPrivateMessagePayload,
   type SocketMessageRecord,
 } from "@/services/chatApplication";
 import ChatAvatar from "./ChatAvatar";
 import { useChatContext } from "./ChatContext";
 import MobileEmojiPicker from "./MobileEmojiPicker";
-import type { ChatMessage } from "./types";
+import type { ChatMessage, ChatTab } from "./types";
+
+function tabFromPathname(pathname: string | null, base: string): ChatTab {
+  if (pathname?.startsWith(`${base}/groups`)) return "groups";
+  if (pathname?.startsWith(`${base}/calls`)) return "calls";
+  if (pathname?.startsWith(`${base}/status`)) return "status";
+  return "individual";
+}
+
+function useIsLgScreen() {
+  const [isLg, setIsLg] = useState(false);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(min-width: 1024px)");
+    const update = () => setIsLg(mediaQuery.matches);
+    update();
+    mediaQuery.addEventListener("change", update);
+    return () => mediaQuery.removeEventListener("change", update);
+  }, []);
+
+  return isLg;
+}
 
 function useClickOutside(
   ref: React.RefObject<HTMLElement | null>,
@@ -59,7 +81,14 @@ function useClickOutside(
 
 export default function RightChatInterface() {
   const params = useParams();
+  const pathname = usePathname();
   const orgId = String(params?.org_id ?? "");
+  const syncConnectionBase = `/dashboard/${orgId}/sync-connection`;
+  const activeTab = useMemo(
+    () => tabFromPathname(pathname, syncConnectionBase),
+    [pathname, syncConnectionBase],
+  );
+  const isLgScreen = useIsLgScreen();
   const { selectedChat, mobileShowChat, setMobileShowChat } = useChatContext();
   const { socket, isConnected } = useContext(SocketContext);
 
@@ -76,6 +105,7 @@ export default function RightChatInterface() {
   const callMenuRef = useRef<HTMLDivElement>(null);
   const moreMenuRef = useRef<HTMLDivElement>(null);
   const mobileInputRef = useRef<HTMLInputElement>(null);
+  const joinedChatIdRef = useRef<string | null>(null);
 
   useClickOutside(callMenuRef, () => setCallMenuOpen(false), callMenuOpen);
   useClickOutside(moreMenuRef, () => setMoreMenuOpen(false), moreMenuOpen);
@@ -98,10 +128,69 @@ export default function RightChatInterface() {
     mobileInputRef.current?.focus();
   }, []);
 
+  const leaveChatRoom = useCallback(
+    (roomId?: string | null) => {
+      if (!socket) return;
+      const id = roomId ?? joinedChatIdRef.current;
+      if (!id) return;
+      socket.emit("leave_chat_room", id);
+      if (joinedChatIdRef.current === id) {
+        joinedChatIdRef.current = null;
+      }
+    },
+    [socket],
+  );
+
+  const isViewingChat = Boolean(
+    selectedChat &&
+      chatId &&
+      activeTab === "individual" &&
+      (isLgScreen || mobileShowChat),
+  );
+
   useEffect(() => {
     if (!socket || !isConnected || currentUserId == null) return;
     socket.emit("join_user_room", currentUserId);
   }, [socket, isConnected, currentUserId]);
+
+  useEffect(() => {
+    if (!socket || currentUserId == null) {
+      leaveChatRoom();
+      return;
+    }
+
+    if (!isViewingChat || !chatId) {
+      leaveChatRoom();
+      return;
+    }
+
+    if (joinedChatIdRef.current && joinedChatIdRef.current !== chatId) {
+      leaveChatRoom(joinedChatIdRef.current);
+    }
+
+    socket.emit("join_chat_room", chatId, currentUserId);
+    joinedChatIdRef.current = chatId;
+
+    socket.emit("seen_private_message", {
+      chat_id: chatId,
+      user_id: currentUserId,
+    });
+
+    return () => {
+      leaveChatRoom(chatId);
+    };
+  }, [socket, currentUserId, chatId, isViewingChat, leaveChatRoom]);
+
+  useEffect(() => {
+    return () => {
+      leaveChatRoom();
+    };
+  }, [leaveChatRoom]);
+
+  const handleBackToList = useCallback(() => {
+    leaveChatRoom();
+    setMobileShowChat(false);
+  }, [leaveChatRoom, setMobileShowChat]);
 
   useEffect(() => {
     if (!selectedChat) {
@@ -122,32 +211,40 @@ export default function RightChatInterface() {
       return;
     }
 
-    const chatIdToLoad = nextChatId;
-    let cancelled = false;
-    async function loadHistory() {
-      setLoadingHistory(true);
-      try {
-        const token = localStorage.getItem("token");
-        if (!token) return;
-        const history = await fetchPrivateChatHistory(
-          token,
-          orgId,
-          chatIdToLoad,
-          contactUserId,
-        );
-        if (!cancelled) setMessages(history);
-      } catch {
-        if (!cancelled) setMessages([]);
-      } finally {
-        if (!cancelled) setLoadingHistory(false);
-      }
+    if (
+      !socket ||
+      !isConnected ||
+      currentUserId == null ||
+      contactUserId == null
+    ) {
+      return;
     }
 
-    void loadHistory();
+    const chatIdToLoad = nextChatId;
+    let cancelled = false;
+
+    setLoadingHistory(true);
+    fetchPrivateChatHistory(
+      socket,
+      chatIdToLoad,
+      currentUserId,
+      contactUserId,
+      selectedChat.user_profile,
+    )
+      .then((history) => {
+        if (!cancelled) setMessages(history);
+      })
+      .catch(() => {
+        if (!cancelled) setMessages([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingHistory(false);
+      });
+
     return () => {
       cancelled = true;
     };
-  }, [selectedChat, orgId, contactUserId]);
+  }, [selectedChat, socket, isConnected, currentUserId, contactUserId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -183,18 +280,60 @@ export default function RightChatInterface() {
       }
 
       setMessages((prev) => {
-        if (prev.some((m) => m.message_id === mapped.message_id)) {
-          return prev.map((m) =>
+        const withoutMatchingOptimistic =
+          mapped.is_outgoing
+            ? prev.filter(
+                (m) =>
+                  !(
+                    m.message_id.startsWith("temp-") &&
+                    m.is_outgoing &&
+                    m.text === mapped.text
+                  ),
+              )
+            : prev;
+
+        if (
+          withoutMatchingOptimistic.some(
+            (m) => m.message_id === mapped.message_id,
+          )
+        ) {
+          return withoutMatchingOptimistic.map((m) =>
             m.message_id === mapped.message_id ? mapped : m,
           );
         }
-        return [...prev, mapped];
+        return [...withoutMatchingOptimistic, mapped];
       });
     };
 
+    const handleSeen = (payload: SeenPrivateMessagePayload) => {
+      const activeChatId = chatId ?? selectedChat.chat_id ?? null;
+      if (
+        !activeChatId ||
+        String(payload.chat_id) !== String(activeChatId) ||
+        Number(payload.seen_by) !== contactUserId
+      ) {
+        return;
+      }
+
+      setMessages((prev) =>
+        prev.map((msg) => {
+          if (!msg.is_outgoing) return msg;
+          if (
+            payload.message_ids.length > 0 &&
+            !payload.message_ids.includes(msg.message_id)
+          ) {
+            return msg;
+          }
+          return { ...msg, status: "read" as const };
+        }),
+      );
+    };
+
     socket.on("receive_private_message", handleReceive);
+    socket.on("seen_private_message", handleSeen);
     return () => {
       socket.off("receive_private_message", handleReceive);
+      socket.off("seen_private_message", handleSeen);
     };
   }, [socket, selectedChat, currentUserId, contactUserId, chatId]);
 
@@ -215,6 +354,7 @@ export default function RightChatInterface() {
     };
  
     setMessage("");
+    setMessages((prev) => [...prev, optimisticMessage]);
 
     socket.emit("send_private_message", {
       sender: currentUserId,
@@ -257,7 +397,7 @@ export default function RightChatInterface() {
       <header className="flex shrink-0 items-center gap-3 border-b border-[#E4E7EC] bg-white px-3 py-2.5 shadow-sm sm:px-4">
         <button
           type="button"
-          onClick={() => setMobileShowChat(false)}
+          onClick={handleBackToList}
           className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg border-0 bg-transparent text-[#374151] outline-none transition hover:bg-[#F3F4F6] lg:hidden"
           aria-label="Back to chat list"
         >
@@ -575,9 +715,15 @@ function MessageBubble({
               className={
                 message.status === "read" ? "text-[#53BDEB]" : "text-[#9CA3AF]"
               }
-              aria-label={message.status === "read" ? "Read" : "Sent"}
+              aria-label={
+                message.status === "read"
+                  ? "Read"
+                  : message.status === "delivered"
+                    ? "Delivered"
+                    : "Sent"
+              }
             >
-              {message.status === "read" ? (
+              {message.status === "read" || message.status === "delivered" ? (
                 <MdDoneAll className="text-sm" />
               ) : (
                 <MdDone className="text-sm" />

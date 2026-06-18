@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import {
   MdAdd,
   MdArrowBack,
@@ -23,9 +23,13 @@ import {
 import { useChatContext } from "./ChatContext";
 import type { ChatParticipant, ChatTab } from "./types";
 import ChatAvatar from "./ChatAvatar";
+import { SocketContext } from "@/components/sockets/Socket.Provider";
 import {
   fetchChatOrgUsers,
+  fetchMyIndividualChatsViaSocket,
   jwtUserId,
+  mergeChatListUpdate,
+  type ChatListUpdateSocketResponse,
   type ChatOrgUser,
 } from "@/services/chatApplication";
 
@@ -84,14 +88,71 @@ export default function LeftChatSidebar() {
     setActiveTab,
     mobileShowChat,
     selectChat,
+    setIndividualChats,
   } = useChatContext();
+  const { socket, isConnected } = useContext(SocketContext);
 
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [showNewChatPicker, setShowNewChatPicker] = useState(false);
   const [orgUsers, setOrgUsers] = useState<ChatOrgUser[]>([]);
   const [loadingOrgUsers, setLoadingOrgUsers] = useState(false);
+  const [loadingChats, setLoadingChats] = useState(false);
+
+  const currentUserId = useMemo(() => {
+    if (typeof window === "undefined") return null;
+    return jwtUserId(localStorage.getItem("token"));
+  }, []);
 
   const activeTab = tabFromPathname(pathname, base);
+
+  useEffect(() => {
+    if (
+      !socket ||
+      !isConnected ||
+      !orgId ||
+      currentUserId == null ||
+      activeTab !== "individual"
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const onChatListUpdate = (payload: ChatListUpdateSocketResponse) => {
+      if (!payload.success || !payload.data) return;
+      setIndividualChats((prev) => mergeChatListUpdate(prev, payload.data!));
+    };
+
+    socket.on("receive_chat_list_update", onChatListUpdate);
+
+    setLoadingChats(true);
+    fetchMyIndividualChatsViaSocket(
+      socket,
+      currentUserId,
+      Number(orgId),
+    )
+      .then((chats) => {
+        if (!cancelled) setIndividualChats(chats);
+      })
+      .catch(() => {
+        if (!cancelled) setIndividualChats([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingChats(false);
+      });
+
+    return () => {
+      cancelled = true;
+      socket.off("receive_chat_list_update", onChatListUpdate);
+    };
+  }, [
+    socket,
+    isConnected,
+    orgId,
+    currentUserId,
+    activeTab,
+    setIndividualChats,
+  ]);
 
   const loadOrgUsers = useCallback(async () => {
     setLoadingOrgUsers(true);
@@ -290,7 +351,9 @@ export default function LeftChatSidebar() {
                 Start new chat
               </button>
             </div>
-            {filteredIndividuals.length === 0 ? (
+            {loadingChats ? (
+              <EmptyState message="Loading chats…" />
+            ) : filteredIndividuals.length === 0 ? (
               <EmptyState
                 message={
                   individualChats.length === 0
