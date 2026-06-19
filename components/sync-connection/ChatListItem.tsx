@@ -1,8 +1,10 @@
 "use client";
 
+import { useContext } from "react";
 import ChatAvatar from "./ChatAvatar";
 import type { ChatParticipant } from "./types";
 import { useChatContext } from "./ChatContext";
+import { SocketContext } from "@/components/sockets/Socket.Provider";
 
 type ChatListItemProps = {
   chat: ChatParticipant;
@@ -16,6 +18,8 @@ export default function ChatListItem({
   isActive = false,
 }: ChatListItemProps) {
   const { selectChat } = useChatContext();
+  const { getUserActiveStatus } = useContext(SocketContext);
+  const { isOnline } = getUserActiveStatus(chat.user_id);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" || e.key === " ") {
@@ -40,7 +44,7 @@ export default function ChatListItem({
         name={chat.user_name}
         imageUrl={chat.user_profile}
         showOnline
-        isOnline={chat.is_online}
+        isOnline={isOnline}
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2">

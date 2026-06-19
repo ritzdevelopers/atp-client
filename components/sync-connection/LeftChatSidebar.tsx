@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
-import { useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   MdAdd,
   MdArrowBack,
@@ -31,9 +31,25 @@ import {
   getIndividualChatKey,
   jwtUserId,
   mergeChatListUpdate,
+  sortIndividualChatsByLastMessage,
   type ChatListUpdateSocketResponse,
   type ChatOrgUser,
+  type TypingIndicatorPayload,
 } from "@/services/chatApplication";
+
+function useIsLgScreen() {
+  const [isLg, setIsLg] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const update = () => setIsLg(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+
+  return isLg;
+}
 
 const TABS: {
   id: ChatTab;
@@ -93,6 +109,11 @@ export default function LeftChatSidebar() {
     setIndividualChats,
   } = useChatContext();
   const { socket, isConnected } = useContext(SocketContext);
+  const isLgScreen = useIsLgScreen();
+
+  const typingClearTimeoutsRef = useRef<
+    Map<string, ReturnType<typeof setTimeout>>
+  >(new Map());
 
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [showNewChatPicker, setShowNewChatPicker] = useState(false);
@@ -106,6 +127,91 @@ export default function LeftChatSidebar() {
   }, []);
 
   const activeTab = tabFromPathname(pathname, base);
+
+  const isActivelyViewingUser = useCallback(
+    (userId: string) => {
+      if (!selectedChat || selectedChat.user_id !== userId) return false;
+      if (activeTab !== "individual") return false;
+      return isLgScreen || mobileShowChat;
+    },
+    [selectedChat, activeTab, isLgScreen, mobileShowChat],
+  );
+
+  useEffect(() => {
+    if (!socket || currentUserId == null) return;
+
+    const scheduleTypingClear = (userId: string) => {
+      const existing = typingClearTimeoutsRef.current.get(userId);
+      if (existing) clearTimeout(existing);
+      typingClearTimeoutsRef.current.set(
+        userId,
+        setTimeout(() => {
+          setIndividualChats((prev) =>
+            prev.map((chat) =>
+              chat.user_id === userId ? { ...chat, is_typing: false } : chat,
+            ),
+          );
+          typingClearTimeoutsRef.current.delete(userId);
+        }, 3000),
+      );
+    };
+
+    const handleTyping = (payload: TypingIndicatorPayload) => {
+      const userId = String(payload.user_id);
+      if (Number(payload.user_id) === currentUserId) return;
+      if (isActivelyViewingUser(userId)) return;
+
+      setIndividualChats((prev) => {
+        if (!prev.some((chat) => chat.user_id === userId)) return prev;
+        return prev.map((chat) =>
+          chat.user_id === userId ? { ...chat, is_typing: true } : chat,
+        );
+      });
+      scheduleTypingClear(userId);
+    };
+
+    const handleTypingStop = (payload: TypingIndicatorPayload) => {
+      const userId = String(payload.user_id);
+      const existing = typingClearTimeoutsRef.current.get(userId);
+      if (existing) {
+        clearTimeout(existing);
+        typingClearTimeoutsRef.current.delete(userId);
+      }
+      setIndividualChats((prev) =>
+        prev.map((chat) =>
+          chat.user_id === userId ? { ...chat, is_typing: false } : chat,
+        ),
+      );
+    };
+
+    socket.on("typing_indicator", handleTyping);
+    socket.on("typing_stop", handleTypingStop);
+
+    return () => {
+      socket.off("typing_indicator", handleTyping);
+      socket.off("typing_stop", handleTypingStop);
+      typingClearTimeoutsRef.current.forEach((timeout) => clearTimeout(timeout));
+      typingClearTimeoutsRef.current.clear();
+    };
+  }, [socket, currentUserId, isActivelyViewingUser, setIndividualChats]);
+
+  useEffect(() => {
+    if (!selectedChat) return;
+    const userId = selectedChat.user_id;
+    if (!isActivelyViewingUser(userId)) return;
+
+    const existing = typingClearTimeoutsRef.current.get(userId);
+    if (existing) {
+      clearTimeout(existing);
+      typingClearTimeoutsRef.current.delete(userId);
+    }
+
+    setIndividualChats((prev) =>
+      prev.map((chat) =>
+        chat.user_id === userId ? { ...chat, is_typing: false } : chat,
+      ),
+    );
+  }, [selectedChat, isActivelyViewingUser, setIndividualChats]);
 
   useEffect(() => {
     if (
@@ -194,12 +300,14 @@ export default function LeftChatSidebar() {
 
   const filteredIndividuals = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return individualChats;
-    return individualChats.filter(
-      (c) =>
-        c.user_name.toLowerCase().includes(q) ||
-        c.user_last_message?.toLowerCase().includes(q),
-    );
+    const list = !q
+      ? individualChats
+      : individualChats.filter(
+          (c) =>
+            c.user_name.toLowerCase().includes(q) ||
+            c.user_last_message?.toLowerCase().includes(q),
+        );
+    return sortIndividualChatsByLastMessage(list);
   }, [individualChats, searchQuery]);
 
   const filteredGroups = useMemo(() => {
@@ -533,6 +641,9 @@ function OrgUserListItem({
   user: ChatOrgUser;
   selectChat: (user: ChatParticipant) => void;
 }) {
+  const { getUserActiveStatus } = useContext(SocketContext);
+  const { isOnline } = getUserActiveStatus(user.user_id);
+
   const chatParticipant: ChatParticipant = {
     user_id: user.user_id.toString(),
     user_name: user.user_name,
@@ -540,7 +651,7 @@ function OrgUserListItem({
     user_last_message: null,
     last_message_at: null,
     unread_count: 0,
-    is_online: false,
+    is_online: isOnline,
     is_typing: false,
   };
   return (
@@ -553,6 +664,8 @@ function OrgUserListItem({
         name={user.user_name}
         imageUrl={user.user_profile}
         size="md"
+        showOnline
+        isOnline={isOnline}
       />
       <div className="min-w-0 flex-1">
         <p className="truncate text-[15px] font-semibold text-[#111827]">

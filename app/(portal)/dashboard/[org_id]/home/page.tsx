@@ -5,18 +5,15 @@ import {
   useEffect,
   useMemo,
   useState,
-  type ReactNode,
 } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
-  BarChart3,
   Building2,
   ChevronRight,
   MapPin,
   Package,
   Plus,
-  UserCircle,
   UsersRound,
 } from "lucide-react";
 import {
@@ -40,6 +37,7 @@ import {
   parseAttendanceNaiveLocal,
 } from "@/lib/attendanceDates";
 import { socket } from "@/lib/socket.io";
+import OrgLiveUsersPanel from "@/components/portal-dashboard/home/OrgLiveUsersPanel";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
@@ -168,8 +166,6 @@ function formatRoleLabel(role: string | null | undefined): string {
 const mobileLabelCls =
   "text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]";
 const mobileCaptionCls = "text-[11px] leading-snug text-[#6B7280]";
-const mobileValueCls = "text-[13px] font-semibold text-[#1F2937]";
-const mobileStatValueCls = "text-lg font-bold tabular-nums tracking-tight";
 
 function mobilePrimaryBtnCls(full = false) {
   return `inline-flex min-h-[34px] items-center justify-center gap-1 rounded-md bg-[#008CD3] px-2.5 py-1.5 text-[12px] font-medium text-white transition active:scale-[0.98] hover:bg-[#0070AA] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full" : ""}`;
@@ -184,8 +180,16 @@ function mobileSecondaryBtnCls(full = false) {
 }
 
 function mobileGoldBtnCls(full = false) {
-  return `inline-flex min-h-[36px] items-center justify-center gap-1.5 rounded-md bg-[#C99237] px-3 py-2 text-[12px] font-semibold text-[#0C123A] transition active:scale-[0.98] hover:bg-[#b87d2e] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full" : ""}`;
+  return `inline-flex min-h-[36px] items-center justify-center gap-1.5 rounded-lg bg-[#C99237] px-3 py-2 text-[12px] font-semibold text-[#0C123A] transition active:scale-[0.98] hover:bg-[#b87d2e] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full" : ""}`;
 }
+
+const dashCardCls =
+  "dashboard-enter relative overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-sm";
+const dashCardAccent =
+  "pointer-events-none absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-[#008CD3] via-[#0C123A] to-[#C99237]";
+const dashSectionHeadCls =
+  "flex items-center gap-2 border-b border-[#E8EBF0] bg-[#FAFBFC] px-3 py-2";
+const dashSectionBodyCls = "p-3";
 
 function MyTeamsSection({
   teams,
@@ -202,49 +206,32 @@ function MyTeamsSection({
 
   return (
     <section
-      className="dashboard-enter overflow-hidden rounded-lg border border-[#008CD3]/20 bg-white shadow-sm ring-1 ring-[#E4E7EC] lg:rounded-2xl lg:border-[#008CD3]/15 lg:shadow-md lg:ring-0"
+      className={`${dashCardCls}`}
       style={{ animationDelay: `${delayMs}ms` }}
     >
-      <div className="border-b border-[#E4E7EC] bg-gradient-to-r from-[#E8F4FB] via-white to-[#E6F4EA] px-3 py-3.5 lg:px-5 lg:py-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex items-start gap-2.5 lg:gap-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#008CD3] text-white shadow-sm lg:h-11 lg:w-11 lg:rounded-xl">
-              <UsersRound className="h-5 w-5 lg:h-6 lg:w-6" aria-hidden />
-            </span>
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-[#008CD3]">
-                My teams
-              </p>
-              <h2 className="mt-0.5 text-[15px] font-semibold text-[#1F2937] lg:text-lg lg:text-[#0C123A]">
-                {activeTeams.length === 1
-                  ? "1 team assigned"
-                  : `${activeTeams.length} teams assigned`}
-              </h2>
-              <p className={`mt-0.5 ${mobileCaptionCls} lg:text-sm`}>
-                Open a team workspace to view members, activity, and HR
-                requests.
-              </p>
-            </div>
-          </div>
+      <div className={dashCardAccent} />
+      <div className={`${dashSectionHeadCls} bg-gradient-to-r from-[#F0F7FC] to-white`}>
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#008CD3] text-white">
+          <UsersRound className="h-4 w-4" aria-hidden />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-sm font-semibold text-[#0C123A]">
+            My teams · {activeTeams.length}
+          </h2>
         </div>
       </div>
 
-      <div className="p-3 lg:p-5">
+      <div className={dashSectionBodyCls}>
         {activeTeams.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-[#E4E7EC] bg-[#F9FAFB] px-4 py-8 text-center">
-            <UsersRound
-              className="mx-auto h-9 w-9 text-[#9CA3AF]"
-              aria-hidden
-            />
-            <p className="mt-2 text-[14px] font-semibold text-[#1F2937]">
-              No team assigned yet
-            </p>
+          <div className="rounded-lg border border-dashed border-[#E4E7EC] bg-[#F9FAFB] px-3 py-5 text-center">
+            <UsersRound className="mx-auto h-7 w-7 text-[#9CA3AF]" aria-hidden />
+            <p className="mt-1.5 text-xs font-semibold text-[#374151]">No team assigned</p>
             <p className={`mt-1 ${mobileCaptionCls}`}>
               Your reporting manager or HR will add you to a team.
             </p>
           </div>
         ) : (
-          <ul className="grid gap-3 sm:grid-cols-2">
+          <ul className="grid gap-2 sm:grid-cols-2">
             {activeTeams.map((team) => {
               const teamId = team.team_id;
               const title = displayTeamTitle(team.team_name);
@@ -259,55 +246,30 @@ function MyTeamsSection({
               return (
                 <li
                   key={String(team.id ?? teamId)}
-                  className="flex h-full flex-col overflow-hidden rounded-xl border border-[#E4E7EC] bg-white shadow-sm transition hover:border-[#008CD3]/35 hover:shadow-md"
+                  className="rounded-lg border border-[#E8EBF0] bg-[#FAFBFC] p-3 transition hover:border-[#008CD3]/30 hover:bg-white"
                 >
-                  <div className="border-t-[3px] border-t-[#008CD3] px-4 pb-4 pt-3.5">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <h3 className="truncate text-[15px] font-semibold text-[#1F2937]">
-                          {title}
-                        </h3>
-                        <p className="mt-1 line-clamp-2 text-[12px] leading-snug text-[#6B7280]">
-                          {team.team_info?.trim() ||
-                            "No team description added yet."}
-                        </p>
-                      </div>
-                      {isReportingManager ? (
-                        <span className="shrink-0 rounded-full bg-[#E6F4EA] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#0F9D58]">
-                          You manage
-                        </span>
-                      ) : null}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="truncate text-sm font-semibold text-[#0C123A]">
+                        {title}
+                      </h3>
+                      <p className="mt-0.5 text-[11px] text-[#6B7280]">
+                        {managerName} · {memberCount || "—"} members
+                      </p>
                     </div>
-
-                    <dl className="mt-3 grid grid-cols-2 gap-2">
-                      <div className="rounded-lg bg-[#F9FAFB] px-2.5 py-2">
-                        <dt className={mobileLabelCls}>Reporting manager</dt>
-                        <dd className={`mt-0.5 ${mobileValueCls} truncate`}>
-                          {managerName}
-                        </dd>
-                      </div>
-                      <div className="rounded-lg bg-[#F9FAFB] px-2.5 py-2">
-                        <dt className={mobileLabelCls}>Members</dt>
-                        <dd className={`mt-0.5 ${mobileValueCls}`}>
-                          {memberCount || "—"}
-                        </dd>
-                      </div>
-                      <div className="col-span-2 rounded-lg bg-[#F9FAFB] px-2.5 py-2">
-                        <dt className={mobileLabelCls}>Joined on</dt>
-                        <dd className={`mt-0.5 ${mobileValueCls}`}>
-                          {formatJoinedDate(team.joined_date)}
-                        </dd>
-                      </div>
-                    </dl>
-
-                    <Link
-                      href={teamGroupHref(orgId, teamId)}
-                      className={`mt-4 ${mobilePrimaryBtnCls(true)} !min-h-[40px] !rounded-lg !text-[13px] !font-semibold lg:!rounded-xl`}
-                    >
-                      Open {title}
-                      <ChevronRight className="h-4 w-4" aria-hidden />
-                    </Link>
+                    {isReportingManager ? (
+                      <span className="shrink-0 rounded bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-emerald-700">
+                        Lead
+                      </span>
+                    ) : null}
                   </div>
+                  <Link
+                    href={teamGroupHref(orgId, teamId)}
+                    className={`mt-2.5 ${mobilePrimaryBtnCls(true)} !min-h-[32px] !py-1.5 !text-xs`}
+                  >
+                    Open team
+                    <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+                  </Link>
                 </li>
               );
             })}
@@ -328,54 +290,69 @@ function InfoRow({
   const display =
     value != null && String(value).length > 0 ? String(value) : "—";
   return (
-    <div className="flex items-center justify-between gap-2 border-b border-slate-100/90 py-3 last:border-b-0 last:pb-0 first:pt-0 max-lg:rounded-md max-lg:border-0 max-lg:bg-[#F9FAFB] max-lg:px-2.5 max-lg:py-2 max-lg:first:mt-0 max-lg:last:mb-0 lg:flex-row lg:gap-3 lg:py-3">
-      <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF] lg:text-xs lg:font-medium lg:normal-case lg:tracking-normal lg:text-slate-500">
-        {label}
-      </span>
-      <span className="min-w-0 text-right text-[13px] font-semibold text-[#1F2937] lg:text-sm lg:text-[#0C123A]">
+    <div className="flex items-center justify-between gap-2 border-b border-[#F1F3F6] py-2 last:border-0">
+      <span className="text-[11px] text-[#6B7280]">{label}</span>
+      <span className="min-w-0 truncate text-right text-[12px] font-medium text-[#0C123A]">
         {display}
       </span>
     </div>
   );
 }
 
-function DashboardCard({
-  icon: Icon,
-  title,
+function ProfileSummaryCard({
+  organization,
+  user,
+  ownerName,
+  ownerEmail,
+  ownerPhone,
+  ownerMatchesUser,
   delayMs,
-  children,
-  id,
 }: {
-  icon: typeof Building2;
-  title: string;
+  organization: RightMainSideOrganization;
+  user: RightMainSideUser;
+  ownerName: string | null | undefined;
+  ownerEmail: string | null | undefined;
+  ownerPhone: string | null | undefined;
+  ownerMatchesUser: boolean;
   delayMs: number;
-  children: ReactNode;
-  id: string;
 }) {
   return (
-    <section
-      id={id}
-      aria-labelledby={`${id}-title`}
-      className="dashboard-enter overflow-hidden rounded-3xl bg-white shadow-md ring-1 ring-slate-200/70 transition-all duration-300 max-lg:rounded-lg max-lg:shadow-sm max-lg:ring-[#E4E7EC] max-lg:p-0 lg:rounded-2xl lg:border lg:border-slate-200/90 lg:p-6 lg:shadow-sm lg:ring-0 lg:hover:border-slate-300 lg:hover:shadow-md"
-      style={{ animationDelay: `${delayMs}ms` }}
-    >
-      <div className="flex items-center gap-2 border-b border-[#E4E7EC] px-3 py-2.5 max-lg:bg-[#F9FAFB] lg:gap-3 lg:border-slate-100/80 lg:px-0 lg:py-0 lg:bg-transparent">
-        <span className="flex h-8 w-8 items-center justify-center rounded-md bg-[#C99237]/15 lg:h-10 lg:w-10 lg:rounded-xl">
-          <Icon
-            className="h-4 w-4 shrink-0 text-[#C99237] lg:h-5 lg:w-5"
-            aria-hidden
-          />
-        </span>
-        <h2
-          id={`${id}-title`}
-          className="text-[13px] font-semibold text-[#1F2937] lg:text-base lg:text-[#0C123A]"
-        >
-          {title}
-        </h2>
+    <section className={dashCardCls} style={{ animationDelay: `${delayMs}ms` }}>
+      <div className={dashCardAccent} />
+      <div className={dashSectionHeadCls}>
+        <Building2 className="h-4 w-4 text-[#008CD3]" aria-hidden />
+        <h2 className="text-sm font-semibold text-[#0C123A]">Company & profile</h2>
       </div>
-      <div className="hidden border-t border-slate-100 lg:my-4 lg:block" />
-      <div className="flex flex-col gap-1 px-2.5 py-2.5 max-lg:gap-1 lg:gap-0 lg:px-0 lg:py-0">
-        {children}
+      <div className={`${dashSectionBodyCls} grid gap-3 sm:grid-cols-2`}>
+        <div>
+          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[#008CD3]">
+            Organization
+          </p>
+          <InfoRow label="Name" value={organization.org_name} />
+          <InfoRow label="Email" value={organization.org_email} />
+          <InfoRow label="Phone" value={organization.org_phone} />
+        </div>
+        <div>
+          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[#008CD3]">
+            {ownerMatchesUser ? "Your account" : "You"}
+          </p>
+          <InfoRow label="Name" value={user.user_name} />
+          <InfoRow label="Email" value={user.user_email} />
+          <InfoRow label="Role" value={formatRoleLabel(user.user_role_name)} />
+          <InfoRow label="Since" value={formatJoinedDate(user.user_created_at)} />
+        </div>
+        {!ownerMatchesUser ? (
+          <div className="sm:col-span-2">
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[#C99237]">
+              Owner
+            </p>
+            <div className="grid gap-0 sm:grid-cols-3">
+              <InfoRow label="Name" value={ownerName} />
+              <InfoRow label="Email" value={ownerEmail} />
+              <InfoRow label="Phone" value={ownerPhone} />
+            </div>
+          </div>
+        ) : null}
       </div>
     </section>
   );
@@ -397,75 +374,49 @@ function OrganizationAddressesSection({
     <section
       id="dash-addresses"
       aria-labelledby="dash-addresses-title"
-      className="dashboard-enter overflow-hidden rounded-3xl bg-white shadow-md ring-1 ring-slate-200/70 max-lg:rounded-lg max-lg:ring-[#E4E7EC] lg:rounded-2xl lg:border lg:border-slate-200/90 lg:p-6 lg:shadow-sm lg:ring-0"
+      className={dashCardCls}
       style={{ animationDelay: `${delayMs}ms` }}
     >
-      <div className="flex items-center justify-between gap-2 border-b border-[#E4E7EC] px-3 py-2.5 max-lg:bg-[#F9FAFB] lg:gap-3 lg:border-slate-100/80 lg:px-0 lg:py-0 lg:pb-4">
-        <div className="flex items-center gap-2 lg:gap-3">
-          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-[#C99237]/15 lg:h-10 lg:w-10 lg:rounded-xl">
-            <MapPin
-              className="h-4 w-4 shrink-0 text-[#C99237] lg:h-5 lg:w-5"
-              aria-hidden
-            />
-          </span>
-          <div>
-            <h2
-              id="dash-addresses-title"
-              className="text-[13px] font-semibold text-[#1F2937] lg:text-base lg:text-[#0C123A]"
-            >
-              Organization addresses
-            </h2>
-            <p className="text-[11px] text-[#6B7280] lg:text-xs lg:text-slate-500 lg:text-sm">
-              {hasAddresses
-                ? `${addresses.length} registered location${addresses.length === 1 ? "" : "s"}`
-                : "No locations on file yet"}
-            </p>
-          </div>
+      <div className={dashCardAccent} />
+      <div className={`${dashSectionHeadCls} justify-between`}>
+        <div className="flex items-center gap-2">
+          <MapPin className="h-4 w-4 text-[#C99237]" aria-hidden />
+          <h2 id="dash-addresses-title" className="text-sm font-semibold text-[#0C123A]">
+            Addresses · {hasAddresses ? addresses.length : 0}
+          </h2>
         </div>
         {hasAddresses ? (
           <Link
             href={manageHref}
-            className="shrink-0 text-xs font-semibold text-[#C99237] underline-offset-2 hover:underline lg:text-sm"
+            className="shrink-0 text-xs font-semibold text-[#008CD3] hover:underline"
           >
             Manage
           </Link>
         ) : null}
       </div>
 
-      <div className="px-2.5 py-2.5 max-lg:pb-3 lg:px-0 lg:py-0">
+      <div className={dashSectionBodyCls}>
         {!hasAddresses ? (
-          <div className="rounded-lg border border-dashed border-[#E4E7EC] bg-[#F9FAFB] px-3 py-8 text-center max-lg:mx-0 lg:rounded-2xl lg:border-slate-200 lg:py-10">
-            <MapPin
-              className="mx-auto h-8 w-8 text-[#9CA3AF] lg:h-9 lg:w-9 lg:text-slate-300"
-              aria-hidden
-            />
-            <p className="mt-2 text-[13px] font-semibold text-[#1F2937] lg:mt-3 lg:text-sm lg:text-[#0C123A]">
-              No address added yet
+          <div className="rounded-xl border border-dashed border-[#E4E7EC] bg-[#F8FAFC] px-4 py-8 text-center">
+            <MapPin className="mx-auto h-8 w-8 text-[#9CA3AF]" aria-hidden />
+            <p className="mt-2 text-sm font-semibold text-[#0C123A]">No address added yet</p>
+            <p className={`mt-1 ${mobileCaptionCls}`}>
+              Add office or branch locations for this organization.
             </p>
-            <p
-              className={`mt-1 ${mobileCaptionCls} lg:text-sm lg:text-slate-500`}
-            >
-              Add your office or branch locations for this organization.
-            </p>
-            <Link
-              href={manageHref}
-              className={`mt-4 ${mobileGoldBtnCls()} lg:mt-5 lg:min-h-[44px] lg:rounded-xl lg:px-5 lg:py-2.5 lg:text-sm lg:font-bold`}
-            >
-              <Plus className="h-3.5 w-3.5 lg:h-4 lg:w-4" aria-hidden />
-              Add organization address
+            <Link href={manageHref} className={`mt-4 ${mobilePrimaryBtnCls()}`}>
+              <Plus className="h-3.5 w-3.5" aria-hidden />
+              Add address
             </Link>
           </div>
         ) : (
-          <ul className="grid gap-2 sm:grid-cols-2 lg:gap-3">
+          <ul className="grid gap-2 sm:grid-cols-2">
             {addresses.map((addr, index) => (
               <li
                 key={String(addr.id ?? index)}
-                className="rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] p-3 lg:rounded-xl lg:border-slate-200/90 lg:bg-slate-50/60 lg:p-4"
+                className="rounded-lg border border-[#EEF1F5] bg-[#F8FAFC] p-3"
               >
-                <p className={mobileLabelCls}>
-                  {addressLocationLabel(addr, index)}
-                </p>
-                <p className="mt-1.5 whitespace-pre-line text-[12px] leading-snug text-[#1F2937] lg:mt-2 lg:text-sm lg:leading-relaxed lg:text-[#0C123A]">
+                <p className={mobileLabelCls}>{addressLocationLabel(addr, index)}</p>
+                <p className="mt-1.5 whitespace-pre-line text-xs leading-relaxed text-[#0C123A]">
                   {formatOrganizationAddress(addr)}
                 </p>
               </li>
@@ -475,7 +426,7 @@ function OrganizationAddressesSection({
         {hasAddresses ? (
           <Link
             href={manageHref}
-            className={`mt-3 ${mobileGoldBtnCls(true)} border border-dashed border-[#C99237]/40 !bg-[#C99237]/5 !text-[#0C123A] hover:!bg-[#C99237]/10 lg:mt-4 lg:min-h-[44px] lg:rounded-xl lg:px-4 lg:py-3 lg:text-sm`}
+            className={`mt-3 ${mobileSecondaryBtnCls(true)} !border-dashed !border-[#C99237]/40 !text-[#0C123A]`}
           >
             <Plus className="h-4 w-4 text-[#C99237]" aria-hidden />
             Add another address
@@ -807,433 +758,138 @@ function HomeOverview({
   const dayVisual = getAttendanceDayVisual(todayRecord?.attendance_status);
 
   return (
-    <div className="-mx-1 space-y-2.5 max-lg:bg-[#F5F7FA] max-lg:px-1 max-lg:pb-2 sm:-mx-2 sm:space-y-3 lg:mx-0 lg:space-y-8 lg:bg-transparent lg:px-0 lg:pb-0">
-      {/* Mobile & tablet: Zoho-style compact hero */}
-      <header
-        className="dashboard-enter overflow-hidden rounded-lg border border-[#0C123A]/20 bg-gradient-to-br from-[#0C123A] via-[#151f52] to-[#0C123A] px-3 py-3.5 shadow-md lg:hidden"
-        style={{ animationDelay: "0ms" }}
-      >
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-[#C99237]">
-              {greetingForHour()}
-            </p>
-            <h1 className="mt-0.5 flex items-center gap-1.5 text-[16px] font-bold leading-tight text-white">
-              <span className="truncate">{displayName}</span>
-              <MdWorkspacePremium
-                className="h-5 w-5 shrink-0 text-[#C99237]"
-                aria-hidden
-              />
-            </h1>
-            <p className="mt-0.5 truncate text-[11px] text-slate-300">
-              {orgTitle}
-            </p>
-            <p className="mt-1 text-[10px] text-slate-400">
-              Management dashboard · quick overview
-            </p>
-          </div>
-          <span
-            className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${roleBadgeClass}`}
-          >
-            {roleBadgeLabel}
-          </span>
-        </div>
-      </header>
-
-      {/* Desktop: original welcome card */}
-      <header
-        className="dashboard-enter hidden rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm sm:p-8 lg:block"
-        style={{ animationDelay: "0ms" }}
-      >
-        <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <h1 className="flex flex-wrap items-center gap-3 text-2xl font-bold tracking-tight text-[#0C123A] sm:text-3xl">
-              <span>
-                {greetingForHour()}, {displayName}
-              </span>
-              <MdWorkspacePremium
-                className="h-8 w-8 shrink-0 text-[#C99237] sm:h-9 sm:w-9"
-                aria-hidden
-              />
-            </h1>
-            <p className="mt-2 text-sm text-slate-500">{orgTitle}</p>
-          </div>
-          <span
-            className={`inline-flex w-fit shrink-0 rounded-full px-4 py-1.5 text-xs font-bold uppercase tracking-wide ${roleBadgeClass}`}
-          >
-            {roleBadgeLabel}
-          </span>
-        </div>
-      </header>
-
-      {roleKey !== "admin" ? (
-        <MyTeamsSection
-          teams={attendanceData?.teams ?? []}
-          orgId={orgId}
-          currentUserName={user.user_name?.trim() || displayName}
-          delayMs={50}
-        />
-      ) : null}
-
-      <section
-        className="dashboard-enter overflow-hidden rounded-lg border border-amber-200/80 bg-gradient-to-r from-amber-50 to-white p-3 shadow-sm ring-1 ring-amber-100 sm:p-4 lg:rounded-2xl lg:p-6"
-        style={{ animationDelay: "75ms" }}
-      >
-        <div className="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between lg:gap-4">
-          <div className="flex items-start gap-2.5 lg:gap-3">
-            <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-amber-100 text-amber-800 lg:h-11 lg:w-11 lg:rounded-xl">
-              <Package className="h-5 w-5 lg:h-6 lg:w-6" aria-hidden />
-              {handoverPendingCount > 0 ? (
-                <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#E8710A] px-1 text-[9px] font-bold text-white">
-                  {handoverPendingCount > 9 ? "9+" : handoverPendingCount}
-                </span>
-              ) : null}
-            </span>
+    <div className="flex flex-col gap-2 lg:gap-3">
+      {/* Mobile */}
+      <header className={`${dashCardCls} overflow-hidden lg:hidden`} style={{ animationDelay: "0ms" }}>
+        <div className="bg-[#0C123A] px-3 py-3">
+          <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
-              <h2 className="text-[13px] font-semibold text-[#0C123A] lg:text-base">
-                Asset handover
-              </h2>
-              <p
-                className={`mt-0.5 max-lg:line-clamp-2 ${mobileCaptionCls} lg:mt-1 lg:text-sm lg:leading-relaxed lg:max-w-xl`}
-              >
-                Exit assets and custom tasks assigned to you as custodian.
-              </p>
+              <p className="text-[9px] font-bold uppercase tracking-wide text-[#C99237]">{greetingForHour()}</p>
+              <h1 className="mt-0.5 flex items-center gap-1 text-base font-bold text-white">
+                <span className="truncate">{displayName}</span>
+                <MdWorkspacePremium className="h-4 w-4 shrink-0 text-[#C99237]" aria-hidden />
+              </h1>
+              <p className="truncate text-[11px] text-slate-400">{orgTitle}</p>
             </div>
+            <span className={`shrink-0 rounded px-2 py-0.5 text-[8px] font-bold uppercase ${roleBadgeClass}`}>{roleBadgeLabel}</span>
           </div>
-          <Link
-            href={handoverHref}
-            className={`${mobileGoldBtnCls(true)} !bg-[#008CD3] !text-white hover:!bg-[#0070AA] lg:inline-flex lg:w-auto lg:shrink-0 lg:rounded-xl lg:px-5 lg:py-2.5 lg:text-sm lg:shadow-md`}
-          >
-            {handoverPendingCount > 0
-              ? `Open handovers (${handoverPendingCount} pending)`
-              : "Open asset handover"}
-          </Link>
         </div>
-      </section>
-
-      <div
-        className={`grid grid-cols-1 gap-2 sm:gap-2.5 lg:gap-6 ${ownerMatchesUser ? "lg:grid-cols-2" : "lg:grid-cols-3"}`}
-      >
-        <DashboardCard
-          icon={Building2}
-          title="Organization"
-          delayMs={100}
-          id="dash-org-card"
-        >
-          <InfoRow label="Name" value={organization.org_name} />
-          <InfoRow label="Email" value={organization.org_email} />
-          <InfoRow label="Phone" value={organization.org_phone} />
-        </DashboardCard>
-
-        {!ownerMatchesUser ? (
-          <DashboardCard
-            icon={UserCircle}
-            title="Owner"
-            delayMs={200}
-            id="dash-owner-card"
-          >
-            <InfoRow label="Name" value={ownerName} />
-            <InfoRow label="Email" value={ownerEmail} />
-            <InfoRow label="Phone" value={ownerPhone} />
-          </DashboardCard>
-        ) : null}
-
-        <DashboardCard
-          icon={BarChart3}
-          title={ownerMatchesUser ? "Owner account" : "Your account"}
-          delayMs={ownerMatchesUser ? 200 : 300}
-          id="dash-account-card"
-        >
-          <InfoRow label="Full name" value={user.user_name} />
-          <InfoRow label="Email" value={user.user_email} />
-          <InfoRow label="Phone" value={user.user_phone} />
-          <InfoRow label="Role" value={formatRoleLabel(user.user_role_name)} />
-          <InfoRow
-            label="Member since"
-            value={formatJoinedDate(user.user_created_at)}
-          />
-        </DashboardCard>
+      </header>
+      <div className="lg:hidden">
+        <OrgLiveUsersPanel orgId={String(orgId)} className="w-full" />
       </div>
 
-      <OrganizationAddressesSection
-        addresses={organizationAddresses}
-        orgId={orgId}
-        delayMs={125}
-      />
+      {/* Desktop hero — compact, no dead space */}
+      <div
+        className={`${dashCardCls} hidden lg:grid lg:h-[280px] lg:grid-cols-[1fr_300px]`}
+        style={{ animationDelay: "0ms" }}
+      >
+        <div className={dashCardAccent} />
+        <div className="flex flex-col justify-center border-r border-[#E8EBF0] bg-[#0C123A] px-5 py-4">
+          <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-[#C99237]">{greetingForHour()}</p>
+          <h1 className="mt-1 flex items-center gap-2 text-xl font-bold text-white">
+            {displayName}
+            <MdWorkspacePremium className="h-5 w-5 text-[#C99237]" aria-hidden />
+          </h1>
+          <p className="mt-1 text-sm text-slate-300">{orgTitle}</p>
+          <span className={`mt-3 inline-flex w-fit rounded px-2.5 py-1 text-[9px] font-bold uppercase ${roleBadgeClass}`}>
+            {roleBadgeLabel}
+          </span>
+        </div>
+        <OrgLiveUsersPanel orgId={String(orgId)} embedded className="h-full" />
+      </div>
 
-      {showAttendance ? (
-        <section
-          className="dashboard-enter overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-[#E4E7EC] lg:rounded-2xl lg:border lg:border-slate-200/90 lg:p-6 lg:shadow-sm lg:ring-0"
-          style={{ animationDelay: "150ms" }}
-        >
-          {/* Mobile & tablet: Zoho-style attendance hub */}
-          <div className="lg:hidden">
-            <div className="border-b border-[#E4E7EC] bg-gradient-to-br from-[#0C123A] via-[#151f52] to-[#0C123A] px-3 py-3.5">
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <h2 className="text-[13px] font-semibold text-white">
-                    Today&apos;s attendance
-                  </h2>
-                  <p className="mt-0.5 text-[10px] text-slate-400">
-                    Mark in, out, or break logs
-                  </p>
+      {/* Bento grid */}
+      <div className="grid grid-cols-1 gap-2 lg:grid-cols-12 lg:gap-3">
+        {showAttendance ? (
+          <section className={`${dashCardCls} lg:col-span-8`} style={{ animationDelay: "50ms" }}>
+            <div className={dashCardAccent} />
+            <div className="flex flex-col sm:flex-row">
+              <div className="shrink-0 border-b border-[#E8EBF0] bg-[#0C123A] px-4 py-3 sm:w-44 sm:border-b-0 sm:border-r">
+                <p className="text-[9px] font-bold uppercase text-[#C99237]">Today</p>
+                <p className="mt-1 text-2xl font-bold tabular-nums text-white">{String(workingHoursDisplay)}</p>
+                <p className="mt-0.5 text-[10px] text-slate-400">{showLiveTimer ? "Live timer" : "Working hours"}</p>
+                <span className={`mt-2 inline-block rounded px-2 py-0.5 text-[9px] font-bold uppercase ${statusTone}`}>{statusLabel}</span>
+                {attendanceError ? <p className="mt-1 text-[10px] text-rose-300">{attendanceError}</p> : null}
+              </div>
+              <div className="min-w-0 flex-1 p-3">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <div className="rounded-md bg-[#F8FAFC] px-2 py-1.5">
+                    <p className={mobileLabelCls}>Check in</p>
+                    <p className="mt-0.5 text-xs font-semibold text-[#0C123A]">{hasCheckedInToday ? formatAttendanceLogLocal(todayRecord?.check_in) : "—"}</p>
+                  </div>
+                  <div className="rounded-md bg-[#F8FAFC] px-2 py-1.5">
+                    <p className={mobileLabelCls}>Check out</p>
+                    <p className="mt-0.5 text-xs font-semibold text-[#0C123A]">{hasCheckedOutToday ? formatAttendanceTimeLocal(todayRecord?.check_out) : "—"}</p>
+                  </div>
+                  <div className="rounded-md bg-[#F8FAFC] px-2 py-1.5">
+                    <p className={mobileLabelCls}>Late after</p>
+                    <p className="mt-0.5 text-xs font-semibold text-[#E8710A]">{lateAfter}</p>
+                  </div>
+                  <div className="rounded-md bg-[#F8FAFC] px-2 py-1.5">
+                    <p className={mobileLabelCls}>Status</p>
+                    <span className={`mt-0.5 inline-block rounded px-1 py-0.5 text-[9px] font-semibold ${dayVisual.boxClass}`}>{dayVisual.meaning}</span>
+                  </div>
                 </div>
-                <span
-                  className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${statusTone}`}
-                >
-                  {statusLabel}
-                </span>
+                <div className="mt-2.5 flex flex-wrap gap-1.5">
+                  <button type="button" onClick={() => void markCheckIn()} disabled={hasCheckedInToday || checkInSubmitting} className={mobilePrimaryBtnCls()}>
+                    {checkInSubmitting ? "…" : hasCheckedInToday ? "Checked in" : "Check in"}
+                  </button>
+                  <button type="button" onClick={() => void markCheckOut()} disabled={!hasCheckedInToday || hasCheckedOutToday || checkOutSubmitting} className={mobileDangerBtnCls()}>
+                    {checkOutSubmitting ? "…" : hasCheckedOutToday ? "Out" : "Check out"}
+                  </button>
+                  <button type="button" onClick={() => void markAttendanceLog()} disabled={!hasCheckedInToday || hasCheckedOutToday || logSubmitting || todayRecord?.id == null || todayRecord?.id === ""} className={mobileSecondaryBtnCls()} title="Mark log">
+                    {logSubmitting ? "…" : "Log"}
+                  </button>
+                </div>
+                {logSuccessMessage ? <p className="mt-1.5 text-[11px] text-emerald-600">{logSuccessMessage}</p> : null}
+                {attendanceActionError ? <p className="mt-1.5 text-[11px] text-red-600">{attendanceActionError}</p> : null}
               </div>
-              <p className={`mt-2 ${mobileLabelCls} !text-slate-400`}>
-                {showLiveTimer ? "Working (live)" : "Working hours"}
-              </p>
-              <p className={`mt-0.5 ${mobileStatValueCls} text-white`}>
-                {String(workingHoursDisplay)}
-              </p>
-              {showLiveTimer ? (
-                <p className={`mt-0.5 ${mobileCaptionCls} !text-slate-400`}>
-                  Updates until you check out
-                </p>
-              ) : null}
-              {attendanceLoading ? (
-                <p className={`mt-1 ${mobileCaptionCls} !text-slate-400`}>
-                  Loading attendance…
-                </p>
-              ) : null}
-              {attendanceError ? (
-                <p className="mt-1 text-[11px] text-rose-300">
-                  {attendanceError}
-                </p>
-              ) : null}
             </div>
+          </section>
+        ) : null}
 
-            <div className="grid grid-cols-2 gap-1.5 p-2.5">
-              <div className="rounded-md border border-[#E4E7EC] bg-[#F9FAFB] px-2.5 py-2">
-                <p className={mobileLabelCls}>Check in</p>
-                <p className={`mt-0.5 ${mobileValueCls}`}>
-                  {hasCheckedInToday
-                    ? formatAttendanceLogLocal(todayRecord?.check_in)
-                    : "—"}
-                </p>
-              </div>
-              <div className="rounded-md border border-[#E4E7EC] bg-[#F9FAFB] px-2.5 py-2">
-                <p className={mobileLabelCls}>Check out</p>
-                <p className={`mt-0.5 ${mobileValueCls}`}>
-                  {hasCheckedOutToday
-                    ? formatAttendanceTimeLocal(todayRecord?.check_out)
-                    : "—"}
-                </p>
-              </div>
-              <div className="rounded-md border border-[#E4E7EC] bg-[#F9FAFB] px-2.5 py-2">
-                <p className={mobileLabelCls}>Late after</p>
-                <p className="mt-0.5 text-[13px] font-semibold text-[#E8710A]">
-                  {lateAfter}
-                </p>
-              </div>
-              <div className="rounded-md border border-[#E4E7EC] bg-[#F9FAFB] px-2.5 py-2">
-                <p className={mobileLabelCls}>Day status</p>
-                <span
-                  className={`mt-0.5 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${dayVisual.boxClass}`}
-                >
-                  {dayVisual.meaning}
-                </span>
-              </div>
+        <section
+          className={`${dashCardCls} ${showAttendance ? "lg:col-span-4" : "lg:col-span-12"}`}
+          style={{ animationDelay: "75ms" }}
+        >
+          <div className={dashCardAccent} />
+          <div className={`${dashSectionHeadCls} justify-between`}>
+            <div className="flex items-center gap-2">
+              <Package className="h-4 w-4 text-amber-600" aria-hidden />
+              <h2 className="text-sm font-semibold text-[#0C123A]">Asset handover</h2>
+              {handoverPendingCount > 0 ? (
+                <span className="rounded-full bg-[#E8710A] px-1.5 py-0.5 text-[9px] font-bold text-white">{handoverPendingCount}</span>
+              ) : null}
             </div>
-
-            <div className="flex flex-wrap gap-1.5 border-t border-[#E4E7EC] px-2.5 py-2.5">
-              <button
-                type="button"
-                onClick={() => void markCheckIn()}
-                disabled={hasCheckedInToday || checkInSubmitting}
-                className={mobilePrimaryBtnCls(true)}
-              >
-                {checkInSubmitting
-                  ? "Marking…"
-                  : hasCheckedInToday
-                    ? "Checked in"
-                    : "Check in"}
-              </button>
-              <button
-                type="button"
-                onClick={() => void markCheckOut()}
-                disabled={
-                  !hasCheckedInToday || hasCheckedOutToday || checkOutSubmitting
-                }
-                className={mobileDangerBtnCls(true)}
-              >
-                {checkOutSubmitting
-                  ? "Processing…"
-                  : hasCheckedOutToday
-                    ? "Checked out"
-                    : "Check out"}
-              </button>
-              <button
-                type="button"
-                onClick={() => void markAttendanceLog()}
-                disabled={
-                  !hasCheckedInToday ||
-                  hasCheckedOutToday ||
-                  logSubmitting ||
-                  todayRecord?.id == null ||
-                  todayRecord?.id === ""
-                }
-                className={mobileSecondaryBtnCls(true)}
-                title="Log stepping out / back in (washroom, errand, etc.)"
-              >
-                {logSubmitting ? "Saving…" : "Mark log"}
-              </button>
-            </div>
-            {logSuccessMessage ? (
-              <p className="border-t border-[#E4E7EC] px-3 py-2 text-[12px] text-[#0F9D58]">
-                {logSuccessMessage}
-              </p>
-            ) : null}
-            {attendanceActionError ? (
-              <p className="border-t border-[#E4E7EC] px-3 pb-2.5 text-[12px] text-[#D93025]">
-                {attendanceActionError}
-              </p>
-            ) : null}
-          </div>
-
-          {/* Desktop: original attendance panel */}
-          <div className="hidden p-6 lg:block">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-base font-semibold text-[#0C123A]">
-                Attendance
-              </h2>
-              <span
-                className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                  String(todayRecord?.attendance_status || "")
-                    .toLowerCase()
-                    .includes("late")
-                    ? "bg-orange-100 text-orange-700"
-                    : String(todayRecord?.attendance_status || "")
-                          .toLowerCase()
-                          .includes("full_day")
-                      ? "bg-emerald-100 text-emerald-700"
-                      : "bg-slate-100 text-slate-700"
-                }`}
-              >
-                {todayRecord?.attendance_status
-                  ? String(todayRecord.attendance_status)
-                      .replace(/_/g, " ")
-                      .toUpperCase()
-                  : "NO STATUS"}
-              </span>
-            </div>
-            {attendanceLoading ? (
-              <p className="mt-3 text-sm text-slate-500">
-                Loading attendance...
-              </p>
-            ) : null}
-            {attendanceError ? (
-              <p className="mt-3 text-sm text-red-600">{attendanceError}</p>
-            ) : null}
-            <div className="mt-4 grid gap-3 sm:grid-cols-5">
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <p className="text-[11px] uppercase tracking-wide text-slate-400">
-                  Today Log
-                </p>
-                <p className="mt-1 text-sm font-semibold text-slate-800">
-                  {hasCheckedInToday
-                    ? formatAttendanceLogLocal(todayRecord?.check_in)
-                    : "—"}
-                </p>
-              </div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <p className="text-[11px] uppercase tracking-wide text-slate-400">
-                  {showLiveTimer ? "Working (live)" : "Working Hours"}
-                </p>
-                <p className="mt-1 text-sm font-semibold tabular-nums text-slate-800">
-                  {String(workingHoursDisplay)}
-                </p>
-                {showLiveTimer ? (
-                  <p className="mt-1 text-[10px] text-slate-500">
-                    Timer runs until you check out
-                  </p>
-                ) : null}
-              </div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <p className="text-[11px] uppercase tracking-wide text-slate-400">
-                  Late After
-                </p>
-                <p className="mt-1 text-sm font-semibold text-rose-500">
-                  {lateAfter}
-                </p>
-              </div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <p className="text-[11px] uppercase tracking-wide text-slate-400">
-                  Check Out Time
-                </p>
-                <p className="mt-1 text-sm font-semibold text-slate-800">
-                  {hasCheckedOutToday
-                    ? formatAttendanceTimeLocal(todayRecord?.check_out)
-                    : "—"}
-                </p>
-              </div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <p className="text-[11px] uppercase tracking-wide text-slate-400">
-                  Day Color
-                </p>
-                <span
-                  className={`mt-1 inline-block rounded px-2 py-0.5 text-xs font-semibold ${dayVisual.boxClass}`}
-                >
-                  {dayVisual.meaning}
-                </span>
-              </div>
-            </div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => void markCheckIn()}
-                disabled={hasCheckedInToday || checkInSubmitting}
-                className="rounded-md bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {checkInSubmitting ? "Marking..." : "Check In"}
-              </button>
-              <button
-                type="button"
-                onClick={() => void markCheckOut()}
-                disabled={
-                  !hasCheckedInToday || hasCheckedOutToday || checkOutSubmitting
-                }
-                className="rounded-md bg-rose-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {checkOutSubmitting
-                  ? "Processing..."
-                  : hasCheckedOutToday
-                    ? "Checked Out"
-                    : "Check Out"}
-              </button>
-              <button
-                type="button"
-                onClick={() => void markAttendanceLog()}
-                disabled={
-                  !hasCheckedInToday ||
-                  hasCheckedOutToday ||
-                  logSubmitting ||
-                  todayRecord?.id == null ||
-                  todayRecord?.id === ""
-                }
-                className="rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                title="Log stepping out / back in (washroom, errand, etc.)"
-              >
-                {logSubmitting ? "Saving…" : "Mark log"}
-              </button>
-            </div>
-            {logSuccessMessage ? (
-              <p className="mt-2 text-sm text-emerald-700">
-                {logSuccessMessage}
-              </p>
-            ) : null}
-            {attendanceActionError ? (
-              <p className="mt-3 text-sm text-red-600">
-                {attendanceActionError}
-              </p>
-            ) : null}
+            <Link href={handoverHref} className={`${mobilePrimaryBtnCls()} !py-1 !text-[11px]`}>
+              Open
+            </Link>
           </div>
         </section>
-      ) : null}
+
+        {roleKey !== "admin" ? (
+          <div className="lg:col-span-6">
+            <MyTeamsSection teams={attendanceData?.teams ?? []} orgId={orgId} currentUserName={user.user_name?.trim() || displayName} delayMs={100} />
+          </div>
+        ) : null}
+
+        <div className={roleKey !== "admin" ? "lg:col-span-6" : "lg:col-span-12"}>
+          <ProfileSummaryCard
+            organization={organization}
+            user={user}
+            ownerName={ownerName}
+            ownerEmail={ownerEmail}
+            ownerPhone={ownerPhone}
+            ownerMatchesUser={ownerMatchesUser}
+            delayMs={125}
+          />
+        </div>
+
+        <div className="lg:col-span-12">
+          <OrganizationAddressesSection addresses={organizationAddresses} orgId={orgId} delayMs={150} />
+        </div>
+      </div>
     </div>
   );
 }
@@ -1255,11 +911,9 @@ export default function HomePage() {
 
   if (loading || !organization || !user) {
     return (
-      <div
-        className="dashboard-enter rounded-lg bg-white p-6 shadow-sm ring-1 ring-[#E4E7EC] max-lg:mx-0 max-lg:p-5 lg:rounded-2xl lg:border lg:border-slate-200 lg:p-8 lg:shadow-md lg:ring-slate-200/70"
-        style={{ animationDelay: "0ms" }}
-      >
-        <p className="text-[13px] font-medium text-[#1F2937] lg:text-base lg:text-[#0C123A]">
+      <div className={`${dashCardCls} p-6`} style={{ animationDelay: "0ms" }}>
+        <div className={dashCardAccent} />
+        <p className="text-sm font-medium text-[#0C123A]">
           {loading ? "Loading dashboard…" : "Could not load organization."}
         </p>
       </div>
