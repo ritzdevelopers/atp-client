@@ -31,6 +31,7 @@ export type AllUsersAttendanceQuery = {
 
 export type AttendanceHeaderData = {
   total_company_employees: number;
+  inactive_company_employees?: number;
   selected_date_present_employees: number;
   selected_date_absent_employees: number;
   check_in_on_time_employees: number;
@@ -51,6 +52,7 @@ export type EmployeeAttendanceRow = {
   employee_working_hours: number;
   employee_attendance_status: string;
   attendance_date: string;
+  is_active_employee: boolean;
   total_attendance_days: number;
   total_present_days: number;
   total_absent_days: number;

@@ -193,8 +193,19 @@ function userInitials(name: string) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
+type EmployeeMembershipTab = "active" | "inactive";
+
+function membershipTabCls(active: boolean) {
+  return `inline-flex min-h-[36px] flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-[12px] font-medium transition sm:text-[13px] ${
+    active
+      ? "bg-white text-[#008CD3] shadow-sm"
+      : "text-[#6B7280] hover:text-[#374151]"
+  }`;
+}
+
 const EMPTY_HEADER: AttendanceHeaderData = {
   total_company_employees: 0,
+  inactive_company_employees: 0,
   selected_date_present_employees: 0,
   selected_date_absent_employees: 0,
   check_in_on_time_employees: 0,
@@ -306,6 +317,11 @@ function MobileEmployeeRow({ employee, orgId, selectedDate }: EmployeeRowProps) 
                 {formatStatusLabel(employee.employee_attendance_status)}
               </span>
             </div>
+            {employee.is_active_employee === false ? (
+              <span className="mt-1 inline-flex rounded-full bg-[#FEF3E6] px-2 py-0.5 text-[10px] font-semibold uppercase text-[#E8710A]">
+                Inactive member
+              </span>
+            ) : null}
             <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[13px] text-[#6B7280]">
               <p>
                 <span className="text-[#9CA3AF]">In </span>
@@ -353,6 +369,8 @@ function ManageAttendanceListPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [userSearchQuery, setUserSearchQuery] = useState("");
+  const [employeeMembershipTab, setEmployeeMembershipTab] =
+    useState<EmployeeMembershipTab>("active");
   const [mobileMainTab, setMobileMainTab] = useState<"team" | "overview">("team");
   const [dateToast, setDateToast] = useState<{ id: number; message: string } | null>(null);
 
@@ -443,6 +461,7 @@ function ManageAttendanceListPage() {
     };
     setActiveKpiFilter("all");
     setStatusFilter("");
+    setEmployeeMembershipTab("active");
     setAppliedQuery(query);
     void loadAttendance(query);
   };
@@ -453,20 +472,47 @@ function ManageAttendanceListPage() {
     setSelectedDate(today);
     setStatusFilter("");
     setActiveKpiFilter("all");
+    setEmployeeMembershipTab("active");
     const query = { date: today, month: parts.month, year: parts.year };
     setAppliedQuery(query);
     void loadAttendance(query, true);
   };
 
   const handleKpiFilterClick = useCallback((filter: AttendanceKpiFilter) => {
+    setEmployeeMembershipTab("active");
     setActiveKpiFilter((prev) => (prev === filter ? "all" : filter));
     setMobileMainTab("team");
   }, []);
 
-  const filteredEmployees = useMemo(() => {
-    let list = employees;
+  const handleMembershipTabChange = useCallback((tab: EmployeeMembershipTab) => {
+    setEmployeeMembershipTab(tab);
+    if (tab === "inactive") {
+      setActiveKpiFilter("all");
+    }
+  }, []);
 
-    if (activeKpiFilter !== "all") {
+  const activeEmployees = useMemo(
+    () => employees.filter((e) => e.is_active_employee !== false),
+    [employees],
+  );
+
+  const inactiveEmployees = useMemo(
+    () => employees.filter((e) => e.is_active_employee === false),
+    [employees],
+  );
+
+  const membershipTabEmployees = useMemo(
+    () => (employeeMembershipTab === "active" ? activeEmployees : inactiveEmployees),
+    [activeEmployees, inactiveEmployees, employeeMembershipTab],
+  );
+
+  const inactiveEmployeeCount =
+    headerData.inactive_company_employees ?? inactiveEmployees.length;
+
+  const filteredEmployees = useMemo(() => {
+    let list = membershipTabEmployees;
+
+    if (employeeMembershipTab === "active" && activeKpiFilter !== "all") {
       list = list.filter((e) =>
         matchesKpiFilter(e.employee_attendance_status, activeKpiFilter),
       );
@@ -489,15 +535,21 @@ function ManageAttendanceListPage() {
         e.employee_designation.toLowerCase().includes(q) ||
         e.employee_phone.toLowerCase().includes(q),
     );
-  }, [employees, activeKpiFilter, statusFilter, userSearchQuery]);
+  }, [
+    membershipTabEmployees,
+    employeeMembershipTab,
+    activeKpiFilter,
+    statusFilter,
+    userSearchQuery,
+  ]);
 
   const statusOptions = useMemo(() => {
     const set = new Set<string>();
-    for (const e of employees) {
+    for (const e of membershipTabEmployees) {
       if (e.employee_attendance_status) set.add(e.employee_attendance_status);
     }
     return Array.from(set).sort();
-  }, [employees]);
+  }, [membershipTabEmployees]);
 
   const mobileTabs = [
     { id: "team" as const, label: "Attendance", count: filteredEmployees.length },
@@ -564,6 +616,43 @@ function ManageAttendanceListPage() {
             </div>
           </div>
 
+          <div className="border-t border-[#E4E7EC] px-3 py-2 sm:px-4">
+            <div className="flex rounded-lg bg-[#F5F7FA] p-0.5">
+              <button
+                type="button"
+                onClick={() => handleMembershipTabChange("active")}
+                className={membershipTabCls(employeeMembershipTab === "active")}
+              >
+                Active
+                <span
+                  className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] ${
+                    employeeMembershipTab === "active"
+                      ? "bg-[#E8F4FB] text-[#008CD3]"
+                      : "bg-[#E4E7EC] text-[#6B7280]"
+                  }`}
+                >
+                  {activeEmployees.length}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleMembershipTabChange("inactive")}
+                className={membershipTabCls(employeeMembershipTab === "inactive")}
+              >
+                Inactive
+                <span
+                  className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] ${
+                    employeeMembershipTab === "inactive"
+                      ? "bg-[#FEF3E6] text-[#E8710A]"
+                      : "bg-[#E4E7EC] text-[#6B7280]"
+                  }`}
+                >
+                  {inactiveEmployeeCount}
+                </span>
+              </button>
+            </div>
+          </div>
+
           {mobileMainTab === "team" ? (
             <div className="space-y-2 border-t border-[#E4E7EC] px-3 py-2.5 sm:px-4">
               <input
@@ -607,7 +696,7 @@ function ManageAttendanceListPage() {
                   className={zohoSearchCls()}
                 />
               </div>
-              {!loading && !error ? (
+              {!loading && !error && employeeMembershipTab === "active" ? (
                 <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5">
                   {(
                     [
@@ -709,6 +798,12 @@ function ManageAttendanceListPage() {
           </div>
         ) : null}
 
+        {!loading && !error && mobileMainTab === "team" && employeeMembershipTab === "inactive" ? (
+          <div className="mx-3 mt-2 rounded-lg border border-[#FEF3E6] bg-[#FFFBF5] px-3 py-2 text-[12px] text-[#92400E] sm:mx-4">
+            Showing inactive org members only. Attendance KPI filters apply to active employees.
+          </div>
+        ) : null}
+
         {!loading && !error && mobileMainTab === "team" && activeKpiFilter !== "all" ? (
           <div className="mx-3 mt-2 flex items-center justify-between gap-2 rounded-lg border border-[#CFE8F7] bg-[#E8F4FB] px-3 py-2 text-[12px] sm:mx-4">
             <span className="font-medium text-[#008CD3]">
@@ -784,7 +879,7 @@ function ManageAttendanceListPage() {
             </div>
           </header>
 
-          {!loading && !error ? (
+          {!loading && !error && employeeMembershipTab === "active" ? (
             <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
               <KpiCard
                 label="Total employees"
@@ -826,6 +921,50 @@ function ManageAttendanceListPage() {
                 active={activeKpiFilter === "late"}
                 onClick={() => handleKpiFilterClick("late")}
               />
+            </div>
+          ) : null}
+
+          <div className={`${zohoPanelCls()} p-1.5`}>
+            <div className="flex rounded-lg bg-[#F5F7FA] p-0.5">
+              <button
+                type="button"
+                onClick={() => handleMembershipTabChange("active")}
+                className={membershipTabCls(employeeMembershipTab === "active")}
+              >
+                Active employees
+                <span
+                  className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] ${
+                    employeeMembershipTab === "active"
+                      ? "bg-[#E8F4FB] text-[#008CD3]"
+                      : "bg-[#E4E7EC] text-[#6B7280]"
+                  }`}
+                >
+                  {activeEmployees.length}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleMembershipTabChange("inactive")}
+                className={membershipTabCls(employeeMembershipTab === "inactive")}
+              >
+                Inactive employees
+                <span
+                  className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] ${
+                    employeeMembershipTab === "inactive"
+                      ? "bg-[#FEF3E6] text-[#E8710A]"
+                      : "bg-[#E4E7EC] text-[#6B7280]"
+                  }`}
+                >
+                  {inactiveEmployeeCount}
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {employeeMembershipTab === "inactive" ? (
+            <div className="rounded-lg border border-[#FEF3E6] bg-[#FFFBF5] px-4 py-2.5 text-[13px] text-[#92400E]">
+              Inactive org members are listed separately. Attendance summary KPIs reflect active
+              employees only.
             </div>
           ) : null}
 
@@ -913,11 +1052,11 @@ function ManageAttendanceListPage() {
             </div>
           ) : null}
 
-          {!loading && !error && activeKpiFilter !== "all" ? (
+          {!loading && !error && employeeMembershipTab === "active" && activeKpiFilter !== "all" ? (
             <div className="flex items-center justify-between gap-3 rounded-lg border border-[#CFE8F7] bg-[#E8F4FB] px-4 py-2.5 text-[13px]">
               <span className="font-medium text-[#008CD3]">
                 Showing {kpiFilterLabel(activeKpiFilter)} · {filteredEmployees.length} of{" "}
-                {employees.length} employees
+                {membershipTabEmployees.length} active employees
               </span>
               <button
                 type="button"
@@ -996,6 +1135,11 @@ function ManageAttendanceListPage() {
                             <p className="text-[11px] uppercase tracking-wide text-[#9CA3AF]">
                               {employee.employee_designation}
                             </p>
+                            {employee.is_active_employee === false ? (
+                              <span className="mt-1 inline-flex rounded-full bg-[#FEF3E6] px-2 py-0.5 text-[10px] font-semibold uppercase text-[#E8710A]">
+                                Inactive member
+                              </span>
+                            ) : null}
                           </div>
                         </div>
                       </td>
@@ -1044,7 +1188,8 @@ function ManageAttendanceListPage() {
                 </tbody>
               </table>
               <div className="border-t border-[#E4E7EC] bg-[#F9FAFB] px-4 py-2.5 text-[12px] text-[#6B7280]">
-                Showing {filteredEmployees.length} of {employees.length} employees
+                Showing {filteredEmployees.length} of {membershipTabEmployees.length}{" "}
+                {employeeMembershipTab === "active" ? "active" : "inactive"} employees
               </div>
             </div>
           ) : null}
