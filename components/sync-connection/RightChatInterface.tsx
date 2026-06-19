@@ -12,32 +12,48 @@ import { useParams, usePathname } from "next/navigation";
 import {
   MdArrowBack,
   MdAttachFile,
-  MdCall,
   MdDelete,
   MdDone,
   MdDoneAll,
   MdEdit,
   MdEmojiEmotions,
+  MdInfoOutline,
   MdMoreVert,
-  MdSearch,
+  MdPersonAdd,
+  MdPersonRemove,
+  MdReply,
   MdSend,
-  MdVideocam,
+  MdBlock,
 } from "react-icons/md";
 import { SocketContext } from "@/components/sockets/Socket.Provider";
 import {
-  deletePrivateMessages,
+  fetchGroupChatHistory,
+  fetchGroupMembers,
   fetchPrivateChatHistory,
+  fileToDataUrl,
   formatLastActiveLabel,
+  inferChatMessageTypeFromMime,
   jwtUserId,
   mapSocketMessageToChatMessage,
+  mapSocketMessageToGroupChatMessage,
+  validateChatMediaFile,
   type SeenPrivateMessagePayload,
   type TypingIndicatorPayload,
   type SocketMessageRecord,
 } from "@/services/chatApplication";
+import { getSyncConnectionBase } from "@/lib/syncConnectionPaths";
 import ChatAvatar from "./ChatAvatar";
+import GroupManagePanel, {
+  type GroupManageView,
+} from "./GroupManagePanel";
 import { useChatContext } from "./ChatContext";
 import MobileEmojiPicker from "./MobileEmojiPicker";
-import type { ChatMessage, ChatTab } from "./types";
+import type {
+  ChatMessage,
+  ChatMessageReply,
+  ChatTab,
+  GroupChat,
+} from "./types";
 
 function tabFromPathname(pathname: string | null, base: string): ChatTab {
   if (pathname?.startsWith(`${base}/groups`)) return "groups";
@@ -88,22 +104,27 @@ export default function RightChatInterface() {
   const params = useParams();
   const pathname = usePathname();
   const orgId = String(params?.org_id ?? "");
-  const syncConnectionBase = `/dashboard/${orgId}/sync-connection`;
+  const syncConnectionBase = useMemo(
+    () => getSyncConnectionBase(pathname, orgId),
+    [pathname, orgId],
+  );
   const activeTab = useMemo(
     () => tabFromPathname(pathname, syncConnectionBase),
     [pathname, syncConnectionBase],
   );
   const isLgScreen = useIsLgScreen();
-  const { selectedChat, mobileShowChat, setMobileShowChat } = useChatContext();
+  const { selectedChat, mobileShowChat, setMobileShowChat, refreshGroupChats, selectChat } =
+    useChatContext();
   const { socket, isConnected, getUserActiveStatus } = useContext(SocketContext);
 
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatId, setChatId] = useState<string | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
-  const [chatSearchQuery, setChatSearchQuery] = useState("");
-  const [callMenuOpen, setCallMenuOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const [groupManageOpen, setGroupManageOpen] = useState(false);
+  const [groupManageView, setGroupManageView] =
+    useState<GroupManageView>("menu");
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
   const [openMessageMenuId, setOpenMessageMenuId] = useState<string | null>(
     null,
@@ -112,14 +133,39 @@ export default function RightChatInterface() {
   const [selectedDeleteIds, setSelectedDeleteIds] = useState<string[]>([]);
   const [deletingMessages, setDeletingMessages] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [replyingTo, setReplyingTo] = useState<ChatMessageReply | null>(null);
+  const [replyError, setReplyError] = useState<string | null>(null);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
+  const [mediaError, setMediaError] = useState<string | null>(null);
+  const isGroupChat = activeTab === "groups";
+  const [groupTyperName, setGroupTyperName] = useState<string | null>(null);
   const [contactIsTyping, setContactIsTyping] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const callMenuRef = useRef<HTMLDivElement>(null);
   const moreMenuRef = useRef<HTMLDivElement>(null);
+  const groupMemberNamesRef = useRef<Map<number, string>>(new Map());
   const mobileInputRef = useRef<HTMLInputElement>(null);
+  const desktopInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const joinedChatIdRef = useRef<string | null>(null);
+  const joinedRoomIsGroupRef = useRef(false);
   const messageMenuRef = useRef<HTMLDivElement>(null);
+  const pendingEditRef = useRef<{ messageId: string; originalText: string } | null>(
+    null,
+  );
+  const pendingDeleteRef = useRef<{
+    snapshot: ChatMessage[];
+    pendingIds: Set<string>;
+  } | null>(null);
+  const pendingReplyRef = useRef<{
+    optimisticMessage: ChatMessage;
+  } | null>(null);
+  const pendingMediaRef = useRef<{
+    optimisticMessage: ChatMessage;
+    localPreviewUrl?: string;
+  } | null>(null);
   const isTypingActiveRef = useRef(false);
   const typingStopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
@@ -128,7 +174,6 @@ export default function RightChatInterface() {
     null,
   );
 
-  useClickOutside(callMenuRef, () => setCallMenuOpen(false), callMenuOpen);
   useClickOutside(moreMenuRef, () => setMoreMenuOpen(false), moreMenuOpen);
   useClickOutside(
     messageMenuRef,
@@ -164,6 +209,32 @@ export default function RightChatInterface() {
       selectedDeleteIds.includes(msg.message_id),
     );
 
+  const openGroupManage = useCallback((view: GroupManageView = "menu") => {
+    setGroupManageView(view);
+    setGroupManageOpen(true);
+    setMoreMenuOpen(false);
+  }, []);
+
+  const handleGroupUpdated = useCallback(
+    (patch?: { group_name?: string; member_count?: number }) => {
+      void refreshGroupChats();
+      if (!selectedChat) return;
+      if (!patch) {
+        selectChat(null);
+        setMobileShowChat(false);
+        return;
+      }
+      selectChat({
+        ...selectedChat,
+        ...(patch.group_name ? { user_name: patch.group_name } : {}),
+        ...(patch.member_count != null
+          ? { member_count: patch.member_count }
+          : {}),
+      } as GroupChat);
+    },
+    [refreshGroupChats, selectedChat, selectChat, setMobileShowChat],
+  );
+
   const exitDeleteMode = useCallback(() => {
     setDeleteMode(false);
     setSelectedDeleteIds([]);
@@ -171,12 +242,90 @@ export default function RightChatInterface() {
     setOpenMessageMenuId(null);
   }, []);
 
+  const cancelEditing = useCallback(() => {
+    setEditingMessageId(null);
+    setMessage("");
+    setEditError(null);
+    pendingEditRef.current = null;
+  }, []);
+
+  const clearPendingDelete = useCallback(() => {
+    pendingDeleteRef.current = null;
+    setDeletingMessages(false);
+  }, []);
+
+  const cancelReply = useCallback(() => {
+    setReplyingTo(null);
+    setReplyError(null);
+    pendingReplyRef.current = null;
+  }, []);
+
+  const clearPendingMedia = useCallback(() => {
+    if (pendingMediaRef.current?.localPreviewUrl) {
+      URL.revokeObjectURL(pendingMediaRef.current.localPreviewUrl);
+    }
+    pendingMediaRef.current = null;
+    setUploadingMedia(false);
+    setMediaError(null);
+  }, []);
+
+  const startReplyMessage = useCallback(
+    (msg: ChatMessage) => {
+      if (msg.message_id.startsWith("temp-")) return;
+      setOpenMessageMenuId(null);
+      cancelEditing();
+      setReplyError(null);
+      const senderId = msg.is_outgoing
+        ? Number(currentUserId)
+        : isGroupChat
+          ? 0
+          : Number(contactUserId);
+      setReplyingTo({
+        message_id: msg.message_id,
+        text: msg.text,
+        sender_id: senderId,
+        sender_name: msg.is_outgoing
+          ? "You"
+          : isGroupChat
+            ? (msg.sender_name ?? "Member")
+            : (selectedChat?.user_name ?? "Contact"),
+        is_outgoing: msg.is_outgoing,
+      });
+      requestAnimationFrame(() => {
+        if (window.matchMedia("(min-width: 768px)").matches) {
+          desktopInputRef.current?.focus();
+        } else {
+          mobileInputRef.current?.focus();
+        }
+      });
+    },
+    [currentUserId, contactUserId, selectedChat?.user_name, cancelEditing, isGroupChat],
+  );
+
+  const startEditingMessage = useCallback((msg: ChatMessage) => {
+    setOpenMessageMenuId(null);
+    setDeleteMode(false);
+    cancelReply();
+    setEditError(null);
+    setEditingMessageId(msg.message_id);
+    setMessage(msg.text);
+    pendingEditRef.current = null;
+    requestAnimationFrame(() => {
+      if (window.matchMedia("(min-width: 768px)").matches) {
+        desktopInputRef.current?.focus();
+      } else {
+        mobileInputRef.current?.focus();
+      }
+    });
+  }, [cancelReply]);
+
   const enterDeleteMode = useCallback((messageId?: string) => {
     setDeleteMode(true);
     setDeleteError(null);
+    cancelReply();
     setOpenMessageMenuId(null);
     setSelectedDeleteIds(messageId ? [messageId] : []);
-  }, []);
+  }, [cancelReply]);
 
   const toggleDeleteSelection = useCallback((messageId: string) => {
     setSelectedDeleteIds((prev) =>
@@ -193,53 +342,59 @@ export default function RightChatInterface() {
     });
   }, [allDeletableSelected, deletableMessages]);
 
-  const handleConfirmDelete = useCallback(async () => {
-    if (!chatId || selectedDeleteIds.length === 0) return;
-
-    const token = localStorage.getItem("token");
-    if (!token) {
-      setDeleteError("You must be signed in to delete messages.");
+  const handleConfirmDelete = useCallback(() => {
+    if (
+      !chatId ||
+      selectedDeleteIds.length === 0 ||
+      !socket ||
+      currentUserId == null
+    ) {
       return;
     }
 
     setDeletingMessages(true);
     setDeleteError(null);
 
-    try {
-      const deletedIds = await deletePrivateMessages(
-        token,
-        orgId,
-        chatId,
-        selectedDeleteIds,
-      );
-      const deletedSet = new Set(deletedIds.map(String));
-      setMessages((prev) =>
-        prev.filter((msg) => !deletedSet.has(msg.message_id)),
-      );
-      exitDeleteMode();
-    } catch (error) {
-      setDeleteError(
-        error instanceof Error ? error.message : "Failed to delete messages",
-      );
-    } finally {
-      setDeletingMessages(false);
-    }
-  }, [chatId, selectedDeleteIds, orgId, exitDeleteMode]);
+    const deleteSet = new Set(selectedDeleteIds.map(String));
 
-  const displayedMessages = useMemo(() => {
-    const q = chatSearchQuery.trim().toLowerCase();
-    if (!q) return messages;
-    return messages.filter((msg) => msg.text.toLowerCase().includes(q));
-  }, [messages, chatSearchQuery]);
+    setMessages((prev) => {
+      pendingDeleteRef.current = {
+        snapshot: prev,
+        pendingIds: new Set(deleteSet),
+      };
+      return prev.filter((msg) => !deleteSet.has(msg.message_id));
+    });
+    exitDeleteMode();
+
+    socket.emit(isGroupChat ? "delete_group_message" : "delete_message", {
+      chat_id: chatId,
+      user_id: currentUserId,
+      message_ids: selectedDeleteIds,
+    });
+  }, [
+    chatId,
+    selectedDeleteIds,
+    socket,
+    currentUserId,
+    isGroupChat,
+    exitDeleteMode,
+  ]);
+
+  const displayedMessages = messages;
 
   const leaveChatRoom = useCallback(
     (roomId?: string | null) => {
       if (!socket) return;
       const id = roomId ?? joinedChatIdRef.current;
       if (!id) return;
-      socket.emit("leave_chat_room", id);
+      if (joinedRoomIsGroupRef.current) {
+        socket.emit("leave_group_chat", id);
+      } else {
+        socket.emit("leave_chat_room", id);
+      }
       if (joinedChatIdRef.current === id) {
         joinedChatIdRef.current = null;
+        joinedRoomIsGroupRef.current = false;
       }
     },
     [socket],
@@ -248,28 +403,31 @@ export default function RightChatInterface() {
   const isViewingChat = Boolean(
     selectedChat &&
       chatId &&
-      activeTab === "individual" &&
+      (activeTab === "individual" || activeTab === "groups") &&
       (isLgScreen || mobileShowChat),
   );
 
   const emitTypingStop = useCallback(() => {
-    if (
-      !socket ||
-      !chatId ||
-      currentUserId == null ||
-      contactUserId == null ||
-      !isTypingActiveRef.current
-    ) {
+    if (!socket || !chatId || currentUserId == null || !isTypingActiveRef.current) {
       return;
     }
 
     isTypingActiveRef.current = false;
+    if (isGroupChat) {
+      socket.emit("group_typing_stop", {
+        chat_id: chatId,
+        user_id: currentUserId,
+      });
+      return;
+    }
+
+    if (contactUserId == null) return;
     socket.emit("typing_stop", {
       chat_id: chatId,
       user_id: currentUserId,
       receiver_id: contactUserId,
     });
-  }, [socket, chatId, currentUserId, contactUserId]);
+  }, [socket, chatId, currentUserId, contactUserId, isGroupChat]);
 
   const handleMessageChange = useCallback(
     (value: string) => {
@@ -280,9 +438,12 @@ export default function RightChatInterface() {
         !socket ||
         !chatId ||
         currentUserId == null ||
-        contactUserId == null ||
         !isViewingChat
       ) {
+        return;
+      }
+
+      if (!isGroupChat && contactUserId == null) {
         return;
       }
 
@@ -298,11 +459,19 @@ export default function RightChatInterface() {
 
       if (!isTypingActiveRef.current) {
         isTypingActiveRef.current = true;
-        socket.emit("typing_indicator", {
-          chat_id: chatId,
-          user_id: currentUserId,
-          receiver_id: contactUserId,
-        });
+        if (isGroupChat) {
+          socket.emit("group_typing_indicator", {
+            chat_id: chatId,
+            user_id: currentUserId,
+            user_name: "You",
+          });
+        } else {
+          socket.emit("typing_indicator", {
+            chat_id: chatId,
+            user_id: currentUserId,
+            receiver_id: contactUserId,
+          });
+        }
       }
 
       if (typingStopTimeoutRef.current) {
@@ -319,6 +488,7 @@ export default function RightChatInterface() {
       currentUserId,
       contactUserId,
       isViewingChat,
+      isGroupChat,
       deleteMode,
       emitTypingStop,
     ],
@@ -342,6 +512,7 @@ export default function RightChatInterface() {
 
   useEffect(() => {
     setContactIsTyping(false);
+    setGroupTyperName(null);
     isTypingActiveRef.current = false;
     if (typingStopTimeoutRef.current) {
       clearTimeout(typingStopTimeoutRef.current);
@@ -375,11 +546,20 @@ export default function RightChatInterface() {
       }
       contactTypingTimeoutRef.current = setTimeout(() => {
         setContactIsTyping(false);
+        setGroupTyperName(null);
         contactTypingTimeoutRef.current = null;
       }, 3000);
     };
 
-    const handleTyping = (payload: TypingIndicatorPayload) => {
+    const resolveTyperName = (userId: number, fallback?: string) => {
+      const fromMembers = groupMemberNamesRef.current.get(userId);
+      if (fromMembers) return fromMembers;
+      if (fallback && fallback !== "You") return fallback;
+      return "Someone";
+    };
+
+    const handlePrivateTyping = (payload: TypingIndicatorPayload) => {
+      if (isGroupChat) return;
       if (Number(payload.user_id) === currentUserId) return;
 
       const typerUserId = String(payload.user_id);
@@ -399,7 +579,8 @@ export default function RightChatInterface() {
       clearContactTypingLater();
     };
 
-    const handleTypingStop = (payload: TypingIndicatorPayload) => {
+    const handlePrivateTypingStop = (payload: TypingIndicatorPayload) => {
+      if (isGroupChat) return;
       if (Number(payload.user_id) === currentUserId) return;
       if (String(payload.user_id) !== String(selectedChat?.user_id ?? "")) {
         return;
@@ -412,17 +593,88 @@ export default function RightChatInterface() {
       setContactIsTyping(false);
     };
 
-    socket.on("typing_indicator", handleTyping);
-    socket.on("typing_stop", handleTypingStop);
+    const handleGroupTyping = (payload: TypingIndicatorPayload) => {
+      if (!isGroupChat) return;
+      if (Number(payload.user_id) === currentUserId) return;
+
+      const activeChatId = chatId ?? selectedChat?.chat_id ?? selectedChat?.user_id ?? null;
+      if (
+        !selectedChat ||
+        !isViewingChat ||
+        !activeChatId ||
+        String(payload.chat_id) !== String(activeChatId)
+      ) {
+        return;
+      }
+
+      setGroupTyperName(
+        resolveTyperName(Number(payload.user_id), payload.user_name),
+      );
+      clearContactTypingLater();
+    };
+
+    const handleGroupTypingStop = (payload: TypingIndicatorPayload) => {
+      if (!isGroupChat) return;
+      if (Number(payload.user_id) === currentUserId) return;
+
+      if (contactTypingTimeoutRef.current) {
+        clearTimeout(contactTypingTimeoutRef.current);
+        contactTypingTimeoutRef.current = null;
+      }
+      setGroupTyperName(null);
+    };
+
+    socket.on("typing_indicator", handlePrivateTyping);
+    socket.on("typing_stop", handlePrivateTypingStop);
+    socket.on("group_typing_indicator", handleGroupTyping);
+    socket.on("group_typing_stop", handleGroupTypingStop);
 
     return () => {
-      socket.off("typing_indicator", handleTyping);
-      socket.off("typing_stop", handleTypingStop);
+      socket.off("typing_indicator", handlePrivateTyping);
+      socket.off("typing_stop", handlePrivateTypingStop);
+      socket.off("group_typing_indicator", handleGroupTyping);
+      socket.off("group_typing_stop", handleGroupTypingStop);
       if (contactTypingTimeoutRef.current) {
         clearTimeout(contactTypingTimeoutRef.current);
       }
     };
-  }, [socket, currentUserId, selectedChat, chatId, isViewingChat]);
+  }, [socket, currentUserId, selectedChat, chatId, isViewingChat, isGroupChat]);
+
+  useEffect(() => {
+    if (!isGroupChat || !chatId || !orgId) {
+      groupMemberNamesRef.current = new Map();
+      return;
+    }
+
+    let cancelled = false;
+    const activeGroupId = chatId;
+
+    async function loadMemberNames() {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+      try {
+        const data = await fetchGroupMembers(token, orgId, activeGroupId);
+        if (cancelled) return;
+        const map = new Map<number, string>();
+        for (const member of data.members) {
+          map.set(member.id, member.name);
+        }
+        groupMemberNamesRef.current = map;
+      } catch {
+        /* member names are optional for typing display */
+      }
+    }
+
+    void loadMemberNames();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isGroupChat,
+    chatId,
+    orgId,
+    isGroupChat ? (selectedChat as GroupChat | null)?.member_count : null,
+  ]);
 
   useEffect(() => {
     if (!socket || currentUserId == null) {
@@ -439,18 +691,31 @@ export default function RightChatInterface() {
       leaveChatRoom(joinedChatIdRef.current);
     }
 
-    socket.emit("join_chat_room", chatId, currentUserId);
+    if (isGroupChat) {
+      socket.emit("join_group_chat", chatId, currentUserId);
+      joinedRoomIsGroupRef.current = true;
+    } else {
+      socket.emit("join_chat_room", chatId, currentUserId);
+      joinedRoomIsGroupRef.current = false;
+    }
     joinedChatIdRef.current = chatId;
 
-    socket.emit("seen_private_message", {
-      chat_id: chatId,
-      user_id: currentUserId,
-    });
+    if (isGroupChat) {
+      socket.emit("seen_group_message", {
+        chat_id: chatId,
+        user_id: currentUserId,
+      });
+    } else {
+      socket.emit("seen_private_message", {
+        chat_id: chatId,
+        user_id: currentUserId,
+      });
+    }
 
     return () => {
       leaveChatRoom(chatId);
     };
-  }, [socket, currentUserId, chatId, isViewingChat, leaveChatRoom]);
+  }, [socket, currentUserId, chatId, isViewingChat, isGroupChat, leaveChatRoom]);
 
   useEffect(() => {
     return () => {
@@ -467,17 +732,26 @@ export default function RightChatInterface() {
     if (!selectedChat) {
       setMessages([]);
       setChatId(null);
-      setChatSearchQuery("");
-      setCallMenuOpen(false);
       setMoreMenuOpen(false);
+      setGroupManageOpen(false);
       setEmojiPickerOpen(false);
       exitDeleteMode();
+      cancelEditing();
+      clearPendingDelete();
+      cancelReply();
+      clearPendingMedia();
       return;
     }
 
-    const nextChatId = selectedChat.chat_id ?? null;
+    const nextChatId = isGroupChat
+      ? (selectedChat.chat_id ?? selectedChat.user_id ?? null)
+      : (selectedChat.chat_id ?? null);
     setChatId(nextChatId);
     exitDeleteMode();
+    cancelEditing();
+    clearPendingDelete();
+    cancelReply();
+    clearPendingMedia();
 
     if (!nextChatId) {
       setMessages([]);
@@ -488,7 +762,7 @@ export default function RightChatInterface() {
       !socket ||
       !isConnected ||
       currentUserId == null ||
-      contactUserId == null
+      (!isGroupChat && contactUserId == null)
     ) {
       return;
     }
@@ -497,13 +771,18 @@ export default function RightChatInterface() {
     let cancelled = false;
 
     setLoadingHistory(true);
-    fetchPrivateChatHistory(
-      socket,
-      chatIdToLoad,
-      currentUserId,
-      contactUserId,
-      selectedChat.user_profile,
-    )
+    const historyPromise = isGroupChat
+      ? fetchGroupChatHistory(socket, chatIdToLoad, currentUserId)
+      : fetchPrivateChatHistory(
+          socket,
+          chatIdToLoad,
+          currentUserId,
+          contactUserId!,
+          selectedChat.user_profile,
+          { contactName: selectedChat.user_name },
+        );
+
+    historyPromise
       .then((history) => {
         if (!cancelled) setMessages(history);
       })
@@ -517,20 +796,35 @@ export default function RightChatInterface() {
     return () => {
       cancelled = true;
     };
-  }, [selectedChat, socket, isConnected, currentUserId, contactUserId, exitDeleteMode]);
+  }, [selectedChat, socket, isConnected, currentUserId, contactUserId, isGroupChat, exitDeleteMode, cancelEditing, clearPendingDelete, cancelReply, clearPendingMedia]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   useEffect(() => {
-    if (!socket || !selectedChat || currentUserId == null || contactUserId == null) {
-      return;
-    }
+    if (!socket || !selectedChat || currentUserId == null) return;
+    if (!isGroupChat && contactUserId == null) return;
 
-    const handleReceive = (raw: SocketMessageRecord) => {
+    const contactName = selectedChat.user_name;
+
+    const mapIncoming = (raw: SocketMessageRecord) => {
+      if (isGroupChat) {
+        return mapSocketMessageToGroupChatMessage(raw, currentUserId);
+      }
+      return mapSocketMessageToChatMessage(
+        raw,
+        currentUserId,
+        contactUserId!,
+        selectedChat.user_profile,
+        contactName,
+      );
+    };
+
+    const mergeIncomingMessage = (raw: SocketMessageRecord) => {
       const incomingChatId = raw.chat_id ? String(raw.chat_id) : null;
-      const activeChatId = chatId ?? selectedChat.chat_id ?? null;
+      const activeChatId =
+        chatId ?? selectedChat.chat_id ?? selectedChat.user_id ?? null;
 
       if (
         activeChatId &&
@@ -540,29 +834,63 @@ export default function RightChatInterface() {
         return;
       }
 
-      const mapped = mapSocketMessageToChatMessage(
-        raw,
-        currentUserId,
-        contactUserId,
-        selectedChat.user_profile,
-      );
+      const mapped = mapIncoming(raw);
       if (!mapped) return;
 
       if (!activeChatId && incomingChatId) {
         setChatId(incomingChatId);
       }
 
+      if (pendingReplyRef.current?.optimisticMessage.message_id.startsWith("temp-")) {
+        const pending = pendingReplyRef.current.optimisticMessage;
+        const sameReplyTarget =
+          (pending.reply_to?.message_id ?? null) ===
+          (mapped.reply_to?.message_id ?? null);
+        if (
+          mapped.is_outgoing &&
+          mapped.text === pending.text &&
+          sameReplyTarget
+        ) {
+          pendingReplyRef.current = null;
+          setReplyError(null);
+        }
+      }
+
+      if (pendingMediaRef.current?.optimisticMessage.message_id.startsWith("temp-media-")) {
+        const pending = pendingMediaRef.current.optimisticMessage;
+        if (
+          mapped.is_outgoing &&
+          mapped.text === pending.text &&
+          (mapped.type ?? "text") === (pending.type ?? "text")
+        ) {
+          if (pendingMediaRef.current.localPreviewUrl) {
+            URL.revokeObjectURL(pendingMediaRef.current.localPreviewUrl);
+          }
+          pendingMediaRef.current = null;
+          setMediaError(null);
+          setUploadingMedia(false);
+        }
+      }
+
       setMessages((prev) => {
         const withoutMatchingOptimistic =
           mapped.is_outgoing
-            ? prev.filter(
-                (m) =>
-                  !(
-                    m.message_id.startsWith("temp-") &&
-                    m.is_outgoing &&
-                    m.text === mapped.text
-                  ),
-              )
+            ? prev.filter((m) => {
+                if (!m.message_id.startsWith("temp-") || !m.is_outgoing) {
+                  return true;
+                }
+                if (m.message_id.startsWith("temp-media-")) {
+                  const sameMedia =
+                    m.text === mapped.text &&
+                    (m.type ?? "text") === (mapped.type ?? "text");
+                  return !sameMedia;
+                }
+                if (m.text !== mapped.text) return true;
+                const sameReply =
+                  (m.reply_to?.message_id ?? null) ===
+                  (mapped.reply_to?.message_id ?? null);
+                return !sameReply;
+              })
             : prev;
 
         if (
@@ -578,13 +906,43 @@ export default function RightChatInterface() {
       });
     };
 
+    const handleReceive = (raw: SocketMessageRecord) => {
+      mergeIncomingMessage(raw);
+    };
+
+    const handleReply = (raw: SocketMessageRecord) => {
+      mergeIncomingMessage(raw);
+    };
+
+    const handleMedia = (raw: SocketMessageRecord) => {
+      mergeIncomingMessage(raw);
+    };
+
     const handleSeen = (payload: SeenPrivateMessagePayload) => {
-      const activeChatId = chatId ?? selectedChat.chat_id ?? null;
-      if (
-        !activeChatId ||
-        String(payload.chat_id) !== String(activeChatId) ||
-        Number(payload.seen_by) !== contactUserId
-      ) {
+      const activeChatId =
+        chatId ?? selectedChat.chat_id ?? selectedChat.user_id ?? null;
+      if (!activeChatId || String(payload.chat_id) !== String(activeChatId)) {
+        return;
+      }
+
+      if (isGroupChat) {
+        if (Number(payload.seen_by) === currentUserId) return;
+        setMessages((prev) =>
+          prev.map((msg) => {
+            if (!msg.is_outgoing) return msg;
+            if (
+              payload.message_ids.length > 0 &&
+              !payload.message_ids.includes(msg.message_id)
+            ) {
+              return msg;
+            }
+            return { ...msg, status: "read" as const };
+          }),
+        );
+        return;
+      }
+
+      if (Number(payload.seen_by) !== contactUserId) {
         return;
       }
 
@@ -602,15 +960,354 @@ export default function RightChatInterface() {
       );
     };
 
-    socket.on("receive_private_message", handleReceive);
-    socket.on("seen_private_message", handleSeen);
-    return () => {
-      socket.off("receive_private_message", handleReceive);
-      socket.off("seen_private_message", handleSeen);
+    const handleEdited = (raw: SocketMessageRecord) => {
+      const incomingChatId = raw.chat_id ? String(raw.chat_id) : null;
+      const activeChatId =
+        chatId ?? selectedChat.chat_id ?? selectedChat.user_id ?? null;
+
+      if (
+        activeChatId &&
+        incomingChatId &&
+        incomingChatId !== activeChatId
+      ) {
+        return;
+      }
+
+      const mapped = mapIncoming(raw);
+      if (!mapped) return;
+
+      if (pendingEditRef.current?.messageId === mapped.message_id) {
+        pendingEditRef.current = null;
+        setEditError(null);
+      }
+
+      setMessages((prev) => {
+        const exists = prev.some((m) => m.message_id === mapped.message_id);
+        if (!exists) return prev;
+        return prev.map((m) =>
+          m.message_id === mapped.message_id ? mapped : m,
+        );
+      });
+
+      if (editingMessageId === mapped.message_id) {
+        setEditingMessageId(null);
+        setMessage("");
+      }
     };
-  }, [socket, selectedChat, currentUserId, contactUserId, chatId]);
+
+    const handleDeleted = (raw: SocketMessageRecord) => {
+      const messageId = String(raw._id);
+      const incomingChatId = raw.chat_id ? String(raw.chat_id) : null;
+      const activeChatId =
+        chatId ?? selectedChat.chat_id ?? selectedChat.user_id ?? null;
+
+      if (
+        activeChatId &&
+        incomingChatId &&
+        incomingChatId !== activeChatId
+      ) {
+        return;
+      }
+
+      const pendingDelete = pendingDeleteRef.current;
+      if (pendingDelete) {
+        pendingDelete.pendingIds.delete(messageId);
+        if (pendingDelete.pendingIds.size === 0) {
+          pendingDeleteRef.current = null;
+          setDeletingMessages(false);
+          setDeleteError(null);
+        }
+      }
+
+      setMessages((prev) =>
+        prev.filter((msg) => msg.message_id !== messageId),
+      );
+    };
+
+    const handleSocketError = (err: { message?: string }) => {
+      const pendingEdit = pendingEditRef.current;
+      if (pendingEdit) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.message_id === pendingEdit.messageId
+              ? { ...m, text: pendingEdit.originalText }
+              : m,
+          ),
+        );
+        pendingEditRef.current = null;
+        setEditingMessageId(pendingEdit.messageId);
+        setEditError(err.message || "Could not edit message.");
+        return;
+      }
+
+      const pendingDelete = pendingDeleteRef.current;
+      if (pendingDelete) {
+        setMessages(pendingDelete.snapshot);
+        pendingDeleteRef.current = null;
+        setDeletingMessages(false);
+        setDeleteError(err.message || "Could not delete messages.");
+        return;
+      }
+
+      const pendingReply = pendingReplyRef.current;
+      if (pendingReply) {
+        setMessages((prev) =>
+          prev.filter(
+            (m) => m.message_id !== pendingReply.optimisticMessage.message_id,
+          ),
+        );
+        pendingReplyRef.current = null;
+        setReplyError(err.message || "Could not send reply.");
+        return;
+      }
+
+      const pendingMedia = pendingMediaRef.current;
+      if (pendingMedia) {
+        setMessages((prev) =>
+          prev.filter(
+            (m) => m.message_id !== pendingMedia.optimisticMessage.message_id,
+          ),
+        );
+        if (pendingMedia.localPreviewUrl) {
+          URL.revokeObjectURL(pendingMedia.localPreviewUrl);
+        }
+        pendingMediaRef.current = null;
+        setUploadingMedia(false);
+        setMediaError(err.message || "Could not send media.");
+      }
+    };
+
+    if (isGroupChat) {
+      socket.on("receive_group_message", handleReceive);
+      socket.on("receive_group_reply_message", handleReply);
+      socket.on("receive_group_media_message", handleMedia);
+      socket.on("seen_group_message", handleSeen);
+      socket.on("receive_group_edited_message", handleEdited);
+      socket.on("receive_group_deleted_message", handleDeleted);
+    } else {
+      socket.on("receive_private_message", handleReceive);
+      socket.on("receive_reply_message", handleReply);
+      socket.on("receive_media_message", handleMedia);
+      socket.on("seen_private_message", handleSeen);
+      socket.on("receive_edited_message", handleEdited);
+      socket.on("receive_deleted_message", handleDeleted);
+    }
+    socket.on("error", handleSocketError);
+    return () => {
+      if (isGroupChat) {
+        socket.off("receive_group_message", handleReceive);
+        socket.off("receive_group_reply_message", handleReply);
+        socket.off("receive_group_media_message", handleMedia);
+        socket.off("seen_group_message", handleSeen);
+        socket.off("receive_group_edited_message", handleEdited);
+        socket.off("receive_group_deleted_message", handleDeleted);
+      } else {
+        socket.off("receive_private_message", handleReceive);
+        socket.off("receive_reply_message", handleReply);
+        socket.off("receive_media_message", handleMedia);
+        socket.off("seen_private_message", handleSeen);
+        socket.off("receive_edited_message", handleEdited);
+        socket.off("receive_deleted_message", handleDeleted);
+      }
+      socket.off("error", handleSocketError);
+    };
+  }, [socket, selectedChat, currentUserId, contactUserId, chatId, editingMessageId, isGroupChat]);
+
+  const handleSaveEdit = useCallback(() => {
+    const text = message.trim();
+    if (
+      !text ||
+      !socket ||
+      !selectedChat ||
+      currentUserId == null ||
+      !chatId ||
+      !editingMessageId
+    ) {
+      return;
+    }
+
+    const original = messages.find((m) => m.message_id === editingMessageId);
+    if (!original) return;
+
+    if (text === original.text) {
+      cancelEditing();
+      return;
+    }
+
+    if (typingStopTimeoutRef.current) {
+      clearTimeout(typingStopTimeoutRef.current);
+      typingStopTimeoutRef.current = null;
+    }
+    emitTypingStop();
+
+    pendingEditRef.current = {
+      messageId: editingMessageId,
+      originalText: original.text,
+    };
+    setEditError(null);
+
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.message_id === editingMessageId
+          ? { ...m, text, is_edited: true, status: "sent" as const }
+          : m,
+      ),
+    );
+    setEditingMessageId(null);
+    setMessage("");
+
+    socket.emit(isGroupChat ? "edit_group_message" : "edit_chat", {
+      chat_id: chatId,
+      user_id: currentUserId,
+      message_id: pendingEditRef.current.messageId,
+      new_content: text,
+    });
+  }, [
+    message,
+    socket,
+    selectedChat,
+    currentUserId,
+    chatId,
+    editingMessageId,
+    messages,
+    cancelEditing,
+    emitTypingStop,
+    isGroupChat,
+  ]);
+
+  const handleSendMedia = useCallback(
+    async (file: File) => {
+      if (!socket || !selectedChat || currentUserId == null || uploadingMedia) {
+        return;
+      }
+
+      const validationError = validateChatMediaFile(file);
+      if (validationError) {
+        setMediaError(validationError);
+        return;
+      }
+
+      setMediaError(null);
+      setUploadingMedia(true);
+
+      if (typingStopTimeoutRef.current) {
+        clearTimeout(typingStopTimeoutRef.current);
+        typingStopTimeoutRef.current = null;
+      }
+      emitTypingStop();
+
+      const localPreviewUrl = URL.createObjectURL(file);
+      const messageType = inferChatMessageTypeFromMime(file.type);
+      const optimisticId = `temp-media-${Date.now()}`;
+      const optimisticMessage: ChatMessage = {
+        message_id: optimisticId,
+        text: file.name,
+        timestamp: new Date().toLocaleTimeString(undefined, {
+          hour: "numeric",
+          minute: "2-digit",
+        }),
+        is_outgoing: true,
+        status: "sent",
+        type: messageType,
+        attachments: [
+          {
+            url: localPreviewUrl,
+            file_name: file.name,
+            mime_type: file.type,
+            size: file.size,
+          },
+        ],
+        media_uploading: true,
+        reply_to: replyingTo,
+      };
+
+      pendingMediaRef.current = { optimisticMessage, localPreviewUrl };
+      setMessages((prev) => [...prev, optimisticMessage]);
+
+      try {
+        const dataUrl = await fileToDataUrl(file);
+        if (isGroupChat) {
+          socket.emit("send_group_media", {
+            sender: currentUserId,
+            company_id: Number(orgId),
+            chat_id: chatId,
+            type: messageType,
+            content: file.name,
+            ...(replyingTo ? { reply_to: replyingTo.message_id } : {}),
+            attachments: [
+              {
+                data: dataUrl,
+                file_name: file.name,
+                mime_type: file.type,
+                size: file.size,
+              },
+            ],
+          });
+        } else {
+          socket.emit("send_media", {
+            sender: currentUserId,
+            delivered_to: Number(selectedChat.user_id),
+            company_id: Number(orgId),
+            type: messageType,
+            content: file.name,
+            chat_type: "private",
+            ...(chatId ? { chat_id: chatId } : {}),
+            ...(replyingTo ? { reply_to: replyingTo.message_id } : {}),
+            attachments: [
+              {
+                data: dataUrl,
+                file_name: file.name,
+                mime_type: file.type,
+                size: file.size,
+              },
+            ],
+          });
+        }
+        setReplyingTo(null);
+      } catch {
+        setMessages((prev) =>
+          prev.filter((msg) => msg.message_id !== optimisticId),
+        );
+        URL.revokeObjectURL(localPreviewUrl);
+        pendingMediaRef.current = null;
+        setMediaError("Could not prepare file for upload.");
+      } finally {
+        setUploadingMedia(false);
+      }
+    },
+    [
+      socket,
+      selectedChat,
+      currentUserId,
+      uploadingMedia,
+      orgId,
+      chatId,
+      replyingTo,
+      emitTypingStop,
+      isGroupChat,
+    ],
+  );
+
+  const handleAttachClick = useCallback(() => {
+    if (deleteMode || editingMessageId || uploadingMedia) return;
+    fileInputRef.current?.click();
+  }, [deleteMode, editingMessageId, uploadingMedia]);
+
+  const handleFileInputChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      event.target.value = "";
+      if (file) void handleSendMedia(file);
+    },
+    [handleSendMedia],
+  );
 
   const handleSendMessage = useCallback(() => {
+    if (editingMessageId) {
+      handleSaveEdit();
+      return;
+    }
+
     const text = message.trim();
     if (!text || !socket || !selectedChat || currentUserId == null) return;
 
@@ -630,10 +1327,52 @@ export default function RightChatInterface() {
       }),
       is_outgoing: true,
       status: "sent",
+      reply_to: replyingTo,
     };
- 
+
     setMessage("");
     setMessages((prev) => [...prev, optimisticMessage]);
+
+    if (replyingTo) {
+      pendingReplyRef.current = { optimisticMessage };
+      setReplyError(null);
+
+      if (isGroupChat) {
+        socket.emit("reply_to_group_message", {
+          chat_id: chatId,
+          user_id: currentUserId,
+          message_id: replyingTo.message_id,
+          content: text,
+          company_id: Number(orgId),
+          type: "text",
+        });
+      } else {
+        socket.emit("reply_to_message", {
+          chat_id: chatId,
+          user_id: currentUserId,
+          message_id: replyingTo.message_id,
+          content: text,
+          delivered_to: Number(selectedChat.user_id),
+          company_id: Number(orgId),
+          chat_type: "private",
+          type: "text",
+        });
+      }
+
+      setReplyingTo(null);
+      return;
+    }
+
+    if (isGroupChat) {
+      socket.emit("send_group_message", {
+        sender: currentUserId,
+        company_id: Number(orgId),
+        chat_id: chatId,
+        type: "text",
+        content: text,
+      });
+      return;
+    }
 
     socket.emit("send_private_message", {
       sender: currentUserId,
@@ -644,7 +1383,7 @@ export default function RightChatInterface() {
       chat_type: "private",
       ...(chatId ? { chat_id: chatId } : {}),
     });
-  }, [message, socket, selectedChat, currentUserId, orgId, chatId, emitTypingStop]);
+  }, [message, socket, selectedChat, currentUserId, orgId, chatId, emitTypingStop, editingMessageId, handleSaveEdit, replyingTo, isGroupChat]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -687,8 +1426,8 @@ export default function RightChatInterface() {
           name={selectedChat.user_name}
           imageUrl={selectedChat.user_profile}
           size="sm"
-          showOnline
-          isOnline={contactActiveStatus.isOnline}
+          showOnline={!isGroupChat}
+          isOnline={!isGroupChat && contactActiveStatus.isOnline}
         />
 
         <div className="min-w-0 flex-1">
@@ -696,10 +1435,20 @@ export default function RightChatInterface() {
             {selectedChat.user_name}
           </h2>
           <p className="text-xs">
-            {contactIsTyping ? (
+            {isGroupChat && groupTyperName ? (
+              <span className="font-medium text-[#008CD3]">
+                {groupTyperName} is typing…
+              </span>
+            ) : !isGroupChat && contactIsTyping ? (
               <span className="font-medium text-[#008CD3]">typing…</span>
             ) : !isConnected ? (
               <span className="text-[#6B7280]">Connecting…</span>
+            ) : isGroupChat ? (
+              <span className="text-[#9CA3AF]">
+                {(selectedChat as GroupChat).member_count
+                  ? `${(selectedChat as GroupChat).member_count} members`
+                  : "Group chat"}
+              </span>
             ) : contactActiveStatus.isOnline ? (
               <span className="font-medium text-emerald-600">online</span>
             ) : (
@@ -715,92 +1464,63 @@ export default function RightChatInterface() {
           </p>
         </div>
 
-        <div className="flex items-center gap-0.5">
-          {/* Desktop header actions — unchanged at md+ */}
-          <div className="hidden items-center gap-0.5 md:flex">
+        {isGroupChat ? (
+          <div className="flex items-center gap-0.5">
             <IconButton
-              label="Search in chat"
-              icon={<MdSearch className="text-xl" />}
+              label="Add members"
+              icon={<MdPersonAdd className="text-xl" />}
+              onClick={() => openGroupManage("add")}
             />
-            <IconButton
-              label="Voice call"
-              icon={<MdCall className="text-xl" />}
-            />
-            <IconButton
-              label="Video call"
-              icon={<MdVideocam className="text-xl" />}
-            />
-            <IconButton
-              label="More options"
-              icon={<MdMoreVert className="text-xl" />}
-            />
-          </div>
-
-          {/* Mobile header — single call dropdown + menu with search */}
-          <div className="flex items-center gap-0.5 md:hidden">
-            <div ref={callMenuRef} className="relative">
-              <IconButton
-                label="Call"
-                icon={<MdCall className="text-xl" />}
-                onClick={() => {
-                  setCallMenuOpen((open) => !open);
-                  setMoreMenuOpen(false);
-                }}
-              />
-              {callMenuOpen && (
-                <div className="absolute right-0 top-full z-50 mt-1 min-w-[10.5rem] overflow-hidden rounded-xl border border-[#E4E7EC] bg-white py-1 shadow-lg">
-                  <MobileMenuItem
-                    icon={<MdCall className="text-lg text-[#008CD3]" />}
-                    label="Voice call"
-                    onClick={() => setCallMenuOpen(false)}
-                  />
-                  <MobileMenuItem
-                    icon={<MdVideocam className="text-lg text-[#008CD3]" />}
-                    label="Video call"
-                    onClick={() => setCallMenuOpen(false)}
-                  />
-                </div>
-              )}
-            </div>
-
             <div ref={moreMenuRef} className="relative">
               <IconButton
                 label="More options"
                 icon={<MdMoreVert className="text-xl" />}
-                onClick={() => {
-                  setMoreMenuOpen((open) => !open);
-                  setCallMenuOpen(false);
-                }}
+                onClick={() => setMoreMenuOpen((open) => !open)}
               />
-              {moreMenuOpen && (
-                <div className="absolute right-0 top-full z-50 mt-1 w-56 overflow-hidden rounded-xl border border-[#E4E7EC] bg-white p-2 shadow-lg">
-                  <div className="relative">
-                    <MdSearch className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-lg text-[#9CA3AF]" />
-                    <input
-                      type="search"
-                      value={chatSearchQuery}
-                      onChange={(e) => setChatSearchQuery(e.target.value)}
-                      placeholder="Search messages"
-                      className="w-full rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] py-2 pl-9 pr-3 text-sm text-[#111827] outline-none placeholder:text-[#9CA3AF] focus:border-[#008CD3]"
-                      aria-label="Search in chat"
-                      autoFocus
-                    />
-                  </div>
-                  {chatSearchQuery.trim() && (
-                    <button
-                      type="button"
-                      onClick={() => setChatSearchQuery("")}
-                      className="mt-2 w-full cursor-pointer rounded-lg border-0 bg-transparent py-1.5 text-left text-xs text-[#008CD3] outline-none hover:bg-[#F3F4F6]"
-                    >
-                      Clear search
-                    </button>
-                  )}
+              {moreMenuOpen ? (
+                <div className="absolute right-0 top-full z-50 mt-1 min-w-[12rem] overflow-hidden rounded-xl border border-[#E4E7EC] bg-white py-1 shadow-lg">
+                  <MobileMenuItem
+                    icon={<MdInfoOutline className="text-lg text-[#008CD3]" />}
+                    label="View group info"
+                    onClick={() => openGroupManage("info")}
+                  />
+                  <MobileMenuItem
+                    icon={<MdPersonAdd className="text-lg text-[#008CD3]" />}
+                    label="Add members"
+                    onClick={() => openGroupManage("add")}
+                  />
+                  <MobileMenuItem
+                    icon={<MdPersonRemove className="text-lg text-[#008CD3]" />}
+                    label="Remove members"
+                    onClick={() => openGroupManage("remove")}
+                  />
+                  <MobileMenuItem
+                    icon={<MdEdit className="text-lg text-[#008CD3]" />}
+                    label="Edit group"
+                    onClick={() => openGroupManage("edit")}
+                  />
+                  <MobileMenuItem
+                    icon={<MdBlock className="text-lg text-[#DC2626]" />}
+                    label="Deactivate group"
+                    onClick={() => openGroupManage("menu")}
+                  />
                 </div>
-              )}
+              ) : null}
             </div>
           </div>
-        </div>
+        ) : null}
       </header>
+
+      {isGroupChat && chatId ? (
+        <GroupManagePanel
+          open={groupManageOpen}
+          onClose={() => setGroupManageOpen(false)}
+          orgId={orgId}
+          groupId={chatId}
+          initialView={groupManageView}
+          onGroupUpdated={handleGroupUpdated}
+        />
+      ) : null}
 
       {deleteMode && (
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[#FECACA] bg-[#FEF2F2] px-4 py-2.5">
@@ -859,9 +1579,7 @@ export default function RightChatInterface() {
             </p>
           ) : displayedMessages.length === 0 ? (
             <p className="py-8 text-center text-sm text-[#6B7280]">
-              {chatSearchQuery.trim()
-                ? "No messages match your search"
-                : "No messages yet. Say hello!"}
+              No messages yet. Say hello!
             </p>
           ) : (
             <>
@@ -885,8 +1603,10 @@ export default function RightChatInterface() {
                   }
                   onOpenMenu={() => setOpenMessageMenuId(msg.message_id)}
                   onCloseMenu={() => setOpenMessageMenuId(null)}
-                  onEdit={() => setOpenMessageMenuId(null)}
+                  onEdit={() => startEditingMessage(msg)}
+                  onReply={() => startReplyMessage(msg)}
                   onDelete={() => enterDeleteMode(msg.message_id)}
+                  isGroupChat={isGroupChat}
                 />
               ))}
             </>
@@ -902,6 +1622,74 @@ export default function RightChatInterface() {
           </p>
         ) : (
           <>
+        {editingMessageId ? (
+          <div className="mx-auto mb-2 flex max-w-3xl items-center justify-between gap-3 rounded-lg border border-[#B8E0F5] bg-[#E8F4FB] px-3 py-2">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-[#008CD3]">Edit message</p>
+              <p className="truncate text-xs text-[#6B7280]">
+                Press Enter or send to save changes
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={cancelEditing}
+              className="shrink-0 cursor-pointer rounded-md border-0 bg-transparent px-2 py-1 text-xs font-medium text-[#6B7280] outline-none hover:bg-white/70 hover:text-[#374151]"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : null}
+        {editError ? (
+          <p className="mx-auto mb-2 max-w-3xl text-center text-xs text-[#DC2626]">
+            {editError}
+          </p>
+        ) : null}
+        {replyingTo ? (
+          <div className="mx-auto mb-2 flex max-w-3xl items-stretch gap-2 rounded-lg border border-[#E4E7EC] bg-white px-3 py-2 shadow-sm">
+            <div
+              className="w-1 shrink-0 rounded-full"
+              style={{
+                backgroundColor: replyingTo.is_outgoing ? "#06CF9C" : "#008CD3",
+              }}
+            />
+            <div className="min-w-0 flex-1">
+              <p
+                className="text-xs font-semibold"
+                style={{
+                  color: replyingTo.is_outgoing ? "#06CF9C" : "#008CD3",
+                }}
+              >
+                {replyingTo.sender_name}
+              </p>
+              <p className="truncate text-xs text-[#6B7280]">{replyingTo.text}</p>
+            </div>
+            <button
+              type="button"
+              onClick={cancelReply}
+              className="shrink-0 cursor-pointer self-start rounded-md border-0 bg-transparent px-2 py-1 text-xs font-medium text-[#6B7280] outline-none hover:bg-[#F3F4F6] hover:text-[#374151]"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : null}
+        {replyError ? (
+          <p className="mx-auto mb-2 max-w-3xl text-center text-xs text-[#DC2626]">
+            {replyError}
+          </p>
+        ) : null}
+        {mediaError ? (
+          <p className="mx-auto mb-2 max-w-3xl text-center text-xs text-[#DC2626]">
+            {mediaError}
+          </p>
+        ) : null}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip"
+          className="hidden"
+          onChange={handleFileInputChange}
+          aria-hidden
+        />
         {/* Desktop footer — unchanged at md+ */}
         <div className="mx-auto hidden max-w-3xl items-end gap-2 md:flex">
           <IconButton
@@ -913,18 +1701,21 @@ export default function RightChatInterface() {
             label="Attach file"
             icon={<MdAttachFile className="text-xl text-[#6B7280]" />}
             className="mb-1"
+            onClick={handleAttachClick}
+            disabled={!isConnected || uploadingMedia || deleteMode || !!editingMessageId}
           />
           <div className="min-w-0 flex-1">
             <input
+              ref={desktopInputRef}
               type="text"
               value={message}
               onChange={(e) => handleMessageChange(e.target.value)}
               onBlur={handleMessageBlur}
               onKeyDown={handleKeyDown}
-              placeholder="Type a message"
+              placeholder={editingMessageId ? "Edit message" : "Type a message"}
               disabled={!isConnected}
               className="w-full rounded-xl border border-[#E4E7EC] bg-white px-4 py-2.5 text-sm text-[#111827] outline-none placeholder:text-[#9CA3AF] disabled:cursor-not-allowed disabled:opacity-70"
-              aria-label="Message input"
+              aria-label={editingMessageId ? "Edit message input" : "Message input"}
             />
           </div>
           <button
@@ -932,7 +1723,7 @@ export default function RightChatInterface() {
             onClick={handleSendMessage}
             disabled={!isConnected || message.trim() === ""}
             className="mb-0.5 flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-[#008CD3] text-white outline-none transition hover:bg-[#0070AA] disabled:cursor-not-allowed disabled:opacity-50"
-            aria-label="Send message"
+            aria-label={editingMessageId ? "Save edited message" : "Send message"}
           >
             <MdSend className="text-xl" />
           </button>
@@ -965,15 +1756,17 @@ export default function RightChatInterface() {
               onBlur={handleMessageBlur}
               onKeyDown={handleKeyDown}
               onFocus={() => setEmojiPickerOpen(false)}
-              placeholder="Message"
+              placeholder={editingMessageId ? "Edit message" : "Message"}
               disabled={!isConnected}
               className="min-w-0 flex-1 border-0 bg-transparent py-2 text-sm text-[#111827] outline-none placeholder:text-[#9CA3AF] disabled:cursor-not-allowed disabled:opacity-70"
-              aria-label="Message input"
+              aria-label={editingMessageId ? "Edit message input" : "Message input"}
             />
 
             <button
               type="button"
-              className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-[#6B7280] outline-none transition hover:bg-[#F3F4F6]"
+              onClick={handleAttachClick}
+              disabled={!isConnected || uploadingMedia || deleteMode || !!editingMessageId}
+              className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-[#6B7280] outline-none transition hover:bg-[#F3F4F6] disabled:cursor-not-allowed disabled:opacity-50"
               aria-label="Attach file"
             >
               <MdAttachFile className="text-[22px]" />
@@ -985,7 +1778,7 @@ export default function RightChatInterface() {
             onClick={handleSendMessage}
             disabled={!isConnected || message.trim() === ""}
             className="mb-0.5 flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-[#008CD3] text-white outline-none transition hover:bg-[#0070AA] disabled:cursor-not-allowed disabled:opacity-50"
-            aria-label="Send message"
+            aria-label={editingMessageId ? "Save edited message" : "Send message"}
           >
             <MdSend className="text-xl" />
           </button>
@@ -1035,6 +1828,103 @@ function DateDivider({ label }: { label: string }) {
   );
 }
 
+function formatFileSize(bytes?: number): string {
+  if (!bytes) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function MessageMediaContent({ message }: { message: ChatMessage }) {
+  const attachment = message.attachments?.[0];
+  if (!attachment?.url) return null;
+
+  const messageType = message.type ?? "file";
+  const fileName = attachment.file_name || message.text || "File";
+
+  if (messageType === "image") {
+    return (
+      <a
+        href={attachment.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mb-1 block overflow-hidden rounded-lg"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={attachment.url}
+          alt={fileName}
+          className="max-h-64 max-w-full rounded-lg object-cover"
+        />
+      </a>
+    );
+  }
+
+  if (messageType === "video") {
+    return (
+      <video
+        src={attachment.url}
+        controls
+        className="mb-1 max-h-64 max-w-full rounded-lg"
+      >
+        <track kind="captions" />
+      </video>
+    );
+  }
+
+  if (messageType === "audio") {
+    return (
+      <audio src={attachment.url} controls className="mb-1 w-full min-w-[220px]">
+        <track kind="captions" />
+      </audio>
+    );
+  }
+
+  return (
+    <a
+      href={attachment.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="mb-1 flex items-center gap-3 rounded-lg bg-black/[0.04] px-3 py-2 transition hover:bg-black/[0.07]"
+    >
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#008CD3]/10 text-[#008CD3]">
+        <MdAttachFile className="text-xl" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[13px] font-medium text-[#111827]">
+          {fileName}
+        </span>
+        {attachment.size ? (
+          <span className="text-[11px] text-[#6B7280]">
+            {formatFileSize(attachment.size)}
+          </span>
+        ) : null}
+      </span>
+    </a>
+  );
+}
+
+function ReplyQuote({ reply }: { reply: ChatMessageReply }) {
+  const accentColor = reply.is_outgoing ? "#06CF9C" : "#008CD3";
+
+  return (
+    <div
+      className="mb-1.5 rounded-md bg-black/[0.04] px-2 py-1.5"
+      style={{ borderLeft: `3px solid ${accentColor}` }}
+    >
+      <p
+        className="text-[11px] font-semibold leading-tight"
+        style={{ color: accentColor }}
+      >
+        {reply.sender_name}
+      </p>
+      <p className="truncate text-[12px] leading-snug text-[#667781]">
+        {reply.text}
+      </p>
+    </div>
+  );
+}
+
 function MessageBubble({
   message,
   contactName,
@@ -1047,7 +1937,9 @@ function MessageBubble({
   onOpenMenu,
   onCloseMenu,
   onEdit,
+  onReply,
   onDelete,
+  isGroupChat = false,
 }: {
   message: ChatMessage;
   contactName: string;
@@ -1060,13 +1952,25 @@ function MessageBubble({
   onOpenMenu?: () => void;
   onCloseMenu?: () => void;
   onEdit?: () => void;
+  onReply?: () => void;
   onDelete?: () => void;
+  isGroupChat?: boolean;
 }) {
   const isOutgoing = message.is_outgoing;
+  const displayName = isGroupChat
+    ? (message.sender_name ?? contactName)
+    : contactName;
   const profileImage = message.user_profile ?? contactProfile;
-  const canManage =
-    isOutgoing && !message.message_id.startsWith("temp-");
-  const showDeleteCheckbox = deleteMode && canManage;
+  const isTextMessage = (message.type ?? "text") === "text";
+  const hasMedia = Boolean(message.attachments?.[0]?.url);
+  const canDelete =
+    isOutgoing &&
+    !message.message_id.startsWith("temp-") &&
+    !message.media_uploading;
+  const canEdit = canDelete && isTextMessage;
+  const canReply = !message.message_id.startsWith("temp-") && !message.media_uploading;
+  const showDeleteCheckbox = deleteMode && canDelete;
+  const showMessageMenu = canReply && !deleteMode;
 
   return (
     <div
@@ -1086,7 +1990,7 @@ function MessageBubble({
 
       {!isOutgoing && (
         <ChatAvatar
-          name={contactName}
+          name={displayName}
           imageUrl={profileImage}
           size="xs"
           className="mb-0.5"
@@ -1094,7 +1998,12 @@ function MessageBubble({
       )}
 
       <div className="relative max-w-[85%] sm:max-w-[70%]">
-        {canManage && !deleteMode && (
+        {isGroupChat && !isOutgoing && message.sender_name ? (
+          <p className="mb-0.5 px-1 text-[11px] font-semibold text-[#008CD3]">
+            {message.sender_name}
+          </p>
+        ) : null}
+        {showMessageMenu && (
           <div
             ref={isMenuOpen ? menuContainerRef : undefined}
             className={`absolute top-1/2 z-20 -translate-y-1/2 ${
@@ -1129,6 +2038,19 @@ function MessageBubble({
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
+                    onReply?.();
+                  }}
+                  className="flex w-full cursor-pointer items-center gap-2 border-0 bg-transparent px-3 py-2 text-left text-sm text-[#111827] outline-none hover:bg-[#F3F4F6]"
+                >
+                  <MdReply className="text-base text-[#008CD3]" />
+                  Reply
+                </button>
+                {canEdit ? (
+                  <>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
                     onEdit?.();
                   }}
                   className="flex w-full cursor-pointer items-center gap-2 border-0 bg-transparent px-3 py-2 text-left text-sm text-[#111827] outline-none hover:bg-[#F3F4F6]"
@@ -1147,6 +2069,8 @@ function MessageBubble({
                   <MdDelete className="text-base" />
                   Delete
                 </button>
+                  </>
+                ) : null}
               </div>
             )}
           </div>
@@ -1157,29 +2081,39 @@ function MessageBubble({
             isOutgoing ? "rounded-br-sm bg-[#DCF8C6]" : "rounded-bl-sm bg-white"
           } ${isSelectedForDelete ? "ring-2 ring-[#008CD3]/40" : ""}`}
           onClick={() => {
-            if (deleteMode && canManage) onToggleDeleteSelect?.();
+            if (deleteMode && canDelete) onToggleDeleteSelect?.();
           }}
           onKeyDown={(e) => {
             if (
               deleteMode &&
-              canManage &&
+              canDelete &&
               (e.key === "Enter" || e.key === " ")
             ) {
               e.preventDefault();
               onToggleDeleteSelect?.();
             }
           }}
-          role={deleteMode && canManage ? "button" : undefined}
-          tabIndex={deleteMode && canManage ? 0 : undefined}
+          role={deleteMode && canDelete ? "button" : undefined}
+          tabIndex={deleteMode && canDelete ? 0 : undefined}
         >
-          <p className="whitespace-pre-wrap break-words text-[14px] leading-relaxed text-[#111827]">
-            {message.text}
-          </p>
+          {message.reply_to ? <ReplyQuote reply={message.reply_to} /> : null}
+          {hasMedia ? <MessageMediaContent message={message} /> : null}
+          {message.media_uploading ? (
+            <p className="mb-1 text-[11px] italic text-[#6B7280]">Uploading…</p>
+          ) : null}
+          {isTextMessage || (!hasMedia && message.text) ? (
+            <p className="whitespace-pre-wrap break-words text-[14px] leading-relaxed text-[#111827]">
+              {message.text}
+            </p>
+          ) : null}
           <div
             className={`mt-1 flex items-center justify-end gap-1 ${
               isOutgoing ? "text-[#6B7280]" : "text-[#9CA3AF]"
             }`}
           >
+            {message.is_edited ? (
+              <span className="text-[10px] italic">edited</span>
+            ) : null}
             <span className="text-[10px]">{message.timestamp}</span>
             {isOutgoing && (
               <span
@@ -1234,17 +2168,20 @@ function IconButton({
   icon,
   className = "",
   onClick,
+  disabled = false,
 }: {
   label: string;
   icon: React.ReactNode;
   className?: string;
   onClick?: () => void;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg border-0 bg-transparent text-[#6B7280] outline-none transition hover:bg-[#F3F4F6] hover:text-[#374151] ${className}`}
+      disabled={disabled}
+      className={`flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg border-0 bg-transparent text-[#6B7280] outline-none transition hover:bg-[#F3F4F6] hover:text-[#374151] disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
       aria-label={label}
     >
       {icon}

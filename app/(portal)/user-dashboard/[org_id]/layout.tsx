@@ -6,7 +6,11 @@ export function generateStaticParams() {
   return generateOrgStaticParams();
 }
 
-export default function UserDashboardOrgLayout({ children }: { children: React.ReactNode }) {
+export default function UserDashboardOrgLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <UserDashboardOrgClientLayout>
       <SocketProvider>{children}</SocketProvider>
