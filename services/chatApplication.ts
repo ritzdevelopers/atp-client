@@ -205,6 +205,7 @@ export type PrivateChatMessageRecord = {
   content?: string;
   sent_by_me?: boolean;
   created_at?: string | null;
+  is_edited?: boolean;
   sender?: {
     id?: number | string;
     profile_picture?: string | null;
@@ -250,8 +251,24 @@ export function mapPrivateChatMessage(
     status: msg.sent_by_me
       ? resolveOutgoingMessageStatus(msg, contactUserId)
       : undefined,
+    is_edited: Boolean(msg.is_edited),
   };
 }
+
+export type SocketMessageReplyRecord = {
+  _id: string;
+  content?: string;
+  sender?: number | string | { id?: number | string };
+  type?: string;
+  is_deleted?: boolean;
+};
+
+export type SocketAttachmentRecord = {
+  url?: string;
+  file_name?: string;
+  mime_type?: string;
+  size?: number;
+};
 
 export type SocketMessageRecord = {
   _id: string;
@@ -260,15 +277,57 @@ export type SocketMessageRecord = {
   chat_id?: string;
   createdAt?: string;
   created_at?: string;
+  type?: string;
+  is_edited?: boolean;
+  is_deleted?: boolean;
+  reply_to?: SocketMessageReplyRecord | string | null;
+  attachments?: SocketAttachmentRecord[];
   seen_by?: Array<number | string>;
   delivered_to?: Array<number | string>;
 };
+
+function mapReplyToRecord(
+  replyTo: SocketMessageReplyRecord | string,
+  currentUserId: number,
+  contactUserId: number,
+  contactName: string,
+): import("@/components/sync-connection/types").ChatMessageReply | null {
+  if (!replyTo) return null;
+
+  if (typeof replyTo === "string") {
+    return {
+      message_id: replyTo,
+      text: "",
+      sender_id: contactUserId,
+      sender_name: contactName,
+      is_outgoing: false,
+    };
+  }
+
+  const senderRaw = replyTo.sender;
+  const senderId =
+    typeof senderRaw === "object" && senderRaw != null
+      ? Number(senderRaw.id ?? senderRaw)
+      : Number(senderRaw);
+  const isReplyOutgoing = senderId === currentUserId;
+
+  return {
+    message_id: String(replyTo._id),
+    text: replyTo.is_deleted
+      ? "This message was deleted"
+      : (replyTo.content ?? ""),
+    sender_id: Number.isNaN(senderId) ? contactUserId : senderId,
+    sender_name: isReplyOutgoing ? "You" : contactName,
+    is_outgoing: isReplyOutgoing,
+  };
+}
 
 export function mapSocketMessageToChatMessage(
   msg: SocketMessageRecord,
   currentUserId: number,
   contactUserId: number,
   contactProfile?: string | null,
+  contactName = "Contact",
 ): import("@/components/sync-connection/types").ChatMessage | null {
   const senderId = Number(msg.sender);
   const isOutgoing = senderId === currentUserId;
@@ -297,7 +356,64 @@ export function mapSocketMessageToChatMessage(
           ? "delivered"
           : "sent"
       : undefined,
+    is_edited: Boolean(msg.is_edited),
+    reply_to: msg.reply_to
+      ? mapReplyToRecord(msg.reply_to, currentUserId, contactUserId, contactName)
+      : null,
+    type: (msg.type as import("@/components/sync-connection/types").ChatMessageType) ||
+      "text",
+    attachments: (msg.attachments ?? [])
+      .filter((item) => item.url)
+      .map((item) => ({
+        url: String(item.url),
+        file_name: item.file_name,
+        mime_type: item.mime_type,
+        size: item.size,
+      })),
   };
+}
+
+const MAX_CHAT_MEDIA_BYTES = 15 * 1024 * 1024;
+
+export function inferChatMessageTypeFromMime(
+  mimeType: string,
+): import("@/components/sync-connection/types").ChatMessageType {
+  if (mimeType.startsWith("image/")) return "image";
+  if (mimeType.startsWith("video/")) return "video";
+  if (mimeType.startsWith("audio/")) return "audio";
+  return "file";
+}
+
+export function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error("Could not read file"));
+    reader.readAsDataURL(file);
+  });
+}
+
+export function validateChatMediaFile(file: File): string | null {
+  if (file.size > MAX_CHAT_MEDIA_BYTES) {
+    return `${file.name} exceeds the 15MB limit`;
+  }
+
+  const allowed =
+    file.type.startsWith("image/") ||
+    file.type.startsWith("video/") ||
+    file.type.startsWith("audio/") ||
+    file.type === "application/pdf" ||
+    file.type.includes("document") ||
+    file.type.includes("sheet") ||
+    file.type.includes("presentation") ||
+    file.type === "application/zip" ||
+    file.type === "text/plain";
+
+  if (!allowed) {
+    return `${file.name} is not a supported file type`;
+  }
+
+  return null;
 }
 
 export type SeenPrivateMessagePayload = {
@@ -376,7 +492,7 @@ export function fetchPrivateChatHistory(
   userId: number,
   contactUserId: number,
   contactProfile?: string | null,
-  options: { page?: number; limit?: number } = {},
+  options: { page?: number; limit?: number; contactName?: string } = {},
 ): Promise<import("@/components/sync-connection/types").ChatMessage[]> {
   return new Promise((resolve, reject) => {
     const timeoutMs = 15000;
@@ -402,6 +518,7 @@ export function fetchPrivateChatHistory(
       }
 
       const rows = payload.data?.messages ?? [];
+      const contactName = options.contactName ?? "Contact";
       const mapped = rows
         .map((msg) =>
           mapSocketMessageToChatMessage(
@@ -409,6 +526,7 @@ export function fetchPrivateChatHistory(
             userId,
             contactUserId,
             contactProfile,
+            contactName,
           ),
         )
         .filter(

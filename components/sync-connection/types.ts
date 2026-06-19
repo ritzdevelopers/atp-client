@@ -36,6 +36,30 @@ export type StatusEntry = {
   viewed?: boolean;
 };
 
+export type ChatMessageReply = {
+  message_id: string;
+  text: string;
+  sender_id: number;
+  sender_name: string;
+  is_outgoing: boolean;
+};
+
+export type ChatAttachment = {
+  url: string;
+  file_name?: string;
+  mime_type?: string;
+  size?: number;
+};
+
+export type ChatMessageType =
+  | "text"
+  | "image"
+  | "audio"
+  | "video"
+  | "file"
+  | "link"
+  | "location";
+
 export type ChatMessage = {
   message_id: string;
   text: string;
@@ -43,4 +67,9 @@ export type ChatMessage = {
   is_outgoing: boolean;
   user_profile?: string | null;
   status?: "sent" | "delivered" | "read";
+  is_edited?: boolean;
+  reply_to?: ChatMessageReply | null;
+  type?: ChatMessageType;
+  attachments?: ChatAttachment[];
+  media_uploading?: boolean;
 };

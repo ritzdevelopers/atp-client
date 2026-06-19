@@ -19,17 +19,20 @@ import {
   MdEdit,
   MdEmojiEmotions,
   MdMoreVert,
+  MdReply,
   MdSearch,
   MdSend,
   MdVideocam,
 } from "react-icons/md";
 import { SocketContext } from "@/components/sockets/Socket.Provider";
 import {
-  deletePrivateMessages,
   fetchPrivateChatHistory,
+  fileToDataUrl,
   formatLastActiveLabel,
+  inferChatMessageTypeFromMime,
   jwtUserId,
   mapSocketMessageToChatMessage,
+  validateChatMediaFile,
   type SeenPrivateMessagePayload,
   type TypingIndicatorPayload,
   type SocketMessageRecord,
@@ -37,7 +40,11 @@ import {
 import ChatAvatar from "./ChatAvatar";
 import { useChatContext } from "./ChatContext";
 import MobileEmojiPicker from "./MobileEmojiPicker";
-import type { ChatMessage, ChatTab } from "./types";
+import type {
+  ChatMessage,
+  ChatMessageReply,
+  ChatTab,
+} from "./types";
 
 function tabFromPathname(pathname: string | null, base: string): ChatTab {
   if (pathname?.startsWith(`${base}/groups`)) return "groups";
@@ -112,14 +119,36 @@ export default function RightChatInterface() {
   const [selectedDeleteIds, setSelectedDeleteIds] = useState<string[]>([]);
   const [deletingMessages, setDeletingMessages] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [replyingTo, setReplyingTo] = useState<ChatMessageReply | null>(null);
+  const [replyError, setReplyError] = useState<string | null>(null);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
+  const [mediaError, setMediaError] = useState<string | null>(null);
   const [contactIsTyping, setContactIsTyping] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const callMenuRef = useRef<HTMLDivElement>(null);
   const moreMenuRef = useRef<HTMLDivElement>(null);
   const mobileInputRef = useRef<HTMLInputElement>(null);
+  const desktopInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const joinedChatIdRef = useRef<string | null>(null);
   const messageMenuRef = useRef<HTMLDivElement>(null);
+  const pendingEditRef = useRef<{ messageId: string; originalText: string } | null>(
+    null,
+  );
+  const pendingDeleteRef = useRef<{
+    snapshot: ChatMessage[];
+    pendingIds: Set<string>;
+  } | null>(null);
+  const pendingReplyRef = useRef<{
+    optimisticMessage: ChatMessage;
+  } | null>(null);
+  const pendingMediaRef = useRef<{
+    optimisticMessage: ChatMessage;
+    localPreviewUrl?: string;
+  } | null>(null);
   const isTypingActiveRef = useRef(false);
   const typingStopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
@@ -171,12 +200,86 @@ export default function RightChatInterface() {
     setOpenMessageMenuId(null);
   }, []);
 
+  const cancelEditing = useCallback(() => {
+    setEditingMessageId(null);
+    setMessage("");
+    setEditError(null);
+    pendingEditRef.current = null;
+  }, []);
+
+  const clearPendingDelete = useCallback(() => {
+    pendingDeleteRef.current = null;
+    setDeletingMessages(false);
+  }, []);
+
+  const cancelReply = useCallback(() => {
+    setReplyingTo(null);
+    setReplyError(null);
+    pendingReplyRef.current = null;
+  }, []);
+
+  const clearPendingMedia = useCallback(() => {
+    if (pendingMediaRef.current?.localPreviewUrl) {
+      URL.revokeObjectURL(pendingMediaRef.current.localPreviewUrl);
+    }
+    pendingMediaRef.current = null;
+    setUploadingMedia(false);
+    setMediaError(null);
+  }, []);
+
+  const startReplyMessage = useCallback(
+    (msg: ChatMessage) => {
+      if (msg.message_id.startsWith("temp-")) return;
+      setOpenMessageMenuId(null);
+      cancelEditing();
+      setReplyError(null);
+      const senderId = msg.is_outgoing
+        ? Number(currentUserId)
+        : Number(contactUserId);
+      setReplyingTo({
+        message_id: msg.message_id,
+        text: msg.text,
+        sender_id: senderId,
+        sender_name: msg.is_outgoing
+          ? "You"
+          : (selectedChat?.user_name ?? "Contact"),
+        is_outgoing: msg.is_outgoing,
+      });
+      requestAnimationFrame(() => {
+        if (window.matchMedia("(min-width: 768px)").matches) {
+          desktopInputRef.current?.focus();
+        } else {
+          mobileInputRef.current?.focus();
+        }
+      });
+    },
+    [currentUserId, contactUserId, selectedChat?.user_name, cancelEditing],
+  );
+
+  const startEditingMessage = useCallback((msg: ChatMessage) => {
+    setOpenMessageMenuId(null);
+    setDeleteMode(false);
+    cancelReply();
+    setEditError(null);
+    setEditingMessageId(msg.message_id);
+    setMessage(msg.text);
+    pendingEditRef.current = null;
+    requestAnimationFrame(() => {
+      if (window.matchMedia("(min-width: 768px)").matches) {
+        desktopInputRef.current?.focus();
+      } else {
+        mobileInputRef.current?.focus();
+      }
+    });
+  }, [cancelReply]);
+
   const enterDeleteMode = useCallback((messageId?: string) => {
     setDeleteMode(true);
     setDeleteError(null);
+    cancelReply();
     setOpenMessageMenuId(null);
     setSelectedDeleteIds(messageId ? [messageId] : []);
-  }, []);
+  }, [cancelReply]);
 
   const toggleDeleteSelection = useCallback((messageId: string) => {
     setSelectedDeleteIds((prev) =>
@@ -193,38 +296,42 @@ export default function RightChatInterface() {
     });
   }, [allDeletableSelected, deletableMessages]);
 
-  const handleConfirmDelete = useCallback(async () => {
-    if (!chatId || selectedDeleteIds.length === 0) return;
-
-    const token = localStorage.getItem("token");
-    if (!token) {
-      setDeleteError("You must be signed in to delete messages.");
+  const handleConfirmDelete = useCallback(() => {
+    if (
+      !chatId ||
+      selectedDeleteIds.length === 0 ||
+      !socket ||
+      currentUserId == null
+    ) {
       return;
     }
 
     setDeletingMessages(true);
     setDeleteError(null);
 
-    try {
-      const deletedIds = await deletePrivateMessages(
-        token,
-        orgId,
-        chatId,
-        selectedDeleteIds,
-      );
-      const deletedSet = new Set(deletedIds.map(String));
-      setMessages((prev) =>
-        prev.filter((msg) => !deletedSet.has(msg.message_id)),
-      );
-      exitDeleteMode();
-    } catch (error) {
-      setDeleteError(
-        error instanceof Error ? error.message : "Failed to delete messages",
-      );
-    } finally {
-      setDeletingMessages(false);
-    }
-  }, [chatId, selectedDeleteIds, orgId, exitDeleteMode]);
+    const deleteSet = new Set(selectedDeleteIds.map(String));
+
+    setMessages((prev) => {
+      pendingDeleteRef.current = {
+        snapshot: prev,
+        pendingIds: new Set(deleteSet),
+      };
+      return prev.filter((msg) => !deleteSet.has(msg.message_id));
+    });
+    exitDeleteMode();
+
+    socket.emit("delete_message", {
+      chat_id: chatId,
+      user_id: currentUserId,
+      message_ids: selectedDeleteIds,
+    });
+  }, [
+    chatId,
+    selectedDeleteIds,
+    socket,
+    currentUserId,
+    exitDeleteMode,
+  ]);
 
   const displayedMessages = useMemo(() => {
     const q = chatSearchQuery.trim().toLowerCase();
@@ -472,12 +579,20 @@ export default function RightChatInterface() {
       setMoreMenuOpen(false);
       setEmojiPickerOpen(false);
       exitDeleteMode();
+      cancelEditing();
+      clearPendingDelete();
+      cancelReply();
+      clearPendingMedia();
       return;
     }
 
     const nextChatId = selectedChat.chat_id ?? null;
     setChatId(nextChatId);
     exitDeleteMode();
+    cancelEditing();
+    clearPendingDelete();
+    cancelReply();
+    clearPendingMedia();
 
     if (!nextChatId) {
       setMessages([]);
@@ -503,6 +618,7 @@ export default function RightChatInterface() {
       currentUserId,
       contactUserId,
       selectedChat.user_profile,
+      { contactName: selectedChat.user_name },
     )
       .then((history) => {
         if (!cancelled) setMessages(history);
@@ -517,7 +633,7 @@ export default function RightChatInterface() {
     return () => {
       cancelled = true;
     };
-  }, [selectedChat, socket, isConnected, currentUserId, contactUserId, exitDeleteMode]);
+  }, [selectedChat, socket, isConnected, currentUserId, contactUserId, exitDeleteMode, cancelEditing, clearPendingDelete, cancelReply, clearPendingMedia]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -528,7 +644,9 @@ export default function RightChatInterface() {
       return;
     }
 
-    const handleReceive = (raw: SocketMessageRecord) => {
+    const contactName = selectedChat.user_name;
+
+    const mergeIncomingMessage = (raw: SocketMessageRecord) => {
       const incomingChatId = raw.chat_id ? String(raw.chat_id) : null;
       const activeChatId = chatId ?? selectedChat.chat_id ?? null;
 
@@ -545,6 +663,7 @@ export default function RightChatInterface() {
         currentUserId,
         contactUserId,
         selectedChat.user_profile,
+        contactName,
       );
       if (!mapped) return;
 
@@ -552,17 +671,56 @@ export default function RightChatInterface() {
         setChatId(incomingChatId);
       }
 
+      if (pendingReplyRef.current?.optimisticMessage.message_id.startsWith("temp-")) {
+        const pending = pendingReplyRef.current.optimisticMessage;
+        const sameReplyTarget =
+          (pending.reply_to?.message_id ?? null) ===
+          (mapped.reply_to?.message_id ?? null);
+        if (
+          mapped.is_outgoing &&
+          mapped.text === pending.text &&
+          sameReplyTarget
+        ) {
+          pendingReplyRef.current = null;
+          setReplyError(null);
+        }
+      }
+
+      if (pendingMediaRef.current?.optimisticMessage.message_id.startsWith("temp-media-")) {
+        const pending = pendingMediaRef.current.optimisticMessage;
+        if (
+          mapped.is_outgoing &&
+          mapped.text === pending.text &&
+          (mapped.type ?? "text") === (pending.type ?? "text")
+        ) {
+          if (pendingMediaRef.current.localPreviewUrl) {
+            URL.revokeObjectURL(pendingMediaRef.current.localPreviewUrl);
+          }
+          pendingMediaRef.current = null;
+          setMediaError(null);
+          setUploadingMedia(false);
+        }
+      }
+
       setMessages((prev) => {
         const withoutMatchingOptimistic =
           mapped.is_outgoing
-            ? prev.filter(
-                (m) =>
-                  !(
-                    m.message_id.startsWith("temp-") &&
-                    m.is_outgoing &&
-                    m.text === mapped.text
-                  ),
-              )
+            ? prev.filter((m) => {
+                if (!m.message_id.startsWith("temp-") || !m.is_outgoing) {
+                  return true;
+                }
+                if (m.message_id.startsWith("temp-media-")) {
+                  const sameMedia =
+                    m.text === mapped.text &&
+                    (m.type ?? "text") === (mapped.type ?? "text");
+                  return !sameMedia;
+                }
+                if (m.text !== mapped.text) return true;
+                const sameReply =
+                  (m.reply_to?.message_id ?? null) ===
+                  (mapped.reply_to?.message_id ?? null);
+                return !sameReply;
+              })
             : prev;
 
         if (
@@ -576,6 +734,18 @@ export default function RightChatInterface() {
         }
         return [...withoutMatchingOptimistic, mapped];
       });
+    };
+
+    const handleReceive = (raw: SocketMessageRecord) => {
+      mergeIncomingMessage(raw);
+    };
+
+    const handleReply = (raw: SocketMessageRecord) => {
+      mergeIncomingMessage(raw);
+    };
+
+    const handleMedia = (raw: SocketMessageRecord) => {
+      mergeIncomingMessage(raw);
     };
 
     const handleSeen = (payload: SeenPrivateMessagePayload) => {
@@ -602,15 +772,319 @@ export default function RightChatInterface() {
       );
     };
 
+    const handleEdited = (raw: SocketMessageRecord) => {
+      const incomingChatId = raw.chat_id ? String(raw.chat_id) : null;
+      const activeChatId = chatId ?? selectedChat.chat_id ?? null;
+
+      if (
+        activeChatId &&
+        incomingChatId &&
+        incomingChatId !== activeChatId
+      ) {
+        return;
+      }
+
+      const mapped = mapSocketMessageToChatMessage(
+        raw,
+        currentUserId,
+        contactUserId,
+        selectedChat.user_profile,
+        contactName,
+      );
+      if (!mapped) return;
+
+      if (pendingEditRef.current?.messageId === mapped.message_id) {
+        pendingEditRef.current = null;
+        setEditError(null);
+      }
+
+      setMessages((prev) => {
+        const exists = prev.some((m) => m.message_id === mapped.message_id);
+        if (!exists) return prev;
+        return prev.map((m) =>
+          m.message_id === mapped.message_id ? mapped : m,
+        );
+      });
+
+      if (editingMessageId === mapped.message_id) {
+        setEditingMessageId(null);
+        setMessage("");
+      }
+    };
+
+    const handleDeleted = (raw: SocketMessageRecord) => {
+      const messageId = String(raw._id);
+      const incomingChatId = raw.chat_id ? String(raw.chat_id) : null;
+      const activeChatId = chatId ?? selectedChat.chat_id ?? null;
+
+      if (
+        activeChatId &&
+        incomingChatId &&
+        incomingChatId !== activeChatId
+      ) {
+        return;
+      }
+
+      const pendingDelete = pendingDeleteRef.current;
+      if (pendingDelete) {
+        pendingDelete.pendingIds.delete(messageId);
+        if (pendingDelete.pendingIds.size === 0) {
+          pendingDeleteRef.current = null;
+          setDeletingMessages(false);
+          setDeleteError(null);
+        }
+      }
+
+      setMessages((prev) =>
+        prev.filter((msg) => msg.message_id !== messageId),
+      );
+    };
+
+    const handleSocketError = (err: { message?: string }) => {
+      const pendingEdit = pendingEditRef.current;
+      if (pendingEdit) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.message_id === pendingEdit.messageId
+              ? { ...m, text: pendingEdit.originalText }
+              : m,
+          ),
+        );
+        pendingEditRef.current = null;
+        setEditingMessageId(pendingEdit.messageId);
+        setEditError(err.message || "Could not edit message.");
+        return;
+      }
+
+      const pendingDelete = pendingDeleteRef.current;
+      if (pendingDelete) {
+        setMessages(pendingDelete.snapshot);
+        pendingDeleteRef.current = null;
+        setDeletingMessages(false);
+        setDeleteError(err.message || "Could not delete messages.");
+        return;
+      }
+
+      const pendingReply = pendingReplyRef.current;
+      if (pendingReply) {
+        setMessages((prev) =>
+          prev.filter(
+            (m) => m.message_id !== pendingReply.optimisticMessage.message_id,
+          ),
+        );
+        pendingReplyRef.current = null;
+        setReplyError(err.message || "Could not send reply.");
+        return;
+      }
+
+      const pendingMedia = pendingMediaRef.current;
+      if (pendingMedia) {
+        setMessages((prev) =>
+          prev.filter(
+            (m) => m.message_id !== pendingMedia.optimisticMessage.message_id,
+          ),
+        );
+        if (pendingMedia.localPreviewUrl) {
+          URL.revokeObjectURL(pendingMedia.localPreviewUrl);
+        }
+        pendingMediaRef.current = null;
+        setUploadingMedia(false);
+        setMediaError(err.message || "Could not send media.");
+      }
+    };
+
     socket.on("receive_private_message", handleReceive);
+    socket.on("receive_reply_message", handleReply);
+    socket.on("receive_media_message", handleMedia);
     socket.on("seen_private_message", handleSeen);
+    socket.on("receive_edited_message", handleEdited);
+    socket.on("receive_deleted_message", handleDeleted);
+    socket.on("error", handleSocketError);
     return () => {
       socket.off("receive_private_message", handleReceive);
+      socket.off("receive_reply_message", handleReply);
+      socket.off("receive_media_message", handleMedia);
       socket.off("seen_private_message", handleSeen);
+      socket.off("receive_edited_message", handleEdited);
+      socket.off("receive_deleted_message", handleDeleted);
+      socket.off("error", handleSocketError);
     };
-  }, [socket, selectedChat, currentUserId, contactUserId, chatId]);
+  }, [socket, selectedChat, currentUserId, contactUserId, chatId, editingMessageId]);
+
+  const handleSaveEdit = useCallback(() => {
+    const text = message.trim();
+    if (
+      !text ||
+      !socket ||
+      !selectedChat ||
+      currentUserId == null ||
+      !chatId ||
+      !editingMessageId
+    ) {
+      return;
+    }
+
+    const original = messages.find((m) => m.message_id === editingMessageId);
+    if (!original) return;
+
+    if (text === original.text) {
+      cancelEditing();
+      return;
+    }
+
+    if (typingStopTimeoutRef.current) {
+      clearTimeout(typingStopTimeoutRef.current);
+      typingStopTimeoutRef.current = null;
+    }
+    emitTypingStop();
+
+    pendingEditRef.current = {
+      messageId: editingMessageId,
+      originalText: original.text,
+    };
+    setEditError(null);
+
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.message_id === editingMessageId
+          ? { ...m, text, is_edited: true, status: "sent" as const }
+          : m,
+      ),
+    );
+    setEditingMessageId(null);
+    setMessage("");
+
+    socket.emit("edit_chat", {
+      chat_id: chatId,
+      user_id: currentUserId,
+      message_id: pendingEditRef.current.messageId,
+      new_content: text,
+    });
+  }, [
+    message,
+    socket,
+    selectedChat,
+    currentUserId,
+    chatId,
+    editingMessageId,
+    messages,
+    cancelEditing,
+    emitTypingStop,
+  ]);
+
+  const handleSendMedia = useCallback(
+    async (file: File) => {
+      if (!socket || !selectedChat || currentUserId == null || uploadingMedia) {
+        return;
+      }
+
+      const validationError = validateChatMediaFile(file);
+      if (validationError) {
+        setMediaError(validationError);
+        return;
+      }
+
+      setMediaError(null);
+      setUploadingMedia(true);
+
+      if (typingStopTimeoutRef.current) {
+        clearTimeout(typingStopTimeoutRef.current);
+        typingStopTimeoutRef.current = null;
+      }
+      emitTypingStop();
+
+      const localPreviewUrl = URL.createObjectURL(file);
+      const messageType = inferChatMessageTypeFromMime(file.type);
+      const optimisticId = `temp-media-${Date.now()}`;
+      const optimisticMessage: ChatMessage = {
+        message_id: optimisticId,
+        text: file.name,
+        timestamp: new Date().toLocaleTimeString(undefined, {
+          hour: "numeric",
+          minute: "2-digit",
+        }),
+        is_outgoing: true,
+        status: "sent",
+        type: messageType,
+        attachments: [
+          {
+            url: localPreviewUrl,
+            file_name: file.name,
+            mime_type: file.type,
+            size: file.size,
+          },
+        ],
+        media_uploading: true,
+        reply_to: replyingTo,
+      };
+
+      pendingMediaRef.current = { optimisticMessage, localPreviewUrl };
+      setMessages((prev) => [...prev, optimisticMessage]);
+
+      try {
+        const dataUrl = await fileToDataUrl(file);
+        socket.emit("send_media", {
+          sender: currentUserId,
+          delivered_to: Number(selectedChat.user_id),
+          company_id: Number(orgId),
+          type: messageType,
+          content: file.name,
+          chat_type: "private",
+          ...(chatId ? { chat_id: chatId } : {}),
+          ...(replyingTo ? { reply_to: replyingTo.message_id } : {}),
+          attachments: [
+            {
+              data: dataUrl,
+              file_name: file.name,
+              mime_type: file.type,
+              size: file.size,
+            },
+          ],
+        });
+        setReplyingTo(null);
+      } catch {
+        setMessages((prev) =>
+          prev.filter((msg) => msg.message_id !== optimisticId),
+        );
+        URL.revokeObjectURL(localPreviewUrl);
+        pendingMediaRef.current = null;
+        setMediaError("Could not prepare file for upload.");
+      } finally {
+        setUploadingMedia(false);
+      }
+    },
+    [
+      socket,
+      selectedChat,
+      currentUserId,
+      uploadingMedia,
+      orgId,
+      chatId,
+      replyingTo,
+      emitTypingStop,
+    ],
+  );
+
+  const handleAttachClick = useCallback(() => {
+    if (deleteMode || editingMessageId || uploadingMedia) return;
+    fileInputRef.current?.click();
+  }, [deleteMode, editingMessageId, uploadingMedia]);
+
+  const handleFileInputChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      event.target.value = "";
+      if (file) void handleSendMedia(file);
+    },
+    [handleSendMedia],
+  );
 
   const handleSendMessage = useCallback(() => {
+    if (editingMessageId) {
+      handleSaveEdit();
+      return;
+    }
+
     const text = message.trim();
     if (!text || !socket || !selectedChat || currentUserId == null) return;
 
@@ -630,10 +1104,30 @@ export default function RightChatInterface() {
       }),
       is_outgoing: true,
       status: "sent",
+      reply_to: replyingTo,
     };
- 
+
     setMessage("");
     setMessages((prev) => [...prev, optimisticMessage]);
+
+    if (replyingTo) {
+      pendingReplyRef.current = { optimisticMessage };
+      setReplyError(null);
+
+      socket.emit("reply_to_message", {
+        chat_id: chatId,
+        user_id: currentUserId,
+        message_id: replyingTo.message_id,
+        content: text,
+        delivered_to: Number(selectedChat.user_id),
+        company_id: Number(orgId),
+        chat_type: "private",
+        type: "text",
+      });
+
+      setReplyingTo(null);
+      return;
+    }
 
     socket.emit("send_private_message", {
       sender: currentUserId,
@@ -644,7 +1138,7 @@ export default function RightChatInterface() {
       chat_type: "private",
       ...(chatId ? { chat_id: chatId } : {}),
     });
-  }, [message, socket, selectedChat, currentUserId, orgId, chatId, emitTypingStop]);
+  }, [message, socket, selectedChat, currentUserId, orgId, chatId, emitTypingStop, editingMessageId, handleSaveEdit, replyingTo]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -885,7 +1379,8 @@ export default function RightChatInterface() {
                   }
                   onOpenMenu={() => setOpenMessageMenuId(msg.message_id)}
                   onCloseMenu={() => setOpenMessageMenuId(null)}
-                  onEdit={() => setOpenMessageMenuId(null)}
+                  onEdit={() => startEditingMessage(msg)}
+                  onReply={() => startReplyMessage(msg)}
                   onDelete={() => enterDeleteMode(msg.message_id)}
                 />
               ))}
@@ -902,6 +1397,74 @@ export default function RightChatInterface() {
           </p>
         ) : (
           <>
+        {editingMessageId ? (
+          <div className="mx-auto mb-2 flex max-w-3xl items-center justify-between gap-3 rounded-lg border border-[#B8E0F5] bg-[#E8F4FB] px-3 py-2">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-[#008CD3]">Edit message</p>
+              <p className="truncate text-xs text-[#6B7280]">
+                Press Enter or send to save changes
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={cancelEditing}
+              className="shrink-0 cursor-pointer rounded-md border-0 bg-transparent px-2 py-1 text-xs font-medium text-[#6B7280] outline-none hover:bg-white/70 hover:text-[#374151]"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : null}
+        {editError ? (
+          <p className="mx-auto mb-2 max-w-3xl text-center text-xs text-[#DC2626]">
+            {editError}
+          </p>
+        ) : null}
+        {replyingTo ? (
+          <div className="mx-auto mb-2 flex max-w-3xl items-stretch gap-2 rounded-lg border border-[#E4E7EC] bg-white px-3 py-2 shadow-sm">
+            <div
+              className="w-1 shrink-0 rounded-full"
+              style={{
+                backgroundColor: replyingTo.is_outgoing ? "#06CF9C" : "#008CD3",
+              }}
+            />
+            <div className="min-w-0 flex-1">
+              <p
+                className="text-xs font-semibold"
+                style={{
+                  color: replyingTo.is_outgoing ? "#06CF9C" : "#008CD3",
+                }}
+              >
+                {replyingTo.sender_name}
+              </p>
+              <p className="truncate text-xs text-[#6B7280]">{replyingTo.text}</p>
+            </div>
+            <button
+              type="button"
+              onClick={cancelReply}
+              className="shrink-0 cursor-pointer self-start rounded-md border-0 bg-transparent px-2 py-1 text-xs font-medium text-[#6B7280] outline-none hover:bg-[#F3F4F6] hover:text-[#374151]"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : null}
+        {replyError ? (
+          <p className="mx-auto mb-2 max-w-3xl text-center text-xs text-[#DC2626]">
+            {replyError}
+          </p>
+        ) : null}
+        {mediaError ? (
+          <p className="mx-auto mb-2 max-w-3xl text-center text-xs text-[#DC2626]">
+            {mediaError}
+          </p>
+        ) : null}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip"
+          className="hidden"
+          onChange={handleFileInputChange}
+          aria-hidden
+        />
         {/* Desktop footer — unchanged at md+ */}
         <div className="mx-auto hidden max-w-3xl items-end gap-2 md:flex">
           <IconButton
@@ -913,18 +1476,21 @@ export default function RightChatInterface() {
             label="Attach file"
             icon={<MdAttachFile className="text-xl text-[#6B7280]" />}
             className="mb-1"
+            onClick={handleAttachClick}
+            disabled={!isConnected || uploadingMedia || deleteMode || !!editingMessageId}
           />
           <div className="min-w-0 flex-1">
             <input
+              ref={desktopInputRef}
               type="text"
               value={message}
               onChange={(e) => handleMessageChange(e.target.value)}
               onBlur={handleMessageBlur}
               onKeyDown={handleKeyDown}
-              placeholder="Type a message"
+              placeholder={editingMessageId ? "Edit message" : "Type a message"}
               disabled={!isConnected}
               className="w-full rounded-xl border border-[#E4E7EC] bg-white px-4 py-2.5 text-sm text-[#111827] outline-none placeholder:text-[#9CA3AF] disabled:cursor-not-allowed disabled:opacity-70"
-              aria-label="Message input"
+              aria-label={editingMessageId ? "Edit message input" : "Message input"}
             />
           </div>
           <button
@@ -932,7 +1498,7 @@ export default function RightChatInterface() {
             onClick={handleSendMessage}
             disabled={!isConnected || message.trim() === ""}
             className="mb-0.5 flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-[#008CD3] text-white outline-none transition hover:bg-[#0070AA] disabled:cursor-not-allowed disabled:opacity-50"
-            aria-label="Send message"
+            aria-label={editingMessageId ? "Save edited message" : "Send message"}
           >
             <MdSend className="text-xl" />
           </button>
@@ -965,15 +1531,17 @@ export default function RightChatInterface() {
               onBlur={handleMessageBlur}
               onKeyDown={handleKeyDown}
               onFocus={() => setEmojiPickerOpen(false)}
-              placeholder="Message"
+              placeholder={editingMessageId ? "Edit message" : "Message"}
               disabled={!isConnected}
               className="min-w-0 flex-1 border-0 bg-transparent py-2 text-sm text-[#111827] outline-none placeholder:text-[#9CA3AF] disabled:cursor-not-allowed disabled:opacity-70"
-              aria-label="Message input"
+              aria-label={editingMessageId ? "Edit message input" : "Message input"}
             />
 
             <button
               type="button"
-              className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-[#6B7280] outline-none transition hover:bg-[#F3F4F6]"
+              onClick={handleAttachClick}
+              disabled={!isConnected || uploadingMedia || deleteMode || !!editingMessageId}
+              className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-[#6B7280] outline-none transition hover:bg-[#F3F4F6] disabled:cursor-not-allowed disabled:opacity-50"
               aria-label="Attach file"
             >
               <MdAttachFile className="text-[22px]" />
@@ -985,7 +1553,7 @@ export default function RightChatInterface() {
             onClick={handleSendMessage}
             disabled={!isConnected || message.trim() === ""}
             className="mb-0.5 flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-[#008CD3] text-white outline-none transition hover:bg-[#0070AA] disabled:cursor-not-allowed disabled:opacity-50"
-            aria-label="Send message"
+            aria-label={editingMessageId ? "Save edited message" : "Send message"}
           >
             <MdSend className="text-xl" />
           </button>
@@ -1035,6 +1603,103 @@ function DateDivider({ label }: { label: string }) {
   );
 }
 
+function formatFileSize(bytes?: number): string {
+  if (!bytes) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function MessageMediaContent({ message }: { message: ChatMessage }) {
+  const attachment = message.attachments?.[0];
+  if (!attachment?.url) return null;
+
+  const messageType = message.type ?? "file";
+  const fileName = attachment.file_name || message.text || "File";
+
+  if (messageType === "image") {
+    return (
+      <a
+        href={attachment.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mb-1 block overflow-hidden rounded-lg"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={attachment.url}
+          alt={fileName}
+          className="max-h-64 max-w-full rounded-lg object-cover"
+        />
+      </a>
+    );
+  }
+
+  if (messageType === "video") {
+    return (
+      <video
+        src={attachment.url}
+        controls
+        className="mb-1 max-h-64 max-w-full rounded-lg"
+      >
+        <track kind="captions" />
+      </video>
+    );
+  }
+
+  if (messageType === "audio") {
+    return (
+      <audio src={attachment.url} controls className="mb-1 w-full min-w-[220px]">
+        <track kind="captions" />
+      </audio>
+    );
+  }
+
+  return (
+    <a
+      href={attachment.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="mb-1 flex items-center gap-3 rounded-lg bg-black/[0.04] px-3 py-2 transition hover:bg-black/[0.07]"
+    >
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#008CD3]/10 text-[#008CD3]">
+        <MdAttachFile className="text-xl" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[13px] font-medium text-[#111827]">
+          {fileName}
+        </span>
+        {attachment.size ? (
+          <span className="text-[11px] text-[#6B7280]">
+            {formatFileSize(attachment.size)}
+          </span>
+        ) : null}
+      </span>
+    </a>
+  );
+}
+
+function ReplyQuote({ reply }: { reply: ChatMessageReply }) {
+  const accentColor = reply.is_outgoing ? "#06CF9C" : "#008CD3";
+
+  return (
+    <div
+      className="mb-1.5 rounded-md bg-black/[0.04] px-2 py-1.5"
+      style={{ borderLeft: `3px solid ${accentColor}` }}
+    >
+      <p
+        className="text-[11px] font-semibold leading-tight"
+        style={{ color: accentColor }}
+      >
+        {reply.sender_name}
+      </p>
+      <p className="truncate text-[12px] leading-snug text-[#667781]">
+        {reply.text}
+      </p>
+    </div>
+  );
+}
+
 function MessageBubble({
   message,
   contactName,
@@ -1047,6 +1712,7 @@ function MessageBubble({
   onOpenMenu,
   onCloseMenu,
   onEdit,
+  onReply,
   onDelete,
 }: {
   message: ChatMessage;
@@ -1060,13 +1726,21 @@ function MessageBubble({
   onOpenMenu?: () => void;
   onCloseMenu?: () => void;
   onEdit?: () => void;
+  onReply?: () => void;
   onDelete?: () => void;
 }) {
   const isOutgoing = message.is_outgoing;
   const profileImage = message.user_profile ?? contactProfile;
-  const canManage =
-    isOutgoing && !message.message_id.startsWith("temp-");
-  const showDeleteCheckbox = deleteMode && canManage;
+  const isTextMessage = (message.type ?? "text") === "text";
+  const hasMedia = Boolean(message.attachments?.[0]?.url);
+  const canDelete =
+    isOutgoing &&
+    !message.message_id.startsWith("temp-") &&
+    !message.media_uploading;
+  const canEdit = canDelete && isTextMessage;
+  const canReply = !message.message_id.startsWith("temp-") && !message.media_uploading;
+  const showDeleteCheckbox = deleteMode && canDelete;
+  const showMessageMenu = canReply && !deleteMode;
 
   return (
     <div
@@ -1094,7 +1768,7 @@ function MessageBubble({
       )}
 
       <div className="relative max-w-[85%] sm:max-w-[70%]">
-        {canManage && !deleteMode && (
+        {showMessageMenu && (
           <div
             ref={isMenuOpen ? menuContainerRef : undefined}
             className={`absolute top-1/2 z-20 -translate-y-1/2 ${
@@ -1129,6 +1803,19 @@ function MessageBubble({
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
+                    onReply?.();
+                  }}
+                  className="flex w-full cursor-pointer items-center gap-2 border-0 bg-transparent px-3 py-2 text-left text-sm text-[#111827] outline-none hover:bg-[#F3F4F6]"
+                >
+                  <MdReply className="text-base text-[#008CD3]" />
+                  Reply
+                </button>
+                {canEdit ? (
+                  <>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
                     onEdit?.();
                   }}
                   className="flex w-full cursor-pointer items-center gap-2 border-0 bg-transparent px-3 py-2 text-left text-sm text-[#111827] outline-none hover:bg-[#F3F4F6]"
@@ -1147,6 +1834,8 @@ function MessageBubble({
                   <MdDelete className="text-base" />
                   Delete
                 </button>
+                  </>
+                ) : null}
               </div>
             )}
           </div>
@@ -1157,29 +1846,39 @@ function MessageBubble({
             isOutgoing ? "rounded-br-sm bg-[#DCF8C6]" : "rounded-bl-sm bg-white"
           } ${isSelectedForDelete ? "ring-2 ring-[#008CD3]/40" : ""}`}
           onClick={() => {
-            if (deleteMode && canManage) onToggleDeleteSelect?.();
+            if (deleteMode && canDelete) onToggleDeleteSelect?.();
           }}
           onKeyDown={(e) => {
             if (
               deleteMode &&
-              canManage &&
+              canDelete &&
               (e.key === "Enter" || e.key === " ")
             ) {
               e.preventDefault();
               onToggleDeleteSelect?.();
             }
           }}
-          role={deleteMode && canManage ? "button" : undefined}
-          tabIndex={deleteMode && canManage ? 0 : undefined}
+          role={deleteMode && canDelete ? "button" : undefined}
+          tabIndex={deleteMode && canDelete ? 0 : undefined}
         >
-          <p className="whitespace-pre-wrap break-words text-[14px] leading-relaxed text-[#111827]">
-            {message.text}
-          </p>
+          {message.reply_to ? <ReplyQuote reply={message.reply_to} /> : null}
+          {hasMedia ? <MessageMediaContent message={message} /> : null}
+          {message.media_uploading ? (
+            <p className="mb-1 text-[11px] italic text-[#6B7280]">Uploading…</p>
+          ) : null}
+          {isTextMessage || (!hasMedia && message.text) ? (
+            <p className="whitespace-pre-wrap break-words text-[14px] leading-relaxed text-[#111827]">
+              {message.text}
+            </p>
+          ) : null}
           <div
             className={`mt-1 flex items-center justify-end gap-1 ${
               isOutgoing ? "text-[#6B7280]" : "text-[#9CA3AF]"
             }`}
           >
+            {message.is_edited ? (
+              <span className="text-[10px] italic">edited</span>
+            ) : null}
             <span className="text-[10px]">{message.timestamp}</span>
             {isOutgoing && (
               <span
@@ -1234,17 +1933,20 @@ function IconButton({
   icon,
   className = "",
   onClick,
+  disabled = false,
 }: {
   label: string;
   icon: React.ReactNode;
   className?: string;
   onClick?: () => void;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg border-0 bg-transparent text-[#6B7280] outline-none transition hover:bg-[#F3F4F6] hover:text-[#374151] ${className}`}
+      disabled={disabled}
+      className={`flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg border-0 bg-transparent text-[#6B7280] outline-none transition hover:bg-[#F3F4F6] hover:text-[#374151] disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
       aria-label={label}
     >
       {icon}

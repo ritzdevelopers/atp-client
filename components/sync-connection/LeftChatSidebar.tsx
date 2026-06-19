@@ -14,12 +14,6 @@ import {
 } from "react-icons/md";
 import ChatListItem from "./ChatListItem";
 import CreateGroupModal from "./CreateGroupModal";
-import {
-  DUMMY_CALLS,
-  DUMMY_STATUS,
-  getAvatarColor,
-  getInitials,
-} from "./dummyData";
 import { useChatContext } from "./ChatContext";
 import type { ChatParticipant, ChatTab } from "./types";
 import ChatAvatar from "./ChatAvatar";
@@ -296,7 +290,10 @@ export default function LeftChatSidebar() {
     if (activeTab !== "individual") {
       setShowNewChatPicker(false);
     }
-  }, [activeTab]);
+    if (activeTab === "calls" || activeTab === "status") {
+      setSearchQuery("");
+    }
+  }, [activeTab, setSearchQuery]);
 
   const filteredIndividuals = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -320,22 +317,6 @@ export default function LeftChatSidebar() {
     );
   }, [groupChats, searchQuery]);
 
-  const filteredCalls = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return DUMMY_CALLS;
-    return DUMMY_CALLS.filter((c) => c.user_name.toLowerCase().includes(q));
-  }, [searchQuery]);
-
-  const filteredStatus = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return DUMMY_STATUS;
-    return DUMMY_STATUS.filter(
-      (s) =>
-        s.user_name.toLowerCase().includes(q) ||
-        s.preview_text?.toLowerCase().includes(q),
-    );
-  }, [searchQuery]);
-
   const filteredOrgUsers = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return orgUsers;
@@ -351,11 +332,10 @@ export default function LeftChatSidebar() {
       ? "Search users"
       : activeTab === "individual"
         ? "Search chats"
-        : activeTab === "groups"
-          ? "Search groups"
-          : activeTab === "calls"
-            ? "Search calls"
-            : "Search status";
+        : "Search groups";
+
+  const showSearchBar =
+    activeTab === "individual" || activeTab === "groups";
 
   return (
     <aside
@@ -401,9 +381,10 @@ export default function LeftChatSidebar() {
         })}
       </nav>
 
-      {(activeTab !== "individual" ||
-        showNewChatPicker ||
-        individualChats.length > 0) && (
+      {(showSearchBar &&
+        (activeTab !== "individual" ||
+          showNewChatPicker ||
+          individualChats.length > 0)) && (
         <div className="shrink-0 border-b border-[#E4E7EC] bg-white px-3 py-2.5">
           {activeTab === "individual" && showNewChatPicker && (
             <button
@@ -527,100 +508,24 @@ export default function LeftChatSidebar() {
         )}
 
         {activeTab === "calls" && (
-          <div role="list" aria-label="Call history">
-            {filteredCalls.length === 0 ? (
-              <EmptyState message="No calls match your search" />
-            ) : (
-              filteredCalls.map((call) => (
-                <div
-                  key={call.call_id}
-                  role="listitem"
-                  className="flex w-full cursor-default items-center gap-3 border-b border-[#F3F4F6] bg-white px-4 py-3 text-left transition hover:bg-[#F9FAFB]"
-                >
-                  <ChatAvatar
-                    name={call.user_name}
-                    imageUrl={call.user_profile}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-[15px] font-semibold text-[#111827]">
-                      {call.user_name}
-                    </p>
-                    <p
-                      className={`mt-0.5 text-[13px] ${
-                        call.call_type === "missed"
-                          ? "text-red-500"
-                          : "text-[#6B7280]"
-                      }`}
-                    >
-                      {call.call_type === "incoming" && "Incoming "}
-                      {call.call_type === "outgoing" && "Outgoing "}
-                      {call.call_type === "missed" && "Missed "}
-                      {call.call_mode} call
-                    </p>
-                  </div>
-                  <span className="shrink-0 text-[11px] text-[#9CA3AF]">
-                    {call.timestamp}
-                  </span>
-                </div>
-              ))
-            )}
-          </div>
+          <ComingSoonFeature
+            title="Calls"
+            description="Voice and video calls are on the way. You'll be able to connect with your team directly from here."
+            icon={<MdCall className="text-3xl text-[#008CD3]" aria-hidden />}
+          />
         )}
 
         {activeTab === "status" && (
-          <div role="list" aria-label="Status updates">
-            <div className="border-b border-[#E4E7EC] px-4 py-3">
-              <button
-                type="button"
-                className="flex w-full cursor-pointer items-center gap-3 rounded-lg border border-dashed border-[#008CD3]/40 bg-[#E8F4FB]/50 px-3 py-2.5 text-left transition hover:bg-[#E8F4FB]"
-              >
-                <span
-                  className="flex h-12 w-12 items-center justify-center rounded-full bg-[#008CD3] text-2xl text-white"
-                  aria-hidden
-                >
-                  +
-                </span>
-                <span className="text-sm font-medium text-[#008CD3]">
-                  Add status update
-                </span>
-              </button>
-            </div>
-            {filteredStatus.length === 0 ? (
-              <EmptyState message="No status updates match your search" />
-            ) : (
-              filteredStatus.map((status) => (
-                <button
-                  key={status.status_id}
-                  type="button"
-                  className="flex w-full cursor-pointer items-center gap-3 border-0 border-b border-[#F3F4F6] bg-white px-4 py-3 text-left outline-none transition hover:bg-[#F9FAFB]"
-                >
-                  <div className="relative">
-                    <span
-                      className={`flex h-12 w-12 items-center justify-center rounded-full text-base font-semibold text-white ring-2 ${
-                        status.viewed ? "ring-[#E4E7EC]" : "ring-[#008CD3]"
-                      }`}
-                      style={{
-                        backgroundColor: getAvatarColor(status.user_name),
-                      }}
-                    >
-                      {getInitials(status.user_name)}
-                    </span>
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-[15px] font-semibold text-[#111827]">
-                      {status.user_name}
-                    </p>
-                    <p className="mt-0.5 truncate text-[13px] text-[#6B7280]">
-                      {status.preview_text}
-                    </p>
-                  </div>
-                  <span className="shrink-0 text-[11px] text-[#9CA3AF]">
-                    {status.timestamp}
-                  </span>
-                </button>
-              ))
-            )}
-          </div>
+          <ComingSoonFeature
+            title="Status"
+            description="Share quick updates with your team. Status stories are coming soon."
+            icon={
+              <MdRadioButtonChecked
+                className="text-3xl text-[#008CD3]"
+                aria-hidden
+              />
+            }
+          />
         )}
       </div>
 
@@ -673,6 +578,31 @@ function OrgUserListItem({
         </p>
         <p className="truncate text-[13px] text-[#6B7280]">{user.user_email}</p>
       </div>
+    </div>
+  );
+}
+
+function ComingSoonFeature({
+  title,
+  description,
+  icon,
+}: {
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+}) {
+  return (
+    <div className="flex h-full min-h-[280px] flex-col items-center justify-center px-8 py-16 text-center">
+      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#E8F4FB]">
+        {icon}
+      </div>
+      <p className="text-xs font-semibold uppercase tracking-wider text-[#008CD3]">
+        Coming soon
+      </p>
+      <h2 className="mt-2 text-lg font-semibold text-[#111827]">{title}</h2>
+      <p className="mt-2 max-w-[240px] text-sm leading-relaxed text-[#6B7280]">
+        {description}
+      </p>
     </div>
   );
 }
