@@ -53,6 +53,10 @@ function statusColorClass(status: string | null | undefined): string {
   return "bg-slate-100 text-slate-700";
 }
 
+const MONTH_LABELS = Array.from({ length: 12 }, (_, i) =>
+  new Date(2000, i, 1).toLocaleDateString(undefined, { month: "long" }),
+);
+
 function formatMonthYearLabel(month: string, year: string): string {
   const d = new Date(Number(year), Number(month) - 1, 1);
   if (Number.isNaN(d.getTime())) return `${month}/${year}`;
@@ -575,9 +579,9 @@ export default function AttendanceHistoryPage() {
               }}
               className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
             >
-              {Array.from({ length: 12 }).map((_, i) => (
+              {MONTH_LABELS.map((label, i) => (
                 <option key={i + 1} value={String(i + 1)}>
-                  Month {i + 1}
+                  {label}
                 </option>
               ))}
             </select>

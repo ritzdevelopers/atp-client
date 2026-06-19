@@ -351,11 +351,11 @@ function LeftSideBar({
         path: `${base}/dashboard-management/manage-assigned-dashboards`,
         requiredFeature: "dashboard-management",
         children: [
-          {
-            id: "manage-assigned-dashboards",
-            name: "Manage Assigned Dashboards",
-            path: `${base}/dashboard-management/manage-assigned-dashboards`,
-          },
+          // {
+          //   id: "manage-assigned-dashboards",
+          //   name: "Manage Assigned Dashboards",
+          //   path: `${base}/dashboard-management/manage-assigned-dashboards`,
+          // },
           {
             id: "assign-dashboard-to-employee",
             name: "Assign Dashboard To Employee",
