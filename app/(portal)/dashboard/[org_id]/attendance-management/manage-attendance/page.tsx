@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import ManageAttendanceDetail from "./ManageAttendanceDetail";
 import {
   Users,
@@ -13,65 +14,139 @@ import {
   Search,
   ChevronRight,
   ClipboardList,
+  Clock,
+  UserCheck,
+  UserX,
+  CalendarDays,
+  Filter,
+  X,
 } from "lucide-react";
 import { MdOpenInNew } from "react-icons/md";
+import {
+  fetchAllUsersAttendanceHistory,
+  type AllUsersAttendanceQuery,
+  type AttendanceHeaderData,
+  type EmployeeAttendanceRow,
+} from "@/services/attendanceHistory";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
-
-type AttendanceRow = {
-  user_id?: number | string;
-  user_name?: string;
-  user_email?: string;
-  user_role_name?: string;
-  attendance_history?: string;
-  attendance_date?: string;
-  attendance_status?: string;
-};
-
-type UserMonthlySummary = {
-  userId: string;
-  userName: string;
-  userEmail: string;
-  userRole: string;
-  present: number;
-  late: number;
-  leave: number;
-  halfDay: number;
-  shortLeave: number;
-};
-
-function toMonthKey(dateValue: string | undefined): string | null {
-  if (!dateValue) return null;
-  const d = new Date(dateValue);
-  if (Number.isNaN(d.getTime())) return null;
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  return `${year}-${month}`;
-}
-
-function normalizeStatus(status: string | undefined): "present" | "late" | "leave" | "half_day" | "short_leave" | "other" {
-  const value = String(status || "").trim().toLowerCase();
-  if (!value) return "other";
-  if (value.includes("short") && value.includes("leave")) return "short_leave";
-  if (value.includes("half")) return "half_day";
-  if (value.includes("late")) return "late";
-  if (value.includes("present")) return "present";
-  if (value.includes("leave")) return "leave";
-  return "other";
-}
-
-function getDefaultMonthValue(): string {
+function getTodayYmd(): string {
   const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  return `${year}-${month}`;
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
-function formatMonthYearLabel(ym: string): string {
-  const [y, m] = ym.split("-");
-  const d = new Date(Number(y), Number(m) - 1, 1);
-  if (Number.isNaN(d.getTime())) return ym;
-  return d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+function ymdToParts(ymd: string) {
+  const [year, month, day] = ymd.split("-");
+  return {
+    year: Number(year) || new Date().getFullYear(),
+    month: Number(month) || new Date().getMonth() + 1,
+    day: Number(day) || new Date().getDate(),
+  };
+}
+
+function isFutureYmd(ymd: string): boolean {
+  const value = String(ymd || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  return value > getTodayYmd();
+}
+
+const FUTURE_DATE_ERROR =
+  "You cannot select a future date. Please choose today or an earlier date.";
+
+type AttendanceKpiFilter =
+  | "all"
+  | "present"
+  | "absent"
+  | "on_time"
+  | "late";
+
+function isPresentStatus(status: string | undefined): boolean {
+  const value = String(status || "").trim().toLowerCase();
+  return value === "present" || (value.includes("present") && !value.includes("absent"));
+}
+
+function isLateStatus(status: string | undefined): boolean {
+  const value = String(status || "").trim().toLowerCase();
+  return value.includes("late");
+}
+
+function isAbsentStatus(status: string | undefined): boolean {
+  const value = String(status || "").trim().toLowerCase();
+  if (!value || value === "absent") return true;
+  return value.includes("absent") && !value.includes("present");
+}
+
+function matchesKpiFilter(
+  status: string | undefined,
+  filter: AttendanceKpiFilter,
+): boolean {
+  if (filter === "all") return true;
+  if (filter === "present") {
+    return isPresentStatus(status) || (isLateStatus(status) && !isAbsentStatus(status));
+  }
+  if (filter === "absent") return isAbsentStatus(status);
+  if (filter === "on_time") return isPresentStatus(status);
+  if (filter === "late") return isLateStatus(status);
+  return true;
+}
+
+function kpiFilterLabel(filter: AttendanceKpiFilter): string {
+  const labels: Record<AttendanceKpiFilter, string> = {
+    all: "All employees",
+    present: "Present",
+    absent: "Absent",
+    on_time: "On time",
+    late: "Late check-in",
+  };
+  return labels[filter];
+}
+
+function formatDisplayDate(ymd: string): string {
+  const d = new Date(`${ymd}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return ymd;
+  return d.toLocaleDateString(undefined, {
+    weekday: "short",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function formatTime(dateTime: string | undefined): string {
+  if (!dateTime) return "—";
+  const d = new Date(dateTime.replace(" ", "T"));
+  if (Number.isNaN(d.getTime())) return dateTime;
+  return d.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
+
+function formatWorkingHours(hours: number | undefined): string {
+  if (hours === undefined || hours === null || hours <= 0) return "—";
+  const wholeHours = Math.floor(hours);
+  const minutes = Math.round((hours - wholeHours) * 60);
+  if (minutes === 0) return `${wholeHours}h`;
+  return `${wholeHours}h ${minutes}m`;
+}
+
+function formatStatusLabel(status: string | undefined): string {
+  const raw = String(status || "").trim();
+  if (!raw) return "N/A";
+  return raw.replace(/_/g, " ");
+}
+
+function statusBadgeClass(status: string | undefined): string {
+  const value = String(status || "").trim().toLowerCase();
+  if (value === "present") return "bg-[#E6F4EA] text-[#0F9D58]";
+  if (value.includes("late")) return "bg-[#FEF3E6] text-[#E8710A]";
+  if (value.includes("leave")) return "bg-[#FCE8E6] text-[#D93025]";
+  if (value.includes("absent")) return "bg-[#F5F7FA] text-[#6B7280]";
+  if (value.includes("half")) return "bg-[#E8F4FB] text-[#008CD3]";
+  return "bg-[#F5F7FA] text-[#6B7280]";
 }
 
 function zohoSearchCls() {
@@ -92,17 +167,6 @@ function zohoSecondaryBtnCls() {
 
 function zohoPanelCls() {
   return "overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-sm";
-}
-
-function statChipCls(tone: "present" | "late" | "leave" | "half" | "short") {
-  const map = {
-    present: "bg-[#E6F4EA] text-[#0F9D58]",
-    late: "bg-[#FEF3E6] text-[#E8710A]",
-    leave: "bg-[#FCE8E6] text-[#D93025]",
-    half: "bg-[#E8F4FB] text-[#008CD3]",
-    short: "bg-[#FFF8E1] text-[#F9A825]",
-  };
-  return `rounded-md px-2 py-1 text-[11px] font-medium ${map[tone]}`;
 }
 
 const USER_ICON_COLORS = [
@@ -129,44 +193,143 @@ function userInitials(name: string) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-type MobileUserRowProps = {
-  user: UserMonthlySummary;
-  orgId: string;
+const EMPTY_HEADER: AttendanceHeaderData = {
+  total_company_employees: 0,
+  selected_date_present_employees: 0,
+  selected_date_absent_employees: 0,
+  check_in_on_time_employees: 0,
+  check_in_late_employees: 0,
+  selected_date_on_leave_employees: 0,
 };
 
-function MobileUserAttendanceRow({ user, orgId }: MobileUserRowProps) {
-  const href = `/dashboard/${orgId}/attendance-management/manage-attendance/0?employee_id=${encodeURIComponent(user.userId)}`;
+type KpiCardProps = {
+  label: string;
+  value: number;
+  tone: "neutral" | "success" | "warning" | "danger" | "info";
+  icon: React.ReactNode;
+  active?: boolean;
+  onClick?: () => void;
+};
+
+function KpiCard({ label, value, tone, icon, active = false, onClick }: KpiCardProps) {
+  const toneMap = {
+    neutral: "text-[#1F2937]",
+    success: "text-[#0F9D58]",
+    warning: "text-[#E8710A]",
+    danger: "text-[#D93025]",
+    info: "text-[#008CD3]",
+  };
+
+  const className = [
+    zohoPanelCls(),
+    "p-3 sm:p-4 text-left transition w-full",
+    onClick
+      ? "cursor-pointer hover:border-[#008CD3]/50 hover:shadow-md active:scale-[0.99]"
+      : "",
+    active ? "border-[#008CD3] bg-[#F8FCFF] ring-2 ring-[#008CD3]/15" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const content = (
+    <div className="flex items-start justify-between gap-2">
+      <div>
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
+          {label}
+        </p>
+        <p className={`mt-1 text-2xl font-semibold tabular-nums ${toneMap[tone]}`}>
+          {value}
+        </p>
+      </div>
+      <span
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+          active ? "bg-[#E8F4FB] text-[#008CD3]" : "bg-[#F5F7FA] text-[#6B7280]"
+        }`}
+      >
+        {icon}
+      </span>
+    </div>
+  );
+
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className={className} aria-pressed={active}>
+        {content}
+      </button>
+    );
+  }
+
+  return <div className={className}>{content}</div>;
+}
+
+type EmployeeRowProps = {
+  employee: EmployeeAttendanceRow;
+  orgId: string;
+  selectedDate: string;
+};
+
+function MobileEmployeeRow({ employee, orgId, selectedDate }: EmployeeRowProps) {
+  const href = `/dashboard/${orgId}/attendance-management/manage-attendance/0?employee_id=${encodeURIComponent(String(employee.employee_id))}`;
+  const parts = ymdToParts(selectedDate);
 
   return (
     <li>
-      <Link href={href} className="flex items-center gap-2.5 px-3 py-3 active:bg-[#F5F7FA] sm:px-4">
-        <span
-          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[11px] font-semibold ${userColorClass(user.userName)}`}
-        >
-          {userInitials(user.userName)}
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-[15px] font-medium text-[#1F2937]">{user.userName}</p>
-          <p className="truncate text-[12px] text-[#6B7280]">{user.userEmail}</p>
-          <div className="mt-1.5 flex flex-wrap gap-1">
-            <span className="rounded-full bg-[#E6F4EA] px-2 py-0.5 text-[11px] font-medium text-[#0F9D58]">
-              P {user.present}
+      <Link href={href} className="block px-3 py-3.5 active:bg-[#F5F7FA] sm:px-4">
+        <div className="flex items-start gap-3">
+          {employee.employee_profile_img ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={employee.employee_profile_img}
+              alt=""
+              className="h-10 w-10 shrink-0 rounded-lg object-cover"
+            />
+          ) : (
+            <span
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[11px] font-semibold ${userColorClass(employee.employee_name)}`}
+            >
+              {userInitials(employee.employee_name)}
             </span>
-            <span className="rounded-full bg-[#FEF3E6] px-2 py-0.5 text-[11px] font-medium text-[#E8710A]">
-              L {user.late}
-            </span>
-            <span className="rounded-full bg-[#FCE8E6] px-2 py-0.5 text-[11px] font-medium text-[#D93025]">
-              Abs {user.leave}
-            </span>
-            <span className="rounded-full bg-[#E8F4FB] px-2 py-0.5 text-[11px] font-medium text-[#008CD3]">
-              ½ {user.halfDay}
-            </span>
-            <span className="rounded-full bg-[#FFF8E1] px-2 py-0.5 text-[11px] font-medium text-[#F9A825]">
-              SL {user.shortLeave}
-            </span>
+          )}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="truncate text-[15px] font-medium text-[#1F2937]">
+                  {employee.employee_name}
+                </p>
+                <p className="truncate text-[12px] text-[#6B7280]">
+                  {employee.employee_designation}
+                </p>
+              </div>
+              <span
+                className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${statusBadgeClass(employee.employee_attendance_status)}`}
+              >
+                {formatStatusLabel(employee.employee_attendance_status)}
+              </span>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[13px] text-[#6B7280]">
+              <p>
+                <span className="text-[#9CA3AF]">In </span>
+                {formatTime(employee.attendance_check_in_time)}
+              </p>
+              <p>
+                <span className="text-[#9CA3AF]">Out </span>
+                {formatTime(employee.attendance_check_out_time)}
+              </p>
+              <p>
+                <span className="text-[#9CA3AF]">Hours </span>
+                {formatWorkingHours(employee.employee_working_hours)}
+              </p>
+              <p>
+                <span className="text-[#9CA3AF]">Month P/L </span>
+                {employee.total_present_days}/{employee.total_check_in_late_days}
+              </p>
+            </div>
+            <p className="mt-1 text-[11px] text-[#9CA3AF]">
+              {parts.month}/{parts.year} · {employee.total_attendance_days} days logged
+            </p>
           </div>
+          <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-[#9CA3AF]" aria-hidden />
         </div>
-        <ChevronRight className="h-4 w-4 shrink-0 text-[#9CA3AF]" aria-hidden />
       </Link>
     </li>
   );
@@ -176,16 +339,52 @@ function ManageAttendanceListPage() {
   const params = useParams();
   const orgId = String(params?.org_id ?? "");
 
-  const [rows, setRows] = useState<AttendanceRow[]>([]);
+  const [headerData, setHeaderData] = useState<AttendanceHeaderData>(EMPTY_HEADER);
+  const [employees, setEmployees] = useState<EmployeeAttendanceRow[]>([]);
+  const [selectedDate, setSelectedDate] = useState(getTodayYmd);
+  const [statusFilter, setStatusFilter] = useState("");
+  const [activeKpiFilter, setActiveKpiFilter] = useState<AttendanceKpiFilter>("all");
+  const [appliedQuery, setAppliedQuery] = useState<AllUsersAttendanceQuery>(() => {
+    const today = getTodayYmd();
+    const parts = ymdToParts(today);
+    return { date: today, month: parts.month, year: parts.year };
+  });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedMonth, setSelectedMonth] = useState(getDefaultMonthValue());
-  const [mobileMainTab, setMobileMainTab] = useState<"team" | "overview">("team");
   const [userSearchQuery, setUserSearchQuery] = useState("");
+  const [mobileMainTab, setMobileMainTab] = useState<"team" | "overview">("team");
+  const [dateToast, setDateToast] = useState<{ id: number; message: string } | null>(null);
 
-  const loadAttendanceRows = useCallback(
-    async (isManualRefresh = false) => {
+  const maxSelectableDate = useMemo(() => getTodayYmd(), []);
+
+  const showDateError = useCallback((message = FUTURE_DATE_ERROR) => {
+    setDateToast({ id: Date.now(), message });
+  }, []);
+
+  useEffect(() => {
+    if (!dateToast) return;
+    const timer = window.setTimeout(() => setDateToast(null), 6000);
+    return () => window.clearTimeout(timer);
+  }, [dateToast]);
+
+  const handleDateChange = useCallback(
+    (value: string) => {
+      if (!value) {
+        setSelectedDate(value);
+        return;
+      }
+      if (isFutureYmd(value)) {
+        showDateError();
+        return;
+      }
+      setSelectedDate(value);
+    },
+    [showDateError],
+  );
+
+  const loadAttendance = useCallback(
+    async (query: AllUsersAttendanceQuery, isManualRefresh = false) => {
       if (!orgId) {
         setError("Invalid organization.");
         setLoading(false);
@@ -199,29 +398,21 @@ function ManageAttendanceListPage() {
         return;
       }
 
-      if (isManualRefresh) {
-        setRefreshing(true);
-      } else {
-        setLoading(true);
-      }
+      if (isManualRefresh) setRefreshing(true);
+      else setLoading(true);
       setError(null);
+
       try {
-        const q = encodeURIComponent(orgId);
-        const res = await fetch(
-          `${API_URL}/api/attendance-history/get-all-users-with-attendance-history?org_id=${q}`,
-          {
-            method: "GET",
-            headers: { Authorization: `Bearer ${token}` },
-          },
-        );
-        const data = (await res.json()) as { data?: AttendanceRow[]; message?: string };
-        if (!res.ok) {
-          throw new Error(data.message || "Could not load attendance history.");
+        const data = await fetchAllUsersAttendanceHistory(token, orgId, query);
+        setHeaderData(data.header_data ?? EMPTY_HEADER);
+        setEmployees(Array.isArray(data.employees_attendance_data) ? data.employees_attendance_data : []);
+        if (data.selected_date) {
+          setSelectedDate(data.selected_date);
         }
-        setRows(Array.isArray(data.data) ? data.data : []);
       } catch (e) {
-        setRows([]);
-        setError(e instanceof Error ? e.message : "Could not load attendance history.");
+        setHeaderData(EMPTY_HEADER);
+        setEmployees([]);
+        setError(e instanceof Error ? e.message : "Could not load attendance.");
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -231,82 +422,93 @@ function ManageAttendanceListPage() {
   );
 
   useEffect(() => {
-    void loadAttendanceRows();
-  }, [loadAttendanceRows]);
+    const today = getTodayYmd();
+    const parts = ymdToParts(today);
+    const initialQuery = { date: today, month: parts.month, year: parts.year };
+    setAppliedQuery(initialQuery);
+    setSelectedDate(today);
+    void loadAttendance(initialQuery);
+  }, [loadAttendance]);
 
-  const monthlySummary = useMemo(() => {
-    const map = new Map<string, UserMonthlySummary>();
+  const applyFilters = () => {
+    if (!selectedDate || isFutureYmd(selectedDate)) {
+      showDateError();
+      return;
+    }
+    const parts = ymdToParts(selectedDate);
+    const query: AllUsersAttendanceQuery = {
+      date: selectedDate,
+      month: parts.month,
+      year: parts.year,
+    };
+    setActiveKpiFilter("all");
+    setStatusFilter("");
+    setAppliedQuery(query);
+    void loadAttendance(query);
+  };
 
-    for (const row of rows) {
-      const rowDate = row.attendance_date || row.attendance_history;
-      const rowMonth = toMonthKey(rowDate);
-      if (!rowMonth || rowMonth !== selectedMonth) continue;
+  const resetToToday = () => {
+    const today = getTodayYmd();
+    const parts = ymdToParts(today);
+    setSelectedDate(today);
+    setStatusFilter("");
+    setActiveKpiFilter("all");
+    const query = { date: today, month: parts.month, year: parts.year };
+    setAppliedQuery(query);
+    void loadAttendance(query, true);
+  };
 
-      const userId = String(row.user_id ?? "");
-      if (!userId) continue;
+  const handleKpiFilterClick = useCallback((filter: AttendanceKpiFilter) => {
+    setActiveKpiFilter((prev) => (prev === filter ? "all" : filter));
+    setMobileMainTab("team");
+  }, []);
 
-      const existing =
-        map.get(userId) ??
-        {
-          userId,
-          userName: String(row.user_name || "Unknown User"),
-          userEmail: String(row.user_email || "No email"),
-          userRole: String(row.user_role_name || "employee"),
-          present: 0,
-          late: 0,
-          leave: 0,
-          halfDay: 0,
-          shortLeave: 0,
-        };
+  const filteredEmployees = useMemo(() => {
+    let list = employees;
 
-      const status = normalizeStatus(row.attendance_status);
-      if (status === "present") existing.present += 1;
-      if (status === "late") existing.late += 1;
-      if (status === "leave") existing.leave += 1;
-      if (status === "half_day") existing.halfDay += 1;
-      if (status === "short_leave") existing.shortLeave += 1;
-
-      map.set(userId, existing);
+    if (activeKpiFilter !== "all") {
+      list = list.filter((e) =>
+        matchesKpiFilter(e.employee_attendance_status, activeKpiFilter),
+      );
     }
 
-    return Array.from(map.values()).sort((a, b) => a.userName.localeCompare(b.userName));
-  }, [rows, selectedMonth]);
+    if (statusFilter) {
+      list = list.filter(
+        (e) =>
+          String(e.employee_attendance_status || "").trim().toLowerCase() ===
+          statusFilter.trim().toLowerCase(),
+      );
+    }
 
-  const filteredSummary = useMemo(() => {
     const q = userSearchQuery.trim().toLowerCase();
-    if (!q) return monthlySummary;
-    return monthlySummary.filter(
-      (u) =>
-        u.userName.toLowerCase().includes(q) ||
-        u.userEmail.toLowerCase().includes(q) ||
-        u.userRole.toLowerCase().includes(q),
+    if (!q) return list;
+    return list.filter(
+      (e) =>
+        e.employee_name.toLowerCase().includes(q) ||
+        e.employee_email.toLowerCase().includes(q) ||
+        e.employee_designation.toLowerCase().includes(q) ||
+        e.employee_phone.toLowerCase().includes(q),
     );
-  }, [monthlySummary, userSearchQuery]);
+  }, [employees, activeKpiFilter, statusFilter, userSearchQuery]);
 
-  const overviewStats = useMemo(() => {
-    let present = 0;
-    let late = 0;
-    let leave = 0;
-    let halfDay = 0;
-    let shortLeave = 0;
-    for (const u of monthlySummary) {
-      present += u.present;
-      late += u.late;
-      leave += u.leave;
-      halfDay += u.halfDay;
-      shortLeave += u.shortLeave;
+  const statusOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const e of employees) {
+      if (e.employee_attendance_status) set.add(e.employee_attendance_status);
     }
-    return { present, late, leave, halfDay, shortLeave };
-  }, [monthlySummary]);
+    return Array.from(set).sort();
+  }, [employees]);
 
   const mobileTabs = [
-    { id: "team" as const, label: "Team", count: monthlySummary.length },
-    { id: "overview" as const, label: "Overview" },
+    { id: "team" as const, label: "Attendance", count: filteredEmployees.length },
+    { id: "overview" as const, label: "Summary" },
   ];
+
+  const displayDateLabel = formatDisplayDate(appliedQuery.date || selectedDate);
 
   return (
     <div className="min-h-full bg-[#F5F7FA] lg:bg-transparent">
-      {/* Mobile & tablet: Zoho admin portal style */}
+      {/* Mobile & tablet */}
       <div className="lg:hidden">
         <div className="sticky top-0 z-20 border-b border-[#E4E7EC] bg-white shadow-sm">
           <div className="flex items-center gap-2 px-3 py-2.5 sm:px-4">
@@ -314,19 +516,19 @@ function ManageAttendanceListPage() {
               <ClipboardList className="h-4 w-4" />
             </span>
             <div className="min-w-0 flex-1">
-              <h1 className="truncate text-[16px] font-semibold text-[#1F2937]">Team attendance</h1>
+              <h1 className="truncate text-[16px] font-semibold text-[#1F2937]">
+                Daily attendance
+              </h1>
               <p className="truncate text-[12px] text-[#6B7280]">
-                {loading
-                  ? "Loading…"
-                  : `${monthlySummary.length} user${monthlySummary.length === 1 ? "" : "s"} · ${formatMonthYearLabel(selectedMonth)}`}
+                {loading ? "Loading…" : displayDateLabel}
               </p>
             </div>
             <button
               type="button"
-              onClick={() => void loadAttendanceRows(true)}
+              onClick={resetToToday}
               disabled={loading || refreshing}
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#008CD3] active:bg-[#F5F7FA] disabled:opacity-50"
-              aria-label="Refresh attendance"
+              aria-label="Refresh"
             >
               <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
             </button>
@@ -363,283 +565,522 @@ function ManageAttendanceListPage() {
           </div>
 
           {mobileMainTab === "team" ? (
-            <div className="space-y-2 border-t border-[#E4E7EC] px-3 py-2 sm:px-4">
+            <div className="space-y-2 border-t border-[#E4E7EC] px-3 py-2.5 sm:px-4">
               <input
-                type="month"
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
+                type="date"
+                value={selectedDate}
+                max={maxSelectableDate}
+                onChange={(e) => handleDateChange(e.target.value)}
                 className={zohoSelectCls()}
-                aria-label="Select month"
+                aria-label="Select date"
               />
+              <div className="grid grid-cols-[1fr_auto] gap-2">
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className={zohoSelectCls()}
+                  aria-label="Filter by status"
+                >
+                  <option value="">All statuses</option>
+                  {statusOptions.map((s) => (
+                    <option key={s} value={s}>
+                      {formatStatusLabel(s)}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={applyFilters}
+                  disabled={loading || refreshing}
+                  className={zohoPrimaryBtnCls()}
+                >
+                  Apply
+                </button>
+              </div>
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF]" />
                 <input
                   type="search"
                   value={userSearchQuery}
                   onChange={(e) => setUserSearchQuery(e.target.value)}
-                  placeholder="Search team members"
+                  placeholder="Search employees"
                   className={zohoSearchCls()}
                 />
               </div>
+              {!loading && !error ? (
+                <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5">
+                  {(
+                    [
+                      ["all", "All", headerData.total_company_employees],
+                      ["present", "Present", headerData.selected_date_present_employees],
+                      ["absent", "Absent", headerData.selected_date_absent_employees],
+                      ["on_time", "On time", headerData.check_in_on_time_employees],
+                      ["late", "Late", headerData.check_in_late_employees],
+                    ] as const
+                  ).map(([id, label, count]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => handleKpiFilterClick(id)}
+                      className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium transition ${
+                        activeKpiFilter === id
+                          ? "border-[#008CD3] bg-[#E8F4FB] text-[#008CD3]"
+                          : "border-[#E4E7EC] bg-white text-[#6B7280]"
+                      }`}
+                    >
+                      {label}
+                      <span className="tabular-nums">{count}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </div>
           ) : null}
         </div>
 
         {error ? (
           <div className="mx-3 mt-2 flex items-start gap-2 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2.5 text-[13px] text-[#1F2937] sm:mx-4">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#D93025]" aria-hidden />
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#D93025]" />
             <span>{error}</span>
           </div>
         ) : null}
 
         {loading ? (
           <div className="flex flex-col items-center justify-center gap-2 py-20 text-[#6B7280]">
-            <Loader2 className="h-8 w-8 animate-spin text-[#008CD3]" aria-hidden />
-            <p className="text-[14px]">Loading attendance summary…</p>
+            <Loader2 className="h-8 w-8 animate-spin text-[#008CD3]" />
+            <p className="text-[14px]">Loading attendance…</p>
           </div>
         ) : null}
 
         {!loading && !error && mobileMainTab === "overview" ? (
           <div className="space-y-2.5 p-3 sm:p-4">
-            <div className={`${zohoPanelCls()} p-3`}>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
-                Team members
-              </p>
-              <p className="mt-0.5 text-2xl font-semibold text-[#1F2937]">{monthlySummary.length}</p>
-              <p className="mt-0.5 text-[13px] text-[#6B7280]">{formatMonthYearLabel(selectedMonth)}</p>
-            </div>
+            <p className="text-[13px] font-medium text-[#6B7280]">{displayDateLabel}</p>
             <div className="grid grid-cols-2 gap-2">
-              <div className={`${zohoPanelCls()} p-3`}>
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">Present</p>
-                <p className="mt-0.5 text-xl font-semibold text-[#0F9D58]">{overviewStats.present}</p>
-              </div>
-              <div className={`${zohoPanelCls()} p-3`}>
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">Late</p>
-                <p className="mt-0.5 text-xl font-semibold text-[#E8710A]">{overviewStats.late}</p>
-              </div>
-              <div className={`${zohoPanelCls()} p-3`}>
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">Leaves</p>
-                <p className="mt-0.5 text-xl font-semibold text-[#D93025]">{overviewStats.leave}</p>
-              </div>
-              <div className={`${zohoPanelCls()} p-3`}>
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">Half days</p>
-                <p className="mt-0.5 text-xl font-semibold text-[#008CD3]">{overviewStats.halfDay}</p>
-              </div>
-            </div>
-            <div className={`${zohoPanelCls()} p-3`}>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
-                Short leaves
-              </p>
-              <p className="mt-0.5 text-xl font-semibold text-[#F9A825]">{overviewStats.shortLeave}</p>
+              <KpiCard
+                label="Total employees"
+                value={headerData.total_company_employees}
+                tone="neutral"
+                icon={<Users className="h-4 w-4" />}
+                active={activeKpiFilter === "all"}
+                onClick={() => handleKpiFilterClick("all")}
+              />
+              <KpiCard
+                label="Present"
+                value={headerData.selected_date_present_employees}
+                tone="success"
+                icon={<UserCheck className="h-4 w-4" />}
+                active={activeKpiFilter === "present"}
+                onClick={() => handleKpiFilterClick("present")}
+              />
+              <KpiCard
+                label="Absent"
+                value={headerData.selected_date_absent_employees}
+                tone="danger"
+                icon={<UserX className="h-4 w-4" />}
+                active={activeKpiFilter === "absent"}
+                onClick={() => handleKpiFilterClick("absent")}
+              />
+              <KpiCard
+                label="On time"
+                value={headerData.check_in_on_time_employees}
+                tone="success"
+                icon={<Clock className="h-4 w-4" />}
+                active={activeKpiFilter === "on_time"}
+                onClick={() => handleKpiFilterClick("on_time")}
+              />
+              <KpiCard
+                label="Late"
+                value={headerData.check_in_late_employees}
+                tone="warning"
+                icon={<Clock className="h-4 w-4" />}
+                active={activeKpiFilter === "late"}
+                onClick={() => handleKpiFilterClick("late")}
+              />
             </div>
             <div className="rounded-lg border border-[#E4E7EC] bg-[#E8F4FB] p-3">
               <div className="flex gap-2.5">
                 <Info className="h-4 w-4 shrink-0 text-[#008CD3]" />
                 <p className="text-[13px] leading-relaxed text-[#4B5563]">
-                  Totals are aggregated across all team members for the selected month. Tap a person
-                  in the Team tab to open their full attendance history.
+                  Summary reflects all active employees for the selected date. Monthly stats on
+                  each row are based on the selected date&apos;s month.
                 </p>
               </div>
             </div>
-            <input
-              type="month"
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className={zohoSelectCls()}
-              aria-label="Select month"
-            />
           </div>
         ) : null}
 
-        {!loading && !error && mobileMainTab === "team" && monthlySummary.length === 0 ? (
+        {!loading && !error && mobileMainTab === "team" && activeKpiFilter !== "all" ? (
+          <div className="mx-3 mt-2 flex items-center justify-between gap-2 rounded-lg border border-[#CFE8F7] bg-[#E8F4FB] px-3 py-2 text-[12px] sm:mx-4">
+            <span className="font-medium text-[#008CD3]">
+              Showing {kpiFilterLabel(activeKpiFilter)} · {filteredEmployees.length} employee
+              {filteredEmployees.length === 1 ? "" : "s"}
+            </span>
+            <button
+              type="button"
+              onClick={() => setActiveKpiFilter("all")}
+              className="shrink-0 font-semibold text-[#0070AA] underline-offset-2 hover:underline"
+            >
+              Clear
+            </button>
+          </div>
+        ) : null}
+
+        {!loading && !error && mobileMainTab === "team" && filteredEmployees.length === 0 ? (
           <div className="mx-3 mt-3 rounded-lg border border-dashed border-[#E4E7EC] bg-white px-4 py-12 text-center sm:mx-4">
             <Users className="mx-auto h-9 w-9 text-[#9CA3AF]" />
-            <p className="mt-3 text-[15px] font-semibold text-[#1F2937]">No records this month</p>
+            <p className="mt-3 text-[15px] font-semibold text-[#1F2937]">No records found</p>
             <p className="mt-1.5 text-[13px] text-[#6B7280]">
-              Try selecting a different month.
+              Try a different date, clear the KPI filter, or adjust the status filter.
             </p>
           </div>
         ) : null}
 
-        {!loading && !error && mobileMainTab === "team" && monthlySummary.length > 0 ? (
+        {!loading && !error && mobileMainTab === "team" && filteredEmployees.length > 0 ? (
           <ul className="mt-1 divide-y divide-[#E4E7EC] border-t border-[#E4E7EC] bg-white">
-            {filteredSummary.length === 0 ? (
-              <li className="px-3 py-10 text-center text-[14px] text-[#6B7280] sm:px-4">
-                No team members match your search.
-              </li>
-            ) : (
-              filteredSummary.map((user) => (
-                <MobileUserAttendanceRow key={user.userId} user={user} orgId={orgId} />
-              ))
-            )}
+            {filteredEmployees.map((employee) => (
+              <MobileEmployeeRow
+                key={String(employee.employee_id)}
+                employee={employee}
+                orgId={orgId}
+                selectedDate={appliedQuery.date || selectedDate}
+              />
+            ))}
           </ul>
         ) : null}
       </div>
 
-      {/* Desktop (lg+): Zoho-style */}
+      {/* Desktop */}
       <section className="hidden lg:block">
-        <div className="mx-auto max-w-6xl space-y-4 px-6 py-6">
+        <div className="mx-auto max-w-7xl space-y-4 px-6 py-6">
           <header className={`${zohoPanelCls()} p-4`}>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="flex min-w-0 items-start gap-3">
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#E8F4FB] text-[#008CD3]">
-                  <ClipboardList className="h-5 w-5" aria-hidden />
+                  <ClipboardList className="h-5 w-5" />
                 </span>
                 <div className="min-w-0">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
                     Attendance management
                   </p>
-                  <h1 className="text-[18px] font-semibold text-[#1F2937]">Team attendance</h1>
-                  <p className="mt-0.5 text-[13px] text-[#6B7280]">
-                    Monthly KPIs for all users · {formatMonthYearLabel(selectedMonth)}
-                  </p>
+                  <h1 className="text-[20px] font-semibold text-[#1F2937]">Daily attendance</h1>
+                  <p className="mt-0.5 text-[13px] text-[#6B7280]">{displayDateLabel}</p>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => void loadAttendanceRows(true)}
-                disabled={loading || refreshing}
-                className={zohoSecondaryBtnCls()}
-              >
-                <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} aria-hidden />
-                {refreshing ? "Refreshing…" : "Refresh"}
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={resetToToday} className={zohoSecondaryBtnCls()}>
+                  <CalendarDays className="h-4 w-4" />
+                  Today
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void loadAttendance(appliedQuery, true)}
+                  disabled={loading || refreshing}
+                  className={zohoSecondaryBtnCls()}
+                >
+                  <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+                  {refreshing ? "Refreshing…" : "Refresh"}
+                </button>
+              </div>
             </div>
           </header>
 
-          {!loading && !error && monthlySummary.length > 0 ? (
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-              <div className={`${zohoPanelCls()} px-3 py-2.5`}>
-                <p className="text-[10px] font-semibold uppercase text-[#6B7280]">Members</p>
-                <p className="text-[18px] font-semibold text-[#1F2937]">{monthlySummary.length}</p>
-              </div>
-              <div className={`${zohoPanelCls()} px-3 py-2.5`}>
-                <p className="text-[10px] font-semibold uppercase text-[#6B7280]">Present</p>
-                <p className="text-[18px] font-semibold text-[#0F9D58]">{overviewStats.present}</p>
-              </div>
-              <div className={`${zohoPanelCls()} px-3 py-2.5`}>
-                <p className="text-[10px] font-semibold uppercase text-[#6B7280]">Late</p>
-                <p className="text-[18px] font-semibold text-[#E8710A]">{overviewStats.late}</p>
-              </div>
-              <div className={`${zohoPanelCls()} px-3 py-2.5`}>
-                <p className="text-[10px] font-semibold uppercase text-[#6B7280]">Leaves</p>
-                <p className="text-[18px] font-semibold text-[#D93025]">{overviewStats.leave}</p>
-              </div>
-              <div className={`${zohoPanelCls()} px-3 py-2.5`}>
-                <p className="text-[10px] font-semibold uppercase text-[#6B7280]">Half days</p>
-                <p className="text-[18px] font-semibold text-[#008CD3]">{overviewStats.halfDay}</p>
-              </div>
-              <div className={`${zohoPanelCls()} px-3 py-2.5`}>
-                <p className="text-[10px] font-semibold uppercase text-[#6B7280]">Short leave</p>
-                <p className="text-[18px] font-semibold text-[#F9A825]">{overviewStats.shortLeave}</p>
-              </div>
+          {!loading && !error ? (
+            <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
+              <KpiCard
+                label="Total employees"
+                value={headerData.total_company_employees}
+                tone="neutral"
+                icon={<Users className="h-4 w-4" />}
+                active={activeKpiFilter === "all"}
+                onClick={() => handleKpiFilterClick("all")}
+              />
+              <KpiCard
+                label="Present"
+                value={headerData.selected_date_present_employees}
+                tone="success"
+                icon={<UserCheck className="h-4 w-4" />}
+                active={activeKpiFilter === "present"}
+                onClick={() => handleKpiFilterClick("present")}
+              />
+              <KpiCard
+                label="Absent"
+                value={headerData.selected_date_absent_employees}
+                tone="danger"
+                icon={<UserX className="h-4 w-4" />}
+                active={activeKpiFilter === "absent"}
+                onClick={() => handleKpiFilterClick("absent")}
+              />
+              <KpiCard
+                label="On time"
+                value={headerData.check_in_on_time_employees}
+                tone="success"
+                icon={<Clock className="h-4 w-4" />}
+                active={activeKpiFilter === "on_time"}
+                onClick={() => handleKpiFilterClick("on_time")}
+              />
+              <KpiCard
+                label="Late check-in"
+                value={headerData.check_in_late_employees}
+                tone="warning"
+                icon={<Clock className="h-4 w-4" />}
+                active={activeKpiFilter === "late"}
+                onClick={() => handleKpiFilterClick("late")}
+              />
             </div>
           ) : null}
 
-          <div className={`${zohoPanelCls()} p-3`}>
-            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-              <div className="min-w-[10rem] flex-1 sm:max-w-[12rem]">
-                <label htmlFor="month-filter" className="mb-1 block text-[12px] font-medium text-[#374151]">
-                  Month
+          <div className={`${zohoPanelCls()} p-4`}>
+            <div className="mb-3 flex items-center gap-2 text-[13px] font-medium text-[#374151]">
+              <Filter className="h-4 w-4 text-[#6B7280]" />
+              Filters
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 lg:items-end">
+              <div>
+                <label htmlFor="date-filter" className="mb-1 block text-[12px] font-medium text-[#374151]">
+                  Date
                 </label>
                 <input
-                  id="month-filter"
-                  type="month"
-                  value={selectedMonth}
-                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  id="date-filter"
+                  type="date"
+                  value={selectedDate}
+                  max={maxSelectableDate}
+                  onChange={(e) => handleDateChange(e.target.value)}
                   className={zohoSelectCls()}
                 />
               </div>
-              <div className="min-w-0 flex-[2] sm:min-w-[14rem]">
+              <div>
+                <label htmlFor="status-filter" className="mb-1 block text-[12px] font-medium text-[#374151]">
+                  Status
+                </label>
+                <select
+                  id="status-filter"
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className={zohoSelectCls()}
+                >
+                  <option value="">All statuses</option>
+                  {statusOptions.map((s) => (
+                    <option key={s} value={s}>
+                      {formatStatusLabel(s)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="sm:col-span-2">
                 <label htmlFor="user-search" className="mb-1 block text-[12px] font-medium text-[#374151]">
                   Search
                 </label>
                 <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF]" aria-hidden />
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF]" />
                   <input
                     id="user-search"
                     type="search"
                     value={userSearchQuery}
                     onChange={(e) => setUserSearchQuery(e.target.value)}
-                    placeholder="Name, email, or role"
+                    placeholder="Name, email, role, or phone"
                     className={zohoSearchCls()}
                   />
                 </div>
               </div>
-              <span className="inline-flex min-h-[40px] items-center rounded-lg bg-[#F5F7FA] px-3 text-[13px] font-medium text-[#374151]">
-                {filteredSummary.length} of {monthlySummary.length} shown
-              </span>
+              <div>
+                <button
+                  type="button"
+                  onClick={applyFilters}
+                  disabled={loading || refreshing}
+                  className={`${zohoPrimaryBtnCls(true)} mt-[22px]`}
+                >
+                  Apply filters
+                </button>
+              </div>
             </div>
+            <p className="mt-3 text-[12px] text-[#6B7280]">
+              Date is sent as <code className="rounded bg-[#F5F7FA] px-1">YYYY-MM-DD</code> (e.g.{" "}
+              {appliedQuery.date || "2026-06-04"}).
+            </p>
           </div>
 
           {loading ? (
             <div className={`${zohoPanelCls()} flex flex-col items-center gap-2 py-12 text-[#6B7280]`}>
-              <Loader2 className="h-8 w-8 animate-spin text-[#008CD3]" aria-hidden />
-              <p className="text-[14px]">Loading attendance summary…</p>
+              <Loader2 className="h-8 w-8 animate-spin text-[#008CD3]" />
+              <p className="text-[14px]">Loading attendance…</p>
             </div>
           ) : null}
 
           {error ? (
             <div className="flex items-start gap-2 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2.5 text-[13px] text-[#1F2937]">
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#D93025]" aria-hidden />
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#D93025]" />
               <span>{error}</span>
             </div>
           ) : null}
 
-          {!loading && !error && monthlySummary.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-[#E4E7EC] bg-white px-6 py-12 text-center">
-              <Users className="mx-auto h-9 w-9 text-[#9CA3AF]" aria-hidden />
-              <p className="mt-3 text-[15px] font-semibold text-[#1F2937]">No records this month</p>
-              <p className="mt-1 text-[13px] text-[#6B7280]">Try selecting a different month.</p>
+          {!loading && !error && activeKpiFilter !== "all" ? (
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-[#CFE8F7] bg-[#E8F4FB] px-4 py-2.5 text-[13px]">
+              <span className="font-medium text-[#008CD3]">
+                Showing {kpiFilterLabel(activeKpiFilter)} · {filteredEmployees.length} of{" "}
+                {employees.length} employees
+              </span>
+              <button
+                type="button"
+                onClick={() => setActiveKpiFilter("all")}
+                className="shrink-0 font-semibold text-[#0070AA] hover:underline"
+              >
+                Clear filter
+              </button>
             </div>
           ) : null}
 
-          {!loading && !error && monthlySummary.length > 0 ? (
-            filteredSummary.length === 0 ? (
-              <div className={`${zohoPanelCls()} px-4 py-10 text-center text-[14px] text-[#6B7280]`}>
-                No team members match your search.
-              </div>
-            ) : (
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {filteredSummary.map((user) => (
-                  <article key={user.userId} className={`${zohoPanelCls()} flex flex-col p-3`}>
-                    <div className="flex items-start gap-2.5">
-                      <span
-                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[11px] font-semibold ${userColorClass(user.userName)}`}
-                      >
-                        {userInitials(user.userName)}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <h2 className="truncate text-[14px] font-semibold text-[#1F2937]">{user.userName}</h2>
-                        <p className="truncate text-[12px] text-[#6B7280]">{user.userEmail}</p>
-                        <span className="mt-1 inline-flex max-w-full truncate rounded-md bg-[#F5F7FA] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[#6B7280]">
-                          {user.userRole}
+          {!loading && !error && filteredEmployees.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-[#E4E7EC] bg-white px-6 py-12 text-center">
+              <Users className="mx-auto h-9 w-9 text-[#9CA3AF]" />
+              <p className="mt-3 text-[15px] font-semibold text-[#1F2937]">No records found</p>
+              <p className="mt-1 text-[13px] text-[#6B7280]">
+                Try a different date, clear the KPI filter, or adjust the status filter.
+              </p>
+            </div>
+          ) : null}
+
+          {!loading && !error && filteredEmployees.length > 0 ? (
+            <div className={`${zohoPanelCls()} overflow-x-auto`}>
+              <table className="min-w-full text-left text-[13px]">
+                <thead className="border-b border-[#E4E7EC] bg-[#F9FAFB]">
+                  <tr>
+                    <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                      Employee
+                    </th>
+                    <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                      Check in
+                    </th>
+                    <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                      Check out
+                    </th>
+                    <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                      Hours worked
+                    </th>
+                    <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                      Status
+                    </th>
+                    <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                      Month stats
+                    </th>
+                    <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                      Action
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#E4E7EC]">
+                  {filteredEmployees.map((employee) => (
+                    <tr key={String(employee.employee_id)} className="hover:bg-[#F9FAFB]/80">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2.5">
+                          {employee.employee_profile_img ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={employee.employee_profile_img}
+                              alt=""
+                              className="h-9 w-9 rounded-lg object-cover"
+                            />
+                          ) : (
+                            <span
+                              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[11px] font-semibold ${userColorClass(employee.employee_name)}`}
+                            >
+                              {userInitials(employee.employee_name)}
+                            </span>
+                          )}
+                          <div className="min-w-0">
+                            <p className="truncate font-medium text-[#1F2937]">
+                              {employee.employee_name}
+                            </p>
+                            <p className="truncate text-[12px] text-[#6B7280]">
+                              {employee.employee_email}
+                            </p>
+                            <p className="text-[11px] uppercase tracking-wide text-[#9CA3AF]">
+                              {employee.employee_designation}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 tabular-nums text-[#374151]">
+                        {formatTime(employee.attendance_check_in_time)}
+                      </td>
+                      <td className="px-4 py-3 tabular-nums text-[#374151]">
+                        {formatTime(employee.attendance_check_out_time)}
+                      </td>
+                      <td className="px-4 py-3 font-medium tabular-nums text-[#008CD3]">
+                        {formatWorkingHours(employee.employee_working_hours)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase ${statusBadgeClass(employee.employee_attendance_status)}`}
+                        >
+                          {formatStatusLabel(employee.employee_attendance_status)}
                         </span>
-                      </div>
-                    </div>
-
-                    <div className="mt-3 grid grid-cols-2 gap-1.5">
-                      <span className={statChipCls("present")}>Present {user.present}</span>
-                      <span className={statChipCls("late")}>Late {user.late}</span>
-                      <span className={statChipCls("leave")}>Leave {user.leave}</span>
-                      <span className={statChipCls("half")}>Half {user.halfDay}</span>
-                      <span className={`col-span-2 ${statChipCls("short")}`}>Short {user.shortLeave}</span>
-                    </div>
-
-                    <Link
-                      href={`/dashboard/${orgId}/attendance-management/manage-attendance/0?employee_id=${encodeURIComponent(user.userId)}`}
-                      className={`${zohoPrimaryBtnCls(true)} mt-3`}
-                    >
-                      <MdOpenInNew className="text-[16px]" aria-hidden />
-                      View history
-                    </Link>
-                  </article>
-                ))}
+                      </td>
+                      <td className="px-4 py-3 text-[12px] text-[#6B7280]">
+                        <div className="space-y-0.5">
+                          <p>
+                            Present <span className="font-medium text-[#0F9D58]">{employee.total_present_days}</span>
+                            {" · "}
+                            Late <span className="font-medium text-[#E8710A]">{employee.total_check_in_late_days}</span>
+                          </p>
+                          <p>
+                            Absent {employee.total_absent_days} · Leave {employee.total_on_leave_days}
+                          </p>
+                          <p className="text-[11px] text-[#9CA3AF]">
+                            {employee.total_attendance_days} days logged
+                          </p>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Link
+                          href={`/dashboard/${orgId}/attendance-management/manage-attendance/0?employee_id=${encodeURIComponent(String(employee.employee_id))}`}
+                          className="inline-flex items-center gap-1 rounded-lg border border-[#E4E7EC] px-2.5 py-1.5 text-[12px] font-medium text-[#008CD3] transition hover:bg-[#E8F4FB]"
+                        >
+                          <MdOpenInNew className="text-[14px]" />
+                          History
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="border-t border-[#E4E7EC] bg-[#F9FAFB] px-4 py-2.5 text-[12px] text-[#6B7280]">
+                Showing {filteredEmployees.length} of {employees.length} employees
               </div>
-            )
+            </div>
           ) : null}
         </div>
       </section>
+
+      {dateToast && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="pointer-events-none fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-[10000] flex justify-center px-3 lg:bottom-6"
+              role="alert"
+              aria-live="assertive"
+            >
+              <div className="pointer-events-auto flex max-w-md items-start gap-2.5 rounded-lg border border-[#F5C6C2] bg-white px-3 py-2.5 text-[#1F2937] shadow-lg sm:min-w-[320px]">
+                <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#FCE8E6] text-[#D93025]">
+                  <AlertCircle className="h-5 w-5" strokeWidth={2} />
+                </span>
+                <div className="min-w-0 flex-1 pt-0.5">
+                  <p className="text-[13px] font-semibold text-[#1F2937]">Date</p>
+                  <p className="mt-0.5 text-[12px] leading-snug text-[#6B7280]">
+                    {dateToast.message}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDateToast(null)}
+                  className="shrink-0 rounded-lg p-1 text-[#9CA3AF] transition hover:bg-[#F3F4F6] hover:text-[#374151]"
+                  aria-label="Dismiss"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
@@ -660,7 +1101,7 @@ export default function ManageAttendancePage() {
     <Suspense
       fallback={
         <div className="flex flex-col items-center justify-center gap-2 bg-[#F5F7FA] py-20 text-[#6B7280]">
-          <Loader2 className="h-8 w-8 animate-spin text-[#008CD3]" aria-hidden />
+          <Loader2 className="h-8 w-8 animate-spin text-[#008CD3]" />
           <p className="text-[14px]">Loading attendance…</p>
         </div>
       }
