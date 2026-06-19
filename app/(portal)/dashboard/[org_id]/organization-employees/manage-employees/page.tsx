@@ -340,7 +340,6 @@ function EmployeeActionsMenuList({
           Update role
         </button>
       ) : null}
-      {!isReadOnlyRosterTab && viewerCanAssignLeaves ? (
         <>
           <button
             type="button"
@@ -379,7 +378,7 @@ function EmployeeActionsMenuList({
             Assign assets
           </button>
         </>
-      ) : null}
+ 
     </>
   );
 }
