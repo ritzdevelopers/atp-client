@@ -12,6 +12,7 @@ import {
   MdPerson,
   MdRadioButtonChecked,
 } from "react-icons/md";
+import { getSyncConnectionBase } from "@/lib/syncConnectionPaths";
 import ChatListItem from "./ChatListItem";
 import CreateGroupModal from "./CreateGroupModal";
 import { useChatContext } from "./ChatContext";
@@ -88,7 +89,10 @@ export default function LeftChatSidebar() {
   const params = useParams();
   const pathname = usePathname();
   const orgId = String(params?.org_id ?? "");
-  const base = `/dashboard/${orgId}/sync-connection`;
+  const base = useMemo(
+    () => getSyncConnectionBase(pathname, orgId),
+    [pathname, orgId],
+  );
 
   const {
     individualChats,

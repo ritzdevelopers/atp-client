@@ -12,6 +12,7 @@ import {
   MdInventory2,
   MdLogout,
   MdMenu,
+  MdOutlineChat,
 } from "react-icons/md";
 import { LuFileSpreadsheet } from "react-icons/lu";
 import AssignedLeaveTypeSelect from "./AssignedLeaveTypeSelect";
@@ -58,6 +59,12 @@ const navigationItems: { id: string; label: string; icon: NavIcon; href: string 
       href: "/user-dashboard/[org_id]/tasks-management",
     },
     {
+      id: "chat",
+      label: "Chat",
+      icon: MdOutlineChat,
+      href: "/user-dashboard/[org_id]/sync-connection",
+    },
+    {
       id: "exit-process",
       label: "Exit Process",
       icon: MdExitToApp,
@@ -95,6 +102,8 @@ function bottomTabShortLabel(item: (typeof navigationItems)[number]): string {
       return "History";
     case "tasks-management":
       return "Tasks";
+    case "chat":
+      return "Chat";
     case "exit-process":
       return "Exit";
     default:

@@ -72,4 +72,5 @@ export type ChatMessage = {
   type?: ChatMessageType;
   attachments?: ChatAttachment[];
   media_uploading?: boolean;
+  sender_name?: string;
 };

@@ -10,6 +10,8 @@ type ChatAvatarProps = {
   showOnline?: boolean;
   isOnline?: boolean;
   className?: string;
+  /** When false, renders a span instead of a button (for use inside other buttons). */
+  interactive?: boolean;
 };
 
 const SIZE_MAP = {
@@ -26,6 +28,7 @@ export default function ChatAvatar({
   showOnline = false,
   isOnline = false,
   className = "",
+  interactive = true,
 }: ChatAvatarProps) {
   const { openAvatarPreview } = useChatContext();
   const color = getAvatarColor(name);
@@ -35,13 +38,8 @@ export default function ChatAvatar({
     openAvatarPreview({ name, imageUrl, color });
   };
 
-  return (
-    <button
-      type="button"
-      onClick={handleClick}
-      className={`relative shrink-0 cursor-pointer rounded-full border-0 bg-transparent p-0 outline-none transition-transform hover:scale-105 active:scale-95 ${className}`}
-      aria-label={`View ${name}'s profile photo`}
-    >
+  const content = (
+    <>
       {imageUrl ? (
         <img
           src={imageUrl}
@@ -64,6 +62,23 @@ export default function ChatAvatar({
           aria-hidden
         />
       )}
+    </>
+  );
+
+  const wrapperClass = `relative shrink-0 rounded-full ${interactive ? "cursor-pointer border-0 bg-transparent p-0 outline-none transition-transform hover:scale-105 active:scale-95" : ""} ${className}`;
+
+  if (!interactive) {
+    return <span className={wrapperClass}>{content}</span>;
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      className={wrapperClass}
+      aria-label={`View ${name}'s profile photo`}
+    >
+      {content}
     </button>
   );
 }
