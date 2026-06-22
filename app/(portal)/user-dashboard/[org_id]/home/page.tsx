@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { MdNotificationsNone, MdSearch } from "react-icons/md";
@@ -38,6 +38,11 @@ import {
   type LeaveBalanceDisplayRow,
   type LeaveSummary,
 } from "@/lib/leaveBalanceDisplay";
+import {
+  clearEmployeeDashboardHomeCache,
+  getBootstrappedHomeCache,
+  writeEmployeeDashboardHomeCache,
+} from "@/lib/employeeDashboardHomeCache";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 const MAX_PROFILE_IMAGE_BYTES = 5 * 1024 * 1024;
@@ -507,6 +512,123 @@ function mobileActionSecondaryBtnCls(full = false) {
   return `inline-flex min-h-[34px] items-center justify-center gap-1 rounded-md border border-[#E4E7EC] bg-white px-2.5 py-1.5 text-[12px] font-medium text-[#1F2937] transition active:scale-[0.98] hover:bg-[#F5F7FA] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full flex-1" : ""}`;
 }
 
+function SkeletonBlock({ className = "" }: { className?: string }) {
+  return <div className={`skeleton-shimmer rounded-md ${className}`} aria-hidden />;
+}
+
+function MobileEmployeeHomeSkeleton() {
+  return (
+    <div className={`${mobileSectionGap} ${mobilePagePad} pt-2`} aria-busy="true" aria-label="Loading dashboard">
+      <div className={mobileCardCls}>
+        <div className="flex items-start justify-between gap-2">
+          <SkeletonBlock className="h-4 w-24" />
+          <SkeletonBlock className="h-3 w-16" />
+        </div>
+        <div className="mt-3 grid grid-cols-7 gap-1">
+          {Array.from({ length: 7 }).map((_, i) => (
+            <SkeletonBlock key={i} className="h-12 w-full rounded-md" />
+          ))}
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className={mobileCardCls}>
+            <SkeletonBlock className="h-3 w-20" />
+            <SkeletonBlock className="mt-2 h-6 w-16" />
+            <SkeletonBlock className="mt-2 h-3 w-24" />
+          </div>
+        ))}
+      </div>
+      <div className={mobileCardCls}>
+        <SkeletonBlock className="h-3 w-20" />
+        <SkeletonBlock className="mt-2 h-10 w-full" />
+        <div className="mt-3 flex gap-1.5">
+          <SkeletonBlock className="h-8 flex-1" />
+          <SkeletonBlock className="h-8 flex-1" />
+          <SkeletonBlock className="h-8 flex-1" />
+        </div>
+      </div>
+      <div className="rounded-md border border-[#E4E7EC] bg-[#E8F4FB] px-3 py-2.5">
+        <SkeletonBlock className="h-8 w-full" />
+      </div>
+    </div>
+  );
+}
+
+function DesktopEmployeeHomeSkeleton() {
+  return (
+    <div className="space-y-5 p-6" aria-busy="true" aria-label="Loading dashboard">
+      <section className="grid gap-5 xl:grid-cols-[2fr_1fr]">
+        <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-wrap items-start gap-4">
+            <SkeletonBlock className="h-20 w-20 shrink-0 rounded-xl" />
+            <div className="min-w-[240px] flex-1 space-y-3">
+              <SkeletonBlock className="h-6 w-48" />
+              <SkeletonBlock className="h-4 w-32" />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <SkeletonBlock className="h-14 w-full" />
+                <SkeletonBlock className="h-14 w-full" />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <SkeletonBlock className="h-8 w-28" />
+                <SkeletonBlock className="h-8 w-36" />
+                <SkeletonBlock className="h-8 w-32" />
+              </div>
+            </div>
+          </div>
+        </article>
+        <article className="rounded-xl bg-indigo-700/20 p-5">
+          <SkeletonBlock className="h-4 w-24 bg-indigo-200/60" />
+          <div className="mt-4 space-y-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <SkeletonBlock key={i} className="h-8 w-full" />
+            ))}
+          </div>
+        </article>
+      </section>
+      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <SkeletonBlock className="h-4 w-32" />
+        <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <SkeletonBlock key={i} className="h-28 w-full rounded-xl" />
+          ))}
+        </div>
+      </section>
+      <section className="grid gap-5 xl:grid-cols-[2fr_1fr]">
+        <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
+            <SkeletonBlock className="h-4 w-36" />
+            <SkeletonBlock className="h-3 w-20" />
+          </div>
+          <div className="grid grid-cols-7 gap-2">
+            {Array.from({ length: 7 }).map((_, i) => (
+              <SkeletonBlock key={i} className="h-14 w-full rounded-lg" />
+            ))}
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-5">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <SkeletonBlock key={i} className="h-20 w-full rounded-lg" />
+            ))}
+          </div>
+        </article>
+        <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <SkeletonBlock className="h-4 w-28" />
+          <div className="mt-4 grid grid-cols-3 gap-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <SkeletonBlock key={i} className="h-16 w-full rounded-lg" />
+            ))}
+          </div>
+          <div className="mt-4 space-y-2">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <SkeletonBlock key={i} className="h-8 w-full rounded-md" />
+            ))}
+          </div>
+        </article>
+      </section>
+    </div>
+  );
+}
+
 const USER_ICON_COLORS = [
   "bg-[#E8F4FB] text-[#008CD3]",
   "bg-[#E6F4EA] text-[#0F9D58]",
@@ -784,7 +906,6 @@ function Home() {
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<EmployeeDashboardResponse | null>(null);
   const [addresses, setAddresses] = useState<UserAddressRow[]>([]);
-  const [addressesLoading, setAddressesLoading] = useState(false);
   const [addressesError, setAddressesError] = useState<string | null>(null);
   const [checkInSubmitting, setCheckInSubmitting] = useState(false);
   const [checkOutSubmitting, setCheckOutSubmitting] = useState(false);
@@ -814,18 +935,6 @@ function Home() {
       ? `/user-dashboard/${encodeURIComponent(String(orgIdParam))}/asset-handover`
       : "#";
 
-  const loadHandoverPendingCount = useCallback(async () => {
-    if (!orgId || Number.isNaN(orgId)) return;
-    const token = localStorage.getItem("token");
-    if (!token) return;
-    try {
-      const result = await fetchHandoverAssignedToMe(token, orgId);
-      setHandoverPendingCount(countPendingHandoverItems(result));
-    } catch {
-      setHandoverPendingCount(0);
-    }
-  }, [orgId]);
-
   const loadDashboardData = useCallback(
     async (forceRefresh = false) => {
       await Promise.resolve();
@@ -841,45 +950,69 @@ function Home() {
         return;
       }
 
+      if (!forceRefresh) {
+        const cached = getBootstrappedHomeCache(orgId);
+        if (cached) {
+          setData(cached.data as EmployeeDashboardResponse);
+          setAddresses(cached.addresses as UserAddressRow[]);
+          setAddressesError(cached.addressesError);
+          setHandoverPendingCount(cached.handoverPendingCount ?? 0);
+          setError(null);
+          setLoading(false);
+          setRefreshing(false);
+          return;
+        }
+      } else {
+        clearEmployeeDashboardHomeCache(orgId);
+      }
+
       if (forceRefresh) {
         setRefreshing(true);
       } else {
         setLoading(true);
       }
       setError(null);
+
+      let nextData: EmployeeDashboardResponse | null = null;
+      let nextAddresses: UserAddressRow[] = [];
+      let nextAddressesError: string | null = null;
+      let nextHandoverCount = 0;
+
       try {
         const q = encodeURIComponent(String(orgId));
-        const res = await fetch(
-          `${API_URL}/api/employees/get-employees-full-information?org_id=${q}`,
-          {
+        const [dashboardRes, handoverResult] = await Promise.all([
+          fetch(`${API_URL}/api/employees/get-employees-full-information?org_id=${q}`, {
             method: "GET",
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          },
-        );
-        const result = (await res.json()) as EmployeeDashboardResponse;
-        if (!res.ok) {
-          throw new Error(
-            result.message || "Could not load employee information",
-          );
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          fetchHandoverAssignedToMe(token, orgId).catch(() => null),
+        ]);
+
+        const result = (await dashboardRes.json()) as EmployeeDashboardResponse;
+        if (!dashboardRes.ok) {
+          throw new Error(result.message || "Could not load employee information");
         }
+
+        nextData = result;
         setData(result);
 
-        let nextAddresses: UserAddressRow[] = [];
+        if (handoverResult) {
+          nextHandoverCount = countPendingHandoverItems(handoverResult);
+          setHandoverPendingCount(nextHandoverCount);
+        } else {
+          setHandoverPendingCount(0);
+        }
+
         const employee = result.employee ?? result.employees;
         const employeeId = employee?.id;
         if (employeeId != null) {
-          setAddressesLoading(true);
           setAddressesError(null);
           try {
             const addressRes = await fetch(
               `${API_URL}/api/user/get-user-address/${q}/${encodeURIComponent(String(employeeId))}`,
               {
                 method: "GET",
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                },
+                headers: { Authorization: `Bearer ${token}` },
               },
             );
             const addressResult = (await addressRes.json()) as {
@@ -887,36 +1020,37 @@ function Home() {
               message?: string;
             };
             if (!addressRes.ok) {
-              throw new Error(
-                addressResult.message || "Could not load employee addresses",
-              );
+              throw new Error(addressResult.message || "Could not load employee addresses");
             }
-            nextAddresses = Array.isArray(addressResult.data)
-              ? addressResult.data
-              : [];
+            nextAddresses = Array.isArray(addressResult.data) ? addressResult.data : [];
             setAddresses(nextAddresses);
           } catch (addressError) {
-            setAddresses([]);
-            setAddressesError(
+            nextAddresses = [];
+            nextAddressesError =
               addressError instanceof Error
                 ? addressError.message
-                : "Could not load employee addresses",
-            );
-          } finally {
-            setAddressesLoading(false);
+                : "Could not load employee addresses";
+            setAddresses([]);
+            setAddressesError(nextAddressesError);
           }
         } else {
           setAddresses([]);
           setAddressesError(null);
         }
+
+        writeEmployeeDashboardHomeCache(orgId, {
+          data: result,
+          addresses: nextAddresses,
+          addressesError: nextAddressesError,
+          handoverPendingCount: nextHandoverCount,
+        });
       } catch (e) {
         setError(
-          e instanceof Error
-            ? e.message
-            : "Could not load employee information",
+          e instanceof Error ? e.message : "Could not load employee information",
         );
         setData(null);
         setAddresses([]);
+        setHandoverPendingCount(0);
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -925,16 +1059,19 @@ function Home() {
     [orgId],
   );
 
-  useEffect(() => {
-    const t = window.setTimeout(() => {
-      void loadDashboardData();
-    }, 0);
-    return () => window.clearTimeout(t);
+  useLayoutEffect(() => {
+    void loadDashboardData();
   }, [loadDashboardData]);
 
   useEffect(() => {
-    void loadHandoverPendingCount();
-  }, [loadHandoverPendingCount]);
+    if (loading || error || !data || !orgId || Number.isNaN(orgId)) return;
+    writeEmployeeDashboardHomeCache(orgId, {
+      data,
+      addresses,
+      addressesError,
+      handoverPendingCount,
+    });
+  }, [loading, error, data, addresses, addressesError, handoverPendingCount, orgId]);
 
   const emp = data?.employee ?? data?.employees;
   const owner = data?.owner;
@@ -1358,11 +1495,7 @@ function Home() {
         <div className="sticky top-0 z-20 border-b border-[#E4E7EC] bg-white shadow-sm">
           <div className="flex items-center gap-2 px-3 py-2.5">
             {loading ? (
-              <span
-                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-xs font-semibold ${userColorClass(employeeName)}`}
-              >
-                {userInitials(employeeName)}
-              </span>
+              <SkeletonBlock className="h-9 w-9 shrink-0 rounded-md" />
             ) : (
               <button
                 type="button"
@@ -1389,10 +1522,20 @@ function Home() {
             )}
             <div className="min-w-0 flex-1">
               <h1 className="truncate text-[15px] font-semibold text-[#1F2937]">
-                {loading ? "Loading…" : employeeName}
+                {loading ? (
+                  <SkeletonBlock className="inline-block h-4 w-28 align-middle" />
+                ) : (
+                  employeeName
+                )}
               </h1>
               <p className="truncate text-[11px] text-[#6B7280]">
-                {org?.org_name || "Employee home"} · {employeeCode}
+                {loading ? (
+                  <SkeletonBlock className="mt-1 inline-block h-3 w-36 align-middle" />
+                ) : (
+                  <>
+                    {org?.org_name || "Employee home"} · {employeeCode}
+                  </>
+                )}
               </p>
               {!loading && !error ? (
                 <p className="truncate text-[10px] text-[#9CA3AF]">
@@ -1454,12 +1597,7 @@ function Home() {
           </div>
         ) : null}
 
-        {loading ? (
-          <div className="flex flex-col items-center justify-center gap-2 py-16 text-[#6B7280]">
-            <Loader2 className="h-7 w-7 animate-spin text-[#008CD3]" />
-            <p className="text-[13px]">Loading your dashboard…</p>
-          </div>
-        ) : null}
+        {loading ? <MobileEmployeeHomeSkeleton /> : null}
 
         {!loading && !error && mobileMainTab === "today" ? (
           <div className={`${mobileSectionGap} ${mobilePagePad} pt-2`}>
@@ -1662,18 +1800,18 @@ function Home() {
                   {addresses.length}
                 </span>
               </div>
-              {addressesLoading ? (
+              {loading ? (
                 <p className="px-3 py-4 text-center text-[12px] text-[#6B7280]">Loading addresses…</p>
               ) : null}
               {addressesError ? (
                 <p className="px-3 py-3 text-[12px] text-[#D93025]">{addressesError}</p>
               ) : null}
-              {!addressesLoading && !addressesError && addressCards.length === 0 ? (
+              {!loading && !addressesError && addressCards.length === 0 ? (
                 <p className="px-3 py-4 text-center text-[12px] text-[#6B7280]">
                   No address added yet.
                 </p>
               ) : null}
-              {!addressesLoading && !addressesError && addressCards.length > 0 ? (
+              {!loading && !addressesError && addressCards.length > 0 ? (
                 <ul className="divide-y divide-[#E4E7EC]">
                   {addressCards.map((address) => (
                     <li key={address.key} className="px-3 py-2.5">
@@ -1811,48 +1949,55 @@ function Home() {
       </header>
 
       <div className="border-b border-slate-200 bg-white px-6 py-4">
-        <MyTeamsSection teams={data?.teams ?? []} orgId={orgId} />
-        <div className="mt-3 flex flex-col gap-4 rounded-xl border border-amber-100 bg-gradient-to-r from-amber-50 to-white p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-3">
-            <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-600 text-white">
-              <Package className="h-5 w-5" aria-hidden />
-              {handoverPendingCount > 0 ? (
-                <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">
-                  {handoverPendingCount > 9 ? "9+" : handoverPendingCount}
-                </span>
-              ) : null}
-            </span>
-            <div>
-              <h2 className="text-sm font-semibold text-slate-800">Asset handover</h2>
-              <p className="mt-0.5 text-xs leading-relaxed text-slate-600">
-                Review exit assets and custom tasks assigned to you as custodian.
-              </p>
-            </div>
+        {loading ? (
+          <div className="space-y-3">
+            <SkeletonBlock className="h-32 w-full rounded-2xl" />
+            <SkeletonBlock className="h-24 w-full rounded-xl" />
           </div>
-          <Link
-            href={handoverHref}
-            className="inline-flex w-full items-center justify-center rounded-lg border border-amber-200 bg-white px-4 py-2.5 text-sm font-semibold text-amber-900 shadow-sm transition hover:bg-amber-50 sm:w-auto"
-          >
-            {handoverPendingCount > 0
-              ? `Open handovers (${handoverPendingCount} pending)`
-              : "Open handovers"}
-          </Link>
-        </div>
+        ) : (
+          <>
+            <MyTeamsSection teams={data?.teams ?? []} orgId={orgId} />
+            <div className="mt-3 flex flex-col gap-4 rounded-xl border border-amber-100 bg-gradient-to-r from-amber-50 to-white p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-600 text-white">
+                  <Package className="h-5 w-5" aria-hidden />
+                  {handoverPendingCount > 0 ? (
+                    <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">
+                      {handoverPendingCount > 9 ? "9+" : handoverPendingCount}
+                    </span>
+                  ) : null}
+                </span>
+                <div>
+                  <h2 className="text-sm font-semibold text-slate-800">Asset handover</h2>
+                  <p className="mt-0.5 text-xs leading-relaxed text-slate-600">
+                    Review exit assets and custom tasks assigned to you as custodian.
+                  </p>
+                </div>
+              </div>
+              <Link
+                href={handoverHref}
+                className="inline-flex w-full items-center justify-center rounded-lg border border-amber-200 bg-white px-4 py-2.5 text-sm font-semibold text-amber-900 shadow-sm transition hover:bg-amber-50 sm:w-auto"
+              >
+                {handoverPendingCount > 0
+                  ? `Open handovers (${handoverPendingCount} pending)`
+                  : "Open handovers"}
+              </Link>
+            </div>
+          </>
+        )}
       </div>
 
       <div className="space-y-5 p-6">
-        {loading ? (
-          <div className="rounded-xl border border-slate-200 bg-white p-10 text-center text-slate-500">
-            Loading employee information...
-          </div>
-        ) : null}
+        {loading ? <DesktopEmployeeHomeSkeleton /> : null}
 
-        {error ? (
+        {error && !loading ? (
           <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             {error}
           </div>
         ) : null}
 
+        {!loading && !error ? (
+        <>
         <section className="grid gap-5 xl:grid-cols-[2fr_1fr]">
           <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex flex-wrap items-start gap-4">
@@ -1951,7 +2096,7 @@ function Home() {
             </span>
           </div>
 
-          {addressesLoading ? (
+          {loading ? (
             <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
               Loading addresses...
             </div>
@@ -1963,13 +2108,13 @@ function Home() {
             </div>
           ) : null}
 
-          {!addressesLoading && !addressesError && addresses.length === 0 ? (
+          {!loading && !addressesError && addresses.length === 0 ? (
             <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
               No address has been added to your profile yet.
             </div>
           ) : null}
 
-          {!addressesLoading && !addressesError && addressCards.length > 0 ? (
+          {!loading && !addressesError && addressCards.length > 0 ? (
             <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {addressCards.map((address) => (
                 <article
@@ -2192,6 +2337,8 @@ function Home() {
             </div>
           </article>
         </section>
+        </>
+        ) : null}
       </div>
       </section>
       <ProfilePhotoZoomModal
