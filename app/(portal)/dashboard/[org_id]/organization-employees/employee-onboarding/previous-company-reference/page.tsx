@@ -179,7 +179,7 @@ function PreviousCompanyReferencePageContent() {
     const q = new URLSearchParams({
       employee_id: employeeId,
       employee_name: employeeName,
-      step: "assets",
+      step: "leave",
     });
     return `${base}?${q.toString()}`;
   }, [orgIdParam, employeeId, employeeName]);

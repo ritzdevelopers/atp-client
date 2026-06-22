@@ -203,3 +203,66 @@ export async function createEmployeeLeaveBalance(
 
   return result;
 }
+
+export type AllocationFrequency =
+  | "monthly"
+  | "quarterly"
+  | "half_yearly"
+  | "yearly";
+
+export type LeaveAssignInfoPayload = {
+  leave_type_id: number | string;
+  allocation_frequency: AllocationFrequency;
+  leaves_per_cycle: number;
+  carry_forward: boolean;
+  max_carry_forward?: number;
+  next_allocation_date: string;
+};
+
+export type LeaveOnboardPayload = {
+  org_id: number | string;
+  employee_id: number | string;
+  leave_assign_info: LeaveAssignInfoPayload[];
+};
+
+export async function leaveOnboardEmployee(
+  token: string,
+  payload: LeaveOnboardPayload,
+): Promise<{ message?: string }> {
+  const body: Record<string, unknown> = {
+    org_id: payload.org_id,
+    employee_id: payload.employee_id,
+    leave_assign_info: payload.leave_assign_info.map((item) => {
+      const row: LeaveAssignInfoPayload = {
+        leave_type_id: item.leave_type_id,
+        allocation_frequency: item.allocation_frequency,
+        leaves_per_cycle: item.leaves_per_cycle,
+        carry_forward: item.carry_forward,
+        next_allocation_date: item.next_allocation_date,
+      };
+      if (item.carry_forward) {
+        row.max_carry_forward = item.max_carry_forward ?? 0;
+      }
+      return row;
+    }),
+  };
+
+  const res = await fetch(`${API_URL}/api/leave-management/leave-onboard`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  const result = (await res.json()) as { message?: string };
+
+  if (!res.ok) {
+    const error = leaveApiError(result, "Could not assign leave schedule");
+    error.status = res.status;
+    throw error;
+  }
+
+  return result;
+}
