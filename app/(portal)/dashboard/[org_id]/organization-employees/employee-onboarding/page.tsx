@@ -23,6 +23,7 @@ import {
   Package,
   PlusCircle,
   Briefcase,
+  CalendarDays,
 } from "lucide-react";
 import { useManagementDashboardContext } from "@/components/portal-dashboard/Layout/ManagementDashboardContext";
 import {
@@ -42,6 +43,7 @@ const ONBOARDING_STEPS_ORDER = [
   "basic",
   "external",
   "reference",
+  "leave",
   "assets",
   "documents",
   "address",
@@ -113,9 +115,10 @@ const ONBOARDING_STEP_NAV = [
   { key: "basic" as const, n: "1", label: "Basics", short: "Basics" },
   { key: "external" as const, n: "2", label: "Emergency", short: "Emergency" },
   { key: "reference" as const, n: "3", label: "Prev. company", short: "Company" },
-  { key: "assets" as const, n: "4", label: "Assets", short: "Assets" },
-  { key: "documents" as const, n: "5", label: "Documents", short: "Docs" },
-  { key: "address" as const, n: "6", label: "Address", short: "Address" },
+  { key: "leave" as const, n: "4", label: "Leave schedule", short: "Leave" },
+  { key: "assets" as const, n: "5", label: "Assets", short: "Assets" },
+  { key: "documents" as const, n: "6", label: "Documents", short: "Docs" },
+  { key: "address" as const, n: "7", label: "Address", short: "Address" },
 ] as const;
 
 const PASSWORD_MIN = 8;
@@ -874,9 +877,25 @@ function EmployeOnboardingPageContent() {
   }, [createdEmployeeId, createdEmployeeName, orgIdParam]);
 
   function handlePreviousCompanySkip() {
+    setOnboardingStep("leave");
+    setSuccess(
+      `${createdEmployeeName || "Employee"}: skipped previous company reference. Configure leave schedule next (optional) or skip.`,
+    );
+  }
+
+  const leaveScheduleFormUrl = useMemo(() => {
+    if (!createdEmployeeId || !orgIdParam) return "";
+    const q = new URLSearchParams({
+      employee_id: String(createdEmployeeId),
+      employee_name: createdEmployeeName || "Employee",
+    });
+    return `/dashboard/${orgIdParam}/organization-employees/employee-onboarding/leave-schedule?${q.toString()}`;
+  }, [createdEmployeeId, createdEmployeeName, orgIdParam]);
+
+  function handleLeaveScheduleSkip() {
     setOnboardingStep("assets");
     setSuccess(
-      `${createdEmployeeName || "Employee"}: skipped previous company reference. Assign assets next (optional) or skip.`,
+      `${createdEmployeeName || "Employee"}: skipped leave schedule. Assign assets next (optional) or skip.`,
     );
   }
 
@@ -1196,8 +1215,8 @@ function EmployeOnboardingPageContent() {
           <div className="min-w-0">
             <h1 className="text-[18px] font-semibold text-[#1F2937]">Employee onboarding</h1>
             <p className="mt-0.5 text-[13px] text-[#6B7280]">
-              Six steps for <span className="font-medium text-[#374151]">{orgName}</span>: basics, emergency
-              contact, previous company (optional), assets, documents, and address.
+              Seven steps for <span className="font-medium text-[#374151]">{orgName}</span>: basics, emergency
+              contact, previous company (optional), leave schedule (optional), assets, documents, and address.
             </p>
           </div>
         </div>
@@ -1476,7 +1495,7 @@ function EmployeOnboardingPageContent() {
               <p className={stepDescCls()}>
                 For{" "}
                 <span className="font-medium text-[#374151]">{createdEmployeeName}</span>.
-                Saved to organizational records (step&nbsp;2 of&nbsp;6).
+                Saved to organizational records (step&nbsp;2 of&nbsp;7).
               </p>
             </div>
           </div>
@@ -1584,7 +1603,7 @@ function EmployeOnboardingPageContent() {
               <p className={stepDescCls()}>
                 Optional background verification for{" "}
                 <span className="font-medium text-[#374151]">{createdEmployeeName}</span>. Experienced
-                hires can add prior employer details; freshers can skip (step&nbsp;3 of&nbsp;6).
+                hires can add prior employer details; freshers can skip (step&nbsp;3 of&nbsp;7).
               </p>
             </div>
           </div>
@@ -1618,6 +1637,51 @@ function EmployeOnboardingPageContent() {
         </div>
       )}
 
+      {onboardingStep === "leave" && createdEmployeeId && (
+        <div className={stepPanelShell()}>
+          <div className={stepSectionHeaderShell()}>
+            <span className={stepIconShellCls()}>
+              <CalendarDays className="h-4 w-4" aria-hidden />
+            </span>
+            <div>
+              <h2 className={stepTitleCls()}>Leave schedule</h2>
+              <p className={stepDescCls()}>
+                Optional — define when and how{" "}
+                <span className="font-medium text-[#374151]">{createdEmployeeName}</span> receives
+                leave credits per type (step&nbsp;4 of&nbsp;7).
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <p className="text-[13px] text-[#6B7280]">
+              Choose organization leave types, set allocation frequency, leaves per cycle, carry-forward
+              rules, and the first credit date. You can assign different schedules for each leave type.
+            </p>
+
+            <div className={stepFooterShell()}>
+              <button
+                type="button"
+                onClick={handleLeaveScheduleSkip}
+                className={btnSkipCls()}
+              >
+                Skip — configure leave later
+              </button>
+              {leaveScheduleFormUrl ? (
+                <Link href={leaveScheduleFormUrl} className={btnPrimaryCls()}>
+                  <CalendarDays className="h-4 w-4" aria-hidden />
+                  Set up leave schedule
+                </Link>
+              ) : (
+                <button type="button" disabled className={btnPrimaryCls()}>
+                  Set up leave schedule
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {onboardingStep === "assets" && createdEmployeeId && (
         <div className={stepPanelShell()}>
           <div className={stepSectionHeaderShell()}>
@@ -1629,7 +1693,7 @@ function EmployeOnboardingPageContent() {
               <p className={stepDescCls()}>
                 Optional — allocate laptops, badges, SIMs, etc. for{" "}
                 <span className="font-medium text-[#374151]">{createdEmployeeName}</span>. Add rows with
-                <span className="font-medium text-[#374151]"> Add asset</span>, or skip (step&nbsp;4 of&nbsp;6).
+                <span className="font-medium text-[#374151]"> Add asset</span>, or skip (step&nbsp;5 of&nbsp;7).
               </p>
             </div>
           </div>
@@ -1858,7 +1922,7 @@ function EmployeOnboardingPageContent() {
             <div>
               <h2 className={stepTitleCls()}>Employee documents</h2>
               <p className={stepDescCls()}>
-                Step&nbsp;5 of&nbsp;6 — tap a frame for full screen preview. Wrong file? Use{" "}
+                Step&nbsp;6 of&nbsp;7 — tap a frame for full screen preview. Wrong file? Use{" "}
                 <span className="font-medium text-[#374151]">Change file</span>. PNG/JPG/WebP/PDF · max{" "}
                 5&nbsp;MB each.
               </p>
@@ -2094,8 +2158,8 @@ function EmployeOnboardingPageContent() {
               <h2 className={stepTitleCls()}>Employee address</h2>
               <p className={stepDescCls()}>
                 Permanent and current address for{" "}
-                <span className="font-medium text-[#374151]">{createdEmployeeName}</span> (step&nbsp;6
-                of&nbsp;6). Optional — skip if you&apos;ll capture this later.
+                <span className="font-medium text-[#374151]">{createdEmployeeName}</span> (step&nbsp;7
+                of&nbsp;7). Optional — skip if you&apos;ll capture this later.
               </p>
             </div>
           </div>

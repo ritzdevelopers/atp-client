@@ -18,6 +18,7 @@ import {
   CheckCircle2,
   BadgeDollarSign,
   CalendarDays,
+  CalendarClock,
   Pencil,
   Shield,
   FileText,
@@ -26,6 +27,7 @@ import {
 } from "lucide-react";
 import { useManagementDashboardContext } from "@/components/portal-dashboard/Layout/ManagementDashboardContext";
 import AssignEmployeeAssetsModal from "@/components/portal-dashboard/employees/AssignEmployeeAssetsModal";
+import ScheduleEmployeeLeaveModal from "@/components/portal-dashboard/employees/ScheduleEmployeeLeaveModal";
 import {
   dedupeOrgUserRows,
   getAllOrgUsers,
@@ -281,6 +283,7 @@ function EmployeeActionsMenuList({
   onRole,
   onDocuments,
   onPaidLeave,
+  onScheduleLeave,
   onAssignAssets,
 }: {
   orgIdParam: string | string[] | undefined;
@@ -294,6 +297,7 @@ function EmployeeActionsMenuList({
   onRole: (row: OrgUserRow) => void;
   onDocuments: (row: OrgUserRow) => void;
   onPaidLeave: (row: OrgUserRow) => void;
+  onScheduleLeave: (row: OrgUserRow) => void;
   onAssignAssets: (row: OrgUserRow) => void;
 }) {
   const itemCls =
@@ -364,6 +368,18 @@ function EmployeeActionsMenuList({
           >
             <BadgeDollarSign className="h-4 w-4 shrink-0 text-[#008CD3]" aria-hidden />
             Assign paid leaves
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className={itemCls}
+            onClick={() => {
+              onScheduleLeave(row);
+              onClose();
+            }}
+          >
+            <CalendarClock className="h-4 w-4 shrink-0 text-[#008CD3]" aria-hidden />
+            Schedule leave
           </button>
           <button
             type="button"
@@ -614,6 +630,9 @@ export default function ManageEmployeesPage() {
   const [assetsRow, setAssetsRow] = useState<OrgUserRow | null>(null);
   const [assetsSuccess, setAssetsSuccess] = useState<string | null>(null);
 
+  const [scheduleLeaveRow, setScheduleLeaveRow] = useState<OrgUserRow | null>(null);
+  const [scheduleLeaveSuccess, setScheduleLeaveSuccess] = useState<string | null>(null);
+
   const allCards = useMemo(() => userRows.map(mapApiUserToCard), [userRows]);
 
   const loadUsers = useCallback(async () => {
@@ -788,6 +807,11 @@ export default function ManageEmployeesPage() {
     } finally {
       setPaidLeaveTypesLoading(false);
     }
+  }
+
+  function openScheduleLeaveModal(row: OrgUserRow) {
+    setScheduleLeaveRow(row);
+    setScheduleLeaveSuccess(null);
   }
 
   function openDocumentsModal(row: OrgUserRow) {
@@ -1024,6 +1048,21 @@ export default function ManageEmployeesPage() {
   return (
     <div className="min-h-full bg-[#F5F7FA] pb-3 [font-family:var(--font-inter),system-ui,sans-serif] max-lg:-mx-1 sm:max-lg:-mx-2 lg:pb-8">
       <div className="mx-auto max-w-6xl max-lg:max-w-none lg:px-4 lg:pt-6 md:max-w-7xl md:px-6">
+        {scheduleLeaveSuccess ? (
+          <div className="mb-3 flex items-start gap-2 rounded-lg border border-[#A8DAB5] bg-[#E6F4EA] px-3 py-2 text-[12px] text-[#0F9D58] max-lg:mx-3 max-lg:mt-2 lg:mb-4 lg:px-4 lg:py-2.5 lg:text-[13px]">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+            <span className="flex-1">{scheduleLeaveSuccess}</span>
+            <button
+              type="button"
+              onClick={() => setScheduleLeaveSuccess(null)}
+              className="shrink-0 rounded-lg p-1 text-[#0F9D58] hover:bg-[#E6F4EA]/80"
+              aria-label="Dismiss"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        ) : null}
+
         {assetsSuccess ? (
           <div className="mb-3 flex items-start gap-2 rounded-lg border border-[#A8DAB5] bg-[#E6F4EA] px-3 py-2 text-[12px] text-[#0F9D58] max-lg:mx-3 max-lg:mt-2 lg:mb-4 lg:px-4 lg:py-2.5 lg:text-[13px]">
             <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
@@ -1215,6 +1254,7 @@ export default function ManageEmployeesPage() {
                       onRole={openRoleModal}
                       onDocuments={openDocumentsModal}
                       onPaidLeave={openPaidLeaveModal}
+                      onScheduleLeave={openScheduleLeaveModal}
                       onAssignAssets={openAssignAssetsModal}
                     />
                   </div>
@@ -1494,7 +1534,7 @@ export default function ManageEmployeesPage() {
       {/* Edit user modal */}
       {editRow && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 z-[999999] flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="edit-user-title"
@@ -1607,7 +1647,7 @@ export default function ManageEmployeesPage() {
       {/* Update role modal */}
       {roleRow && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 z-[999999] flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="role-modal-title"
@@ -1695,7 +1735,7 @@ export default function ManageEmployeesPage() {
       {/* Assign paid leaves modal */}
       {paidLeaveRow && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 z-[999999] flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="paid-leaves-title"
@@ -1844,7 +1884,7 @@ export default function ManageEmployeesPage() {
       {/* Add documents modal */}
       {documentsRow && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 z-[999999] flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="documents-modal-title"
@@ -1979,10 +2019,27 @@ export default function ManageEmployeesPage() {
             onRole={openRoleModal}
             onDocuments={openDocumentsModal}
             onPaidLeave={openPaidLeaveModal}
+            onScheduleLeave={openScheduleLeaveModal}
             onAssignAssets={openAssignAssetsModal}
           />
         </MobileEmployeeMenuSheet>
       ) : null}
+
+      <ScheduleEmployeeLeaveModal
+        open={scheduleLeaveRow != null}
+        orgId={organizationIdNum}
+        orgIdParam={orgIdParam}
+        employee={
+          scheduleLeaveRow
+            ? {
+                userId: scheduleLeaveRow.id ?? "",
+                userName: String(scheduleLeaveRow.user_name ?? "Employee"),
+              }
+            : null
+        }
+        onClose={() => setScheduleLeaveRow(null)}
+        onSuccess={(message) => setScheduleLeaveSuccess(message)}
+      />
 
       <AssignEmployeeAssetsModal
         open={assetsRow != null}
