@@ -8,6 +8,13 @@ import {
   localYmdFromAttendanceValue,
 } from "@/lib/attendanceDates";
 import {
+  clearOwnAttendanceHistoryCaches,
+  readOwnAttendanceHistoryCache,
+  shouldRefreshOwnAttendanceHistoryCache,
+  stableFilterKey,
+  writeOwnAttendanceHistoryCache,
+} from "@/lib/employeeManagementCache";
+import {
   BarChart3,
   RefreshCw,
   Loader2,
@@ -161,33 +168,76 @@ export default function AttendanceHistoryPage() {
   const [page, setPage] = useState(1);
   const limit = 100;
 
-  const [loading, setLoading] = useState(true);
+  const historyFilterKey = stableFilterKey({
+    month,
+    year,
+    status,
+    page,
+    limit,
+    sort: "DESC",
+  });
+  const cachedHistory =
+    orgId && !Number.isNaN(orgId)
+      ? readOwnAttendanceHistoryCache<AttendanceRow>(orgId, historyFilterKey)
+      : null;
+
+  const [loading, setLoading] = useState(() => !cachedHistory);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [rows, setRows] = useState<AttendanceRow[]>([]);
-  const [meta, setMeta] = useState<{ page: number; limit: number }>({ page: 1, limit });
+  const [rows, setRows] = useState<AttendanceRow[]>(() => cachedHistory?.rows ?? []);
+  const [meta, setMeta] = useState<{ page: number; limit: number }>(
+    () => cachedHistory?.meta ?? { page: 1, limit },
+  );
   const [mobileMainTab, setMobileMainTab] = useState<"log" | "calendar" | "overview">("log");
 
   const monthYear = `${year}-${String(Number(month)).padStart(2, "0")}`;
 
   const loadHistory = useCallback(
-    async (isRefresh = false) => {
+    async (force = false) => {
       if (!orgId || Number.isNaN(orgId)) {
         setError("Invalid organization.");
         setLoading(false);
         setRefreshing(false);
         return;
       }
+
+      const filterKey = stableFilterKey({
+        month,
+        year,
+        status,
+        page,
+        limit,
+        sort: "DESC",
+      });
+      const cached = readOwnAttendanceHistoryCache<AttendanceRow>(orgId, filterKey);
+
+      if (cached && !force) {
+        setRows(cached.rows);
+        setMeta(cached.meta);
+        setError(null);
+        setLoading(false);
+        if (!shouldRefreshOwnAttendanceHistoryCache(orgId, filterKey)) {
+          return;
+        }
+        setRefreshing(true);
+      } else {
+        if (force) {
+          clearOwnAttendanceHistoryCaches(orgId);
+        }
+        if (force) setRefreshing(true);
+        else setLoading(true);
+        setError(null);
+      }
+
       const token = localStorage.getItem("token");
       if (!token) {
         setError("Not signed in.");
         setLoading(false);
         setRefreshing(false);
+        if (!cached) setRows([]);
         return;
       }
-      if (isRefresh) setRefreshing(true);
-      else setLoading(true);
-      setError(null);
+
       try {
         const search = new URLSearchParams({
           month: String(month),
@@ -206,13 +256,18 @@ export default function AttendanceHistoryPage() {
         );
         const data = (await res.json()) as AttendanceApiResponse;
         if (!res.ok) throw new Error(data.message || "Could not load attendance history.");
-        setRows(Array.isArray(data.data) ? data.data : []);
-        setMeta({
+        const nextRows = Array.isArray(data.data) ? data.data : [];
+        const nextMeta = {
           page: data.page ?? page,
           limit: data.limit ?? limit,
-        });
+        };
+        setRows(nextRows);
+        setMeta(nextMeta);
+        writeOwnAttendanceHistoryCache(orgId, filterKey, { rows: nextRows, meta: nextMeta });
       } catch (e) {
-        setRows([]);
+        if (!cached || force) {
+          setRows([]);
+        }
         setError(e instanceof Error ? e.message : "Could not load attendance history.");
       } finally {
         setLoading(false);

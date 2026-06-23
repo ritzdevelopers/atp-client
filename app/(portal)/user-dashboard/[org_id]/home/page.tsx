@@ -513,7 +513,12 @@ function mobileActionSecondaryBtnCls(full = false) {
 }
 
 function SkeletonBlock({ className = "" }: { className?: string }) {
-  return <div className={`skeleton-shimmer rounded-md ${className}`} aria-hidden />;
+  return (
+    <span
+      className={`skeleton-shimmer inline-block rounded-md align-middle ${className}`}
+      aria-hidden
+    />
+  );
 }
 
 function MobileEmployeeHomeSkeleton() {

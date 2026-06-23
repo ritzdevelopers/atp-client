@@ -20,6 +20,13 @@ import {
   resolveStaticExportId,
   STATIC_EXPORT_PLACEHOLDER_ID,
 } from "@/lib/static-export";
+import {
+  clearMyTaskDetailCache,
+  clearMyTasksCaches,
+  readMyTaskDetailCache,
+  shouldRefreshMyTaskDetailCache,
+  writeMyTaskDetailCache,
+} from "@/lib/employeeManagementCache";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
@@ -100,8 +107,11 @@ function MyTaskDetailContent() {
     String(params?.task_id ?? ""),
   );
 
-  const [task, setTask] = useState<TaskDetail | null>(null);
-  const [loading, setLoading] = useState(true);
+  const cachedTask =
+    orgId && taskId ? readMyTaskDetailCache<TaskDetail>(orgId, taskId) : null;
+
+  const [task, setTask] = useState<TaskDetail | null>(() => cachedTask);
+  const [loading, setLoading] = useState(() => !cachedTask);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [showManagerResponse, setShowManagerResponse] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
@@ -124,6 +134,15 @@ function MyTaskDetailContent() {
       setModalOpen(true);
     },
     [],
+  );
+
+  const patchTaskCache = useCallback(
+    (next: TaskDetail) => {
+      if (!orgId || !taskId) return;
+      writeMyTaskDetailCache(orgId, taskId, next);
+      clearMyTasksCaches(orgId);
+    },
+    [orgId, taskId],
   );
 
   const updateTaskStatus = useCallback(
@@ -169,43 +188,63 @@ function MyTaskDetailContent() {
     [orgId, taskId, showModal],
   );
 
-  const loadTask = useCallback(async () => {
-    const userId =
-      typeof window !== "undefined" ? localStorage.getItem("user_id") ?? "" : "";
-    if (!orgId || !taskId || !userId) {
-      setLoading(false);
-      return null;
-    }
-    setLoading(true);
-
-    try {
-      const qs = new URLSearchParams({
-        org_id: orgId,
-        employee_id: userId,
-      });
-      const res = await fetch(
-        `${API_URL}/api/task-management/get-my-task-information/${taskId}?${qs}`,
-        { method: "GET", headers: authHeaders() },
-      );
-      const result = await res.json();
-      if (!res.ok) {
-        throw new Error(result.message || "Failed to load task");
+  const loadTask = useCallback(
+    async (force = false) => {
+      const userId =
+        typeof window !== "undefined" ? localStorage.getItem("user_id") ?? "" : "";
+      if (!orgId || !taskId || !userId) {
+        setLoading(false);
+        return null;
       }
-      const data = result.data as TaskDetail;
-      setTask(data);
-      return data;
-    } catch (err) {
-      showModal(
-        "error",
-        "Could not load task",
-        err instanceof Error ? err.message : "Unknown error",
-        () => router.push(`/user-dashboard/${orgId}/tasks-management`),
-      );
-      return null;
-    } finally {
-      setLoading(false);
-    }
-  }, [orgId, taskId, showModal, router]);
+
+      const cached = readMyTaskDetailCache<TaskDetail>(orgId, taskId);
+      if (cached && !force) {
+        setTask(cached);
+        setLoading(false);
+        if (!shouldRefreshMyTaskDetailCache(orgId, taskId)) {
+          return cached;
+        }
+      } else {
+        if (force) {
+          clearMyTaskDetailCache(orgId, taskId);
+        }
+        if (!cached) setLoading(true);
+      }
+
+      try {
+        const qs = new URLSearchParams({
+          org_id: orgId,
+          employee_id: userId,
+        });
+        const res = await fetch(
+          `${API_URL}/api/task-management/get-my-task-information/${taskId}?${qs}`,
+          { method: "GET", headers: authHeaders() },
+        );
+        const result = await res.json();
+        if (!res.ok) {
+          throw new Error(result.message || "Failed to load task");
+        }
+        const data = result.data as TaskDetail;
+        setTask(data);
+        writeMyTaskDetailCache(orgId, taskId, data);
+        return data;
+      } catch (err) {
+        if (!cached || force) {
+          setTask(null);
+        }
+        showModal(
+          "error",
+          "Could not load task",
+          err instanceof Error ? err.message : "Unknown error",
+          () => router.push(`/user-dashboard/${orgId}/tasks-management`),
+        );
+        return null;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [orgId, taskId, showModal, router],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -218,9 +257,12 @@ function MyTaskDetailContent() {
       if (cancelled || !ack || ack.unchanged) return;
 
       if (ack.task_status) {
-        setTask((prev) =>
-          prev ? { ...prev, task_status: ack.task_status! } : prev,
-        );
+        setTask((prev) => {
+          if (!prev) return prev;
+          const next = { ...prev, task_status: ack.task_status! };
+          patchTaskCache(next);
+          return next;
+        });
       }
     }
 
@@ -228,7 +270,7 @@ function MyTaskDetailContent() {
     return () => {
       cancelled = true;
     };
-  }, [loadTask, updateTaskStatus]);
+  }, [loadTask, updateTaskStatus, patchTaskCache]);
 
   const awaitingManagerReview =
     task?.task_status === "completed" && task?.complete_status === "pending";
@@ -247,18 +289,19 @@ function MyTaskDetailContent() {
   const handleStatusClick = async (status: "in-progress" | "completed") => {
     const result = await updateTaskStatus(status);
     if (result?.task_status) {
-      setTask((prev) =>
-        prev
-          ? {
-              ...prev,
-              task_status: result.task_status!,
-              employee_completed_at:
-                result.task_status === "completed"
-                  ? new Date().toISOString()
-                  : prev.employee_completed_at,
-            }
-          : prev,
-      );
+      setTask((prev) => {
+        if (!prev) return prev;
+        const next = {
+          ...prev,
+          task_status: result.task_status!,
+          employee_completed_at:
+            result.task_status === "completed"
+              ? new Date().toISOString()
+              : prev.employee_completed_at,
+        };
+        patchTaskCache(next);
+        return next;
+      });
     }
   };
 
