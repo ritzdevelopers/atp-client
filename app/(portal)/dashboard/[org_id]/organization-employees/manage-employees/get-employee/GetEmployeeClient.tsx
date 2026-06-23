@@ -719,6 +719,7 @@ function ProfileHeroCard({
   phone,
   quickActions,
   onQuickAction,
+  fullAttendanceHref,
 }: {
   name: string;
   role: string;
@@ -734,6 +735,7 @@ function ProfileHeroCard({
   phone: string;
   quickActions: HeroQuickAction[];
   onQuickAction: (id: string) => void;
+  fullAttendanceHref?: string;
 }) {
   return (
     <article className="card-fade-in relative overflow-hidden rounded-[24px] border border-white/60 bg-white/80 shadow-[0_10px_40px_rgba(15,23,42,0.08)] backdrop-blur-xl">
@@ -822,6 +824,16 @@ function ProfileHeroCard({
                 onClick={() => onQuickAction(action.id)}
               />
             ))}
+            {fullAttendanceHref ? (
+              <Link
+                href={fullAttendanceHref}
+                className="inline-flex items-center gap-2 rounded-xl border border-[#CEEAD6] bg-[#E6F4EA] px-3.5 py-2 text-[13px] font-semibold text-[#0F9D58] shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#D4EDDA] hover:shadow-md active:scale-95"
+              >
+                <CalendarCheck className="h-4 w-4" aria-hidden />
+                Full attendance
+                <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+              </Link>
+            ) : null}
           </div>
         </div>
 
@@ -1124,6 +1136,10 @@ function EmployeeInsightsPanel({
   );
 }
 
+function getEmployeeAttendanceHref(orgId: string, employeeUserId: string): string {
+  return `/dashboard/${orgId}/attendance-management/manage-attendance/0?employee_id=${encodeURIComponent(employeeUserId)}`;
+}
+
 function AttendanceHistoryTable({
   rows,
   loading,
@@ -1134,6 +1150,7 @@ function AttendanceHistoryTable({
   onYearChange,
   onRefresh,
   refreshing,
+  fullAttendanceHref,
 }: {
   rows: AttendanceHistoryRow[];
   loading: boolean;
@@ -1144,6 +1161,7 @@ function AttendanceHistoryTable({
   onYearChange: (year: number) => void;
   onRefresh: () => void;
   refreshing: boolean;
+  fullAttendanceHref?: string;
 }) {
   const attendanceRows = useMemo(
     () => rows.filter((row) => Boolean(row.attendance_date || row.attendance_history)),
@@ -1215,6 +1233,15 @@ function AttendanceHistoryTable({
           >
             <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
           </button>
+          {fullAttendanceHref ? (
+            <Link
+              href={fullAttendanceHref}
+              className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-[#CEEAD6] bg-[#E6F4EA] px-3 text-[13px] font-semibold text-[#0F9D58] transition hover:bg-[#D4EDDA]"
+            >
+              Full history
+              <ArrowRight className="h-4 w-4" aria-hidden />
+            </Link>
+          ) : null}
         </div>
       </div>
 
@@ -4658,6 +4685,11 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
 
+  const fullAttendanceHref = useMemo(() => {
+    if (!orgId || !userId) return "";
+    return getEmployeeAttendanceHref(orgId, userId);
+  }, [orgId, userId]);
+
   const quickActions: HeroQuickAction[] = useMemo(
     () => [
       { id: "section-personal", icon: <User className="h-4 w-4" />, label: "Profile" },
@@ -4720,6 +4752,7 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
       onYearChange={setAttendanceYear}
       onRefresh={() => void loadAttendance(true)}
       refreshing={attendanceRefreshing}
+      fullAttendanceHref={fullAttendanceHref || undefined}
     />
   );
 
@@ -5420,6 +5453,7 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
         phone={asText(info?.user_phone)}
         quickActions={quickActions}
         onQuickAction={scrollToSection}
+        fullAttendanceHref={fullAttendanceHref || undefined}
       />
 
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">

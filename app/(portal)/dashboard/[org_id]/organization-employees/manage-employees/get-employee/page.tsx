@@ -22,7 +22,7 @@ function GetEmployeePageContent() {
 }
 
 export default function GetEmployeePage() {
-  return (
+  return ( 
     <Suspense
       fallback={
         <div className="flex flex-col items-center justify-center gap-3 py-24 text-[#6B7280]">

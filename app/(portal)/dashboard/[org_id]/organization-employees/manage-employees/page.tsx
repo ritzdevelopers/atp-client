@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { useParams } from "next/navigation";
-import {
-  Star,
+import { useParams, usePathname, useRouter } from "next/navigation";
+import { 
   Eye,
   MessageCircle,
+  CalendarCheck,
   MoreHorizontal,
   Users,
   AtSign,
@@ -44,6 +44,7 @@ import {
   shouldRefreshManageOrgUsersCache,
   writeManageOrgUsersCache,
 } from "@/lib/employeeManagementCache";
+import { getSyncConnectionBase } from "@/lib/syncConnectionPaths";
 
 type EmployeeTier = "employees" | "management" | "inactive" | "exit_process";
 type RosterTier = "employees" | "management";
@@ -63,8 +64,6 @@ type EmployeeCard = {
   hasExitProcess: boolean;
   exitActionLabel: string | null;
   exitStatusLabel: string | null;
-  avatarSrc: string;
-  avatarSeed: string;
   profileImageUrl: string | null;
 };
 
@@ -79,19 +78,41 @@ const ACCENT = "#008CD3";
 const ACCENT_SOFT = "#E8F4FB";
 const PASSWORD_MIN = 8;
 
-function avatarUrl(seed: string) {
-  return `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(seed)}`;
-}
-
 function profileImageUrlFromRow(userImage: unknown): string | null {
   const image = String(userImage ?? "").trim();
   return image || null;
 }
 
-function resolveAvatarSrc(userImage: unknown, seed: string) {
-  const image = profileImageUrlFromRow(userImage);
-  if (image) return image;
-  return avatarUrl(seed);
+function initialsFromName(name: string | null | undefined): string {
+  if (name == null || !String(name).trim()) return "?";
+  const parts = String(name).trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0]![0]}${parts[parts.length - 1]![0]}`.toUpperCase();
+  }
+  if (parts.length === 1 && parts[0]!.length >= 2) {
+    return parts[0]!.slice(0, 2).toUpperCase();
+  }
+  return parts[0]?.[0]?.toUpperCase() ?? "?";
+}
+
+const AVATAR_FILL_COLORS = [
+  "bg-[#E8F4FB] text-[#008CD3]",
+  "bg-[#E6F4EA] text-[#0F9D58]",
+  "bg-[#FEF3E6] text-[#E8710A]",
+  "bg-[#F3E8FD] text-[#7B1FA2]",
+  "bg-[#FCE8E6] text-[#D93025]",
+];
+
+function avatarColorClass(seed: string): string {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i += 1) {
+    hash = seed.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return AVATAR_FILL_COLORS[Math.abs(hash) % AVATAR_FILL_COLORS.length]!;
+}
+
+function getEmployeeAttendanceHref(orgId: string, employeeUserId: string): string {
+  return `/dashboard/${orgId}/attendance-management/manage-attendance/0?employee_id=${encodeURIComponent(employeeUserId)}`;
 }
 
 const mobileLabelCls =
@@ -163,51 +184,82 @@ function ProfilePhotoZoomModal({
 function EmployeeAvatar({
   emp,
   size = "md",
+  shape = "rounded",
   onZoom,
 }: {
   emp: EmployeeCard;
-  size?: "md" | "lg";
+  size?: "md" | "lg" | "xl";
+  shape?: "rounded" | "circle";
   onZoom: (imageUrl: string, name: string) => void;
 }) {
-  const box = size === "lg" ? "h-14 w-14" : "h-11 w-11";
+  const [imageFailed, setImageFailed] = useState(false);
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [emp.profileImageUrl, emp.id]);
+
+  const box =
+    size === "xl" ? "h-[4.5rem] w-[4.5rem]" : size === "lg" ? "h-14 w-14" : "h-11 w-11";
+  const rounded = shape === "circle" || size === "xl" ? "rounded-full" : "rounded-md";
+  const border = size === "xl" ? "border-2" : "border";
+  const textSize =
+    size === "xl" ? "text-lg" : size === "lg" ? "text-sm" : "text-xs";
   const dot =
-    size === "lg" ? "h-3 w-3 border-2" : "h-2.5 w-2.5 border-[1.5px]";
-  const img = (
+    size === "lg" || size === "xl"
+      ? "h-3 w-3 border-2"
+      : "h-2.5 w-2.5 border-[1.5px]";
+  const showImage = Boolean(emp.profileImageUrl) && !imageFailed;
+  const initials = initialsFromName(emp.name);
+  const colorCls = avatarColorClass(emp.name || emp.id);
+
+  const statusDot = (
+    <span
+      className={`absolute bottom-0 right-0 rounded-full border-white ${dot} ${
+        emp.status === "in" ? "bg-[#0F9D58]" : "bg-[#D93025]"
+      }`}
+      aria-hidden
+    />
+  );
+
+  const shell = `relative ${box} shrink-0 overflow-hidden ${rounded} ${border} border-[#E4E7EC] bg-[#F9FAFB]`;
+
+  const avatarContent = showImage ? (
     <>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={emp.avatarSrc}
+        src={emp.profileImageUrl!}
         alt=""
         className="h-full w-full object-cover object-top"
-        onError={(e) => {
-          e.currentTarget.src = avatarUrl(emp.avatarSeed);
-        }}
+        onError={() => setImageFailed(true)}
       />
+      {statusDot}
+    </>
+  ) : (
+    <>
       <span
-        className={`absolute bottom-0 right-0 rounded-full border-white ${dot} ${
-          emp.status === "in" ? "bg-[#0F9D58]" : "bg-[#D93025]"
-        }`}
+        className={`flex h-full w-full items-center justify-center font-semibold ${textSize} ${colorCls}`}
         aria-hidden
-      />
+      >
+        {initials}
+      </span>
+      {statusDot}
     </>
   );
 
-  const shell = `relative ${box} shrink-0 overflow-hidden rounded-md border border-[#E4E7EC] bg-[#F9FAFB]`;
-
-  if (emp.profileImageUrl) {
+  if (showImage && emp.profileImageUrl) {
     return (
       <button
         type="button"
         onClick={() => onZoom(emp.profileImageUrl!, emp.name)}
-        className={`${shell} transition active:opacity-90`}
+        className={`${shell} transition active:opacity-90${size === "xl" ? " hover:ring-2 hover:ring-[#008CD3]/25" : ""}`}
         aria-label={`View ${emp.name} profile photo`}
       >
-        {img}
+        {avatarContent}
       </button>
     );
   }
 
-  return <div className={shell}>{img}</div>;
+  return <div className={shell}>{avatarContent}</div>;
 }
 
 function MobileEmployeeMenuSheet({
@@ -435,7 +487,6 @@ function formatExitStatusLabel(status: string | undefined | null): string | null
 function mapApiUserToCard(row: OrgUserRow): EmployeeCard {
   const id = row.id != null ? String(row.id) : "";
   const email = String(row.user_email ?? "");
-  const avatarSeed = email || id || "user";
   const roleRaw = row.role_name ?? row.user_role_name;
   const roleLabel = formatRoleLabel(roleRaw);
   const isActive = isOrgMemberActive(row.is_active);
@@ -464,8 +515,6 @@ function mapApiUserToCard(row: OrgUserRow): EmployeeCard {
     hasExitProcess,
     exitActionLabel,
     exitStatusLabel,
-    avatarSrc: resolveAvatarSrc((row as { user_image?: unknown }).user_image, avatarSeed),
-    avatarSeed,
     profileImageUrl: profileImageUrlFromRow((row as { user_image?: unknown }).user_image),
   };
 }
@@ -550,8 +599,52 @@ function normalizeBool(value: unknown): boolean {
   );
 }
 
+function ContactEmailTag({ email }: { email: string }) {
+  if (!email || email === "—") {
+    return (
+      <span className="inline-flex max-w-full items-center gap-1 rounded-md border border-[#E4E7EC] bg-[#F5F7FA] px-2 py-0.5 text-[11px] text-[#9CA3AF]">
+        <AtSign className="h-3 w-3 shrink-0" aria-hidden />
+        —
+      </span>
+    );
+  }
+  return (
+    <a
+      href={`mailto:${email}`}
+      className="inline-flex max-w-full items-center gap-1 rounded-md border border-[#C5E4F3] bg-[#E8F4FB] px-2 py-0.5 text-[11px] font-medium text-[#0070AA] transition hover:border-[#008CD3]/40 hover:bg-[#D6EDF9]"
+    >
+      <AtSign className="h-3 w-3 shrink-0" aria-hidden />
+      <span className="truncate">{email}</span>
+    </a>
+  );
+}
+
+function ContactPhoneTag({ phone }: { phone: string }) {
+  const digits = phone.replace(/[^\d+]/g, "");
+  const callable = phone && phone !== "—" && digits.length >= 6;
+  if (!callable) {
+    return (
+      <span className="inline-flex max-w-full items-center gap-1 rounded-md border border-[#E4E7EC] bg-[#F5F7FA] px-2 py-0.5 text-[11px] text-[#9CA3AF]">
+        <Phone className="h-3 w-3 shrink-0" aria-hidden />
+        {phone || "—"}
+      </span>
+    );
+  }
+  return (
+    <a
+      href={`tel:${digits}`}
+      className="inline-flex max-w-full items-center gap-1 rounded-md border border-[#CEEAD6] bg-[#E6F4EA] px-2 py-0.5 text-[11px] font-medium text-[#0F9D58] transition hover:border-[#0F9D58]/30 hover:bg-[#D4EDDA]"
+    >
+      <Phone className="h-3 w-3 shrink-0" aria-hidden />
+      <span className="truncate">{phone}</span>
+    </a>
+  );
+}
+
 export default function ManageEmployeesPage() {
   const params = useParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const ctx = useManagementDashboardContext();
   const orgIdParam = params?.org_id;
   const organizationIdNum =
@@ -742,6 +835,26 @@ export default function ManageEmployeesPage() {
         e.memberSince.toLowerCase().includes(q),
     );
   }, [baseList, search]);
+
+  const rosterStats = useMemo(() => {
+    const activeCount = allCards.filter((e) => e.isActive).length;
+    const inactiveCount = allCards.filter((e) => !e.isActive).length;
+    return { activeCount, inactiveCount };
+  }, [allCards]);
+
+  const navigateToSyncConnection = useCallback(
+    (employeeUserId?: string) => {
+      const orgId = String(orgIdParam ?? "");
+      if (!orgId) return;
+      const base = getSyncConnectionBase(pathname, orgId);
+      router.push(
+        employeeUserId
+          ? `${base}?user_id=${encodeURIComponent(employeeUserId)}`
+          : base,
+      );
+    },
+    [orgIdParam, pathname, router],
+  );
 
   const activeFilterLabel = search.trim() || null;
 
@@ -1050,6 +1163,16 @@ export default function ManageEmployeesPage() {
               member{filtered.length === 1 ? "" : "s"}
               {filtered.some((e) => e.profileImageUrl) ? " · tap photo to enlarge" : ""}
             </p>
+            {!listLoading && allCards.length > 0 ? (
+              <>
+                <span className="inline-flex rounded-full bg-[#E6F4EA] px-2 py-0.5 text-[10px] font-semibold text-[#0F9D58]">
+                  {rosterStats.activeCount} active
+                </span>
+                <span className="inline-flex rounded-full bg-[#FCE8E6] px-2 py-0.5 text-[10px] font-semibold text-[#D93025]">
+                  {rosterStats.inactiveCount} inactive
+                </span>
+              </>
+            ) : null}
             {activeFilterLabel ? (
               <span className="inline-flex items-center gap-1 rounded-full bg-[#E8F4FB] px-2 py-0.5 text-[10px] font-medium text-[#008CD3]">
                 {activeFilterLabel}
@@ -1068,15 +1191,37 @@ export default function ManageEmployeesPage() {
 
         {/* Desktop: page intro + tabs */}
         <div className="hidden lg:block">
-          <div className="mb-3 flex items-start gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#E8F4FB] text-[#008CD3]">
-              <Users className="h-5 w-5" aria-hidden />
-            </span>
-            <div>
-              <h1 className="text-[18px] font-semibold text-[#1F2937]">Team members</h1>
-              <p className="text-[13px] text-[#6B7280]">{tabSubtitle}</p>
+          <header className="mb-4 overflow-hidden rounded-2xl border border-[#E4E7EC] bg-gradient-to-br from-[#0C123A] via-[#151e59] to-[#008CD3] p-6 text-white shadow-sm">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 backdrop-blur-sm">
+                  <Users className="h-5 w-5" aria-hidden />
+                </span>
+                <div>
+                  <h1 className="text-xl font-semibold tracking-tight">Team members</h1>
+                  <p className="mt-1 text-sm text-white/80">{tabSubtitle}</p>
+                </div>
+              </div>
+              {!listLoading && !listError ? (
+                <div className="flex flex-wrap gap-2">
+                  <div className="rounded-lg bg-white/10 px-3 py-2 text-center backdrop-blur-sm">
+                    <p className="text-lg font-semibold leading-none text-[#A8E6CF]">
+                      {rosterStats.activeCount}
+                    </p>
+                    <p className="mt-1 text-[10px] uppercase tracking-wide text-white/70">Active</p>
+                  </div>
+                  <div className="rounded-lg bg-white/10 px-3 py-2 text-center backdrop-blur-sm">
+                    <p className="text-lg font-semibold leading-none text-[#FECACA]">
+                      {rosterStats.inactiveCount}
+                    </p>
+                    <p className="mt-1 text-[10px] uppercase tracking-wide text-white/70">
+                      Inactive
+                    </p>
+                  </div>
+                </div>
+              ) : null}
             </div>
-          </div>
+          </header>
           <div className="flex gap-6 border-b border-[#E4E7EC]">
             {tabOptions.map((t) => (
               <button
@@ -1185,7 +1330,7 @@ export default function ManageEmployeesPage() {
                 return (
                   <article
                     key={listKey}
-                    className={`rounded-lg border border-[#E4E7EC] bg-white shadow-sm transition-shadow active:scale-[0.995] lg:overflow-visible lg:hover:border-[#008CD3]/20${menuOpen ? " lg:relative lg:z-[100]" : ""}`}
+                    className={`rounded-lg border border-[#E4E7EC] bg-white shadow-sm transition-shadow active:scale-[0.995] lg:overflow-visible lg:hover:border-[#008CD3]/20 lg:hover:shadow-md${menuOpen ? " lg:relative lg:z-[100]" : ""}`}
                   >
                     {/* Mobile & tablet: Zoho-style list card */}
                     <div className="relative flex gap-2.5 p-2.5 lg:hidden">
@@ -1208,19 +1353,20 @@ export default function ManageEmployeesPage() {
                             >
                               <Eye className="h-3.5 w-3.5" />
                             </Link>
+                            <Link
+                              href={getEmployeeAttendanceHref(String(orgIdParam ?? ""), emp.id)}
+                              className="rounded-md p-1.5 text-[#0F9D58] active:bg-[#E6F4EA]"
+                              aria-label={`View ${emp.name} full attendance history`}
+                            >
+                              <CalendarCheck className="h-3.5 w-3.5" />
+                            </Link>
                             <button
                               type="button"
-                              onClick={() => toggleFavorite(emp.id)}
-                              className="rounded-md p-1.5 text-[#9CA3AF] active:bg-[#F5F7FA]"
-                              aria-label={fav ? "Remove favorite" : "Add favorite"}
+                              onClick={() => navigateToSyncConnection(emp.id)}
+                              className="rounded-md p-1.5 text-[#008CD3] active:bg-[#E8F4FB]"
+                              aria-label={`Message ${emp.name}`}
                             >
-                              <Star
-                                className="h-3.5 w-3.5"
-                                style={{
-                                  color: fav ? "#E8710A" : undefined,
-                                  fill: fav ? "#E8710A" : "none",
-                                }}
-                              />
+                              <MessageCircle className="h-3.5 w-3.5" />
                             </button>
                             <div className="relative" data-employee-menu>
                               <button
@@ -1254,25 +1400,14 @@ export default function ManageEmployeesPage() {
                         {(isInactiveTab || isExitProcessTab) && exitDetailLine ? (
                           <p className={`mt-1 ${mobileCaptionCls}`}>{exitDetailLine}</p>
                         ) : null}
-                        <div className="mt-1.5 space-y-0.5">
-                          {emp.email ? (
-                            <a
-                              href={`mailto:${emp.email}`}
-                              className="flex items-center gap-1 truncate text-[11px] text-[#008CD3]"
-                            >
-                              <AtSign className="h-3 w-3 shrink-0 text-[#9CA3AF]" aria-hidden />
-                              {emp.email}
-                            </a>
-                          ) : null}
-                          <p className={`flex items-center gap-1 ${mobileCaptionCls}`}>
-                            <Phone className="h-3 w-3 shrink-0" aria-hidden />
-                            {emp.phone}
-                          </p>
-                          <p className={`flex items-center gap-1 ${mobileCaptionCls}`}>
-                            <CalendarDays className="h-3 w-3 shrink-0" aria-hidden />
-                            Since {emp.memberSince}
-                          </p>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                          <ContactEmailTag email={emp.email} />
+                          <ContactPhoneTag phone={emp.phone} />
                         </div>
+                        <p className={`mt-1 flex items-center gap-1 ${mobileCaptionCls}`}>
+                          <CalendarDays className="h-3 w-3 shrink-0" aria-hidden />
+                          Since {emp.memberSince}
+                        </p>
                       </div>
                     </div>
 
@@ -1288,24 +1423,18 @@ export default function ManageEmployeesPage() {
                           >
                             <Eye className="h-3.5 w-3.5" aria-hidden />
                           </Link>
-                          <button
-                            type="button"
-                            onClick={() => toggleFavorite(emp.id)}
-                            className="rounded-md p-1.5 text-[#9CA3AF] transition hover:bg-[#F5F7FA]"
-                            aria-label={fav ? "Remove favorite" : "Add favorite"}
+                          <Link
+                            href={getEmployeeAttendanceHref(String(orgIdParam ?? ""), emp.id)}
+                            className="rounded-md p-1.5 text-[#0F9D58] transition hover:bg-[#E6F4EA]"
+                            aria-label={`View ${emp.name} full attendance history`}
                           >
-                            <Star
-                              className="h-3.5 w-3.5"
-                              style={{
-                                color: fav ? "#E8710A" : undefined,
-                                fill: fav ? "#E8710A" : "none",
-                              }}
-                            />
-                          </button>
+                            <CalendarCheck className="h-3.5 w-3.5" aria-hidden />
+                          </Link>
                           <button
                             type="button"
-                            className="rounded-md p-1.5 text-[#6B7280] transition hover:bg-[#F5F7FA]"
-                            aria-label="Message"
+                            onClick={() => navigateToSyncConnection(emp.id)}
+                            className="rounded-md p-1.5 text-[#008CD3] transition hover:bg-[#E8F4FB]"
+                            aria-label={`Message ${emp.name}`}
                           >
                             <MessageCircle className="h-3.5 w-3.5" aria-hidden />
                           </button>
@@ -1326,40 +1455,12 @@ export default function ManageEmployeesPage() {
                       </div>
 
                       <div className="mt-2 flex flex-col items-center">
-                        {emp.profileImageUrl ? (
-                          <button
-                            type="button"
-                            onClick={() => openPhotoZoom(emp.profileImageUrl!, emp.name)}
-                            className="relative h-[4.5rem] w-[4.5rem] overflow-hidden rounded-full border-2 border-[#E4E7EC] bg-[#F9FAFB] transition hover:ring-2 hover:ring-[#008CD3]/25"
-                            aria-label={`View ${emp.name} profile photo`}
-                          >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={emp.avatarSrc}
-                              alt=""
-                              width={72}
-                              height={72}
-                              className="h-full w-full object-cover object-top"
-                              onError={(e) => {
-                                e.currentTarget.src = avatarUrl(emp.avatarSeed);
-                              }}
-                            />
-                          </button>
-                        ) : (
-                          <div className="relative h-[4.5rem] w-[4.5rem] overflow-hidden rounded-full border-2 border-[#E4E7EC] bg-[#F9FAFB]">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={emp.avatarSrc}
-                              alt=""
-                              width={72}
-                              height={72}
-                              className="h-full w-full object-cover object-top"
-                              onError={(e) => {
-                                e.currentTarget.src = avatarUrl(emp.avatarSeed);
-                              }}
-                            />
-                          </div>
-                        )}
+                        <EmployeeAvatar
+                          emp={emp}
+                          size="xl"
+                          shape="circle"
+                          onZoom={openPhotoZoom}
+                        />
                         <div className="mt-2 flex w-full items-start justify-center gap-2 px-1">
                           <p className="text-center text-[12px] text-[#6B7280]">
                             {emp.empCode} –{" "}
@@ -1406,22 +1507,9 @@ export default function ManageEmployeesPage() {
                           <span className="font-medium text-[#374151]">{emp.memberSince}</span>
                         </span>
                       </div>
-                      <div className="flex items-center gap-1.5 text-[12px]">
-                        <AtSign className="h-3.5 w-3.5 shrink-0 text-[#9CA3AF]" aria-hidden />
-                        {emp.email ? (
-                          <a
-                            href={`mailto:${emp.email}`}
-                            className="truncate text-[#008CD3] hover:underline"
-                          >
-                            {emp.email}
-                          </a>
-                        ) : (
-                          <span className="text-[#9CA3AF]">—</span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1.5 text-[12px] text-[#6B7280]">
-                        <Phone className="h-3.5 w-3.5 shrink-0 text-[#9CA3AF]" aria-hidden />
-                        <span className="truncate">{emp.phone}</span>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <ContactEmailTag email={emp.email} />
+                        <ContactPhoneTag phone={emp.phone} />
                       </div>
                     </div>
                     </div>
