@@ -93,6 +93,14 @@ export function readOrganizationFeatureSnapshot(
   }
 }
 
+const FEATURE_SNAPSHOT_STALE_MS = 5 * 60 * 1000;
+
+export function shouldRefreshOrganizationFeatureSnapshot(orgId: string): boolean {
+  const snapshot = readOrganizationFeatureSnapshot(orgId);
+  if (!snapshot?.groups?.length) return true;
+  return Date.now() - snapshot.updatedAt >= FEATURE_SNAPSHOT_STALE_MS;
+}
+
 function encodeCookieValue(snapshot: OrgFeatureAccessSnapshot): string {
   return encodeURIComponent(JSON.stringify(snapshot));
 }

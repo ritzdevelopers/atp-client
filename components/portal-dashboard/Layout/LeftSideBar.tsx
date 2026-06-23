@@ -293,19 +293,8 @@ function LeftSideBar({
         name: "Organization Roles",
         value: "employees-roles-management",
         icon: <MdAdminPanelSettings />,
-        children: [
-          {
-            id: "create-new-role",
-            name: "Create New Role",
-            path: `${base}/organization-roles/create-new-role`,
-          },
-          {
-            id: "manage-roles",
-            name: "Manage Roles",
-            path: `${base}/organization-roles/manage-roles`,
-          },
-        ],
-        path: `${base}/organization-roles/create-new-role`,
+        children: [],
+        path: `${base}/organization-roles/manage-roles`,
         requiredFeatureAny: [
           "employees-roles-management",
           "organization-roles",

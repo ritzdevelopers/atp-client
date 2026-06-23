@@ -37,6 +37,13 @@ import {
   parseAttendanceNaiveLocal,
 } from "@/lib/attendanceDates";
 import { socket } from "@/lib/socket.io";
+import {
+  clearEmployeeDashboardHomeCache,
+  patchEmployeeDashboardHomeCache,
+  readEmployeeDashboardHomeCache,
+  shouldRefreshEmployeeDashboardHomeCache,
+  writeEmployeeDashboardHomeCache,
+} from "@/lib/employeeDashboardHomeCache";
 import OrgLiveUsersPanel from "@/components/portal-dashboard/home/OrgLiveUsersPanel";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
@@ -471,14 +478,21 @@ function HomeOverview({
     (!!normalized(ownerName) &&
       normalized(ownerName) === normalized(user.user_name));
   const showAttendance = roleKey !== "admin";
+  const cachedHome =
+    orgId && !Number.isNaN(orgId) ? readEmployeeDashboardHomeCache(orgId) : null;
 
-  const [attendanceLoading, setAttendanceLoading] = useState(false);
+  const [attendanceLoading, setAttendanceLoading] = useState(() => {
+    if (!showAttendance) return false;
+    return !cachedHome;
+  });
   const [attendanceError, setAttendanceError] = useState<string | null>(null);
   const [attendanceActionError, setAttendanceActionError] = useState<
     string | null
   >(null);
   const [attendanceData, setAttendanceData] =
-    useState<EmployeeDashboardResponse | null>(null);
+    useState<EmployeeDashboardResponse | null>(
+      () => (cachedHome?.data as EmployeeDashboardResponse | undefined) ?? null,
+    );
   const [checkInSubmitting, setCheckInSubmitting] = useState(false);
   const [checkOutSubmitting, setCheckOutSubmitting] = useState(false);
   const [logSubmitting, setLogSubmitting] = useState(false);
@@ -486,61 +500,120 @@ function HomeOverview({
     null,
   );
   const [tick, setTick] = useState(0);
-  const [handoverPendingCount, setHandoverPendingCount] = useState(0);
+  const [handoverPendingCount, setHandoverPendingCount] = useState(
+    () => cachedHome?.handoverPendingCount ?? 0,
+  );
 
   const handoverHref =
     orgId && !Number.isNaN(orgId)
       ? `/dashboard/${encodeURIComponent(String(orgId))}/asset-handover`
       : "#";
 
-  const loadHandoverPendingCount = useCallback(async () => {
-    if (!orgId || Number.isNaN(orgId)) return;
-    const token = localStorage.getItem("token");
-    if (!token) return;
-    try {
-      const result = await fetchHandoverAssignedToMe(token, orgId);
-      setHandoverPendingCount(countPendingHandoverItems(result));
-    } catch {
-      setHandoverPendingCount(0);
-    }
-  }, [orgId]);
-
-  useEffect(() => {
-    void loadHandoverPendingCount();
-  }, [loadHandoverPendingCount]);
-
-  useEffect(() => {
-    async function loadAttendance() {
-      if (!showAttendance || !orgId || Number.isNaN(orgId)) return;
+  const loadHomeOverviewData = useCallback(
+    async (forceRefresh = false) => {
+      if (!orgId || Number.isNaN(orgId)) return;
       const token = localStorage.getItem("token");
       if (!token) return;
-      setAttendanceLoading(true);
+
+      const cached = readEmployeeDashboardHomeCache(orgId);
+      if (cached && !forceRefresh) {
+        if (showAttendance) {
+          setAttendanceData(cached.data as EmployeeDashboardResponse);
+        }
+        setHandoverPendingCount(cached.handoverPendingCount ?? 0);
+        setAttendanceError(null);
+        setAttendanceLoading(false);
+        if (!shouldRefreshEmployeeDashboardHomeCache(orgId)) {
+          return;
+        }
+      } else if (forceRefresh) {
+        clearEmployeeDashboardHomeCache(orgId);
+      }
+
+      if (showAttendance && (!cached || forceRefresh)) {
+        setAttendanceLoading(true);
+      }
       setAttendanceError(null);
+
       try {
         const q = encodeURIComponent(String(orgId));
-        const res = await fetch(
-          `${API_URL}/api/employees/get-employees-full-information?org_id=${q}`,
-          {
-            method: "GET",
-            headers: { Authorization: `Bearer ${token}` },
-          },
-        );
-        const result = (await res.json()) as EmployeeDashboardResponse & {
-          message?: string;
-        };
-        if (!res.ok)
-          throw new Error(result.message || "Could not load attendance");
-        setAttendanceData(result);
+        const [dashboardRes, handoverResult] = await Promise.all([
+          showAttendance
+            ? fetch(
+                `${API_URL}/api/employees/get-employees-full-information?org_id=${q}`,
+                {
+                  method: "GET",
+                  headers: { Authorization: `Bearer ${token}` },
+                },
+              )
+            : Promise.resolve(null),
+          fetchHandoverAssignedToMe(token, orgId).catch(() => null),
+        ]);
+
+        let nextData = cached?.data as EmployeeDashboardResponse | undefined;
+        if (dashboardRes) {
+          const result = (await dashboardRes.json()) as EmployeeDashboardResponse & {
+            message?: string;
+          };
+          if (!dashboardRes.ok) {
+            throw new Error(result.message || "Could not load attendance");
+          }
+          nextData = result;
+          setAttendanceData(result);
+        }
+
+        const nextHandoverCount = handoverResult
+          ? countPendingHandoverItems(handoverResult)
+          : 0;
+        setHandoverPendingCount(nextHandoverCount);
+
+        if (nextData || handoverResult) {
+          writeEmployeeDashboardHomeCache(orgId, {
+            data: nextData ?? cached?.data ?? {},
+            addresses: cached?.addresses ?? [],
+            addressesError: cached?.addressesError ?? null,
+            handoverPendingCount: nextHandoverCount,
+          });
+        }
       } catch (e) {
+        if (!cached || forceRefresh) {
+          if (showAttendance) {
+            setAttendanceData(null);
+          }
+          setHandoverPendingCount(0);
+        }
         setAttendanceError(
           e instanceof Error ? e.message : "Could not load attendance",
         );
       } finally {
         setAttendanceLoading(false);
       }
+    },
+    [orgId, showAttendance],
+  );
+
+  useEffect(() => {
+    void loadHomeOverviewData();
+  }, [loadHomeOverviewData]);
+
+  async function refreshAttendanceData(token: string) {
+    if (!orgId || Number.isNaN(orgId) || !showAttendance) return;
+    const q = encodeURIComponent(String(orgId));
+    const refresh = await fetch(
+      `${API_URL}/api/employees/get-employees-full-information?org_id=${q}`,
+      {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
+    const refreshData = (await refresh.json()) as EmployeeDashboardResponse & {
+      message?: string;
+    };
+    if (refresh.ok) {
+      setAttendanceData(refreshData);
+      patchEmployeeDashboardHomeCache(orgId, { data: refreshData });
     }
-    void loadAttendance();
-  }, [orgId, showAttendance]);
+  }
 
   const todayYmd = getTodayLocalYmd(new Date());
   const historyMap = useMemo(() => {
@@ -615,19 +688,7 @@ function HomeOverview({
       );
       const result = (await res.json()) as { message?: string };
       if (!res.ok) throw new Error(result.message || "Could not mark check-in");
-      const q = encodeURIComponent(String(orgId));
-      const refresh = await fetch(
-        `${API_URL}/api/employees/get-employees-full-information?org_id=${q}`,
-        {
-          method: "GET",
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      );
-      const refreshData =
-        (await refresh.json()) as EmployeeDashboardResponse & {
-          message?: string;
-        };
-      if (refresh.ok) setAttendanceData(refreshData);
+      await refreshAttendanceData(token);
     } catch (e) {
       setAttendanceActionError(
         e instanceof Error ? e.message : "Could not mark check-in.",
@@ -669,19 +730,7 @@ function HomeOverview({
       const result = (await res.json()) as { message?: string };
       if (!res.ok)
         throw new Error(result.message || "Could not mark check-out");
-      const q = encodeURIComponent(String(orgId));
-      const refresh = await fetch(
-        `${API_URL}/api/employees/get-employees-full-information?org_id=${q}`,
-        {
-          method: "GET",
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      );
-      const refreshData =
-        (await refresh.json()) as EmployeeDashboardResponse & {
-          message?: string;
-        };
-      if (refresh.ok) setAttendanceData(refreshData);
+      await refreshAttendanceData(token);
     } catch (e) {
       setAttendanceActionError(
         e instanceof Error ? e.message : "Could not mark check-out.",

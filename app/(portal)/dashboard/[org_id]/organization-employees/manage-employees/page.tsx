@@ -16,7 +16,6 @@ import {
   Loader2,
   AlertCircle,
   CheckCircle2,
-  BadgeDollarSign,
   CalendarDays,
   CalendarClock,
   Pencil,
@@ -40,10 +39,11 @@ import {
   type OrgRoleRow,
 } from "@/services/adminUser";
 import {
-  createEmployeeLeaveBalance,
-  getLeaveTypesForEmployee,
-  type LeaveTypeRow,
-} from "@/services/leaveManagement";
+  clearManageOrgUsersCache,
+  readManageOrgUsersCache,
+  shouldRefreshManageOrgUsersCache,
+  writeManageOrgUsersCache,
+} from "@/lib/employeeManagementCache";
 
 type EmployeeTier = "employees" | "management" | "inactive" | "exit_process";
 type RosterTier = "employees" | "management";
@@ -276,13 +276,11 @@ function EmployeeActionsMenuList({
   emp,
   row,
   isReadOnlyRosterTab,
-  viewerCanAssignLeaves,
   variant,
   onClose,
   onEdit,
   onRole,
   onDocuments,
-  onPaidLeave,
   onScheduleLeave,
   onAssignAssets,
 }: {
@@ -290,13 +288,11 @@ function EmployeeActionsMenuList({
   emp: EmployeeCard;
   row: OrgUserRow;
   isReadOnlyRosterTab: boolean;
-  viewerCanAssignLeaves: boolean;
   variant: "dropdown" | "sheet";
   onClose: () => void;
   onEdit: (row: OrgUserRow) => void;
   onRole: (row: OrgUserRow) => void;
   onDocuments: (row: OrgUserRow) => void;
-  onPaidLeave: (row: OrgUserRow) => void;
   onScheduleLeave: (row: OrgUserRow) => void;
   onAssignAssets: (row: OrgUserRow) => void;
 }) {
@@ -356,18 +352,6 @@ function EmployeeActionsMenuList({
           >
             <FileText className="h-4 w-4 shrink-0 text-[#008CD3]" aria-hidden />
             Add documents
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            className={itemCls}
-            onClick={() => {
-              void onPaidLeave(row);
-              onClose();
-            }}
-          >
-            <BadgeDollarSign className="h-4 w-4 shrink-0 text-[#008CD3]" aria-hidden />
-            Assign paid leaves
           </button>
           <button
             type="button"
@@ -576,9 +560,11 @@ export default function ManageEmployeesPage() {
       : Number(orgIdParam ?? NaN);
 
   const viewerRole = (ctx?.user?.user_role_name ?? "").trim().toLowerCase();
-  const viewerCanAssignLeaves = viewerRole === "admin" || viewerRole === "hr";
 
-  const [userRows, setUserRows] = useState<OrgUserRow[]>([]);
+  const [userRows, setUserRows] = useState<OrgUserRow[]>(() => {
+    const cached = readManageOrgUsersCache(organizationIdNum);
+    return cached ? dedupeOrgUserRows(cached) : [];
+  });
   const [tab, setTab] = useState<EmployeeTier>("employees");
   const [search, setSearch] = useState("");
   const [favorites, setFavorites] = useState<Set<string>>(() => new Set());
@@ -591,7 +577,9 @@ export default function ManageEmployeesPage() {
     setPhotoZoom({ imageUrl, alt });
   }, []);
 
-  const [listLoading, setListLoading] = useState(true);
+  const [listLoading, setListLoading] = useState(
+    () => !readManageOrgUsersCache(organizationIdNum),
+  );
   const [listError, setListError] = useState<string | null>(null);
 
   const [menuUserId, setMenuUserId] = useState<string | null>(null);
@@ -612,15 +600,6 @@ export default function ManageEmployeesPage() {
   const [roleSaving, setRoleSaving] = useState(false);
   const [roleError, setRoleError] = useState<string | null>(null);
 
-  const [paidLeaveRow, setPaidLeaveRow] = useState<OrgUserRow | null>(null);
-  const [paidLeaveTypes, setPaidLeaveTypes] = useState<LeaveTypeRow[]>([]);
-  const [paidLeaveTypesLoading, setPaidLeaveTypesLoading] = useState(false);
-  const [paidLeaveTypeId, setPaidLeaveTypeId] = useState("");
-  const [paidLeaveTotal, setPaidLeaveTotal] = useState("");
-  const [paidLeaveSaving, setPaidLeaveSaving] = useState(false);
-  const [paidLeaveError, setPaidLeaveError] = useState<string | null>(null);
-  const [paidLeaveSuccess, setPaidLeaveSuccess] = useState<string | null>(null);
-
   const [documentsRow, setDocumentsRow] = useState<OrgUserRow | null>(null);
   const [docFiles, setDocFiles] = useState<Partial<Record<EmployeeOnboardingDocumentField, File>>>({});
   const [documentsSaving, setDocumentsSaving] = useState(false);
@@ -635,7 +614,8 @@ export default function ManageEmployeesPage() {
 
   const allCards = useMemo(() => userRows.map(mapApiUserToCard), [userRows]);
 
-  const loadUsers = useCallback(async () => {
+  const loadUsers = useCallback(async (options?: { force?: boolean }) => {
+    const force = options?.force ?? false;
     const token = localStorage.getItem("token");
     if (!token) {
       setListLoading(false);
@@ -643,18 +623,39 @@ export default function ManageEmployeesPage() {
       setUserRows([]);
       return;
     }
+
+    const cached = readManageOrgUsersCache(organizationIdNum);
+    if (cached && !force) {
+      setUserRows(dedupeOrgUserRows(cached));
+      setListError(null);
+      setListLoading(false);
+      if (!shouldRefreshManageOrgUsersCache(organizationIdNum)) {
+        return;
+      }
+    }
+
+    if (force) {
+      clearManageOrgUsersCache(organizationIdNum);
+    }
+
     setListError(null);
-    setListLoading(true);
+    if (!cached || force) {
+      setListLoading(true);
+    }
     try {
       const rows = await getAllOrgUsers(token);
-      setUserRows(dedupeOrgUserRows(rows));
+      const deduped = dedupeOrgUserRows(rows);
+      setUserRows(deduped);
+      writeManageOrgUsersCache(organizationIdNum, deduped);
     } catch (e) {
       setListError(e instanceof Error ? e.message : "Failed to load users");
-      setUserRows([]);
+      if (!cached) {
+        setUserRows([]);
+      }
     } finally {
       setListLoading(false);
     }
-  }, []);
+  }, [organizationIdNum]);
 
   useEffect(() => {
     let cancelled = false;
@@ -774,41 +775,6 @@ export default function ManageEmployeesPage() {
     setRoleSelectId("");
   }
 
-  async function openPaidLeaveModal(row: OrgUserRow) {
-    setPaidLeaveRow(row);
-    setPaidLeaveTypeId("");
-    setPaidLeaveTotal("");
-    setPaidLeaveError(null);
-    setPaidLeaveSuccess(null);
-    setPaidLeaveTypes([]);
-
-    if (Number.isNaN(organizationIdNum)) {
-      setPaidLeaveError("Invalid organization.");
-      return;
-    }
-
-    const token = localStorage.getItem("token");
-    if (!token) {
-      setPaidLeaveError("Not signed in.");
-      return;
-    }
-
-    setPaidLeaveTypesLoading(true);
-    try {
-      const types = await getLeaveTypesForEmployee(token, organizationIdNum);
-      setPaidLeaveTypes(types);
-      if (types.length === 1 && types[0].id != null) {
-        setPaidLeaveTypeId(String(types[0].id));
-      }
-    } catch (err) {
-      setPaidLeaveError(
-        err instanceof Error ? err.message : "Could not load leave types.",
-      );
-    } finally {
-      setPaidLeaveTypesLoading(false);
-    }
-  }
-
   function openScheduleLeaveModal(row: OrgUserRow) {
     setScheduleLeaveRow(row);
     setScheduleLeaveSuccess(null);
@@ -905,7 +871,7 @@ export default function ManageEmployeesPage() {
       });
       setEditRow(null);
       setMenuUserId(null);
-      await loadUsers();
+      await loadUsers({ force: true });
     } catch (err) {
       setEditError(err instanceof Error ? err.message : "Update failed.");
     } finally {
@@ -951,7 +917,7 @@ export default function ManageEmployeesPage() {
       });
       setRoleRow(null);
       setMenuUserId(null);
-      await loadUsers();
+      await loadUsers({ force: true });
     } catch (err) {
       setRoleError(err instanceof Error ? err.message : "Role update failed.");
     } finally {
@@ -959,62 +925,10 @@ export default function ManageEmployeesPage() {
     }
   }
 
-  async function submitPaidLeaves(e: React.FormEvent) {
-    e.preventDefault();
-    if (!paidLeaveRow?.id) return;
-    if (!viewerCanAssignLeaves) {
-      setPaidLeaveError("You do not have permission to assign paid leaves.");
-      return;
-    }
-    if (Number.isNaN(organizationIdNum)) {
-      setPaidLeaveError("Invalid organization.");
-      return;
-    }
-
-    if (!paidLeaveTypeId) {
-      setPaidLeaveError("Select a leave type.");
-      return;
-    }
-
-    const total = Number(paidLeaveTotal);
-    if (!Number.isFinite(total) || total < 0 || !Number.isInteger(total)) {
-      setPaidLeaveError("Enter a valid whole number of leave days (0 or more).");
-      return;
-    }
-
-    const token = localStorage.getItem("token");
-    if (!token) {
-      setPaidLeaveError("Not signed in.");
-      return;
-    }
-
-    setPaidLeaveSaving(true);
-    setPaidLeaveError(null);
-    setPaidLeaveSuccess(null);
-    try {
-      const result = await createEmployeeLeaveBalance(token, {
-        org_id: organizationIdNum,
-        employee_id: paidLeaveRow.id,
-        leave_type_id: paidLeaveTypeId,
-        total_leaves: total,
-      });
-      setPaidLeaveSuccess(
-        result.message || "Employee leave balance assigned successfully.",
-      );
-      await loadUsers();
-    } catch (err) {
-      setPaidLeaveError(
-        err instanceof Error ? err.message : "Could not assign leave balance.",
-      );
-    } finally {
-      setPaidLeaveSaving(false);
-    }
-  }
-
   const tabOptions = [
     { id: "employees" as const, label: "Employees" },
     { id: "management" as const, label: "Management" },
-    { id: "exit_process" as const, label: "Exit process" },
+    // { id: "exit_process" as const, label: "Exit process" },
     { id: "inactive" as const, label: "Inactive" },
   ] as const;
 
@@ -1085,7 +999,7 @@ export default function ManageEmployeesPage() {
               <span>{listError}</span>
               <button
                 type="button"
-                onClick={() => void loadUsers()}
+                onClick={() => void loadUsers({ force: true })}
                 className="rounded-lg border border-[#F5C6C2] bg-white px-2.5 py-1 text-[12px] font-medium text-[#D93025] active:scale-[0.98] hover:bg-[#FCE8E6]"
               >
                 Retry
@@ -1247,13 +1161,11 @@ export default function ManageEmployeesPage() {
                       emp={emp}
                       row={row}
                       isReadOnlyRosterTab={isReadOnlyRosterTab}
-                      viewerCanAssignLeaves={viewerCanAssignLeaves}
                       variant="dropdown"
                       onClose={closeEmployeeMenu}
                       onEdit={openEditModal}
                       onRole={openRoleModal}
                       onDocuments={openDocumentsModal}
-                      onPaidLeave={openPaidLeaveModal}
                       onScheduleLeave={openScheduleLeaveModal}
                       onAssignAssets={openAssignAssetsModal}
                     />
@@ -1732,155 +1644,6 @@ export default function ManageEmployeesPage() {
         </div>
       )}
 
-      {/* Assign paid leaves modal */}
-      {paidLeaveRow && (
-        <div
-          className="fixed inset-0 z-[999999] flex items-center justify-center p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="paid-leaves-title"
-        >
-          <button
-            type="button"
-            className="absolute inset-0 bg-black/50"
-            aria-label="Close"
-            onClick={() => !paidLeaveSaving && setPaidLeaveRow(null)}
-          />
-          <div className={zohoModalShellCls()}>
-            <div className="mb-4 flex items-start justify-between gap-2">
-              <div>
-                <h2 id="paid-leaves-title" className="text-[16px] font-semibold text-[#1F2937]">
-                  Assign paid leaves
-                </h2>
-                <p className="mt-0.5 text-[13px] text-[#6B7280]">
-                  Assign a leave balance to{" "}
-                  <span className="font-semibold text-[#1F2937]">{paidLeaveRow.user_name}</span>.
-                </p>
-              </div>
-              <button
-                type="button"
-                disabled={paidLeaveSaving}
-                onClick={() => setPaidLeaveRow(null)}
-                className="rounded-lg p-1.5 text-[#6B7280] hover:bg-[#F3F4F6]"
-                aria-label="Close"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="mb-4 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs leading-relaxed text-sky-900">
-              Choose a leave type created under Company Leave Management, then set how many
-              days this employee can use for that type. Each type can only be assigned once per
-              employee.
-            </div>
-
-            {paidLeaveError && (
-              <div className="mb-3 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2 text-[13px] text-[#1F2937]">
-                {paidLeaveError}
-              </div>
-            )}
-            {paidLeaveSuccess && (
-              <div className="mb-3 rounded-lg border border-[#A8DAB5] bg-[#E6F4EA] px-3 py-2 text-[13px] text-[#1F2937]">
-                {paidLeaveSuccess}
-              </div>
-            )}
-
-            {paidLeaveTypesLoading ? (
-              <div className="mb-4 flex items-center gap-2 text-[13px] text-[#6B7280]">
-                <Loader2 className="h-4 w-4 animate-spin text-[#008CD3]" aria-hidden />
-                Loading leave types…
-              </div>
-            ) : null}
-
-            {!paidLeaveTypesLoading && paidLeaveTypes.length === 0 && !paidLeaveError ? (
-              <div className="mb-4 rounded-lg border border-dashed border-[#E4E7EC] bg-[#F9FAFB] px-3 py-4 text-center text-[13px] text-[#6B7280]">
-                <CalendarDays className="mx-auto mb-2 h-7 w-7 text-[#9CA3AF]" aria-hidden />
-                <p>No leave types defined yet.</p>
-                <Link
-                  href={`/dashboard/${orgIdParam ?? ""}/organization-leave/manage-leave-types`}
-                  className="mt-2 inline-block font-medium text-[#008CD3] underline-offset-2 hover:underline"
-                  onClick={() => setPaidLeaveRow(null)}
-                >
-                  Manage leave types
-                </Link>
-              </div>
-            ) : null}
-
-            <form onSubmit={submitPaidLeaves} className="space-y-4">
-              <div>
-                <label htmlFor="paid-leave-type" className={labelCls()}>
-                  Leave type <span className="text-red-500">*</span>
-                </label>
-                <select
-                  id="paid-leave-type"
-                  className={inputCls()}
-                  value={paidLeaveTypeId}
-                  onChange={(e) => setPaidLeaveTypeId(e.target.value)}
-                  required
-                  disabled={
-                    paidLeaveSaving || paidLeaveTypesLoading || paidLeaveTypes.length === 0
-                  }
-                >
-                  <option value="">Select leave type</option>
-                  {paidLeaveTypes.map((lt) => (
-                    <option key={String(lt.id)} value={String(lt.id)}>
-                      {lt.leave_type_name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label htmlFor="paid-leave-total" className={labelCls()}>
-                  Total leave days <span className="text-red-500">*</span>
-                </label>
-                <input
-                  id="paid-leave-total"
-                  type="number"
-                  min="0"
-                  step="1"
-                  className={inputCls()}
-                  value={paidLeaveTotal}
-                  onChange={(e) => setPaidLeaveTotal(e.target.value)}
-                  placeholder="Example: 12"
-                  required
-                  disabled={
-                    paidLeaveSaving || paidLeaveTypesLoading || paidLeaveTypes.length === 0
-                  }
-                />
-                <p className="mt-1 text-[12px] text-[#6B7280]">
-                  Number of days allocated for the selected leave type (remaining starts equal to
-                  total).
-                </p>
-              </div>
-
-              <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">
-                <button
-                  type="button"
-                  disabled={paidLeaveSaving}
-                  onClick={() => setPaidLeaveRow(null)}
-                  className={zohoSecondaryBtnCls()}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={
-                    paidLeaveSaving ||
-                    paidLeaveTypesLoading ||
-                    paidLeaveTypes.length === 0
-                  }
-                  className={zohoPrimaryBtnCls()}
-                >
-                  {paidLeaveSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                  Assign leave balance
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
       {/* Add documents modal */}
       {documentsRow && (
         <div
@@ -2012,13 +1775,11 @@ export default function ManageEmployeesPage() {
             emp={activeMenuContext.emp}
             row={activeMenuContext.row}
             isReadOnlyRosterTab={activeMenuContext.isReadOnlyRosterTab}
-            viewerCanAssignLeaves={viewerCanAssignLeaves}
             variant="sheet"
             onClose={closeEmployeeMenu}
             onEdit={openEditModal}
             onRole={openRoleModal}
             onDocuments={openDocumentsModal}
-            onPaidLeave={openPaidLeaveModal}
             onScheduleLeave={openScheduleLeaveModal}
             onAssignAssets={openAssignAssetsModal}
           />

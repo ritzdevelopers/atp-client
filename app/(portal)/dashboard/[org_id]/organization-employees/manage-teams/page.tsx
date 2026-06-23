@@ -19,7 +19,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { getAllOrgUsers, type OrgUserRow } from "@/services/adminUser";
+import { getAllOrgUsers, dedupeOrgUserRows, type OrgUserRow } from "@/services/adminUser";
 import {
   addMemberToOrgTeam,
   fetchAllOrgTeams,
@@ -27,6 +27,15 @@ import {
   updateOrgTeam,
   type OrgTeamRow,
 } from "@/services/orgTeams";
+import {
+  clearManageTeamsPageCaches,
+  readManageOrgTeamsCache,
+  readManageOrgUsersCache,
+  shouldRefreshManageOrgTeamsCache,
+  shouldRefreshManageOrgUsersCache,
+  writeManageOrgTeamsCache,
+  writeManageOrgUsersCache,
+} from "@/lib/employeeManagementCache";
 
 type ModalKind = null | "add" | "remove" | "admin" | "update";
 
@@ -120,10 +129,14 @@ function modalShell(
 export default function ManageTeamsPage() {
   const params = useParams();
   const orgId = String(params?.org_id ?? "");
+  const cachedTeams = orgId ? readManageOrgTeamsCache(orgId) : null;
+  const cachedUsers = orgId ? readManageOrgUsersCache(orgId) : null;
 
-  const [teams, setTeams] = useState<OrgTeamRow[]>([]);
-  const [orgUsers, setOrgUsers] = useState<OrgUserRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [teams, setTeams] = useState<OrgTeamRow[]>(() => cachedTeams ?? []);
+  const [orgUsers, setOrgUsers] = useState<OrgUserRow[]>(() =>
+    cachedUsers ? dedupeOrgUserRows(cachedUsers) : [],
+  );
+  const [loading, setLoading] = useState(() => !cachedTeams && !cachedUsers);
   const [busy, setBusy] = useState(false);
   const [banner, setBanner] = useState<{
     type: "ok" | "err";
@@ -143,9 +156,41 @@ export default function ManageTeamsPage() {
     null,
   );
 
-  const loadAll = useCallback(async () => {
-    setLoading(true);
+  const loadAll = useCallback(async (options?: { force?: boolean }) => {
+    const force = options?.force ?? false;
+    if (!orgId) {
+      setLoading(false);
+      setBanner({ type: "err", text: "Invalid organization." });
+      return;
+    }
+
+    const cachedTeamRows = readManageOrgTeamsCache(orgId);
+    const cachedUserRows = readManageOrgUsersCache(orgId);
+
+    if (!force && (cachedTeamRows || cachedUserRows)) {
+      if (cachedTeamRows) setTeams(cachedTeamRows);
+      if (cachedUserRows) setOrgUsers(dedupeOrgUserRows(cachedUserRows));
+      setBanner(null);
+      setLoading(false);
+
+      const teamsFresh =
+        cachedTeamRows && !shouldRefreshManageOrgTeamsCache(orgId);
+      const usersFresh =
+        cachedUserRows && !shouldRefreshManageOrgUsersCache(orgId);
+      if (teamsFresh && usersFresh) {
+        return;
+      }
+    }
+
+    if (force) {
+      clearManageTeamsPageCaches(orgId);
+    }
+
+    if (!cachedTeamRows && !cachedUserRows) {
+      setLoading(true);
+    }
     setBanner(null);
+
     try {
       const token = localStorage.getItem("token");
       if (!token) {
@@ -156,18 +201,26 @@ export default function ManageTeamsPage() {
         fetchAllOrgTeams(token),
         getAllOrgUsers(token),
       ]);
+      const dedupedUsers = dedupeOrgUserRows(usersRows);
       setTeams(t);
-      setOrgUsers(usersRows);
+      setOrgUsers(dedupedUsers);
+      writeManageOrgTeamsCache(orgId, t);
+      writeManageOrgUsersCache(orgId, dedupedUsers);
     } catch (e) {
       setBanner({
         type: "err",
         text: e instanceof Error ? e.message : "Failed to load teams.",
       });
-      setTeams([]);
+      if (!cachedTeamRows) {
+        setTeams([]);
+      }
+      if (!cachedUserRows) {
+        setOrgUsers([]);
+      }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [orgId]);
 
   useEffect(() => {
     void loadAll();
@@ -253,7 +306,7 @@ export default function ManageTeamsPage() {
     setBanner(null);
     try {
       await action();
-      await loadAll();
+      await loadAll({ force: true });
       closeModal();
       setBanner({ type: "ok", text: "Saved." });
     } catch (e) {
@@ -283,7 +336,7 @@ export default function ManageTeamsPage() {
           </div>
           <button
             type="button"
-            onClick={() => void loadAll()}
+            onClick={() => void loadAll({ force: true })}
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white transition active:bg-white/10"
             aria-label="Refresh teams"
           >
@@ -331,7 +384,7 @@ export default function ManageTeamsPage() {
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={() => void loadAll()}
+                onClick={() => void loadAll({ force: true })}
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
               >
                 <RefreshCw
