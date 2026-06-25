@@ -36,7 +36,6 @@ import {
   localYmdFromAttendanceValue,
   parseAttendanceNaiveLocal,
 } from "@/lib/attendanceDates";
-import { socket } from "@/lib/socket.io";
 import {
   clearEmployeeDashboardHomeCache,
   patchEmployeeDashboardHomeCache,
@@ -45,6 +44,8 @@ import {
   writeEmployeeDashboardHomeCache,
 } from "@/lib/employeeDashboardHomeCache";
 import OrgLiveUsersPanel from "@/components/portal-dashboard/home/OrgLiveUsersPanel";
+import BiometricLiveAttendanceFeed from "@/components/portal-dashboard/home/BiometricLiveAttendanceFeed";
+import { useDeviceLiveAttendance } from "@/hooks/useDeviceLiveAttendance";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
@@ -616,6 +617,9 @@ function HomeOverview({
   }
 
   const todayYmd = getTodayLocalYmd(new Date());
+  const { attendance: deviceAttendance } = useDeviceLiveAttendance(
+    orgId ? String(orgId) : undefined,
+  );
   const historyMap = useMemo(() => {
     const map = new Map<string, AttendanceHistoryRow>();
     for (const row of attendanceData?.attendance_history ?? []) {
@@ -625,9 +629,28 @@ function HomeOverview({
     return map;
   }, [attendanceData?.attendance_history]);
   const todayRecord = historyMap.get(todayYmd);
-  const hasCheckedInToday = Boolean(todayRecord?.check_in);
-  const hasCheckedOutToday = Boolean(todayRecord?.check_out);
-  const checkInInstant = parseAttendanceNaiveLocal(todayRecord?.check_in);
+  const effectiveTodayRecord = useMemo(() => {
+    if (!deviceAttendance?.check_in) return todayRecord;
+    return {
+      ...todayRecord,
+      attendance_date: deviceAttendance.attendance_date ?? todayYmd,
+      check_in: deviceAttendance.check_in,
+      check_out: deviceAttendance.check_out ?? todayRecord?.check_out ?? null,
+      attendance_status: todayRecord?.attendance_status ?? "present",
+    };
+  }, [deviceAttendance, todayRecord, todayYmd]);
+  const hasCheckedInToday = Boolean(effectiveTodayRecord?.check_in);
+  const hasCheckedOutToday = Boolean(effectiveTodayRecord?.check_out);
+  const latestMachinePunch = deviceAttendance?.latest_punch_at ?? null;
+  const machinePunchCount = deviceAttendance?.punch_count ?? 0;
+  const showLatestMachinePunch = Boolean(
+    hasCheckedInToday &&
+      !hasCheckedOutToday &&
+      machinePunchCount > 1 &&
+      latestMachinePunch &&
+      latestMachinePunch !== effectiveTodayRecord?.check_out,
+  );
+  const checkInInstant = parseAttendanceNaiveLocal(effectiveTodayRecord?.check_in);
   const checkInValid =
     checkInInstant && !Number.isNaN(checkInInstant.getTime());
   const showLiveTimer = Boolean(
@@ -650,7 +673,7 @@ function HomeOverview({
       : 0;
   const workingHoursDisplay = showLiveTimer
     ? formatElapsedDuration(liveElapsedMs)
-    : formatWorkingTimeDisplay(todayRecord?.working_time);
+    : formatWorkingTimeDisplay(effectiveTodayRecord?.working_time);
   const attendanceEmployee =
     attendanceData?.employee ?? attendanceData?.employees;
   const lateAfter = attendanceEmployee?.mark_attendance_late_after
@@ -792,19 +815,19 @@ function HomeOverview({
           ? "border-2 border-[#C99237] bg-white text-[#0C123A]"
           : "bg-slate-200 text-[#0C123A]";
 
-  const statusLabel = todayRecord?.attendance_status
-    ? String(todayRecord.attendance_status).replace(/_/g, " ")
+  const statusLabel = effectiveTodayRecord?.attendance_status
+    ? String(effectiveTodayRecord.attendance_status).replace(/_/g, " ")
     : "No status";
-  const statusTone = String(todayRecord?.attendance_status || "")
+  const statusTone = String(effectiveTodayRecord?.attendance_status || "")
     .toLowerCase()
     .includes("late")
     ? "bg-orange-500/20 text-orange-100"
-    : String(todayRecord?.attendance_status || "")
+    : String(effectiveTodayRecord?.attendance_status || "")
           .toLowerCase()
           .includes("full_day")
       ? "bg-emerald-500/20 text-emerald-100"
       : "bg-white/10 text-slate-200";
-  const dayVisual = getAttendanceDayVisual(todayRecord?.attendance_status);
+  const dayVisual = getAttendanceDayVisual(effectiveTodayRecord?.attendance_status);
 
   return (
     <div className="flex flex-col gap-2 lg:gap-3">
@@ -827,10 +850,13 @@ function HomeOverview({
       <div className="lg:hidden">
         <OrgLiveUsersPanel orgId={String(orgId)} className="w-full" />
       </div>
+      <div className="lg:hidden">
+        <BiometricLiveAttendanceFeed orgId={String(orgId)} className="w-full" />
+      </div>
 
       {/* Desktop hero — compact, no dead space */}
       <div
-        className={`${dashCardCls} hidden lg:grid lg:h-[280px] lg:grid-cols-[1fr_300px]`}
+        className={`${dashCardCls} hidden lg:grid lg:h-[280px] lg:grid-cols-[1fr_300px_300px]`}
         style={{ animationDelay: "0ms" }}
       >
         <div className={dashCardAccent} />
@@ -846,6 +872,7 @@ function HomeOverview({
           </span>
         </div>
         <OrgLiveUsersPanel orgId={String(orgId)} embedded className="h-full" />
+        <BiometricLiveAttendanceFeed orgId={String(orgId)} embedded className="h-full" />
       </div>
 
       {/* Bento grid */}
@@ -865,12 +892,20 @@ function HomeOverview({
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                   <div className="rounded-md bg-[#F8FAFC] px-2 py-1.5">
                     <p className={mobileLabelCls}>Check in</p>
-                    <p className="mt-0.5 text-xs font-semibold text-[#0C123A]">{hasCheckedInToday ? formatAttendanceLogLocal(todayRecord?.check_in) : "—"}</p>
+                    <p className="mt-0.5 text-xs font-semibold text-[#0C123A]">{hasCheckedInToday ? formatAttendanceLogLocal(effectiveTodayRecord?.check_in) : "—"}</p>
                   </div>
                   <div className="rounded-md bg-[#F8FAFC] px-2 py-1.5">
                     <p className={mobileLabelCls}>Check out</p>
-                    <p className="mt-0.5 text-xs font-semibold text-[#0C123A]">{hasCheckedOutToday ? formatAttendanceTimeLocal(todayRecord?.check_out) : "—"}</p>
+                    <p className="mt-0.5 text-xs font-semibold text-[#0C123A]">{hasCheckedOutToday ? formatAttendanceTimeLocal(effectiveTodayRecord?.check_out) : "—"}</p>
                   </div>
+                  {showLatestMachinePunch ? (
+                    <div className="rounded-md bg-[#F8FAFC] px-2 py-1.5">
+                      <p className={mobileLabelCls}>Last machine punch</p>
+                      <p className="mt-0.5 text-xs font-semibold text-[#008CD3]">
+                        {formatAttendanceTimeLocal(latestMachinePunch)}
+                      </p>
+                    </div>
+                  ) : null}
                   <div className="rounded-md bg-[#F8FAFC] px-2 py-1.5">
                     <p className={mobileLabelCls}>Late after</p>
                     <p className="mt-0.5 text-xs font-semibold text-[#E8710A]">{lateAfter}</p>

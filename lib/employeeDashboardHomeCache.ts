@@ -33,10 +33,9 @@ export type EmployeeDashboardHomeCacheEntry = {
   cachedAt: number;
 };
 
-const CACHE_KEY_PREFIX = "employee_dashboard_home_v1";
-
 /** Reuse cached data on route changes; background refresh after this age. */
 const STALE_MS = 5 * 60 * 1000;
+const CACHE_KEY_PREFIX = "employee_dashboard_home_v2";
 
 const memoryCache = new Map<string, EmployeeDashboardHomeCacheEntry>();
 
