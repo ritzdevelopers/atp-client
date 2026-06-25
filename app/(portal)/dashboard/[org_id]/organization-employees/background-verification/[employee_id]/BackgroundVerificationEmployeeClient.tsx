@@ -35,6 +35,13 @@ import {
   type BackgroundVerificationPersonRole,
   type BackgroundVerificationStatus,
 } from "@/services/adminUser";
+import {
+  clearBgvEmployeeDetailCache,
+  clearBgvListCaches,
+  readBgvEmployeeDetailCache,
+  shouldRefreshBgvEmployeeDetailCache,
+  writeBgvEmployeeDetailCache,
+} from "@/lib/employeeManagementCache";
 
 const STATUS_OPTIONS: { value: BackgroundVerificationStatus; label: string }[] = [
   { value: "pending", label: "Pending" },
@@ -247,9 +254,13 @@ function BackgroundVerificationEmployeeClientContent() {
     (String(params?.employee_id ?? "") !== "0"
       ? String(params?.employee_id ?? "")
       : "");
+  const cachedReferences =
+    orgId && employeeId ? readBgvEmployeeDetailCache(orgId, employeeId) : null;
 
-  const [references, setReferences] = useState<BackgroundVerificationDetailRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [references, setReferences] = useState<BackgroundVerificationDetailRow[]>(
+    () => cachedReferences ?? [],
+  );
+  const [loading, setLoading] = useState(() => !cachedReferences);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ type: "ok" | "err"; text: string } | null>(null);
@@ -280,9 +291,24 @@ function BackgroundVerificationEmployeeClientContent() {
         return;
       }
 
-      if (isManualRefresh) setRefreshing(true);
-      else setLoading(true);
-      setError(null);
+      const cached = readBgvEmployeeDetailCache(orgId, employeeId);
+
+      if (cached && !isManualRefresh) {
+        setReferences(cached);
+        setError(null);
+        setLoading(false);
+        if (!shouldRefreshBgvEmployeeDetailCache(orgId, employeeId)) {
+          return;
+        }
+        setRefreshing(true);
+      } else {
+        if (isManualRefresh) {
+          clearBgvEmployeeDetailCache(orgId, employeeId);
+        }
+        if (isManualRefresh) setRefreshing(true);
+        else setLoading(true);
+        setError(null);
+      }
 
       try {
         const listResult = await getAllUserBackgroundVerifications(token, orgId, {
@@ -294,6 +320,7 @@ function BackgroundVerificationEmployeeClientContent() {
 
         if (listRefs.length === 0) {
           setReferences([]);
+          writeBgvEmployeeDetailCache(orgId, employeeId, []);
           return;
         }
 
@@ -308,13 +335,15 @@ function BackgroundVerificationEmployeeClientContent() {
           ),
         );
 
-        setReferences(
-          detailResults.filter(
-            (row): row is BackgroundVerificationDetailRow => row != null,
-          ),
+        const nextReferences = detailResults.filter(
+          (row): row is BackgroundVerificationDetailRow => row != null,
         );
+        setReferences(nextReferences);
+        writeBgvEmployeeDetailCache(orgId, employeeId, nextReferences);
       } catch (e) {
-        setReferences([]);
+        if (!cached || isManualRefresh) {
+          setReferences([]);
+        }
         setError(
           e instanceof Error ? e.message : "Could not load verification details.",
         );
@@ -410,7 +439,9 @@ function BackgroundVerificationEmployeeClientContent() {
       setNotice({ type: "ok", text: "Reference updated successfully." });
       setEditModal(null);
       setEditForm(null);
-      await loadDetails(false);
+      clearBgvEmployeeDetailCache(orgId, employeeId);
+      clearBgvListCaches(orgId);
+      await loadDetails(true);
     } catch (e) {
       setEditError(
         e instanceof Error ? e.message : "Could not update reference.",
@@ -441,7 +472,9 @@ function BackgroundVerificationEmployeeClientContent() {
       });
       setNotice({ type: "ok", text: "Verification status updated." });
       setVerifyModal(null);
-      await loadDetails(false);
+      clearBgvEmployeeDetailCache(orgId, employeeId);
+      clearBgvListCaches(orgId);
+      await loadDetails(true);
     } catch (e) {
       setNotice({
         type: "err",

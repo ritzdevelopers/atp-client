@@ -109,6 +109,24 @@ import {
   type EmployeeExitProcessRow,
 } from "@/services/employeeExit";
 import { useManagementDashboardContext } from "@/components/portal-dashboard/Layout/ManagementDashboardContext";
+import {
+  clearEmployeeBgvCache,
+  clearEmployeeDetailCache,
+  clearEmployeeShiftsCache,
+  clearManageOrgUsersCache,
+  readEmployeeAttendanceCache,
+  readEmployeeBgvCache,
+  readEmployeeDetailCache,
+  readEmployeeShiftsCache,
+  shouldRefreshEmployeeAttendanceCache,
+  shouldRefreshEmployeeBgvCache,
+  shouldRefreshEmployeeDetailCache,
+  shouldRefreshEmployeeShiftsCache,
+  writeEmployeeAttendanceCache,
+  writeEmployeeBgvCache,
+  writeEmployeeDetailCache,
+  writeEmployeeShiftsCache,
+} from "@/lib/employeeManagementCache";
 
 // ── Design system tokens ──────────────────────────────────────────────
 const GLASS_CARD =
@@ -701,6 +719,7 @@ function ProfileHeroCard({
   phone,
   quickActions,
   onQuickAction,
+  fullAttendanceHref,
 }: {
   name: string;
   role: string;
@@ -716,6 +735,7 @@ function ProfileHeroCard({
   phone: string;
   quickActions: HeroQuickAction[];
   onQuickAction: (id: string) => void;
+  fullAttendanceHref?: string;
 }) {
   return (
     <article className="card-fade-in relative overflow-hidden rounded-[24px] border border-white/60 bg-white/80 shadow-[0_10px_40px_rgba(15,23,42,0.08)] backdrop-blur-xl">
@@ -804,6 +824,16 @@ function ProfileHeroCard({
                 onClick={() => onQuickAction(action.id)}
               />
             ))}
+            {fullAttendanceHref ? (
+              <Link
+                href={fullAttendanceHref}
+                className="inline-flex items-center gap-2 rounded-xl border border-[#CEEAD6] bg-[#E6F4EA] px-3.5 py-2 text-[13px] font-semibold text-[#0F9D58] shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#D4EDDA] hover:shadow-md active:scale-95"
+              >
+                <CalendarCheck className="h-4 w-4" aria-hidden />
+                Full attendance
+                <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+              </Link>
+            ) : null}
           </div>
         </div>
 
@@ -1106,6 +1136,10 @@ function EmployeeInsightsPanel({
   );
 }
 
+function getEmployeeAttendanceHref(orgId: string, employeeUserId: string): string {
+  return `/dashboard/${orgId}/attendance-management/manage-attendance/0?employee_id=${encodeURIComponent(employeeUserId)}`;
+}
+
 function AttendanceHistoryTable({
   rows,
   loading,
@@ -1116,6 +1150,7 @@ function AttendanceHistoryTable({
   onYearChange,
   onRefresh,
   refreshing,
+  fullAttendanceHref,
 }: {
   rows: AttendanceHistoryRow[];
   loading: boolean;
@@ -1126,6 +1161,7 @@ function AttendanceHistoryTable({
   onYearChange: (year: number) => void;
   onRefresh: () => void;
   refreshing: boolean;
+  fullAttendanceHref?: string;
 }) {
   const attendanceRows = useMemo(
     () => rows.filter((row) => Boolean(row.attendance_date || row.attendance_history)),
@@ -1197,6 +1233,15 @@ function AttendanceHistoryTable({
           >
             <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
           </button>
+          {fullAttendanceHref ? (
+            <Link
+              href={fullAttendanceHref}
+              className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-[#CEEAD6] bg-[#E6F4EA] px-3 text-[13px] font-semibold text-[#0F9D58] transition hover:bg-[#D4EDDA]"
+            >
+              Full history
+              <ArrowRight className="h-4 w-4" aria-hidden />
+            </Link>
+          ) : null}
         </div>
       </div>
 
@@ -2880,9 +2925,17 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
   const viewerRole = (ctx?.user?.user_role_name ?? "").trim().toLowerCase();
   const viewerCanManageExit = viewerRole === "admin" || viewerRole === "hr";
 
-  const [data, setData] = useState<SingleEmployeeData | null>(null);
-  const [exitRow, setExitRow] = useState<EmployeeExitProcessRow | null>(null);
-  const [loading, setLoading] = useState(true);
+  const cachedEmployeeDetail = readEmployeeDetailCache(orgId, userId);
+  const cachedBgvReferences = readEmployeeBgvCache(orgId, userId);
+  const cachedUserShifts = readEmployeeShiftsCache(orgId, userId);
+
+  const [data, setData] = useState<SingleEmployeeData | null>(
+    () => cachedEmployeeDetail?.data ?? null,
+  );
+  const [exitRow, setExitRow] = useState<EmployeeExitProcessRow | null>(
+    () => cachedEmployeeDetail?.exitRow ?? null,
+  );
+  const [loading, setLoading] = useState(() => !cachedEmployeeDetail);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [completeOpen, setCompleteOpen] = useState(false);
@@ -2947,8 +3000,10 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
   const [assetError, setAssetError] = useState<string | null>(null);
   const [assetSuccess, setAssetSuccess] = useState<string | null>(null);
 
-  const [bgvReferences, setBgvReferences] = useState<BackgroundVerificationReferenceItem[]>([]);
-  const [bgvLoading, setBgvLoading] = useState(false);
+  const [bgvReferences, setBgvReferences] = useState<BackgroundVerificationReferenceItem[]>(
+    () => cachedBgvReferences ?? [],
+  );
+  const [bgvLoading, setBgvLoading] = useState(() => cachedBgvReferences == null);
   const [referenceAddOpen, setReferenceAddOpen] = useState(false);
   const [referenceAddForm, setReferenceAddForm] = useState<ReferenceEditForm>(createEmptyReferenceForm);
   const [referenceViewTarget, setReferenceViewTarget] = useState<BackgroundVerificationDetailRow | null>(
@@ -2976,8 +3031,8 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
   const [ipError, setIpError] = useState<string | null>(null);
   const [ipSuccess, setIpSuccess] = useState<string | null>(null);
 
-  const [userShifts, setUserShifts] = useState<CompanyShiftRow[]>([]);
-  const [shiftsLoading, setShiftsLoading] = useState(false);
+  const [userShifts, setUserShifts] = useState<CompanyShiftRow[]>(() => cachedUserShifts ?? []);
+  const [shiftsLoading, setShiftsLoading] = useState(() => cachedUserShifts == null);
   const [shiftAssignOpen, setShiftAssignOpen] = useState(false);
   const [companyShifts, setCompanyShifts] = useState<CompanyShiftRow[]>([]);
   const [companyShiftsLoading, setCompanyShiftsLoading] = useState(false);
@@ -2998,8 +3053,17 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
   const [attendanceMonth, setAttendanceMonth] = useState(now.getMonth() + 1);
   const [attendanceYear, setAttendanceYear] = useState(now.getFullYear());
   const [selectedCalendarDay, setSelectedCalendarDay] = useState<number | null>(null);
-  const [attendanceRows, setAttendanceRows] = useState<AttendanceHistoryRow[]>([]);
-  const [attendanceLoading, setAttendanceLoading] = useState(false);
+  const cachedAttendance = readEmployeeAttendanceCache(
+    orgId,
+    userId,
+    now.getFullYear(),
+    now.getMonth() + 1,
+    null,
+  );
+  const [attendanceRows, setAttendanceRows] = useState<AttendanceHistoryRow[]>(
+    () => cachedAttendance ?? [],
+  );
+  const [attendanceLoading, setAttendanceLoading] = useState(() => cachedAttendance == null);
   const [attendanceRefreshing, setAttendanceRefreshing] = useState(false);
   const [attendanceError, setAttendanceError] = useState<string | null>(null);
 
@@ -3022,9 +3086,26 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
         return;
       }
 
-      if (isRefresh) setRefreshing(true);
-      else setLoading(true);
-      setError(null);
+      const cached = readEmployeeDetailCache(orgId, userId);
+      if (cached && !isRefresh) {
+        setData(cached.data);
+        setExitRow(cached.exitRow);
+        setError(null);
+        setLoading(false);
+        if (!shouldRefreshEmployeeDetailCache(orgId, userId)) {
+          return;
+        }
+        setRefreshing(true);
+      } else {
+        if (isRefresh) {
+          clearEmployeeDetailCache(orgId, userId);
+          clearManageOrgUsersCache(orgId);
+          setRefreshing(true);
+        } else {
+          setLoading(true);
+        }
+        setError(null);
+      }
 
       try {
         const [result, exitRes] = await Promise.all([
@@ -3037,11 +3118,18 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
             sort_by: "updated_at",
           }).catch(() => ({ data: [] as EmployeeExitProcessRow[] })),
         ]);
+        const nextExitRow = pickRelevantEmployeeExitRow(exitRes.data ?? []);
         setData(result);
-        setExitRow(pickRelevantEmployeeExitRow(exitRes.data ?? []));
+        setExitRow(nextExitRow);
+        writeEmployeeDetailCache(orgId, userId, {
+          data: result,
+          exitRow: nextExitRow,
+        });
       } catch (e) {
-        setData(null);
-        setExitRow(null);
+        if (!cached || isRefresh) {
+          setData(null);
+          setExitRow(null);
+        }
         setError(e instanceof Error ? e.message : "Could not load employee details.");
       } finally {
         setLoading(false);
@@ -3060,9 +3148,34 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
         return;
       }
 
-      if (isRefresh) setAttendanceRefreshing(true);
-      else setAttendanceLoading(true);
-      setAttendanceError(null);
+      const cached = readEmployeeAttendanceCache(
+        orgId,
+        userId,
+        attendanceYear,
+        attendanceMonth,
+        selectedCalendarDay,
+      );
+      if (cached && !isRefresh) {
+        setAttendanceRows(cached);
+        setAttendanceError(null);
+        setAttendanceLoading(false);
+        if (
+          !shouldRefreshEmployeeAttendanceCache(
+            orgId,
+            userId,
+            attendanceYear,
+            attendanceMonth,
+            selectedCalendarDay,
+          )
+        ) {
+          return;
+        }
+        setAttendanceRefreshing(true);
+      } else {
+        if (isRefresh) setAttendanceRefreshing(true);
+        else setAttendanceLoading(true);
+        setAttendanceError(null);
+      }
 
       try {
         const rows = await fetchSingleUserAttendanceHistory(token, orgId, userId, {
@@ -3071,8 +3184,18 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
           date: selectedCalendarDay ?? undefined,
         });
         setAttendanceRows(rows);
+        writeEmployeeAttendanceCache(
+          orgId,
+          userId,
+          attendanceYear,
+          attendanceMonth,
+          selectedCalendarDay,
+          rows,
+        );
       } catch (e) {
-        setAttendanceRows([]);
+        if (!cached || isRefresh) {
+          setAttendanceRows([]);
+        }
         setAttendanceError(
           e instanceof Error ? e.message : "Could not load attendance history.",
         );
@@ -3088,7 +3211,7 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
     void loadEmployee(false);
   }, [loadEmployee]);
 
-  const loadBgvReferences = useCallback(async () => {
+  const loadBgvReferences = useCallback(async (isRefresh = false) => {
     if (!orgId || !userId) {
       setBgvReferences([]);
       return;
@@ -3100,16 +3223,33 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
       return;
     }
 
-    setBgvLoading(true);
+    const cached = readEmployeeBgvCache(orgId, userId);
+    if (cached && !isRefresh) {
+      setBgvReferences(cached);
+      setBgvLoading(false);
+      if (!shouldRefreshEmployeeBgvCache(orgId, userId)) {
+        return;
+      }
+    } else {
+      if (isRefresh) {
+        clearEmployeeBgvCache(orgId, userId);
+      }
+      setBgvLoading(true);
+    }
+
     try {
       const listResult = await getAllUserBackgroundVerifications(token, orgId, {
         employee_id: userId,
         is_ascending: "DESC",
       });
       const group = Array.isArray(listResult.data) ? listResult.data[0] : null;
-      setBgvReferences(group?.references ?? []);
+      const references = group?.references ?? [];
+      setBgvReferences(references);
+      writeEmployeeBgvCache(orgId, userId, references);
     } catch {
-      setBgvReferences([]);
+      if (!cached || isRefresh) {
+        setBgvReferences([]);
+      }
     } finally {
       setBgvLoading(false);
     }
@@ -3119,7 +3259,7 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
     void loadBgvReferences();
   }, [loadBgvReferences]);
 
-  const loadUserShifts = useCallback(async () => {
+  const loadUserShifts = useCallback(async (isRefresh = false) => {
     if (!orgId || !userId) {
       setUserShifts([]);
       return;
@@ -3131,12 +3271,28 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
       return;
     }
 
-    setShiftsLoading(true);
+    const cached = readEmployeeShiftsCache(orgId, userId);
+    if (cached && !isRefresh) {
+      setUserShifts(cached);
+      setShiftsLoading(false);
+      if (!shouldRefreshEmployeeShiftsCache(orgId, userId)) {
+        return;
+      }
+    } else {
+      if (isRefresh) {
+        clearEmployeeShiftsCache(orgId, userId);
+      }
+      setShiftsLoading(true);
+    }
+
     try {
       const shifts = await getUserShifts(token, orgId, userId);
       setUserShifts(shifts);
+      writeEmployeeShiftsCache(orgId, userId, shifts);
     } catch {
-      setUserShifts([]);
+      if (!cached || isRefresh) {
+        setUserShifts([]);
+      }
     } finally {
       setShiftsLoading(false);
     }
@@ -4142,7 +4298,7 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
       setReferenceAddOpen(false);
       setReferenceAddForm(createEmptyReferenceForm());
       setReferenceSuccess("Previous company reference added successfully.");
-      await loadBgvReferences();
+      await loadBgvReferences(true);
     } catch (e) {
       setReferenceError(e instanceof Error ? e.message : "Could not add reference.");
     } finally {
@@ -4177,7 +4333,7 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
       setReferenceEditTarget(null);
       setReferenceEditForm(null);
       setReferenceSuccess("Reference updated successfully.");
-      await loadBgvReferences();
+      await loadBgvReferences(true);
     } catch (e) {
       setReferenceError(e instanceof Error ? e.message : "Could not update reference.");
     } finally {
@@ -4209,7 +4365,7 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
       setReferenceVerifyTarget(null);
       setReferenceVerifyNotes("");
       setReferenceSuccess("Verification status updated successfully.");
-      await loadBgvReferences();
+      await loadBgvReferences(true);
     } catch (e) {
       setReferenceError(e instanceof Error ? e.message : "Could not update verification status.");
     } finally {
@@ -4376,7 +4532,7 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
       setShiftSuccess(
         userShifts.length > 0 ? "Shift updated successfully." : "Shift assigned successfully.",
       );
-      await Promise.all([loadUserShifts(), loadEmployee(true)]);
+      await Promise.all([loadUserShifts(true), loadEmployee(true)]);
     } catch (e) {
       setShiftError(e instanceof Error ? e.message : "Could not assign shift.");
     } finally {
@@ -4403,7 +4559,7 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
       });
       setShiftUnassignTarget(null);
       setShiftSuccess("Shift unassigned successfully.");
-      await Promise.all([loadUserShifts(), loadEmployee(true)]);
+      await Promise.all([loadUserShifts(true), loadEmployee(true)]);
     } catch (e) {
       setShiftError(e instanceof Error ? e.message : "Could not unassign shift.");
     } finally {
@@ -4529,6 +4685,11 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
 
+  const fullAttendanceHref = useMemo(() => {
+    if (!orgId || !userId) return "";
+    return getEmployeeAttendanceHref(orgId, userId);
+  }, [orgId, userId]);
+
   const quickActions: HeroQuickAction[] = useMemo(
     () => [
       { id: "section-personal", icon: <User className="h-4 w-4" />, label: "Profile" },
@@ -4591,6 +4752,7 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
       onYearChange={setAttendanceYear}
       onRefresh={() => void loadAttendance(true)}
       refreshing={attendanceRefreshing}
+      fullAttendanceHref={fullAttendanceHref || undefined}
     />
   );
 
@@ -5291,6 +5453,7 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
         phone={asText(info?.user_phone)}
         quickActions={quickActions}
         onQuickAction={scrollToSection}
+        fullAttendanceHref={fullAttendanceHref || undefined}
       />
 
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
@@ -5404,8 +5567,9 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
               type="button"
               onClick={() => {
                 void loadEmployee(true);
-                void loadBgvReferences();
-                void loadUserShifts();
+                void loadBgvReferences(true);
+                void loadUserShifts(true);
+                void loadAttendance(true);
               }}
               disabled={loading || refreshing}
               className="inline-flex items-center gap-2 rounded-2xl border border-white/70 bg-white/80 px-4 py-2.5 text-[14px] font-semibold text-[#334155] shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:text-[#2563EB] hover:shadow-md disabled:opacity-60"

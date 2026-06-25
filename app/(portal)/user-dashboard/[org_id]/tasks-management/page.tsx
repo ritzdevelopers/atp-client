@@ -20,6 +20,13 @@ import PortalResponseModal, {
   type PortalResponseVariant,
 } from "@/components/portal-dashboard/ui/PortalResponseModal";
 import { buildStaticDetailHref } from "@/lib/static-export";
+import {
+  clearMyTasksCaches,
+  readMyTasksCache,
+  shouldRefreshMyTasksCache,
+  stableFilterKey,
+  writeMyTasksCache,
+} from "@/lib/employeeManagementCache";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
@@ -172,6 +179,18 @@ function StatusBadge({ status }: { status: TaskStatus }) {
   );
 }
 
+function buildApiFilterKey(filters: TaskFilters): string {
+  return stableFilterKey({
+    task_status: filters.task_status,
+    task_priority: filters.task_priority,
+    complete_status: filters.complete_status,
+    start_date: filters.start_date,
+    end_date: filters.end_date,
+    sort_by: filters.sort_by,
+    is_ascending: filters.is_ascending,
+  });
+}
+
 export default function MyTasksPage() {
   const params = useParams();
   const router = useRouter();
@@ -179,8 +198,13 @@ export default function MyTasksPage() {
 
   const [filters, setFilters] = useState<TaskFilters>(defaultFilters);
   const [showFilters, setShowFilters] = useState(true);
-  const [tasks, setTasks] = useState<TaskRow[]>([]);
-  const [loading, setLoading] = useState(true);
+
+  const apiFilterKey = useMemo(() => buildApiFilterKey(filters), [filters]);
+  const cachedTasks = orgId ? readMyTasksCache<TaskRow>(orgId, apiFilterKey) : null;
+
+  const [tasks, setTasks] = useState<TaskRow[]>(() => cachedTasks ?? []);
+  const [loading, setLoading] = useState(() => !cachedTasks);
+  const [refreshing, setRefreshing] = useState(false);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [modalVariant, setModalVariant] = useState<PortalResponseVariant>("error");
@@ -210,33 +234,59 @@ export default function MyTasksPage() {
     return qs.toString();
   }, [orgId, filters]);
 
-  const fetchTasks = useCallback(async () => {
-    if (!orgId) return;
-    setLoading(true);
-    try {
-      const res = await fetch(
-        `${API_URL}/api/task-management/get-my-tasks?${buildQueryString()}`,
-        { method: "GET", headers: authHeaders() },
-      );
-      const result = await res.json();
-      if (!res.ok) {
-        throw new Error(result.message || "Failed to load your tasks");
+  const fetchTasks = useCallback(
+    async (force = false) => {
+      if (!orgId) return;
+
+      const filterKey = buildApiFilterKey(filters);
+      const cached = readMyTasksCache<TaskRow>(orgId, filterKey);
+
+      if (cached && !force) {
+        setTasks(cached);
+        setLoading(false);
+        if (!shouldRefreshMyTasksCache(orgId, filterKey)) {
+          return;
+        }
+        setRefreshing(true);
+      } else {
+        if (force) {
+          clearMyTasksCaches(orgId);
+        }
+        if (force) setRefreshing(true);
+        else setLoading(true);
       }
-      setTasks(Array.isArray(result.data) ? result.data : []);
-    } catch (err) {
-      setTasks([]);
-      showModal(
-        "error",
-        "Could not load tasks",
-        err instanceof Error ? err.message : "Unknown error",
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [orgId, buildQueryString, showModal]);
+
+      try {
+        const res = await fetch(
+          `${API_URL}/api/task-management/get-my-tasks?${buildQueryString()}`,
+          { method: "GET", headers: authHeaders() },
+        );
+        const result = await res.json();
+        if (!res.ok) {
+          throw new Error(result.message || "Failed to load your tasks");
+        }
+        const rows = Array.isArray(result.data) ? result.data : [];
+        setTasks(rows);
+        writeMyTasksCache(orgId, filterKey, rows);
+      } catch (err) {
+        if (!cached || force) {
+          setTasks([]);
+        }
+        showModal(
+          "error",
+          "Could not load tasks",
+          err instanceof Error ? err.message : "Unknown error",
+        );
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [orgId, buildQueryString, filters, showModal],
+  );
 
   useEffect(() => {
-    fetchTasks();
+    void fetchTasks(false);
   }, [fetchTasks]);
 
   const filteredTasks = useMemo(() => {
@@ -285,11 +335,11 @@ export default function MyTasksPage() {
           </div>
           <button
             type="button"
-            onClick={() => fetchTasks()}
-            disabled={loading}
+            onClick={() => void fetchTasks(true)}
+            disabled={loading || refreshing}
             className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-[#E4E7EC] bg-white px-4 py-2.5 text-[13px] font-semibold text-[#1F2937] shadow-sm transition hover:bg-[#F9FAFB] disabled:opacity-60"
           >
-            {loading ? (
+            {loading || refreshing ? (
               <Loader2 className="h-4 w-4 animate-spin text-[#008CD3]" />
             ) : (
               <RefreshCw className="h-4 w-4 text-[#008CD3]" />
@@ -424,12 +474,12 @@ export default function MyTasksPage() {
         </div>
 
         <p className="mb-3 text-[13px] text-[#6B7280]">
-          {loading
+          {loading || refreshing
             ? "Loading…"
             : `${filteredTasks.length} issue${filteredTasks.length === 1 ? "" : "s"}`}
         </p>
 
-        {loading ? (
+        {loading && tasks.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-[#E4E7EC] bg-white py-20">
             <Loader2 className="h-9 w-9 animate-spin text-[#008CD3]" />
           </div>

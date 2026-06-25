@@ -36,6 +36,12 @@ import type {
   TeamAttendanceQueryRow,
   TeamLeaveQueryRow,
 } from "@/services/orgTeams";
+import {
+  clearMyOrgTeamCache,
+  readMyOrgTeamCache,
+  shouldRefreshMyOrgTeamCache,
+  writeMyOrgTeamCache,
+} from "@/lib/employeeManagementCache";
 
 function formatDate(value: string | null | undefined): string {
   if (value == null || value === "") return "—";
@@ -480,11 +486,14 @@ function UserMyTeamPageContent() {
   const orgIdParam = params?.org_id;
   const orgId = Number(orgIdParam);
 
+  const cachedTeam =
+    orgId && !Number.isNaN(orgId) ? readMyOrgTeamCache(orgId, selectedTeamId) : null;
+
   const [token, setToken] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !cachedTeam);
   const [refreshing, setRefreshing] = useState(false);
-  const [team, setTeam] = useState<OrgTeamDetail | null>(null);
-  const [noTeam, setNoTeam] = useState(false);
+  const [team, setTeam] = useState<OrgTeamDetail | null>(() => cachedTeam?.team ?? null);
+  const [noTeam, setNoTeam] = useState(() => cachedTeam?.noTeam ?? false);
   const [teamError, setTeamError] = useState<string | null>(null);
 
   const leaveRows = useMemo(
@@ -533,41 +542,68 @@ function UserMyTeamPageContent() {
   }, []);
 
   const loadData = useCallback(
-    async (isRefresh = false) => {
+    async (force = false) => {
       if (!orgId || Number.isNaN(orgId)) {
         setLoading(false);
+        setRefreshing(false);
         setTeamError("Invalid organization.");
         return;
       }
+
+      const cached = readMyOrgTeamCache(orgId, selectedTeamId);
+      if (cached && !force) {
+        setTeam(cached.team);
+        setNoTeam(cached.noTeam);
+        setTeamError(null);
+        setLoading(false);
+        if (!shouldRefreshMyOrgTeamCache(orgId, selectedTeamId)) {
+          return;
+        }
+        setRefreshing(true);
+      } else {
+        if (force) {
+          clearMyOrgTeamCache(orgId, selectedTeamId);
+        }
+        if (force) setRefreshing(true);
+        else setLoading(true);
+        setTeamError(null);
+      }
+
       const t = localStorage.getItem("token");
       if (!t) {
         setLoading(false);
+        setRefreshing(false);
         setTeamError("Not signed in.");
+        if (!cached) {
+          setTeam(null);
+          setNoTeam(false);
+        }
         return;
       }
       setToken(t);
-      if (isRefresh) setRefreshing(true);
-      else {
-        setLoading(true);
-      }
-      setTeamError(null);
-      setNoTeam(false);
 
       try {
         const data = await fetchMyOrgTeam(t, orgId, selectedTeamId ?? undefined);
         setTeam(data);
+        setNoTeam(false);
+        writeMyOrgTeamCache(orgId, selectedTeamId, { team: data, noTeam: false });
       } catch (e) {
         const err = e as ApiError;
-        setTeam(null);
         if (err.status === 404) {
+          setTeam(null);
           setNoTeam(true);
+          writeMyOrgTeamCache(orgId, selectedTeamId, { team: null, noTeam: true });
         } else {
+          if (!cached || force) {
+            setTeam(null);
+            setNoTeam(false);
+          }
           setTeamError(err.message || "Could not load team.");
         }
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
       }
-
-      setLoading(false);
-      setRefreshing(false);
     },
     [orgId, selectedTeamId],
   );
@@ -672,6 +708,8 @@ function UserMyTeamPageContent() {
       }
       const refreshed = await fetchMyOrgTeam(t, orgId, selectedTeamId ?? undefined);
       setTeam(refreshed);
+      setNoTeam(false);
+      writeMyOrgTeamCache(orgId, selectedTeamId, { team: refreshed, noTeam: false });
     } catch (err) {
       setAttFormError(
         err instanceof Error ? err.message : "Something went wrong.",
@@ -714,6 +752,8 @@ function UserMyTeamPageContent() {
       setReason("");
       const refreshed = await fetchMyOrgTeam(t, orgId, selectedTeamId ?? undefined);
       setTeam(refreshed);
+      setNoTeam(false);
+      writeMyOrgTeamCache(orgId, selectedTeamId, { team: refreshed, noTeam: false });
     } catch (err) {
       setLeaveFormError(
         err instanceof Error ? err.message : "Could not submit leave request.",

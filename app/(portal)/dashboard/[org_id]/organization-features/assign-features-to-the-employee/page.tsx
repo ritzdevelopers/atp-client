@@ -23,9 +23,16 @@ import {
   fetchOrganizationFeatureGroups,
   persistOrganizationFeatureAccess,
   readOrganizationFeatureSnapshot,
+  shouldRefreshOrganizationFeatureSnapshot,
   type OrgFeatureGroup,
   type OrgSubFeature,
 } from "@/lib/orgFeatureAccess";
+import {
+  clearEmployeeFeatureAccessCache,
+  readEmployeeFeatureAccessCache,
+  shouldRefreshEmployeeFeatureAccessCache,
+  writeEmployeeFeatureAccessCache,
+} from "@/lib/employeeManagementCache";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
@@ -44,6 +51,22 @@ type EmployeeOption = {
   employee_name: string;
   employee_profile_image?: string | null;
 };
+
+type EmployeeFeatureAccessRow = EmployeeOption;
+
+function mapEmployeeRows(
+  rows: Array<{
+    employee_id: number | string;
+    employee_name: string;
+    employee_profile_image?: string | null;
+  }>,
+): EmployeeOption[] {
+  return rows.map((r) => ({
+    employee_id: r.employee_id,
+    employee_name: r.employee_name,
+    employee_profile_image: r.employee_profile_image,
+  }));
+}
 
 function authHeaders(): Record<string, string> {
   const token = localStorage.getItem("token");
@@ -81,9 +104,14 @@ export default function AssignFeaturesToEmployeePage() {
   const params = useParams();
   const orgId = String(params?.org_id ?? "");
 
-  const [loadingFeatures, setLoadingFeatures] = useState(true);
+  const featureSnapshot = orgId ? readOrganizationFeatureSnapshot(orgId) : null;
+
+  const [loadingFeatures, setLoadingFeatures] = useState(() => !featureSnapshot?.groups?.length);
+  const [refreshingFeatures, setRefreshingFeatures] = useState(false);
   const [featureError, setFeatureError] = useState<string | null>(null);
-  const [orgFeatures, setOrgFeatures] = useState<OrgFeatureGroup[]>([]);
+  const [orgFeatures, setOrgFeatures] = useState<OrgFeatureGroup[]>(
+    () => featureSnapshot?.groups ?? [],
+  );
   const [featureSearch, setFeatureSearch] = useState("");
 
   const [isAssignmentActive, setIsAssignmentActive] = useState(false);
@@ -129,33 +157,49 @@ export default function AssignFeaturesToEmployeePage() {
     setResponseModal((prev) => ({ ...prev, open: false }));
   }
 
-  const loadOrgFeatures = useCallback(async () => {
-    if (!orgId) return;
-    setLoadingFeatures(true);
-    setFeatureError(null);
+  const loadOrgFeatures = useCallback(
+    async (force = false) => {
+      if (!orgId) return;
 
-    const cached = readOrganizationFeatureSnapshot(orgId);
-    const hadCache = Boolean(cached?.groups?.length);
-    if (hadCache) {
-      setOrgFeatures(cached!.groups);
-    }
+      const cached = readOrganizationFeatureSnapshot(orgId);
+      const hadCache = Boolean(cached?.groups?.length);
 
-    try {
-      const token = localStorage.getItem("token");
-      if (!token) throw new Error("Not signed in.");
-      const groups = await fetchOrganizationFeatureGroups(orgId, token);
-      setOrgFeatures(groups);
-      // Cache feature groups only — keep sidebar-computed allowedPaths intact.
-      persistOrganizationFeatureAccess(orgId, groups, readOrganizationFeatureSnapshot(orgId)?.allowedPaths ?? []);
-    } catch (e) {
-      if (!hadCache) {
-        setFeatureError(e instanceof Error ? e.message : "Could not load features");
-        setOrgFeatures([]);
+      if (hadCache && !force) {
+        setOrgFeatures(cached!.groups);
+        setFeatureError(null);
+        setLoadingFeatures(false);
+        if (!shouldRefreshOrganizationFeatureSnapshot(orgId)) {
+          return;
+        }
+        setRefreshingFeatures(true);
+      } else {
+        if (force) setRefreshingFeatures(true);
+        else setLoadingFeatures(true);
+        setFeatureError(null);
       }
-    } finally {
-      setLoadingFeatures(false);
-    }
-  }, [orgId]);
+
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) throw new Error("Not signed in.");
+        const groups = await fetchOrganizationFeatureGroups(orgId, token);
+        setOrgFeatures(groups);
+        persistOrganizationFeatureAccess(
+          orgId,
+          groups,
+          readOrganizationFeatureSnapshot(orgId)?.allowedPaths ?? [],
+        );
+      } catch (e) {
+        if (!hadCache || force) {
+          setFeatureError(e instanceof Error ? e.message : "Could not load features");
+          setOrgFeatures([]);
+        }
+      } finally {
+        setLoadingFeatures(false);
+        setRefreshingFeatures(false);
+      }
+    },
+    [orgId],
+  );
 
   useEffect(() => {
     void loadOrgFeatures();
@@ -175,38 +219,47 @@ export default function AssignFeaturesToEmployeePage() {
     setFeatureSearch("");
   }
 
-  async function loadEmployees() {
-    setEmployeeLoading(true);
-    setEmployeeError(null);
-    try {
-      const res = await fetch(
-        `${API_URL}/api/organization-features/get-all-employees-with-accessible-features-and-sub-features-info?org_id=${encodeURIComponent(orgId)}`,
-        { method: "GET", headers: authHeaders() },
-      );
-      const data = (await res.json()) as {
-        data?: Array<{
-          employee_id: number | string;
-          employee_name: string;
-          employee_profile_image?: string | null;
-        }>;
-        message?: string;
-      };
-      if (!res.ok) throw new Error(data.message || "Could not load employees");
-      const rows = Array.isArray(data.data) ? data.data : [];
-      setEmployees(
-        rows.map((r) => ({
-          employee_id: r.employee_id,
-          employee_name: r.employee_name,
-          employee_profile_image: r.employee_profile_image,
-        })),
-      );
-    } catch (e) {
-      setEmployeeError(e instanceof Error ? e.message : "Could not load employees");
-      setEmployees([]);
-    } finally {
-      setEmployeeLoading(false);
-    }
-  }
+  const loadEmployees = useCallback(
+    async (force = false) => {
+      if (!orgId) return;
+
+      const cached = readEmployeeFeatureAccessCache<EmployeeFeatureAccessRow>(orgId);
+      if (cached?.length && !force) {
+        setEmployees(mapEmployeeRows(cached));
+        setEmployeeError(null);
+        setEmployeeLoading(false);
+        if (!shouldRefreshEmployeeFeatureAccessCache(orgId)) {
+          return;
+        }
+      } else {
+        setEmployeeLoading(true);
+        setEmployeeError(null);
+      }
+
+      try {
+        const res = await fetch(
+          `${API_URL}/api/organization-features/get-all-employees-with-accessible-features-and-sub-features-info?org_id=${encodeURIComponent(orgId)}`,
+          { method: "GET", headers: authHeaders() },
+        );
+        const data = (await res.json()) as {
+          data?: EmployeeFeatureAccessRow[];
+          message?: string;
+        };
+        if (!res.ok) throw new Error(data.message || "Could not load employees");
+        const rows = Array.isArray(data.data) ? data.data : [];
+        writeEmployeeFeatureAccessCache(orgId, rows);
+        setEmployees(mapEmployeeRows(rows));
+      } catch (e) {
+        if (!cached?.length || force) {
+          setEmployeeError(e instanceof Error ? e.message : "Could not load employees");
+          setEmployees([]);
+        }
+      } finally {
+        setEmployeeLoading(false);
+      }
+    },
+    [orgId],
+  );
 
   async function openAssignmentFlow() {
     setModalEmployeeId(selectedEmployee ? String(selectedEmployee.employee_id) : "");
@@ -487,6 +540,7 @@ export default function AssignFeaturesToEmployeePage() {
       );
       const data = (await res.json()) as { message?: string };
       if (!res.ok) throw new Error(data.message || "Could not assign access");
+      clearEmployeeFeatureAccessCache(orgId);
       showResponse(
         "success",
         "Access assigned",
@@ -607,12 +661,12 @@ export default function AssignFeaturesToEmployeePage() {
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={() => void loadOrgFeatures()}
-                  disabled={loadingFeatures}
+                  onClick={() => void loadOrgFeatures(true)}
+                  disabled={loadingFeatures || refreshingFeatures}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-[#E4E7EC] bg-white px-3 py-2 text-[13px] font-medium text-[#374151] shadow-sm transition hover:bg-[#F9FAFB] disabled:opacity-50"
                 >
                   <RefreshCw
-                    className={`h-4 w-4 ${loadingFeatures ? "animate-spin" : ""}`}
+                    className={`h-4 w-4 ${loadingFeatures || refreshingFeatures ? "animate-spin" : ""}`}
                   />
                   Refresh
                 </button>

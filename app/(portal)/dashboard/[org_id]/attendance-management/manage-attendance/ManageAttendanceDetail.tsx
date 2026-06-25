@@ -2,6 +2,8 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import DailyHoursRechartsChart from "./DailyHoursRechartsChart";
+import MonthlyActivityRechartsChart from "./MonthlyActivityRechartsChart";
 import {
   ChevronLeft,
   RefreshCw,
@@ -11,6 +13,9 @@ import {
   User,
   ClipboardList,
   BarChart3,
+  CalendarDays,
+  Clock,
+  TrendingUp,
 } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
@@ -194,6 +199,244 @@ function dateBlockFromValue(dateValue: string | undefined) {
     day: String(d.getDate()).padStart(2, "0"),
     mon: d.toLocaleDateString(undefined, { month: "short" }).toUpperCase(),
   };
+}
+
+function workingMinutes(value: string | number | undefined): number {
+  const n = Number(value);
+  return Number.isNaN(n) || n < 0 ? 0 : n;
+}
+
+function statusChartColor(status: string | undefined): string {
+  const bucket = normalizeStatus(status);
+  if (bucket === "present") return "#0F9D58";
+  if (bucket === "late") return "#E8710A";
+  if (bucket === "leave") return "#D93025";
+  if (bucket === "half_day") return "#008CD3";
+  if (bucket === "short_leave") return "#F9A825";
+  return "#9CA3AF";
+}
+
+function statusHeatmapClass(status: string | undefined): string {
+  const bucket = normalizeStatus(status);
+  if (bucket === "present") return "bg-[#0F9D58] text-white";
+  if (bucket === "late") return "bg-[#E8710A] text-white";
+  if (bucket === "leave") return "bg-[#D93025] text-white";
+  if (bucket === "half_day") return "bg-[#008CD3] text-white";
+  if (bucket === "short_leave") return "bg-[#F9A825] text-white";
+  return "bg-[#F1F5F9] text-[#9CA3AF]";
+}
+
+function formatMonthYearLabel(year: number, month: number): string {
+  return new Date(year, month - 1, 1).toLocaleDateString(undefined, {
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function buildConicGradient(
+  segments: { count: number; color: string }[],
+  total: number,
+): string {
+  if (total <= 0) return "conic-gradient(#E4E7EC 0% 100%)";
+  let acc = 0;
+  const parts = segments.map((s) => {
+    const pct = (s.count / total) * 100;
+    const start = acc;
+    acc += pct;
+    return `${s.color} ${start}% ${acc}%`;
+  });
+  return `conic-gradient(${parts.join(", ")})`;
+}
+
+type KpiSegment = { key: string; label: string; count: number; color: string };
+
+type KpiStatCardProps = {
+  label: string;
+  value: number;
+  color: string;
+  bg: string;
+  accent: string;
+  share?: number;
+};
+
+function KpiStatCard({ label, value, color, bg, accent, share }: KpiStatCardProps) {
+  return (
+    <div className={`rounded-xl border border-[#E4E7EC] p-4 shadow-sm ${bg}`}>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">{label}</p>
+      <p className={`mt-1 text-2xl font-bold tabular-nums sm:text-3xl ${color}`}>{value}</p>
+      {share != null && share > 0 ? (
+        <div className="mt-2.5">
+          <div className="h-1.5 overflow-hidden rounded-full bg-white/70">
+            <div
+              className="h-full rounded-full transition-all duration-500"
+              style={{ width: `${share}%`, backgroundColor: accent }}
+            />
+          </div>
+          <p className="mt-1 text-[11px] font-medium text-[#6B7280]">{share}% of month</p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function AttendanceDonutChart({
+  segments,
+  total,
+  centerLabel,
+  centerValue,
+  size = 140,
+}: {
+  segments: KpiSegment[];
+  total: number;
+  centerLabel: string;
+  centerValue: string;
+  size?: number;
+}) {
+  const active = segments.filter((s) => s.count > 0);
+  return (
+    <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center sm:gap-6">
+      <div className="relative shrink-0" style={{ width: size, height: size }}>
+        <div
+          className="h-full w-full rounded-full shadow-inner"
+          style={{ background: buildConicGradient(active, total) }}
+          aria-hidden
+        />
+        <div className="absolute inset-[18%] flex flex-col items-center justify-center rounded-full bg-white text-center shadow-sm">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
+            {centerLabel}
+          </p>
+          <p className="text-xl font-bold tabular-nums text-[#1F2937]">{centerValue}</p>
+        </div>
+      </div>
+      <ul className="w-full min-w-0 space-y-2 sm:flex-1">
+        {active.map((seg) => (
+          <li key={seg.key} className="flex items-center justify-between gap-2 text-[13px]">
+            <span className="flex min-w-0 items-center gap-2">
+              <span
+                className="h-2.5 w-2.5 shrink-0 rounded-full"
+                style={{ backgroundColor: seg.color }}
+              />
+              <span className="truncate font-medium text-[#1F2937]">{seg.label}</span>
+            </span>
+            <span className="shrink-0 tabular-nums text-[#6B7280]">
+              {seg.count} ({total > 0 ? Math.round((seg.count / total) * 100) : 0}%)
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function MonthCalendarHeatmap({
+  year,
+  month,
+  cells,
+}: {
+  year: number;
+  month: number;
+  cells: { day: number | null; status?: string }[];
+}) {
+  const weekdays = ["S", "M", "T", "W", "T", "F", "S"];
+  return (
+    <div>
+      <div className="mb-2 grid grid-cols-7 gap-1 text-center text-[10px] font-semibold uppercase text-[#9CA3AF]">
+        {weekdays.map((d, i) => (
+          <span key={`${d}-${i}`}>{d}</span>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-1">
+        {cells.map((cell, i) =>
+          cell.day == null ? (
+            <div key={`empty-${i}`} className="aspect-square" />
+          ) : (
+            <div
+              key={`day-${cell.day}`}
+              title={
+                cell.status
+                  ? `Day ${cell.day}: ${formatStatusLabel(cell.status)}`
+                  : `Day ${cell.day}: no record`
+              }
+              className={`flex aspect-square items-center justify-center rounded-md text-[11px] font-semibold tabular-nums ${
+                cell.status ? statusHeatmapClass(cell.status) : "bg-[#F5F7FA] text-[#CBD5E1]"
+              }`}
+            >
+              {cell.day}
+            </div>
+          ),
+        )}
+      </div>
+      <p className="mt-3 text-[12px] font-medium text-[#1F2937]">
+        {formatMonthYearLabel(year, month)}
+      </p>
+    </div>
+  );
+}
+
+function EnhancedStatusBars({
+  items,
+}: {
+  items: { status: string; count: number; percentage: number }[];
+}) {
+  if (items.length === 0) {
+    return <p className="text-[13px] text-[#6B7280]">No status data for this period.</p>;
+  }
+  return (
+    <div className="space-y-3">
+      {items.map((item) => (
+        <div key={item.status}>
+          <div className="mb-1 flex items-center justify-between gap-2 text-[13px]">
+            <span className="flex min-w-0 items-center gap-2 font-medium text-[#1F2937]">
+              <span
+                className="h-2.5 w-2.5 shrink-0 rounded-full"
+                style={{ backgroundColor: statusChartColor(item.status) }}
+              />
+              <span className="truncate capitalize">{formatStatusLabel(item.status)}</span>
+            </span>
+            <span className="shrink-0 tabular-nums text-[#6B7280]">
+              {item.count} ({item.percentage}%)
+            </span>
+          </div>
+          <div className="h-2.5 overflow-hidden rounded-full bg-[#F5F7FA]">
+            <div
+              className="h-full rounded-full transition-all duration-500"
+              style={{
+                width: `${item.percentage}%`,
+                backgroundColor: statusChartColor(item.status),
+              }}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function StackedMonthBar({ segments, total }: { segments: KpiSegment[]; total: number }) {
+  if (total <= 0) {
+    return (
+      <div className="h-3 overflow-hidden rounded-full bg-[#F5F7FA]">
+        <div className="h-full w-full bg-[#E4E7EC]" />
+      </div>
+    );
+  }
+  return (
+    <div className="flex h-3 overflow-hidden rounded-full bg-[#F5F7FA]">
+      {segments
+        .filter((s) => s.count > 0)
+        .map((seg) => (
+          <div
+            key={seg.key}
+            className="h-full transition-all duration-500"
+            style={{
+              width: `${(seg.count / total) * 100}%`,
+              backgroundColor: seg.color,
+            }}
+            title={`${seg.label}: ${seg.count}`}
+          />
+        ))}
+    </div>
+  );
 }
 
 type MobileLogRowProps = {
@@ -421,9 +664,92 @@ function ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
       .sort((a, b) => a.month.localeCompare(b.month));
   }, [attendanceRows]);
 
-  const maxMonthlyTrend = useMemo(() => {
-    return monthlyTrend.reduce((max, item) => Math.max(max, item.count), 1);
-  }, [monthlyTrend]);
+  const monthAnalytics = useMemo(() => {
+    const appliedMonthKey = `${appliedQuery.year}-${String(appliedQuery.month).padStart(2, "0")}`;
+    const dayMap = new Map<string, { minutes: number; status?: string }>();
+    let totalMinutes = 0;
+
+    for (const row of attendanceRows) {
+      const dateVal = row.attendance_date || row.attendance_history;
+      const rowMonth = toMonthKey(dateVal);
+      if (!rowMonth || rowMonth !== appliedMonthKey || !dateVal) continue;
+      const d = new Date(dateVal);
+      if (Number.isNaN(d.getTime())) continue;
+      const dayKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      const mins = workingMinutes(row.working_time);
+      totalMinutes += mins;
+      dayMap.set(dayKey, { minutes: mins, status: row.attendance_status });
+    }
+
+    const daysInMonth = new Date(appliedQuery.year, appliedQuery.month, 0).getDate();
+    const kpiTotal =
+      monthlyKpi.present +
+      monthlyKpi.late +
+      monthlyKpi.leave +
+      monthlyKpi.halfDay +
+      monthlyKpi.shortLeave;
+    const attendanceRate =
+      kpiTotal > 0
+        ? Math.round(((monthlyKpi.present + monthlyKpi.late) / kpiTotal) * 100)
+        : 0;
+    const onTimeRate =
+      kpiTotal > 0 ? Math.round((monthlyKpi.present / kpiTotal) * 100) : 0;
+
+    const dailyHours = Array.from(dayMap.entries())
+      .map(([key, entry]) => {
+        const day = Number(key.split("-")[2]);
+        return {
+          day,
+          hours: entry.minutes / 60,
+          status: entry.status,
+        };
+      })
+      .sort((a, b) => a.day - b.day);
+
+    const maxDailyHours = dailyHours.reduce((max, p) => Math.max(max, p.hours), 0);
+
+    const firstDow = new Date(appliedQuery.year, appliedQuery.month - 1, 1).getDay();
+    const calendarCells: { day: number | null; status?: string }[] = [];
+    for (let i = 0; i < firstDow; i += 1) calendarCells.push({ day: null });
+    for (let d = 1; d <= daysInMonth; d += 1) {
+      const key = `${appliedQuery.year}-${String(appliedQuery.month).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      calendarCells.push({ day: d, status: dayMap.get(key)?.status });
+    }
+
+    return {
+      totalMinutes,
+      totalHours: totalMinutes / 60,
+      daysWithRecord: dayMap.size,
+      daysInMonth,
+      kpiTotal,
+      attendanceRate,
+      onTimeRate,
+      dailyHours,
+      maxDailyHours,
+      calendarCells,
+      dayMap,
+    };
+  }, [appliedQuery.month, appliedQuery.year, attendanceRows, monthlyKpi]);
+
+  const kpiSegments = useMemo<KpiSegment[]>(
+    () =>
+      [
+        { key: "present", label: "Present", count: monthlyKpi.present, color: "#0F9D58" },
+        { key: "late", label: "Late", count: monthlyKpi.late, color: "#E8710A" },
+        { key: "leave", label: "Leave", count: monthlyKpi.leave, color: "#D93025" },
+        { key: "halfDay", label: "Half day", count: monthlyKpi.halfDay, color: "#008CD3" },
+        {
+          key: "shortLeave",
+          label: "Short leave",
+          count: monthlyKpi.shortLeave,
+          color: "#F9A825",
+        },
+      ].filter((s) => s.count > 0),
+    [monthlyKpi],
+  );
+
+  const sharePct = (count: number) =>
+    monthAnalytics.kpiTotal > 0 ? Math.round((count / monthAnalytics.kpiTotal) * 100) : 0;
 
   const employeeName = profile?.user_name?.trim() || "Employee";
   const hasProfile = Boolean(profile?.user_name);
@@ -574,57 +900,148 @@ function ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
 
         {!loading && !error && hasProfile && mobileMainTab === "overview" ? (
           <div className="space-y-3 p-4">
-            <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
+            <div className="overflow-hidden rounded-xl border border-[#E4E7EC] bg-gradient-to-br from-[#008CD3] to-[#0070AA] p-4 text-white shadow-sm">
               <div className="flex items-start gap-3">
                 <span
-                  className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-lg text-sm font-semibold ${userColorClass(employeeName)}`}
+                  className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-white/20 text-sm font-semibold text-white backdrop-blur-sm`}
                 >
                   {userInitials(employeeName)}
                 </span>
-                <div className="min-w-0">
-                  <p className="text-[16px] font-semibold text-[#1F2937]">{employeeName}</p>
-                  <p className="truncate text-[14px] text-[#6B7280]">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[16px] font-semibold">{employeeName}</p>
+                  <p className="truncate text-[13px] text-white/85">
                     {profile?.user_email || "No email"}
                   </p>
-                  <p className="mt-1 text-[13px] text-[#9CA3AF]">
-                    Joined {formatDate(profile?.joining_date)}
+                  <p className="mt-1 text-[12px] text-white/70">
+                    {profile?.user_role_name || "employee"} · Joined{" "}
+                    {formatDate(profile?.joining_date)}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4 grid grid-cols-3 gap-2 border-t border-white/20 pt-4">
+                <div className="text-center">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-white/70">
+                    Attendance
+                  </p>
+                  <p className="mt-0.5 text-xl font-bold tabular-nums">
+                    {monthAnalytics.attendanceRate}%
+                  </p>
+                </div>
+                <div className="text-center">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-white/70">
+                    On time
+                  </p>
+                  <p className="mt-0.5 text-xl font-bold tabular-nums">
+                    {monthAnalytics.onTimeRate}%
+                  </p>
+                </div>
+                <div className="text-center">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-white/70">
+                    Hours
+                  </p>
+                  <p className="mt-0.5 text-xl font-bold tabular-nums">
+                    {monthAnalytics.totalHours.toFixed(1)}h
                   </p>
                 </div>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
-                <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">Present</p>
-                <p className="mt-1 text-2xl font-semibold text-[#0F9D58]">{monthlyKpi.present}</p>
-              </div>
-              <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
-                <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">Late</p>
-                <p className="mt-1 text-2xl font-semibold text-[#E8710A]">{monthlyKpi.late}</p>
-              </div>
-              <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
-                <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">Leaves</p>
-                <p className="mt-1 text-2xl font-semibold text-[#D93025]">{monthlyKpi.leave}</p>
-              </div>
-              <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
-                <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">Half days</p>
-                <p className="mt-1 text-2xl font-semibold text-[#008CD3]">{monthlyKpi.halfDay}</p>
-              </div>
-            </div>
+
             <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
-              <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">
-                Short leaves
-              </p>
-              <p className="mt-1 text-2xl font-semibold text-[#F9A825]">{monthlyKpi.shortLeave}</p>
-              <p className="mt-1 text-[14px] text-[#6B7280]">
-                KPIs for {appliedQuery.month}/{appliedQuery.year}
-              </p>
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <p className="text-[13px] font-semibold text-[#1F2937]">
+                  {formatMonthYearLabel(appliedQuery.year, appliedQuery.month)} breakdown
+                </p>
+                <span className="rounded-full bg-[#E8F4FB] px-2 py-0.5 text-[11px] font-semibold text-[#008CD3]">
+                  {monthAnalytics.daysWithRecord}/{monthAnalytics.daysInMonth} days
+                </span>
+              </div>
+              <StackedMonthBar segments={kpiSegments} total={monthAnalytics.kpiTotal} />
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <KpiStatCard
+                  label="Present"
+                  value={monthlyKpi.present}
+                  color="text-[#0F9D58]"
+                  bg="bg-[#E6F4EA]/40"
+                  accent="#0F9D58"
+                  share={sharePct(monthlyKpi.present)}
+                />
+                <KpiStatCard
+                  label="Late"
+                  value={monthlyKpi.late}
+                  color="text-[#E8710A]"
+                  bg="bg-[#FEF3E6]/50"
+                  accent="#E8710A"
+                  share={sharePct(monthlyKpi.late)}
+                />
+                <KpiStatCard
+                  label="Leaves"
+                  value={monthlyKpi.leave}
+                  color="text-[#D93025]"
+                  bg="bg-[#FCE8E6]/40"
+                  accent="#D93025"
+                  share={sharePct(monthlyKpi.leave)}
+                />
+                <KpiStatCard
+                  label="Half days"
+                  value={monthlyKpi.halfDay}
+                  color="text-[#008CD3]"
+                  bg="bg-[#E8F4FB]/50"
+                  accent="#008CD3"
+                  share={sharePct(monthlyKpi.halfDay)}
+                />
+              </div>
             </div>
+
+            <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
+              <div className="mb-3 flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-[#008CD3]" />
+                <h2 className="text-[15px] font-semibold text-[#1F2937]">Status mix</h2>
+              </div>
+              <AttendanceDonutChart
+                segments={kpiSegments}
+                total={monthAnalytics.kpiTotal}
+                centerLabel="Records"
+                centerValue={String(monthAnalytics.kpiTotal)}
+                size={120}
+              />
+            </div>
+
+            <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
+              <div className="mb-3 flex items-center gap-2">
+                <CalendarDays className="h-4 w-4 text-[#008CD3]" />
+                <h2 className="text-[15px] font-semibold text-[#1F2937]">Month calendar</h2>
+              </div>
+              <MonthCalendarHeatmap
+                year={appliedQuery.year}
+                month={appliedQuery.month}
+                cells={monthAnalytics.calendarCells}
+              />
+              <div className="mt-3 grid grid-cols-2 gap-2 border-t border-[#EEF2F6] pt-3 text-[11px] text-[#6B7280]">
+                <p>
+                  <span className="mr-1.5 inline-block h-2 w-2 rounded-sm bg-[#0F9D58]" />
+                  Present
+                </p>
+                <p>
+                  <span className="mr-1.5 inline-block h-2 w-2 rounded-sm bg-[#E8710A]" />
+                  Late
+                </p>
+                <p>
+                  <span className="mr-1.5 inline-block h-2 w-2 rounded-sm bg-[#D93025]" />
+                  Leave
+                </p>
+                <p>
+                  <span className="mr-1.5 inline-block h-2 w-2 rounded-sm bg-[#F1F5F9]" />
+                  No record
+                </p>
+              </div>
+            </div>
+
             <div className="rounded-xl border border-[#E4E7EC] bg-[#E8F4FB] p-4">
               <div className="flex gap-3">
                 <Info className="h-5 w-5 shrink-0 text-[#008CD3]" />
                 <p className="text-[14px] leading-relaxed text-[#4B5563]">
-                  Monthly KPIs reflect records in the applied query period. Use the Log tab to
-                  change date filters and view check-in/out details.
+                  Charts reflect the applied query period ({appliedQuery.month}/{appliedQuery.year}
+                  ). Use the Log tab to change filters and view check-in/out details.
                 </p>
               </div>
             </div>
@@ -635,55 +1052,40 @@ function ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
           <div className="space-y-3 p-4">
             <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
               <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-[#008CD3]" />
+                <h2 className="text-[15px] font-semibold text-[#1F2937]">Daily hours</h2>
+              </div>
+              <p className="mt-1 text-[13px] text-[#6B7280]">
+                {formatMonthYearLabel(appliedQuery.year, appliedQuery.month)} ·{" "}
+                {monthAnalytics.totalHours.toFixed(1)}h total
+              </p>
+              <div className="mt-4">
+                <DailyHoursRechartsChart
+                  year={appliedQuery.year}
+                  month={appliedQuery.month}
+                  daysInMonth={monthAnalytics.daysInMonth}
+                  points={monthAnalytics.dailyHours}
+                />
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
+              <div className="flex items-center gap-2">
                 <BarChart3 className="h-4 w-4 text-[#008CD3]" />
                 <h2 className="text-[15px] font-semibold text-[#1F2937]">Status distribution</h2>
               </div>
-              <div className="mt-4 space-y-3">
-                {statusDistribution.map((item) => (
-                  <div key={item.status}>
-                    <div className="mb-1 flex items-center justify-between text-[13px]">
-                      <span className="font-medium capitalize text-[#1F2937]">{item.status}</span>
-                      <span className="text-[#6B7280]">
-                        {item.count} ({item.percentage}%)
-                      </span>
-                    </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-[#F5F7FA]">
-                      <div
-                        className="h-full rounded-full bg-[#008CD3]"
-                        style={{ width: `${item.percentage}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
+              <div className="mt-4">
+                <EnhancedStatusBars items={statusDistribution} />
               </div>
             </div>
+
             <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
               <div className="flex items-center gap-2">
                 <User className="h-4 w-4 text-[#008CD3]" />
                 <h2 className="text-[15px] font-semibold text-[#1F2937]">Monthly activity</h2>
               </div>
-              <div className="mt-4 space-y-3">
-                {monthlyTrend.length === 0 ? (
-                  <p className="text-[14px] text-[#6B7280]">No trend data available.</p>
-                ) : (
-                  monthlyTrend.map((item) => {
-                    const width = Math.max(8, Math.round((item.count / maxMonthlyTrend) * 100));
-                    return (
-                      <div key={item.month}>
-                        <div className="mb-1 flex items-center justify-between text-[13px]">
-                          <span className="font-medium text-[#1F2937]">{item.month}</span>
-                          <span className="text-[#6B7280]">{item.count} records</span>
-                        </div>
-                        <div className="h-2 overflow-hidden rounded-full bg-[#F5F7FA]">
-                          <div
-                            className="h-full rounded-full bg-[#0F9D58]"
-                            style={{ width: `${width}%` }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
+              <div className="mt-4">
+                <MonthlyActivityRechartsChart items={monthlyTrend} />
               </div>
             </div>
           </div>
@@ -711,7 +1113,7 @@ function ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
         ) : null}
       </div>
 
-      {/* Desktop layout (unchanged) */}
+      {/* Desktop layout */}
       <section className="hidden space-y-6 p-4 sm:p-6 lg:block">
       <div>
         <button
@@ -722,16 +1124,56 @@ function ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
           ← Back
         </button>
       </div>
-      <header className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-slate-500">
+      <header className="overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-[#0C123A] via-[#151e59] to-[#008CD3] p-6 text-white shadow-sm sm:p-8">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-white/70">
           Attendance Management
         </p>
-        <h1 className="mt-1 text-2xl font-bold tracking-tight text-[#0C123A] sm:text-3xl">Employee Full Attendance History</h1>
-        <p className="mt-2 text-sm text-slate-600">Detailed attendance timeline and month-wise KPIs for management insights.</p>
+        <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
+          Employee Attendance Analytics
+        </h1>
+        <p className="mt-2 max-w-2xl text-sm text-white/85">
+          Visual breakdown of attendance patterns, working hours, and status distribution for
+          management decisions.
+        </p>
+        {!loading && hasProfile ? (
+          <div className="mt-6 grid gap-3 sm:grid-cols-4">
+            <div className="rounded-xl bg-white/10 px-4 py-3 backdrop-blur-sm">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-white/70">
+                Attendance rate
+              </p>
+              <p className="mt-1 text-2xl font-bold tabular-nums">{monthAnalytics.attendanceRate}%</p>
+            </div>
+            <div className="rounded-xl bg-white/10 px-4 py-3 backdrop-blur-sm">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-white/70">
+                On-time rate
+              </p>
+              <p className="mt-1 text-2xl font-bold tabular-nums">{monthAnalytics.onTimeRate}%</p>
+            </div>
+            <div className="rounded-xl bg-white/10 px-4 py-3 backdrop-blur-sm">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-white/70">
+                Total hours
+              </p>
+              <p className="mt-1 text-2xl font-bold tabular-nums">
+                {monthAnalytics.totalHours.toFixed(1)}h
+              </p>
+            </div>
+            <div className="rounded-xl bg-white/10 px-4 py-3 backdrop-blur-sm">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-white/70">
+                Days logged
+              </p>
+              <p className="mt-1 text-2xl font-bold tabular-nums">
+                {monthAnalytics.daysWithRecord}/{monthAnalytics.daysInMonth}
+              </p>
+            </div>
+          </div>
+        ) : null}
       </header>
 
       {loading ? (
-        <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">Loading attendance history...</div>
+        <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white py-16 text-sm text-slate-500">
+          <Loader2 className="h-8 w-8 animate-spin text-[#008CD3]" />
+          Loading attendance history…
+        </div>
       ) : null}
 
       {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div> : null}
@@ -742,30 +1184,49 @@ function ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
 
       {!loading && !error && hasProfile ? (
         <>
-          <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-lg font-semibold text-[#0C123A]">{profile?.user_name || "Unknown User"}</h2>
-            <p className="text-sm text-slate-600">{profile?.user_email || "No email"}</p>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-indigo-700">
-                {profile?.user_role_name || "employee"}
-              </span>
-              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-700">
-                Joined {formatDate(profile?.joining_date)}
-              </span>
+          <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="flex items-start gap-4">
+                <span
+                  className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-xl text-base font-semibold ${userColorClass(employeeName)}`}
+                >
+                  {userInitials(employeeName)}
+                </span>
+                <div>
+                  <h2 className="text-xl font-semibold text-[#0C123A]">
+                    {profile?.user_name || "Unknown User"}
+                  </h2>
+                  <p className="text-sm text-slate-600">{profile?.user_email || "No email"}</p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-indigo-700">
+                      {profile?.user_role_name || "employee"}
+                    </span>
+                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-700">
+                      Joined {formatDate(profile?.joining_date)}
+                    </span>
+                  </div>
+                </div>
+              </div>
               <button
                 type="button"
                 onClick={refreshWithCurrentQuery}
                 disabled={loading || refreshing}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {refreshing ? "Refreshing..." : "Refresh"}
+                <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+                {refreshing ? "Refreshing…" : "Refresh"}
               </button>
             </div>
           </article>
 
-          <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm font-semibold text-[#0C123A]">Monthly KPI Snapshot</p>
+          <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-[#0C123A]">Query filters</p>
+                <p className="text-xs text-slate-500">
+                  Period: {formatMonthYearLabel(appliedQuery.year, appliedQuery.month)}
+                </p>
+              </div>
               <div className="flex flex-wrap items-center gap-2">
                 <input
                   type="number"
@@ -793,68 +1254,157 @@ function ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
                   type="button"
                   onClick={applySelectedQuery}
                   disabled={loading || refreshing}
-                  className="rounded-lg bg-[#0C123A] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#151e59] disabled:cursor-not-allowed disabled:opacity-60"
+                  className="rounded-lg bg-[#0C123A] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#151e59] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Apply Query
                 </button>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-5">
-              <div className="rounded-lg bg-emerald-50 px-3 py-2 text-emerald-700">Present: {monthlyKpi.present}</div>
-              <div className="rounded-lg bg-amber-50 px-3 py-2 text-amber-700">Late: {monthlyKpi.late}</div>
-              <div className="rounded-lg bg-rose-50 px-3 py-2 text-rose-700">Leaves: {monthlyKpi.leave}</div>
-              <div className="rounded-lg bg-violet-50 px-3 py-2 text-violet-700">Half Days: {monthlyKpi.halfDay}</div>
-              <div className="rounded-lg bg-sky-50 px-3 py-2 text-sky-700">Short Leaves: {monthlyKpi.shortLeave}</div>
+            <div className="mb-4">
+              <StackedMonthBar segments={kpiSegments} total={monthAnalytics.kpiTotal} />
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+              <KpiStatCard
+                label="Present"
+                value={monthlyKpi.present}
+                color="text-emerald-700"
+                bg="bg-emerald-50/80"
+                accent="#0F9D58"
+                share={sharePct(monthlyKpi.present)}
+              />
+              <KpiStatCard
+                label="Late"
+                value={monthlyKpi.late}
+                color="text-amber-700"
+                bg="bg-amber-50/80"
+                accent="#E8710A"
+                share={sharePct(monthlyKpi.late)}
+              />
+              <KpiStatCard
+                label="Leaves"
+                value={monthlyKpi.leave}
+                color="text-rose-700"
+                bg="bg-rose-50/80"
+                accent="#D93025"
+                share={sharePct(monthlyKpi.leave)}
+              />
+              <KpiStatCard
+                label="Half days"
+                value={monthlyKpi.halfDay}
+                color="text-sky-700"
+                bg="bg-sky-50/80"
+                accent="#008CD3"
+                share={sharePct(monthlyKpi.halfDay)}
+              />
+              <KpiStatCard
+                label="Short leaves"
+                value={monthlyKpi.shortLeave}
+                color="text-yellow-700"
+                bg="bg-yellow-50/80"
+                accent="#F9A825"
+                share={sharePct(monthlyKpi.shortLeave)}
+              />
+            </div>
+          </article>
+
+          <article className="grid gap-4 xl:grid-cols-3">
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm xl:col-span-1">
+              <h3 className="text-sm font-semibold text-[#0C123A]">Status composition</h3>
+              <p className="mt-1 text-xs text-slate-500">Share of each attendance type this period.</p>
+              <div className="mt-5">
+                <AttendanceDonutChart
+                  segments={kpiSegments}
+                  total={monthAnalytics.kpiTotal}
+                  centerLabel="Records"
+                  centerValue={String(monthAnalytics.kpiTotal)}
+                  size={160}
+                />
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm xl:col-span-2">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-semibold text-[#0C123A]">Daily working hours</h3>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Line trend of recorded hours across the month with average and peak markers.
+                  </p>
+                </div>
+                <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
+                  {monthAnalytics.totalHours.toFixed(1)}h total
+                </span>
+              </div>
+              <div className="mt-3">
+                <DailyHoursRechartsChart
+                  year={appliedQuery.year}
+                  month={appliedQuery.month}
+                  daysInMonth={monthAnalytics.daysInMonth}
+                  points={monthAnalytics.dailyHours}
+                />
+              </div>
             </div>
           </article>
 
           <article className="grid gap-4 lg:grid-cols-2">
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h3 className="text-sm font-semibold text-[#0C123A]">Status Distribution</h3>
-              <p className="mt-1 text-xs text-slate-500">Raw status values from attendance records.</p>
-              <div className="mt-4 space-y-3">
-                {statusDistribution.map((item) => (
-                  <div key={item.status}>
-                    <div className="mb-1 flex items-center justify-between text-xs">
-                      <span className="font-semibold text-slate-700">{item.status}</span>
-                      <span className="text-slate-500">
-                        {item.count} ({item.percentage}%)
-                      </span>
-                    </div>
-                    <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
-                      <div
-                        className="h-full rounded-full bg-[#0C123A]"
-                        style={{ width: `${item.percentage}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
+              <h3 className="text-sm font-semibold text-[#0C123A]">Status distribution</h3>
+              <p className="mt-1 text-xs text-slate-500">All status values from loaded records.</p>
+              <div className="mt-4">
+                <EnhancedStatusBars items={statusDistribution} />
               </div>
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h3 className="text-sm font-semibold text-[#0C123A]">Monthly Activity Trend</h3>
-              <p className="mt-1 text-xs text-slate-500">Attendance entries by month.</p>
-              <div className="mt-4 space-y-3">
-                {monthlyTrend.map((item) => {
-                  const width = Math.max(8, Math.round((item.count / maxMonthlyTrend) * 100));
-                  return (
-                    <div key={item.month} className="space-y-1">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-semibold text-slate-700">{item.month}</span>
-                        <span className="text-slate-500">{item.count} records</span>
-                      </div>
-                      <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
-                        <div className="h-full rounded-full bg-indigo-500" style={{ width: `${width}%` }} />
-                      </div>
-                    </div>
-                  );
-                })}
+              <h3 className="text-sm font-semibold text-[#0C123A]">Monthly activity trend</h3>
+              <p className="mt-1 text-xs text-slate-500">
+                Bar chart of attendance records per month with average and month-over-month context.
+              </p>
+              <div className="mt-5">
+                <MonthlyActivityRechartsChart items={monthlyTrend} />
               </div>
             </div>
           </article>
 
+          <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className="text-sm font-semibold text-[#0C123A]">Month calendar heatmap</h3>
+                <p className="text-xs text-slate-500">Color-coded attendance status by day.</p>
+              </div>
+            </div>
+            <div className="max-w-md">
+              <MonthCalendarHeatmap
+                year={appliedQuery.year}
+                month={appliedQuery.month}
+                cells={monthAnalytics.calendarCells}
+              />
+            </div>
+            <div className="mt-4 flex flex-wrap gap-4 border-t border-slate-100 pt-4 text-xs text-slate-600">
+              <span className="flex items-center gap-1.5">
+                <span className="h-3 w-3 rounded-sm bg-[#0F9D58]" /> Present
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-3 w-3 rounded-sm bg-[#E8710A]" /> Late
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-3 w-3 rounded-sm bg-[#D93025]" /> Leave
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-3 w-3 rounded-sm bg-[#008CD3]" /> Half day
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-3 w-3 rounded-sm bg-[#F9A825]" /> Short leave
+              </span>
+            </div>
+          </article>
+
           <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="border-b border-slate-200 bg-slate-50 px-5 py-4">
+              <h3 className="text-sm font-semibold text-[#0C123A]">Attendance log</h3>
+              <p className="text-xs text-slate-500">
+                {sortedRows.length} record{sortedRows.length === 1 ? "" : "s"} in current query
+              </p>
+            </div>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-slate-200 text-sm">
                 <thead className="bg-slate-50">
@@ -868,11 +1418,18 @@ function ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
                   {sortedRows.map((row, index) => (
-                    <tr key={`${String(row.attendance_date || row.attendance_history)}-${index}`} className="hover:bg-slate-50/70">
-                      <td className="px-4 py-3 text-slate-700">{formatDate(row.attendance_date || row.attendance_history)}</td>
+                    <tr
+                      key={`${String(row.attendance_date || row.attendance_history)}-${index}`}
+                      className="transition hover:bg-slate-50/80"
+                    >
+                      <td className="px-4 py-3 font-medium text-slate-800">
+                        {formatDate(row.attendance_date || row.attendance_history)}
+                      </td>
                       <td className="px-4 py-3 text-slate-600">{formatTime(row.check_in)}</td>
                       <td className="px-4 py-3 text-slate-600">{formatTime(row.check_out)}</td>
-                      <td className="px-4 py-3 text-slate-600">{formatWorkingTime(row.working_time)}</td>
+                      <td className="px-4 py-3 font-medium text-[#008CD3]">
+                        {formatWorkingTime(row.working_time)}
+                      </td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${statusBadgeClass(row.attendance_status)}`}>
                           {formatStatusLabel(row.attendance_status)}

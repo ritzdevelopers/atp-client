@@ -13,7 +13,7 @@ import {
   XCircle,
   ChevronDown,
 } from "lucide-react";
-import { getAllOrgUsers, type OrgUserRow } from "@/services/adminUser";
+import { getAllOrgUsers, dedupeOrgUserRows, type OrgUserRow } from "@/services/adminUser";
 import {
   attendanceCategoryLabel,
   fetchAllAttendanceQueries,
@@ -21,6 +21,19 @@ import {
   type AttendanceQueryCategory,
   type AttendanceQueryRow,
 } from "@/services/attendanceQueries";
+import {
+  clearAttendanceQueriesCaches,
+  clearLeaveRequestsCaches,
+  readAttendanceQueriesCache,
+  readLeaveRequestsCache,
+  readManageOrgUsersCache,
+  shouldRefreshAttendanceQueriesCache,
+  shouldRefreshLeaveRequestsCache,
+  stableFilterKey,
+  writeAttendanceQueriesCache,
+  writeLeaveRequestsCache,
+  writeManageOrgUsersCache,
+} from "@/lib/employeeManagementCache";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
@@ -155,6 +168,11 @@ function userDisplayName(
 function ManageEmployeeLeavesPage() {
   const params = useParams();
   const orgId = String(params?.org_id ?? "");
+  const initialAttFilterKey = stableFilterKey(EMPTY_ATT_FILTERS);
+  const cachedAttendance = orgId
+    ? readAttendanceQueriesCache(orgId, initialAttFilterKey)
+    : null;
+  const cachedOrgUsers = orgId ? readManageOrgUsersCache(orgId) : null;
 
   const [mainTab, setMainTab] = useState<"leaves" | "attendance">("attendance");
 
@@ -175,9 +193,16 @@ function ManageEmployeeLeavesPage() {
   const [appliedAttFilters, setAppliedAttFilters] = useState<AttFilters>({
     ...EMPTY_ATT_FILTERS,
   });
-  const [attRows, setAttRows] = useState<AttendanceQueryRow[]>([]);
-  const [orgUsers, setOrgUsers] = useState<OrgUserRow[]>([]);
-  const [attLoading, setAttLoading] = useState(false);
+  const [attRows, setAttRows] = useState<AttendanceQueryRow[]>(
+    () => cachedAttendance?.queries ?? [],
+  );
+  const [orgUsers, setOrgUsers] = useState<OrgUserRow[]>(() => {
+    if (cachedAttendance?.users?.length) {
+      return dedupeOrgUserRows(cachedAttendance.users);
+    }
+    return cachedOrgUsers ? dedupeOrgUserRows(cachedOrgUsers) : [];
+  });
+  const [attLoading, setAttLoading] = useState(() => !cachedAttendance);
   const [attRefreshing, setAttRefreshing] = useState(false);
   const [attError, setAttError] = useState<string | null>(null);
   const [attModal, setAttModal] = useState<{
@@ -215,12 +240,28 @@ function ManageEmployeeLeavesPage() {
         return;
       }
 
-      if (isManualRefresh) setRefreshing(true);
-      else setLoading(true);
-      setError(null);
+      const filterKey = buildQueryString(f);
+      const cached = readLeaveRequestsCache<LeaveRow>(orgId, filterKey);
+
+      if (cached && !isManualRefresh) {
+        setRows(cached);
+        setError(null);
+        setLoading(false);
+        if (!shouldRefreshLeaveRequestsCache(orgId, filterKey)) {
+          return;
+        }
+        setRefreshing(true);
+      } else {
+        if (isManualRefresh) {
+          clearLeaveRequestsCaches(orgId);
+        }
+        if (isManualRefresh) setRefreshing(true);
+        else setLoading(true);
+        setError(null);
+      }
 
       try {
-        const qs = buildQueryString(f);
+        const qs = filterKey;
         const res = await fetch(`${API_URL}/api/user/get-all-leaves?${qs}`, {
           method: "GET",
           headers: { Authorization: `Bearer ${token}` },
@@ -229,9 +270,13 @@ function ManageEmployeeLeavesPage() {
         if (!res.ok) {
           throw new Error(data.message || "Could not load leave requests.");
         }
-        setRows(Array.isArray(data.data) ? data.data : []);
+        const nextRows = Array.isArray(data.data) ? data.data : [];
+        setRows(nextRows);
+        writeLeaveRequestsCache(orgId, filterKey, nextRows);
       } catch (e) {
-        setRows([]);
+        if (!cached || isManualRefresh) {
+          setRows([]);
+        }
         setError(e instanceof Error ? e.message : "Could not load leave requests.");
       } finally {
         setLoading(false);
@@ -258,9 +303,26 @@ function ManageEmployeeLeavesPage() {
         return;
       }
 
-      if (isManualRefresh) setAttRefreshing(true);
-      else setAttLoading(true);
-      setAttError(null);
+      const filterKey = stableFilterKey(f);
+      const cached = readAttendanceQueriesCache(orgId, filterKey);
+
+      if (cached && !isManualRefresh) {
+        setAttRows(cached.queries);
+        setOrgUsers(dedupeOrgUserRows(cached.users));
+        setAttError(null);
+        setAttLoading(false);
+        if (!shouldRefreshAttendanceQueriesCache(orgId, filterKey)) {
+          return;
+        }
+        setAttRefreshing(true);
+      } else {
+        if (isManualRefresh) {
+          clearAttendanceQueriesCaches(orgId);
+        }
+        if (isManualRefresh) setAttRefreshing(true);
+        else setAttLoading(true);
+        setAttError(null);
+      }
 
       try {
         const [users, queries] = await Promise.all([
@@ -272,11 +334,19 @@ function ManageEmployeeLeavesPage() {
             attendance_date: f.attendance_date.trim() || undefined,
           }),
         ]);
-        setOrgUsers(users);
+        const dedupedUsers = dedupeOrgUserRows(users);
+        setOrgUsers(dedupedUsers);
         setAttRows(queries);
+        writeAttendanceQueriesCache(orgId, filterKey, {
+          queries,
+          users: dedupedUsers,
+        });
+        writeManageOrgUsersCache(orgId, dedupedUsers);
       } catch (e) {
-        setAttRows([]);
-        setOrgUsers([]);
+        if (!cached || isManualRefresh) {
+          setAttRows([]);
+          setOrgUsers([]);
+        }
         setAttError(
           e instanceof Error ? e.message : "Could not load attendance queries.",
         );
@@ -354,7 +424,8 @@ function ManageEmployeeLeavesPage() {
         throw new Error(data.message || "Update failed.");
       }
       setNotice({ type: "ok", text: data.message || "Leave updated." });
-      await loadLeaves(appliedFilters, false);
+      clearLeaveRequestsCaches(orgId);
+      await loadLeaves(appliedFilters, true);
     } catch (e) {
       setNotice({
         type: "err",
@@ -407,7 +478,8 @@ function ManageEmployeeLeavesPage() {
             : "Attendance query rejected.",
       });
       setAttModal(null);
-      await loadAttendance(appliedAttFilters, false);
+      clearAttendanceQueriesCaches(orgId);
+      await loadAttendance(appliedAttFilters, true);
     } catch (e) {
       setNotice({
         type: "err",

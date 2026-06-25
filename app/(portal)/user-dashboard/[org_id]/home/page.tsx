@@ -43,6 +43,8 @@ import {
   getBootstrappedHomeCache,
   writeEmployeeDashboardHomeCache,
 } from "@/lib/employeeDashboardHomeCache";
+import { useBiometricAttendanceFeed } from "@/hooks/useBiometricAttendanceFeed";
+import { useDeviceLiveAttendance } from "@/hooks/useDeviceLiveAttendance";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 const MAX_PROFILE_IMAGE_BYTES = 5 * 1024 * 1024;
@@ -187,7 +189,9 @@ function historyByLocalYmd(
   const map = new Map<string, AttendanceHistoryRow>();
   if (!history) return map;
   for (const row of history) {
-    const key = localYmdFromAttendanceValue(row.attendance_date);
+    const key =
+      localYmdFromAttendanceValue(row.attendance_date) ??
+      localYmdFromAttendanceValue(row.check_in);
     if (key) map.set(key, row);
   }
   return map;
@@ -513,7 +517,12 @@ function mobileActionSecondaryBtnCls(full = false) {
 }
 
 function SkeletonBlock({ className = "" }: { className?: string }) {
-  return <div className={`skeleton-shimmer rounded-md ${className}`} aria-hidden />;
+  return (
+    <span
+      className={`skeleton-shimmer inline-block rounded-md align-middle ${className}`}
+      aria-hidden
+    />
+  );
 }
 
 function MobileEmployeeHomeSkeleton() {
@@ -950,23 +959,18 @@ function Home() {
         return;
       }
 
-      if (!forceRefresh) {
-        const cached = getBootstrappedHomeCache(orgId);
-        if (cached) {
-          setData(cached.data as EmployeeDashboardResponse);
-          setAddresses(cached.addresses as UserAddressRow[]);
-          setAddressesError(cached.addressesError);
-          setHandoverPendingCount(cached.handoverPendingCount ?? 0);
-          setError(null);
-          setLoading(false);
-          setRefreshing(false);
-          return;
-        }
-      } else {
-        clearEmployeeDashboardHomeCache(orgId);
-      }
+      const cached = !forceRefresh ? getBootstrappedHomeCache(orgId) : null;
 
-      if (forceRefresh) {
+      if (cached) {
+        setData(cached.data as EmployeeDashboardResponse);
+        setAddresses(cached.addresses as UserAddressRow[]);
+        setAddressesError(cached.addressesError);
+        setHandoverPendingCount(cached.handoverPendingCount ?? 0);
+        setError(null);
+        setLoading(false);
+        setRefreshing(true);
+      } else if (forceRefresh) {
+        clearEmployeeDashboardHomeCache(orgId);
         setRefreshing(true);
       } else {
         setLoading(true);
@@ -1081,16 +1085,66 @@ function Home() {
   const now = new Date();
   const todayYmd = getTodayLocalYmd(now);
 
+  const { lastEvent: biometricEvent } = useBiometricAttendanceFeed(
+    orgIdParam ? String(orgIdParam) : undefined,
+  );
+
+  const { attendance: deviceAttendance } = useDeviceLiveAttendance(
+    orgIdParam ? String(orgIdParam) : undefined,
+  );
+
   const historyMap = useMemo(
     () => historyByLocalYmd(attendanceHistory),
     [attendanceHistory],
   );
   const todayRecord = historyMap.get(todayYmd);
 
-  const hasCheckedInToday = Boolean(todayRecord?.check_in);
-  const hasCheckedOutToday = Boolean(todayRecord?.check_out);
+  const effectiveTodayRecord = useMemo(() => {
+    if (!deviceAttendance?.check_in) return todayRecord;
+    return {
+      ...todayRecord,
+      attendance_date: deviceAttendance.attendance_date ?? todayYmd,
+      check_in: deviceAttendance.check_in,
+      check_out: deviceAttendance.check_out ?? todayRecord?.check_out ?? null,
+      attendance_status: todayRecord?.attendance_status ?? "present",
+    };
+  }, [deviceAttendance, todayRecord, todayYmd]);
 
-  const checkInInstant = parseAttendanceNaiveLocal(todayRecord?.check_in);
+  useEffect(() => {
+    const employeeId = emp?.id;
+    if (!biometricEvent || employeeId == null) return;
+    if (String(biometricEvent.user_id) !== String(employeeId)) return;
+    if (biometricEvent.attendance_date !== todayYmd) return;
+    if (
+      biometricEvent.event_type === "duplicate_check_in" ||
+      biometricEvent.event_type === "duplicate_check_out"
+    ) {
+      return;
+    }
+    setData((prev) =>
+      upsertTodayHistory(prev, todayYmd, {
+        id: biometricEvent.attendance_id ?? undefined,
+        check_in: biometricEvent.check_in,
+        check_out: biometricEvent.check_out,
+        attendance_status: biometricEvent.attendance_status ?? undefined,
+      }),
+    );
+  }, [biometricEvent, emp?.id, todayYmd]);
+
+  const hasCheckedInToday = Boolean(effectiveTodayRecord?.check_in);
+  const hasCheckedOutToday = Boolean(effectiveTodayRecord?.check_out);
+
+  const latestMachinePunch = deviceAttendance?.latest_punch_at ?? null;
+  const machinePunchCount = deviceAttendance?.punch_count ?? 0;
+  const showLatestMachinePunch = Boolean(
+    hasCheckedInToday &&
+      !hasCheckedOutToday &&
+      machinePunchCount > 1 &&
+      latestMachinePunch &&
+      latestMachinePunch !== effectiveTodayRecord?.check_out,
+  );
+
+  const checkInInstant = parseAttendanceNaiveLocal(effectiveTodayRecord?.check_in);
   const checkInValid =
     checkInInstant && !Number.isNaN(checkInInstant.getTime());
 
@@ -1115,20 +1169,23 @@ function Home() {
 
   const workingHoursDisplay = showLiveTimer
     ? formatElapsedDuration(liveElapsedMs)
-    : formatMinutesAsHours(todayRecord?.working_time);
+    : formatMinutesAsHours(effectiveTodayRecord?.working_time);
 
   const todayLog = hasCheckedInToday
-    ? formatAttendanceLogLocal(todayRecord?.check_in)
+    ? formatAttendanceLogLocal(effectiveTodayRecord?.check_in)
     : "—";
   const checkOutTime = hasCheckedOutToday
-    ? formatAttendanceTimeLocal(todayRecord?.check_out)
+    ? formatAttendanceTimeLocal(effectiveTodayRecord?.check_out)
     : "—";
   const checkInTime = hasCheckedInToday
-    ? formatAttendanceTimeLocal(todayRecord?.check_in)
+    ? formatAttendanceTimeLocal(effectiveTodayRecord?.check_in)
+    : null;
+  const latestPunchTime = showLatestMachinePunch
+    ? formatAttendanceTimeLocal(latestMachinePunch)
     : null;
   const shiftLabel = emp?.user_shift_name?.trim() || "Shift not assigned";
 
-  const attendanceStatusRaw = todayRecord?.attendance_status;
+  const attendanceStatusRaw = effectiveTodayRecord?.attendance_status;
   const attendanceStatus = String(attendanceStatusRaw || "—").toLowerCase();
 
   const attendanceDays = Array.from({ length: 7 }).map((_, idx) => {
@@ -1140,7 +1197,10 @@ function Home() {
     const dateNum = String(d.getDate());
     const ymd = getLocalYmdFromDate(d);
     const active = ymd === todayYmd;
-    const row = historyMap.get(ymd);
+    const row =
+      ymd === todayYmd && effectiveTodayRecord?.check_in
+        ? effectiveTodayRecord
+        : historyMap.get(ymd);
     const visual = getAttendanceDayVisual(row?.attendance_status);
     return { day, dateNum, ymd, active, visual };
   });
@@ -1651,6 +1711,11 @@ function Home() {
                 ) : (
                   <p className={`mt-0.5 ${mobileCaptionCls}`}>Not checked in</p>
                 )}
+                {latestPunchTime ? (
+                  <p className={`mt-0.5 ${mobileCaptionCls} text-[#008CD3]`}>
+                    Last machine punch {latestPunchTime}
+                  </p>
+                ) : null}
               </div>
               <div className={mobileCardCls}>
                 <p className={mobileLabelCls}>Check out</p>
@@ -2200,6 +2265,11 @@ function Home() {
                 <p className="mt-1 text-sm font-semibold leading-relaxed text-slate-800">
                   {todayLog}
                 </p>
+                {showLatestMachinePunch && latestPunchTime ? (
+                  <p className="mt-1 text-[11px] font-semibold text-[#008CD3]">
+                    Last machine punch: {latestPunchTime}
+                  </p>
+                ) : null}
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button
                     type="button"
@@ -2266,6 +2336,11 @@ function Home() {
                 <p className="mt-1 text-lg font-semibold text-slate-800">
                   {checkOutTime}
                 </p>
+                {showLatestMachinePunch && latestPunchTime ? (
+                  <p className="mt-1 text-[10px] font-medium text-[#008CD3]">
+                    Last punch {latestPunchTime}
+                  </p>
+                ) : null}
               </div>
               <div className="rounded-lg bg-slate-50 p-3">
                 <p className="text-[11px] uppercase tracking-wide text-slate-400">

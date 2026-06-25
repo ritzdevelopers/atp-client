@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import Button from "@/components/website/ui/Button";
 import Input from "@/components/website/ui/Input";
 import Loader from "@/components/website/ui/Loader";
 import Modal from "@/components/website/ui/Modal";
-import { type ApiError, loginUser } from "@/services/auth";
+import { type ApiError, getMe, loginUser } from "@/services/auth";
 
 const LOGIN_REDIRECT_TO_CREATE_ORG_MESSAGES = new Set([
   "error fetching user role name",
@@ -26,6 +26,35 @@ export default function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    let cancelled = false;
+
+    const redirectIfAuthenticated = async () => {
+      try {
+        const me: any = await getMe(token);
+        if (cancelled) return;
+
+        const role = String(me?.role ?? "").trim().toLowerCase();
+        if (role === "admin") {
+          router.replace("/portal");
+        } else if (role === "hr" || role === "manager" || role === "employee") {
+          router.replace("/dashboard");
+        }
+      } catch {
+        // Stay on login when session is invalid.
+      }
+    };
+
+    void redirectIfAuthenticated();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setIsSubmitting(true);
@@ -34,7 +63,20 @@ export default function LoginPage() {
     try {
       const result = await loginUser(formData);
       localStorage.setItem("token", result.token);
-      window.location.replace("/");
+
+      try {
+        const me: any = await getMe(result.token);
+        const role = String(me?.role ?? "").trim().toLowerCase();
+        if (role === "admin") {
+          router.replace("/portal");
+        } else if (role === "hr" || role === "manager" || role === "employee") {
+          router.replace("/dashboard");
+        } else {
+          router.replace("/dashboard");
+        }
+      } catch {
+        router.replace("/dashboard");
+      }
       return;
     } catch (error) {
       const apiError = error as ApiError;

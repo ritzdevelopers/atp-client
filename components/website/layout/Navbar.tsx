@@ -78,19 +78,7 @@ function pickDashboardType(result: any, orgId: string | null): DashboardType {
   return "employee";
 }
 
-function buildDashboardHref(
-  role: Role,
-  orgId: string | null,
-  dashboardType: DashboardType,
-): string {
-  if (role === "admin") {
-    return "/portal";
-  }
-  if (dashboardType === "management") {
-    return orgId ? `/dashboard/${orgId}/home` : "/dashboard";
-  }
-  return orgId ? `/user-dashboard/${orgId}/home` : "/dashboard";
-}
+const PORTAL_ENTRANCE_PATH = "/dashboard";
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
@@ -214,10 +202,9 @@ export default function Navbar() {
       return [...baseNavLinks, { label: "Admin Panel", href: "/portal" }];
     }
     if (auth.role === "hr" || auth.role === "manager" || auth.role === "employee") {
-      const dashboardHref = buildDashboardHref(auth.role, auth.orgId, auth.dashboardType);
-      const dashboardLabel =
-        auth.dashboardType === "management" ? "Dashboard" : "My Dashboard";
-      return [...baseNavLinks, { label: dashboardLabel, href: dashboardHref }];
+      const entranceLabel =
+        auth.dashboardType === "management" ? "Team Portal" : "My Portal";
+      return [...baseNavLinks, { label: entranceLabel, href: PORTAL_ENTRANCE_PATH }];
     }
     return [
       ...baseNavLinks,

@@ -21,6 +21,13 @@ import {
   type BackgroundVerificationReferenceItem,
   type BackgroundVerificationStatus,
 } from "@/services/adminUser";
+import {
+  clearBgvOrgCaches,
+  readBgvListCache,
+  shouldRefreshBgvListCache,
+  stableFilterKey,
+  writeBgvListCache,
+} from "@/lib/employeeManagementCache";
 
 type VerifyTarget = BackgroundVerificationReferenceItem & {
   employee_id: number;
@@ -197,11 +204,15 @@ function BackgroundVerificationPage() {
   const params = useParams();
   const router = useRouter();
   const orgId = String(params?.org_id ?? "");
+  const initialFilterKey = stableFilterKey(EMPTY_FILTERS);
+  const cachedGroups = orgId ? readBgvListCache(orgId, initialFilterKey) : null;
 
   const [filters, setFilters] = useState<Filters>({ ...EMPTY_FILTERS });
   const [appliedFilters, setAppliedFilters] = useState<Filters>({ ...EMPTY_FILTERS });
-  const [employeeGroups, setEmployeeGroups] = useState<BackgroundVerificationEmployeeGroup[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [employeeGroups, setEmployeeGroups] = useState<BackgroundVerificationEmployeeGroup[]>(
+    () => cachedGroups ?? [],
+  );
+  const [loading, setLoading] = useState(() => !cachedGroups);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ type: "ok" | "err"; text: string } | null>(null);
@@ -227,9 +238,25 @@ function BackgroundVerificationPage() {
         return;
       }
 
-      if (isManualRefresh) setRefreshing(true);
-      else setLoading(true);
-      setError(null);
+      const filterKey = stableFilterKey(f);
+      const cached = readBgvListCache(orgId, filterKey);
+
+      if (cached && !isManualRefresh) {
+        setEmployeeGroups(cached);
+        setError(null);
+        setLoading(false);
+        if (!shouldRefreshBgvListCache(orgId, filterKey)) {
+          return;
+        }
+        setRefreshing(true);
+      } else {
+        if (isManualRefresh) {
+          clearBgvOrgCaches(orgId);
+        }
+        if (isManualRefresh) setRefreshing(true);
+        else setLoading(true);
+        setError(null);
+      }
 
       try {
         const result = await getAllUserBackgroundVerifications(token, orgId, {
@@ -240,9 +267,13 @@ function BackgroundVerificationPage() {
           joining_date: f.joining_date || undefined,
           is_ascending: f.is_ascending,
         });
-        setEmployeeGroups(Array.isArray(result.data) ? result.data : []);
+        const groups = Array.isArray(result.data) ? result.data : [];
+        setEmployeeGroups(groups);
+        writeBgvListCache(orgId, filterKey, groups);
       } catch (e) {
-        setEmployeeGroups([]);
+        if (!cached || isManualRefresh) {
+          setEmployeeGroups([]);
+        }
         setError(
           e instanceof Error ? e.message : "Could not load background verifications.",
         );
@@ -345,7 +376,8 @@ function BackgroundVerificationPage() {
       });
       setNotice({ type: "ok", text: "Verification status updated." });
       setVerifyModal(null);
-      await loadReferences(appliedFilters, false);
+      clearBgvOrgCaches(orgId);
+      await loadReferences(appliedFilters, true);
     } catch (e) {
       setNotice({
         type: "err",

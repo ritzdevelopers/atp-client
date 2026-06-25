@@ -23,11 +23,12 @@ import {
 } from "lucide-react";
 import { MdOpenInNew } from "react-icons/md";
 import {
-  fetchAllUsersAttendanceHistory,
+  fetchBiometricManageAttendance,
   type AllUsersAttendanceQuery,
   type AttendanceHeaderData,
   type EmployeeAttendanceRow,
 } from "@/services/attendanceHistory";
+import { useBiometricAttendanceFeed } from "@/hooks/useBiometricAttendanceFeed";
 
 function getTodayYmd(): string {
   const now = new Date();
@@ -279,13 +280,39 @@ type EmployeeRowProps = {
   selectedDate: string;
 };
 
-function MobileEmployeeRow({ employee, orgId, selectedDate }: EmployeeRowProps) {
-  const href = `/dashboard/${orgId}/attendance-management/manage-attendance/0?employee_id=${encodeURIComponent(String(employee.employee_id))}`;
-  const parts = ymdToParts(selectedDate);
+function formatPortalUserId(employee: EmployeeAttendanceRow): string {
+  const id = employee.user_id ?? employee.employee_id;
+  if (id == null || id === "" || Number(id) === 0) return "—";
+  return String(id);
+}
 
-  return (
-    <li>
-      <Link href={href} className="block px-3 py-3.5 active:bg-[#F5F7FA] sm:px-4">
+function formatEmployeeId(employee: EmployeeAttendanceRow): string {
+  return employee.biometric_employee_code?.trim() || "—";
+}
+
+function employeeRowKey(employee: EmployeeAttendanceRow): string {
+  if (employee.biometric_employee_code) {
+    return `bio-${employee.biometric_employee_code}`;
+  }
+  const uid = employee.user_id ?? employee.employee_id;
+  if (uid != null && Number(uid) > 0) {
+    return `user-${uid}`;
+  }
+  if (employee.biometric_employee_id != null && employee.biometric_employee_id !== "") {
+    return `device-${employee.biometric_employee_id}`;
+  }
+  return `emp-${employee.employee_name}`;
+}
+
+function MobileEmployeeRow({ employee, orgId, selectedDate }: EmployeeRowProps) {
+  const userId = employee.user_id ?? employee.employee_id;
+  const hasPortalUser = userId != null && Number(userId) > 0;
+  const href = hasPortalUser
+    ? `/dashboard/${orgId}/attendance-management/manage-attendance/0?employee_id=${encodeURIComponent(String(userId))}`
+    : "#";
+  const parts = ymdToParts(selectedDate);
+  const rowClass = "block px-3 py-3.5 sm:px-4";
+  const inner = (
         <div className="flex items-start gap-3">
           {employee.employee_profile_img ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -310,6 +337,15 @@ function MobileEmployeeRow({ employee, orgId, selectedDate }: EmployeeRowProps) 
                 <p className="truncate text-[12px] text-[#6B7280]">
                   {employee.employee_designation}
                 </p>
+                <p className="truncate text-[11px] text-[#9CA3AF]">
+                  Employee ID {formatEmployeeId(employee)}
+                  {formatPortalUserId(employee) !== "—"
+                    ? ` · Portal user ${formatPortalUserId(employee)}`
+                    : ""}
+                </p>
+                {!hasPortalUser ? (
+                  <p className="text-[11px] text-amber-600">Not linked to portal</p>
+                ) : null}
               </div>
               <span
                 className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${statusBadgeClass(employee.employee_attendance_status)}`}
@@ -344,9 +380,21 @@ function MobileEmployeeRow({ employee, orgId, selectedDate }: EmployeeRowProps) 
               {parts.month}/{parts.year} · {employee.total_attendance_days} days logged
             </p>
           </div>
-          <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-[#9CA3AF]" aria-hidden />
+          {hasPortalUser ? (
+            <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-[#9CA3AF]" aria-hidden />
+          ) : null}
         </div>
-      </Link>
+  );
+
+  return (
+    <li>
+      {hasPortalUser ? (
+        <Link href={href} className={`${rowClass} active:bg-[#F5F7FA]`}>
+          {inner}
+        </Link>
+      ) : (
+        <div className={rowClass}>{inner}</div>
+      )}
     </li>
   );
 }
@@ -421,7 +469,7 @@ function ManageAttendanceListPage() {
       setError(null);
 
       try {
-        const data = await fetchAllUsersAttendanceHistory(token, orgId, query);
+        const data = await fetchBiometricManageAttendance(token, orgId, query);
         setHeaderData(data.header_data ?? EMPTY_HEADER);
         setEmployees(Array.isArray(data.employees_attendance_data) ? data.employees_attendance_data : []);
         if (data.selected_date) {
@@ -447,6 +495,32 @@ function ManageAttendanceListPage() {
     setSelectedDate(today);
     void loadAttendance(initialQuery);
   }, [loadAttendance]);
+
+  const { lastEvent } = useBiometricAttendanceFeed(orgId || undefined);
+
+  useEffect(() => {
+    if (!lastEvent || !appliedQuery?.date) return;
+    if (lastEvent.attendance_date !== appliedQuery.date) return;
+    if (
+      lastEvent.event_type === "duplicate_check_in" ||
+      lastEvent.event_type === "duplicate_check_out"
+    ) {
+      return;
+    }
+    void loadAttendance(appliedQuery, true);
+  }, [lastEvent, appliedQuery, loadAttendance]);
+
+  // Poll machine DB while viewing today so check-out appears after 6:30 punches.
+  useEffect(() => {
+    const viewedDate = appliedQuery.date || selectedDate;
+    if (!orgId || viewedDate !== getTodayYmd()) return;
+
+    const timer = window.setInterval(() => {
+      void loadAttendance(appliedQuery, true);
+    }, 5000);
+
+    return () => window.clearInterval(timer);
+  }, [orgId, appliedQuery, selectedDate, loadAttendance]);
 
   const applyFilters = () => {
     if (!selectedDate || isFutureYmd(selectedDate)) {
@@ -834,7 +908,7 @@ function ManageAttendanceListPage() {
           <ul className="mt-1 divide-y divide-[#E4E7EC] border-t border-[#E4E7EC] bg-white">
             {filteredEmployees.map((employee) => (
               <MobileEmployeeRow
-                key={String(employee.employee_id)}
+                key={employeeRowKey(employee)}
                 employee={employee}
                 orgId={orgId}
                 selectedDate={appliedQuery.date || selectedDate}
@@ -1087,6 +1161,12 @@ function ManageAttendanceListPage() {
                       Employee
                     </th>
                     <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                      Employee ID
+                    </th>
+                    <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                      Portal user ID
+                    </th>
+                    <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
                       Check in
                     </th>
                     <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
@@ -1107,8 +1187,14 @@ function ManageAttendanceListPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#E4E7EC]">
-                  {filteredEmployees.map((employee) => (
-                    <tr key={String(employee.employee_id)} className="hover:bg-[#F9FAFB]/80">
+                  {filteredEmployees.map((employee) => {
+                    const rowKey = employeeRowKey(employee);
+                    const portalUserId = employee.user_id ?? employee.employee_id;
+                    const hasPortalUser =
+                      portalUserId != null && Number(portalUserId) > 0;
+
+                    return (
+                    <tr key={rowKey} className="hover:bg-[#F9FAFB]/80">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2.5">
                           {employee.employee_profile_img ? (
@@ -1143,6 +1229,12 @@ function ManageAttendanceListPage() {
                           </div>
                         </div>
                       </td>
+                      <td className="px-4 py-3 text-[12px] font-medium text-[#1F2937]">
+                        {formatEmployeeId(employee)}
+                      </td>
+                      <td className="px-4 py-3 tabular-nums text-[12px] text-[#6B7280]">
+                        {formatPortalUserId(employee)}
+                      </td>
                       <td className="px-4 py-3 tabular-nums text-[#374151]">
                         {formatTime(employee.attendance_check_in_time)}
                       </td>
@@ -1175,21 +1267,26 @@ function ManageAttendanceListPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3">
+                        {hasPortalUser ? (
                         <Link
-                          href={`/dashboard/${orgId}/attendance-management/manage-attendance/0?employee_id=${encodeURIComponent(String(employee.employee_id))}`}
+                          href={`/dashboard/${orgId}/attendance-management/manage-attendance/0?employee_id=${encodeURIComponent(String(portalUserId))}`}
                           className="inline-flex items-center gap-1 rounded-lg border border-[#E4E7EC] px-2.5 py-1.5 text-[12px] font-medium text-[#008CD3] transition hover:bg-[#E8F4FB]"
                         >
                           <MdOpenInNew className="text-[14px]" />
                           History
                         </Link>
+                        ) : (
+                          <span className="text-[11px] text-[#9CA3AF]">Unmapped</span>
+                        )}
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
               <div className="border-t border-[#E4E7EC] bg-[#F9FAFB] px-4 py-2.5 text-[12px] text-[#6B7280]">
                 Showing {filteredEmployees.length} of {membershipTabEmployees.length}{" "}
-                {employeeMembershipTab === "active" ? "active" : "inactive"} employees
+                {employeeMembershipTab === "active" ? "active" : "inactive"} employees · Biometric DB
               </div>
             </div>
           ) : null}

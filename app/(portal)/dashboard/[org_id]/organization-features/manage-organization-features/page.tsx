@@ -16,6 +16,12 @@ import {
   Shield,
   Users,
 } from "lucide-react";
+import {
+  clearEmployeeFeatureAccessCache,
+  readEmployeeFeatureAccessCache,
+  shouldRefreshEmployeeFeatureAccessCache,
+  writeEmployeeFeatureAccessCache,
+} from "@/lib/employeeManagementCache";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
@@ -117,62 +123,105 @@ export default function ManageOrganizationFeaturesPage() {
   const params = useParams();
   const orgId = Number(params?.org_id);
 
-  const [loading, setLoading] = useState(true);
+  const cachedEmployees =
+    orgId && !Number.isNaN(orgId) ? readEmployeeFeatureAccessCache<EmployeeRow>(orgId) : null;
+
+  const [loading, setLoading] = useState(() => !cachedEmployees?.length);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [employees, setEmployees] = useState<EmployeeRow[]>([]);
+  const [employees, setEmployees] = useState<EmployeeRow[]>(() => cachedEmployees ?? []);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | string | null>(null);
-  const [expandedFeatureId, setExpandedFeatureId] = useState<number | string | null>(null);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | string | null>(() => {
+    const first = cachedEmployees?.[0];
+    return first?.employee_id ?? null;
+  });
+  const [expandedFeatureId, setExpandedFeatureId] = useState<number | string | null>(() => {
+    const first = cachedEmployees?.[0];
+    return first?.features_access?.[0]?.feature_id ?? null;
+  });
   const [mobileMainTab, setMobileMainTab] = useState<"members" | "access">("members");
 
-  const loadEmployees = useCallback(async () => {
-    if (!orgId || Number.isNaN(orgId)) {
-      setError("Invalid organization.");
-      setLoading(false);
-      return;
-    }
-
-    const token = localStorage.getItem("token");
-    if (!token) {
-      setError("Not signed in.");
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-    try {
-      const q = encodeURIComponent(String(orgId));
-      const res = await fetch(
-        `${API_URL}/api/organization-features/get-all-employees-with-accessible-features-and-sub-features-info?org_id=${q}`,
-        {
-          method: "GET",
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      );
-      const data = (await res.json()) as {
-        data?: EmployeeRow[];
-        message?: string;
-      };
-      if (!res.ok) {
-        throw new Error(data.message || "Could not load employees");
+  const loadEmployees = useCallback(
+    async (force = false) => {
+      if (!orgId || Number.isNaN(orgId)) {
+        setError("Invalid organization.");
+        setLoading(false);
+        setRefreshing(false);
+        return;
       }
-      const rows = Array.isArray(data.data) ? data.data : [];
-      setEmployees(rows);
-      setSelectedEmployeeId((prev) => {
-        if (prev != null && rows.some((r) => String(r.employee_id) === String(prev))) {
-          return prev;
+
+      const cached = readEmployeeFeatureAccessCache<EmployeeRow>(orgId);
+      if (cached && !force) {
+        setEmployees(cached);
+        setError(null);
+        setLoading(false);
+        setSelectedEmployeeId((prev) => {
+          if (prev != null && cached.some((r) => String(r.employee_id) === String(prev))) {
+            return prev;
+          }
+          return cached[0]?.employee_id ?? null;
+        });
+        setExpandedFeatureId(cached[0]?.features_access?.[0]?.feature_id ?? null);
+        if (!shouldRefreshEmployeeFeatureAccessCache(orgId)) {
+          return;
         }
-        return rows[0]?.employee_id ?? null;
-      });
-      setExpandedFeatureId(rows[0]?.features_access?.[0]?.feature_id ?? null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load employees");
-      setEmployees([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [orgId]);
+        setRefreshing(true);
+      } else {
+        if (force) {
+          clearEmployeeFeatureAccessCache(orgId);
+        }
+        if (force) setRefreshing(true);
+        else setLoading(true);
+        setError(null);
+      }
+
+      const token = localStorage.getItem("token");
+      if (!token) {
+        setError("Not signed in.");
+        setLoading(false);
+        setRefreshing(false);
+        if (!cached) setEmployees([]);
+        return;
+      }
+
+      try {
+        const q = encodeURIComponent(String(orgId));
+        const res = await fetch(
+          `${API_URL}/api/organization-features/get-all-employees-with-accessible-features-and-sub-features-info?org_id=${q}`,
+          {
+            method: "GET",
+            headers: { Authorization: `Bearer ${token}` },
+          },
+        );
+        const data = (await res.json()) as {
+          data?: EmployeeRow[];
+          message?: string;
+        };
+        if (!res.ok) {
+          throw new Error(data.message || "Could not load employees");
+        }
+        const rows = Array.isArray(data.data) ? data.data : [];
+        setEmployees(rows);
+        writeEmployeeFeatureAccessCache(orgId, rows);
+        setSelectedEmployeeId((prev) => {
+          if (prev != null && rows.some((r) => String(r.employee_id) === String(prev))) {
+            return prev;
+          }
+          return rows[0]?.employee_id ?? null;
+        });
+        setExpandedFeatureId(rows[0]?.features_access?.[0]?.feature_id ?? null);
+      } catch (e) {
+        if (!cached || force) {
+          setEmployees([]);
+        }
+        setError(e instanceof Error ? e.message : "Could not load employees");
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [orgId],
+  );
 
   useEffect(() => {
     void loadEmployees();
@@ -553,11 +602,14 @@ export default function ManageOrganizationFeaturesPage() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => void loadEmployees()}
-                  disabled={loading}
+                  onClick={() => void loadEmployees(true)}
+                  disabled={loading || refreshing}
                   className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border border-[#E4E7EC] bg-white px-3 py-1.5 text-[13px] font-medium text-[#374151] transition hover:bg-[#F9FAFB] disabled:opacity-50"
                 >
-                  <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} aria-hidden />
+                  <RefreshCw
+                    className={`h-4 w-4 ${loading || refreshing ? "animate-spin" : ""}`}
+                    aria-hidden
+                  />
                   Refresh
                 </button>
               </div>
@@ -603,12 +655,12 @@ export default function ManageOrganizationFeaturesPage() {
             </div>
             <button
               type="button"
-              onClick={() => void loadEmployees()}
-              disabled={loading}
+              onClick={() => void loadEmployees(true)}
+              disabled={loading || refreshing}
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#008CD3] transition active:bg-[#F5F7FA] disabled:opacity-50"
               aria-label="Refresh"
             >
-              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              <RefreshCw className={`h-4 w-4 ${loading || refreshing ? "animate-spin" : ""}`} />
             </button>
           </div>
 

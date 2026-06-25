@@ -41,6 +41,9 @@ export type AttendanceHeaderData = {
 
 export type EmployeeAttendanceRow = {
   employee_id: number | string;
+  user_id?: number | string | null;
+  biometric_employee_code?: string;
+  biometric_employee_id?: number | string;
   employee_name: string;
   employee_email: string;
   org_id: number | string;
@@ -64,6 +67,7 @@ export type EmployeeAttendanceRow = {
 export type AllUsersAttendanceResponse = {
   success?: boolean;
   message?: string;
+  source?: string;
   selected_date?: string;
   header_data?: AttendanceHeaderData;
   employees_attendance_data?: EmployeeAttendanceRow[];
@@ -173,6 +177,32 @@ export async function fetchAllUsersAttendanceHistory(
   const data = (await res.json()) as AllUsersAttendanceResponse;
   if (!res.ok || data.success === false) {
     throw new Error(data.message || "Could not load attendance history.");
+  }
+  return data;
+}
+
+/** Manage attendance list sourced from biometric SQL Server (with portal user_id). */
+export async function fetchBiometricManageAttendance(
+  token: string,
+  orgId: string,
+  query: AllUsersAttendanceQuery,
+): Promise<AllUsersAttendanceResponse> {
+  const params = new URLSearchParams({ org_id: orgId });
+  if (query.date) params.set("date", query.date);
+  if (query.month) params.set("month", String(query.month));
+  if (query.year) params.set("year", String(query.year));
+  if (query.status) params.set("status", query.status);
+
+  const res = await fetch(
+    `${API_URL}/api/biometric/manage-attendance?${params.toString()}`,
+    {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+    },
+  );
+  const data = (await res.json()) as AllUsersAttendanceResponse;
+  if (!res.ok || data.success === false) {
+    throw new Error(data.message || "Could not load biometric attendance.");
   }
   return data;
 }
