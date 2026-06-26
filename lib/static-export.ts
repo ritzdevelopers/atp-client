@@ -1,4 +1,4 @@
-const DEFAULT_STATIC_ORG_IDS = ["1"];
+const DEFAULT_STATIC_ORG_IDS = ["1", "2"];
 
 export function getStaticOrgIds(): string[] {
   const fromEnv = process.env.STATIC_ORG_IDS?.split(",")

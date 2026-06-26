@@ -3,6 +3,7 @@
 import LeftSideBar from "@/components/portal-dashboard/user-layout/LeftSideBar";
 import RightMainSide from "@/components/portal-dashboard/user-layout/RightMainSide";
 import { useIsSyncConnectionRoute } from "@/lib/useIsSyncConnectionRoute";
+import { useIsDashboardV2Home } from "@/lib/useIsDashboardV2Home";
 import { useEffect } from "react";
 
 function UserDashboardComponent({
@@ -40,9 +41,11 @@ export default function UserDashboardOrgClientLayout({
   children: React.ReactNode;
 }) {
   const isSyncConnection = useIsSyncConnectionRoute();
+  const isDashboardV2Home = useIsDashboardV2Home();
+  const containScroll = isSyncConnection || isDashboardV2Home;
 
   useEffect(() => {
-    if (!isSyncConnection) return;
+    if (!containScroll) return;
 
     const html = document.documentElement;
     const body = document.body;
@@ -56,10 +59,10 @@ export default function UserDashboardOrgClientLayout({
       html.style.overflow = prevHtmlOverflow;
       body.style.overflow = prevBodyOverflow;
     };
-  }, [isSyncConnection]);
+  }, [containScroll]);
 
   return (
-    <UserDashboardComponent containScroll={isSyncConnection}>
+    <UserDashboardComponent containScroll={containScroll}>
       {children}
     </UserDashboardComponent>
   );
