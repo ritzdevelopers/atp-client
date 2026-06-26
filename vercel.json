@@ -37,7 +37,7 @@
       "destination": "/dashboard/1/:path*"
     },
     {
-      "source": "/user-dashboard/:org_id((?!1$)[^/]+)/:path*",
+      "source": "/user-dashboard/:org_id((?!1$|2$)[^/]+)/:path*",
       "destination": "/user-dashboard/1/:path*"
     }
   ]
