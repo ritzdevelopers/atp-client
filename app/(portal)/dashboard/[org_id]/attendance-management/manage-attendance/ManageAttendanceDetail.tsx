@@ -36,6 +36,7 @@ type AttendanceDetailRow = {
   user_email?: string;
   user_phone?: string;
   user_role_name?: string;
+  emp_code?: string;
   attendance_history?: string;
   attendance_date?: string;
   check_in?: string;
@@ -393,7 +394,7 @@ function MonthCalendarHeatmap({
 }: {
   year: number;
   month: number;
-  cells: { day: number | null; status?: string; isSunday?: boolean }[];
+  cells: { day: number | null; status?: string; isSunday?: boolean; isWeekend?: boolean }[];
 }) {
   const weekdays = ["S", "M", "T", "W", "T", "F", "S"];
   return (
@@ -411,7 +412,7 @@ function MonthCalendarHeatmap({
             <div
               key={`day-${cell.day}`}
               title={`Day ${cell.day}: ${formatCalculatedStatusLabel(cell.status)}`}
-              className={`flex aspect-square items-center justify-center rounded-md text-[11px] font-semibold tabular-nums ${calendarHeatmapClass(cell.status, cell.isSunday)}`}
+              className={`flex aspect-square items-center justify-center rounded-md text-[11px] font-semibold tabular-nums ${calendarHeatmapClass(cell.status, cell.isWeekend ?? cell.isSunday)}`}
             >
               {cell.day}
             </div>
@@ -545,7 +546,8 @@ type ManageAttendanceDetailProps = {
   employeeId: string;
 };
 
-function ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
+function 
+ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
   const params = useParams();
   const router = useRouter();
   const orgId = String(params?.org_id ?? "");
@@ -684,7 +686,13 @@ function ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
   const statusDistribution = useMemo(() => {
     const counts = new Map<string, number>();
     for (const day of monthAttendance.days) {
-      if (day.is_future || day.is_sunday) continue;
+      if (
+        day.is_future ||
+        day.attendance_status === "weekly_off" ||
+        (day.is_weekend && !day.check_in)
+      ) {
+        continue;
+      }
       const status = String(day.attendance_status || "absent");
       counts.set(status, (counts.get(status) || 0) + 1);
     }
@@ -802,6 +810,7 @@ function ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
     monthAnalytics.kpiTotal > 0 ? Math.round((count / monthAnalytics.kpiTotal) * 100) : 0;
 
   const employeeName = profile?.user_name?.trim() || "Employee";
+  const employeeCode = profile?.emp_code?.trim() || "";
   const hasProfile = Boolean(profile?.user_name);
   const hasAttendance = attendanceRows.length > 0;
 
@@ -810,6 +819,8 @@ function ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
     return {
       employee_id: employeeId,
       user_id: profile?.user_id ?? employeeId,
+      emp_code: employeeCode,
+      biometric_employee_code: employeeCode,
       employee_name: profile?.user_name?.trim() || "Employee",
       employee_email: profile?.user_email || "",
       org_id: orgId,
@@ -863,8 +874,8 @@ function ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
                 {loading
                   ? "Loading…"
                   : hasAttendance
-                    ? `${attendanceRows.length} record${attendanceRows.length === 1 ? "" : "s"} · ${profile?.user_role_name || "employee"}`
-                    : `${profile?.user_role_name || "employee"} · no records this period`}
+                    ? `${attendanceRows.length} record${attendanceRows.length === 1 ? "" : "s"} · ${profile?.user_role_name || "employee"}${employeeCode ? ` · ID ${employeeCode}` : ""}`
+                    : `${profile?.user_role_name || "employee"}${employeeCode ? ` · ID ${employeeCode}` : ""} · no records this period`}
               </p>
             </div>
             <button
@@ -1001,6 +1012,7 @@ function ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
                   <p className="mt-1 text-[12px] text-white/70">
                     {profile?.user_role_name || "employee"} · Joined{" "}
                     {formatDate(profile?.joining_date)}
+                    {employeeCode ? ` · ID ${employeeCode}` : ""}
                   </p>
                 </div>
               </div>
@@ -1311,6 +1323,9 @@ function ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
                     {profile?.user_name || "Unknown User"}
                   </h2>
                   <p className="text-sm text-slate-600">{profile?.user_email || "No email"}</p>
+                  {employeeCode ? (
+                    <p className="text-sm font-medium text-[#008CD3]">Employee ID {employeeCode}</p>
+                  ) : null}
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-indigo-700">
                       {profile?.user_role_name || "employee"}

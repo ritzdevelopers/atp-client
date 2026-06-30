@@ -1364,6 +1364,8 @@ export type OrgUserRow = {
   exit_process_application_status?: string | null;
   /** `team_members.team_id` from `get_all_users` (null if not on a team). */
   employee_team_id?: number | string | null;
+  /** `apt_org_members.emp_code` from `get_all_users`. */
+  emp_code?: string | null;
   orgID?: number | string;
   /** From `get_all_users` join with `user_shifts` / `shifts` */
   user_shift_id?: number | string | null;
@@ -1492,6 +1494,7 @@ export async function updateMyProfileImage(
 
 export type EmployeeUserInfo = {
   id?: number | string;
+  emp_code?: string | null;
   user_name?: string;
   user_email?: string;
   user_phone?: string;

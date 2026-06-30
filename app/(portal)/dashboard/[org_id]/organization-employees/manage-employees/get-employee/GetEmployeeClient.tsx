@@ -76,7 +76,15 @@ import {
 import {
   fetchSingleUserAttendanceHistory,
   type AttendanceHistoryRow,
+  type EmployeeAttendanceRow,
 } from "@/services/attendanceHistory";
+import ExportAttendanceHistoryModal from "@/components/portal-dashboard/attendance/ExportAttendanceHistoryModal";
+import {
+  buildMonthAttendanceView,
+  calendarHeatmapClass,
+  formatCalculatedStatusLabel,
+  type CalculatedAttendanceStatus,
+} from "@/lib/attendanceRules";
 import {
   createEmployeeBankInfo,
   updateEmployeeBankInfo,
@@ -409,6 +417,19 @@ function normalizeAttendanceStatus(
   return "other";
 }
 
+function calculatedStatusBadgeClass(status: string | undefined): string {
+  const value = String(status || "").trim().toLowerCase();
+  if (value === "present" || value === "present_full_day") {
+    return "bg-[#ECFDF5] text-[#059669] ring-[#A7F3D0]";
+  }
+  if (value === "late") return "bg-[#FFFBEB] text-[#D97706] ring-[#FDE68A]";
+  if (value === "absent") return "bg-[#FEF2F2] text-[#DC2626] ring-[#FECACA]";
+  if (value === "half_day") return "bg-[#F5F3FF] text-[#7C3AED] ring-[#DDD6FE]";
+  if (value === "short_leave") return "bg-[#EFF6FF] text-[#2563EB] ring-[#BFDBFE]";
+  if (value === "weekly_off") return "bg-[#F1F5F9] text-[#64748B] ring-[#E2E8F0]";
+  return "bg-[#F1F5F9] text-[#64748B] ring-[#E2E8F0]";
+}
+
 function attendanceStatusClass(status: unknown): string {
   const bucket = normalizeAttendanceStatus(status);
   if (bucket === "present") return "bg-[#ECFDF5] text-[#059669] ring-[#A7F3D0]";
@@ -602,62 +623,16 @@ function AttendanceMiniCalendar({
   onPrevMonth: () => void;
   onNextMonth: () => void;
 }) {
-  const statusByDay = useMemo(() => {
-    const map = new Map<number, string>();
-    for (const row of rows) {
-      const dateStr = row.attendance_date || row.attendance_history;
-      if (!dateStr) continue;
-      const d = new Date(dateStr);
-      if (Number.isNaN(d.getTime())) continue;
-      if (d.getMonth() + 1 !== month || d.getFullYear() !== year) continue;
-      map.set(d.getDate(), String(row.attendance_status ?? ""));
-    }
-    return map;
-  }, [rows, month, year]);
+  const monthView = useMemo(
+    () => buildMonthAttendanceView(year, month, rows),
+    [year, month, rows],
+  );
 
-  const firstDay = new Date(year, month - 1, 1).getDay();
-  const daysInMonth = new Date(year, month, 0).getDate();
   const monthLabel = new Date(year, month - 1, 1).toLocaleDateString(undefined, {
     month: "long",
     year: "numeric",
   });
-  const today = new Date();
-  const isToday = (day: number) =>
-    today.getDate() === day &&
-    today.getMonth() + 1 === month &&
-    today.getFullYear() === year;
   const weekdayLabels = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
-  const cells: ReactNode[] = [];
-  for (let i = 0; i < firstDay; i += 1) {
-    cells.push(<span key={`empty-${i}`} className="h-9" aria-hidden />);
-  }
-  for (let day = 1; day <= daysInMonth; day += 1) {
-    const status = statusByDay.get(day);
-    const isSelected = selectedDay === day;
-    const hasAttendance = status != null;
-    cells.push(
-      <button
-        key={day}
-        type="button"
-        onClick={() => onSelectDay(day)}
-        className={`group relative flex h-9 w-full flex-col items-center justify-center rounded-xl text-[13px] font-semibold transition-all duration-200 hover:-translate-y-0.5 ${
-          isSelected ? "ring-2 ring-[#2563EB] ring-offset-2" : ""
-        } ${
-          hasAttendance
-            ? attendanceDayClass(status)
-            : `text-[#475569] hover:bg-[#F1F5F9] ${isToday(day) ? "ring-1 ring-[#2563EB]/40" : ""}`
-        }`}
-        aria-label={`Day ${day}`}
-      >
-        <span>{day}</span>
-        {hasAttendance ? (
-          <span className="absolute bottom-1 h-1 w-1 rounded-full bg-white/80" aria-hidden />
-        ) : isToday(day) ? (
-          <span className="absolute bottom-1 h-1 w-1 rounded-full bg-[#2563EB]" aria-hidden />
-        ) : null}
-      </button>,
-    );
-  }
 
   return (
     <div className="flex flex-col">
@@ -688,16 +663,35 @@ function AttendanceMiniCalendar({
         </div>
       </div>
       <div className="mb-1.5 grid grid-cols-7 gap-1">
-        {weekdayLabels.map((label) => (
+        {weekdayLabels.map((label, index) => (
           <span
-            key={label}
+            key={`${label}-${index}`}
             className="flex h-6 items-center justify-center text-[11px] font-semibold uppercase tracking-wide text-[#94A3B8]"
           >
             {label}
           </span>
         ))}
       </div>
-      <div className="grid grid-cols-7 gap-1">{cells}</div>
+      <div className="grid grid-cols-7 gap-1">
+        {monthView.calendarCells.map((cell, index) =>
+          cell.day == null ? (
+            <span key={`empty-${index}`} className="h-9" aria-hidden />
+          ) : (
+            <button
+              key={`day-${cell.day}`}
+              type="button"
+              onClick={() => onSelectDay(cell.day!)}
+              title={`Day ${cell.day}: ${formatCalculatedStatusLabel(cell.status)}`}
+              className={`flex h-9 w-full items-center justify-center rounded-xl text-[13px] font-semibold transition-all duration-200 hover:-translate-y-0.5 ${
+                selectedDay === cell.day ? "ring-2 ring-[#2563EB] ring-offset-2" : ""
+              } ${calendarHeatmapClass(cell.status, cell.isWeekend ?? cell.isSunday)}`}
+              aria-label={`Day ${cell.day}`}
+            >
+              {cell.day}
+            </button>
+          ),
+        )}
+      </div>
     </div>
   );
 }
@@ -711,7 +705,7 @@ function ProfileHeroCard({
   isActive,
   imageUrl,
   onImageZoom,
-  employeeId,
+  empCode,
   joined,
   workDuration,
   company,
@@ -727,7 +721,7 @@ function ProfileHeroCard({
   isActive: boolean;
   imageUrl: string | null;
   onImageZoom: (url: string, alt: string) => void;
-  employeeId: string;
+  empCode: string;
   joined: string;
   workDuration: string;
   company: string;
@@ -788,7 +782,13 @@ function ProfileHeroCard({
                 </span>
               </div>
               <p className="mt-1.5 text-[16px] font-semibold text-[#334155]">{role}</p>
-              <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-[#64748B]">
+              <div className="mt-2 inline-flex flex-col rounded-xl border border-[#E8F4FB] bg-[#F8FCFF] px-3 py-2">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-[#94A3B8]">
+                  Employee code
+                </span>
+                <span className="text-[14px] font-semibold text-[#008CD3]">{empCode}</span>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-[#64748B]">
                 <span className="inline-flex items-center gap-1.5">
                   <Building2 className="h-4 w-4 text-[#94A3B8]" />
                   {department}
@@ -838,7 +838,6 @@ function ProfileHeroCard({
         </div>
 
         <div className="grid grid-cols-1 gap-2.5 self-center sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-          <HeroMetaItem icon={<Hash className="h-4 w-4" />} label="Employee ID" value={employeeId} />
           <HeroMetaItem icon={<CalendarDays className="h-4 w-4" />} label="Joining date" value={joined} />
           <HeroMetaItem icon={<Clock className="h-4 w-4" />} label="Work duration" value={workDuration} />
           <HeroMetaItem icon={<Building2 className="h-4 w-4" />} label="Company" value={company} />
@@ -1151,6 +1150,9 @@ function AttendanceHistoryTable({
   onRefresh,
   refreshing,
   fullAttendanceHref,
+  statusByDate,
+  onExport,
+  exportDisabled,
 }: {
   rows: AttendanceHistoryRow[];
   loading: boolean;
@@ -1162,27 +1164,21 @@ function AttendanceHistoryTable({
   onRefresh: () => void;
   refreshing: boolean;
   fullAttendanceHref?: string;
+  statusByDate: Map<string, CalculatedAttendanceStatus>;
+  onExport?: () => void;
+  exportDisabled?: boolean;
 }) {
   const attendanceRows = useMemo(
     () => rows.filter((row) => Boolean(row.attendance_date || row.attendance_history)),
     [rows],
   );
 
-  const summary = useMemo(() => {
-    let present = 0;
-    let late = 0;
-    let leave = 0;
-    let minutes = 0;
-    for (const row of attendanceRows) {
-      const bucket = normalizeAttendanceStatus(row.attendance_status);
-      if (bucket === "present") present += 1;
-      else if (bucket === "late") late += 1;
-      else if (bucket === "leave") leave += 1;
-      const m = Number(row.working_time);
-      if (Number.isFinite(m) && m > 0) minutes += m;
-    }
-    return { present, late, leave, hours: Math.round((minutes / 60) * 10) / 10 };
-  }, [attendanceRows]);
+  const monthView = useMemo(
+    () => buildMonthAttendanceView(year, month, rows),
+    [year, month, rows],
+  );
+
+  const summary = monthView.summary;
 
   const monthOptions = Array.from({ length: 12 }, (_, i) => i + 1);
   const yearOptions = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
@@ -1233,6 +1229,18 @@ function AttendanceHistoryTable({
           >
             <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
           </button>
+          {onExport ? (
+            <button
+              type="button"
+              onClick={onExport}
+              disabled={exportDisabled || loading}
+              className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-[#E8F4FB] bg-[#F8FCFF] px-3 text-[13px] font-semibold text-[#008CD3] transition hover:bg-[#E8F4FB] disabled:opacity-50"
+              aria-label="Export attendance to Excel"
+            >
+              <Download className="h-4 w-4" aria-hidden />
+              Export
+            </button>
+          ) : null}
           {fullAttendanceHref ? (
             <Link
               href={fullAttendanceHref}
@@ -1246,10 +1254,18 @@ function AttendanceHistoryTable({
       </div>
 
       <div className="grid shrink-0 grid-cols-2 gap-3 px-5 pt-4 sm:grid-cols-4">
-        <AttendanceSummaryPill label="Present" value={summary.present} accent="success" />
+        <AttendanceSummaryPill
+          label="Present"
+          value={summary.present + summary.presentFullDay}
+          accent="success"
+        />
         <AttendanceSummaryPill label="Late" value={summary.late} accent="warning" />
-        <AttendanceSummaryPill label="Leaves" value={summary.leave} accent="danger" />
-        <AttendanceSummaryPill label="Work hrs" value={`${summary.hours}h`} accent="primary" />
+        <AttendanceSummaryPill label="Absent" value={summary.absent} accent="danger" />
+        <AttendanceSummaryPill
+          label="Work hrs"
+          value={`${Math.round((summary.totalWorkingMinutes / 60) * 10) / 10}h`}
+          accent="primary"
+        />
       </div>
 
       {error ? (
@@ -1281,7 +1297,10 @@ function AttendanceHistoryTable({
               </tr>
             </thead>
             <tbody>
-              {attendanceRows.map((row, index) => (
+              {attendanceRows.map((row, index) => {
+                const dateKey = String(row.attendance_date || row.attendance_history || "").slice(0, 10);
+                const calculatedStatus = statusByDate.get(dateKey);
+                return (
                 <tr
                   key={String(row.attendance_id ?? index)}
                   className={`transition-colors hover:bg-[#EFF6FF] ${index % 2 === 1 ? "bg-[#F8FAFC]" : "bg-transparent"}`}
@@ -1296,13 +1315,14 @@ function AttendanceHistoryTable({
                   </td>
                   <td className="rounded-r-xl px-3 py-2.5">
                     <span
-                      className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase ring-1 ring-inset ${attendanceStatusClass(row.attendance_status)}`}
+                      className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase ring-1 ring-inset ${calculatedStatusBadgeClass(calculatedStatus)}`}
                     >
-                      {formatLabel(row.attendance_status)}
+                      {formatCalculatedStatusLabel(calculatedStatus)}
                     </span>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         )}
@@ -3066,6 +3086,7 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
   const [attendanceLoading, setAttendanceLoading] = useState(() => cachedAttendance == null);
   const [attendanceRefreshing, setAttendanceRefreshing] = useState(false);
   const [attendanceError, setAttendanceError] = useState<string | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
 
   const openPhotoZoom = useCallback((imageUrl: string, alt: string) => {
     setPhotoZoom({ imageUrl, alt });
@@ -3348,6 +3369,12 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
 
   const info = data?.user_info;
   const employeeName = asText(info?.user_name, "Employee");
+  const employeeEmpCode = String(info?.emp_code ?? "").trim() || "—";
+
+  const monthAttendance = useMemo(
+    () => buildMonthAttendanceView(attendanceYear, attendanceMonth, attendanceRows),
+    [attendanceYear, attendanceMonth, attendanceRows],
+  );
 
   const hasOpenExit = exitRow != null && isOpenExitStatus(exitRow.application_status);
   const exitPending = exitRow != null && isPendingExitStatus(exitRow.application_status);
@@ -4657,20 +4684,42 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
       ? String(info.user_image).trim()
       : null;
 
+  const exportEmployee = useMemo<EmployeeAttendanceRow | null>(() => {
+    if (!userId || !info) return null;
+    const portalUserId = info.id ?? userId;
+    return {
+      employee_id: portalUserId,
+      user_id: portalUserId,
+      employee_name: employeeName,
+      employee_email: asText(info.user_email),
+      org_id: orgId,
+      employee_designation: asText(info.role_name),
+      employee_profile_img: profileImageUrl ?? "",
+      employee_phone: asText(info.user_phone),
+      attendance_check_in_time: "",
+      attendance_check_out_time: "",
+      employee_working_hours: 0,
+      employee_attendance_status: "",
+      attendance_date: "",
+      is_active_employee: employeeIsActive,
+      total_attendance_days: 0,
+      total_present_days: 0,
+      total_absent_days: 0,
+      total_on_leave_days: 0,
+      total_check_in_on_time_days: 0,
+      total_check_in_late_days: 0,
+    };
+  }, [userId, orgId, info, employeeName, employeeIsActive, profileImageUrl]);
+
   const attendanceRate = useMemo(() => {
-    const rows = attendanceRows.filter(
-      (row) => Boolean(row.attendance_date || row.attendance_history),
-    );
-    if (rows.length === 0) return null;
-    let credited = 0;
-    for (const row of rows) {
-      const bucket = normalizeAttendanceStatus(row.attendance_status);
-      if (bucket === "present" || bucket === "late" || bucket === "half_day" || bucket === "short_leave") {
-        credited += 1;
-      }
-    }
-    return Math.round((credited / rows.length) * 100);
-  }, [attendanceRows]);
+    const kpiTotal = monthAttendance.summary.kpiTotal;
+    if (kpiTotal <= 0) return null;
+    const credited =
+      monthAttendance.summary.present +
+      monthAttendance.summary.presentFullDay +
+      monthAttendance.summary.late;
+    return Math.round((credited / kpiTotal) * 100);
+  }, [monthAttendance]);
 
   const leaveRemaining = useMemo(() => {
     if (!data) return 0;
@@ -4729,8 +4778,9 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
         {[
           { label: "Present", cls: "bg-[#10B981]" },
           { label: "Late", cls: "bg-[#F59E0B]" },
-          { label: "Leave", cls: "bg-[#EF4444]" },
-          { label: "Half day", cls: "bg-[#8B5CF6]" },
+          { label: "Absent", cls: "bg-[#DC2626]" },
+          { label: "Half day", cls: "bg-[#008CD3]" },
+          { label: "Sat / Sun off", cls: "bg-[#E5E7EB]" },
         ].map((legend) => (
           <span key={legend.label} className="inline-flex items-center gap-1.5 text-[12px] text-[#64748B]">
             <span className={`h-2.5 w-2.5 rounded-full ${legend.cls}`} />
@@ -4753,6 +4803,9 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
       onRefresh={() => void loadAttendance(true)}
       refreshing={attendanceRefreshing}
       fullAttendanceHref={fullAttendanceHref || undefined}
+      statusByDate={monthAttendance.statusByDate}
+      onExport={() => setExportOpen(true)}
+      exportDisabled={!exportEmployee}
     />
   );
 
@@ -4796,7 +4849,7 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
         <DetailItem label="Emergency contact" icon={<User className="h-4 w-4" />} value={asText(info?.emergency_contact_name)} />
         <DetailItem label="Emergency number" icon={<Phone className="h-4 w-4" />} value={asText(info?.emergency_number)} />
         <DetailItem label="Relation" icon={<Users className="h-4 w-4" />} value={formatLabel(info?.relation_blood_line)} />
-        <DetailItem label="Employee ID" icon={<Hash className="h-4 w-4" />} value={asText(info?.id ?? userId)} />
+        <DetailItem label="Employee code" icon={<Hash className="h-4 w-4" />} value={employeeEmpCode} />
       </DetailGrid>
     </SectionCard>
   ) : null;
@@ -5445,7 +5498,7 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
         isActive={employeeIsActive}
         imageUrl={profileImageUrl}
         onImageZoom={openPhotoZoom}
-        employeeId={asText(info?.id ?? userId)}
+        empCode={employeeEmpCode}
         joined={formatDate(info?.created_at)}
         workDuration={workedForDuration(info?.created_at)}
         company={orgName}
@@ -5559,10 +5612,27 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
               <h1 className="truncate text-[26px] font-bold tracking-tight text-[#0F172A] sm:text-[32px]">
                 {employeeName}
               </h1>
+              {!loading && !error ? (
+                <div className="mt-2 inline-flex flex-col rounded-xl border border-[#E8F4FB] bg-white/90 px-3 py-2 shadow-sm">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-[#94A3B8]">
+                    Employee code
+                  </span>
+                  <span className="text-[14px] font-semibold text-[#008CD3]">{employeeEmpCode}</span>
+                </div>
+              ) : null}
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {exitActionButtons}
+            <button
+              type="button"
+              onClick={() => setExportOpen(true)}
+              disabled={loading || !exportEmployee}
+              className="inline-flex items-center gap-2 rounded-2xl border border-[#E8F4FB] bg-[#F8FCFF] px-4 py-2.5 text-[14px] font-semibold text-[#008CD3] shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:bg-[#E8F4FB] hover:shadow-md disabled:opacity-60"
+            >
+              <Download className="h-4 w-4" />
+              Export attendance
+            </button>
             <button
               type="button"
               onClick={() => {
@@ -7357,6 +7427,14 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
           </div>
         </div>
       ) : null}
+
+      <ExportAttendanceHistoryModal
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        orgId={orgId}
+        employee={exportEmployee}
+        clientSideCalculation
+      />
     </div>
   );
 }

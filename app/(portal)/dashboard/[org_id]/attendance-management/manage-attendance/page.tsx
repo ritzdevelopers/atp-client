@@ -293,16 +293,19 @@ function formatPortalUserId(employee: EmployeeAttendanceRow): string {
 }
 
 function formatEmployeeId(employee: EmployeeAttendanceRow): string {
-  return employee.biometric_employee_code?.trim() || "—";
+  return employee.emp_code?.trim() || employee.biometric_employee_code?.trim() || "—";
 }
 
 function employeeRowKey(employee: EmployeeAttendanceRow): string {
-  if (employee.biometric_employee_code) {
-    return `bio-${employee.biometric_employee_code}`;
-  }
   const uid = employee.user_id ?? employee.employee_id;
   if (uid != null && Number(uid) > 0) {
     return `user-${uid}`;
+  }
+  if (employee.emp_code?.trim()) {
+    return `emp-code-${employee.emp_code.trim()}`;
+  }
+  if (employee.biometric_employee_code) {
+    return `bio-${employee.biometric_employee_code}`;
   }
   if (employee.biometric_employee_id != null && employee.biometric_employee_id !== "") {
     return `device-${employee.biometric_employee_id}`;
@@ -628,7 +631,9 @@ function ManageAttendanceListPage() {
         e.employee_name.toLowerCase().includes(q) ||
         e.employee_email.toLowerCase().includes(q) ||
         e.employee_designation.toLowerCase().includes(q) ||
-        e.employee_phone.toLowerCase().includes(q),
+        e.employee_phone.toLowerCase().includes(q) ||
+        (e.emp_code || "").toLowerCase().includes(q) ||
+        (e.biometric_employee_code || "").toLowerCase().includes(q),
     );
   }, [
     membershipTabEmployees,

@@ -177,9 +177,20 @@ export function formatCalculatedStatusLabel(status: string | undefined): string 
 
 export function calendarHeatmapClass(
   status: string | undefined,
-  isSunday = false,
+  isWeekend = false,
 ): string {
-  if (isSunday || status === "weekly_off") {
+  if (isWeekend) {
+    if (
+      status &&
+      status !== "absent" &&
+      status !== "weekly_off" &&
+      status !== "future"
+    ) {
+      return "bg-[#0F9D58] text-white shadow-sm";
+    }
+    return "bg-[#E5E7EB] text-[#6B7280]";
+  }
+  if (status === "weekly_off") {
     return "bg-[#E5E7EB] text-[#6B7280]";
   }
   if (!status || status === "absent") {
@@ -212,6 +223,7 @@ export type MonthCalendarCell = {
   day: number | null;
   status?: CalculatedAttendanceStatus;
   isSunday?: boolean;
+  isWeekend?: boolean;
 };
 
 export type MonthAttendanceView = {
@@ -240,8 +252,9 @@ export function buildMonthAttendanceView(
     if (!day.check_in) {
       return {
         ...day,
-        attendance_status: day.is_sunday ? "weekly_off" : "absent",
-        is_absent: !day.is_sunday,
+        attendance_status: day.is_weekend ? "weekly_off" : "absent",
+        is_absent: !day.is_weekend,
+        is_weekly_off: day.is_weekend,
       };
     }
     const detailed = calculateDetailedStatusFromPunches(day.check_in, day.check_out);
@@ -272,7 +285,7 @@ export function buildMonthAttendanceView(
       future += 1;
       continue;
     }
-    if (day.is_sunday || status === "weekly_off") {
+    if (status === "weekly_off" || (day.is_weekend && !day.check_in)) {
       weeklyOff += 1;
       continue;
     }
@@ -297,17 +310,19 @@ export function buildMonthAttendanceView(
   for (let d = 1; d <= daysInMonth; d += 1) {
     const dateYmd = `${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
     const dateObj = new Date(`${dateYmd}T12:00:00`);
-    const isSunday = dateObj.getDay() === 0;
+    const dayIndex = dateObj.getDay();
+    const isSunday = dayIndex === 0;
+    const isWeekend = isWeekendDay(dayIndex);
     const isFuture = dateYmd > todayYmd;
     let status = statusByDate.get(dateYmd);
 
     if (!status) {
       if (isFuture) status = "future";
-      else if (isSunday) status = "weekly_off";
+      else if (isWeekend) status = "weekly_off";
       else status = "absent";
     }
 
-    calendarCells.push({ day: d, status, isSunday });
+    calendarCells.push({ day: d, status, isSunday, isWeekend });
   }
 
   const kpiTotal =
@@ -376,6 +391,40 @@ const DAY_NAMES = [
   "Saturday",
 ];
 
+/** Saturday (6) and Sunday (0) are weekly off unless the employee has attendance. */
+export function isWeekendDay(dayIndex: number): boolean {
+  return dayIndex === 0 || dayIndex === 6;
+}
+
+export function isWeekendYmd(ymd: string): boolean {
+  return isWeekendDay(new Date(`${ymd}T12:00:00`).getDay());
+}
+
+export function dayIsWeekend(day: {
+  is_weekend?: boolean;
+  is_sunday?: boolean;
+  date?: string;
+}): boolean {
+  if (day.is_weekend) return true;
+  if (day.date) return isWeekendYmd(day.date);
+  return Boolean(day.is_sunday);
+}
+
+export function hasAttendanceOnDay(day: {
+  check_in?: string | null;
+  attendance_status?: string | null;
+}): boolean {
+  if (day.check_in) return true;
+  const status = String(day.attendance_status || "").trim().toLowerCase();
+  return (
+    status !== "" &&
+    status !== "absent" &&
+    status !== "weekly_off" &&
+    status !== "future" &&
+    status !== "not_joined"
+  );
+}
+
 /** Build calendar days using only check-in/check-out — ignores stored backend status. */
 export function buildCalendarDaysFromPunches(
   fromDate: string,
@@ -394,6 +443,7 @@ export function buildCalendarDaysFromPunches(
     const d = new Date(`${current}T12:00:00`);
     const dayIndex = d.getDay();
     const isSunday = dayIndex === 0;
+    const isWeekend = isWeekendDay(dayIndex);
     const record = rowByDate.get(current);
     const checkIn = record?.check_in ?? null;
     const checkOut = record?.check_out ?? null;
@@ -406,12 +456,12 @@ export function buildCalendarDaysFromPunches(
 
     if (isFuture) {
       attendance_status = "future";
-    } else if (isSunday && !checkIn) {
+    } else if (isWeekend && !checkIn) {
       attendance_status = "weekly_off";
       is_weekly_off = true;
     } else if (!checkIn) {
       attendance_status = "absent";
-      is_absent = !isSunday;
+      is_absent = true;
     } else {
       attendance_status = deriveStatusFromPunches(checkIn, checkOut);
       is_absent = attendance_status === "absent";
@@ -422,6 +472,7 @@ export function buildCalendarDaysFromPunches(
       day_name: DAY_NAMES[dayIndex],
       day_short: DAY_NAMES[dayIndex].slice(0, 3),
       is_sunday: isSunday,
+      is_weekend: isWeekend,
       is_weekly_off,
       is_future: isFuture,
       is_absent,
@@ -451,8 +502,13 @@ export function summarizeCalendarDaysClient(days: CalendarDayExport[]) {
     if (day.is_future || day.attendance_status === "not_joined") continue;
 
     const status = String(day.attendance_status || "").trim().toLowerCase();
-    if (day.is_weekly_off || day.is_sunday) weeklyOffDays += 1;
-    if (day.is_absent || status === "absent") absentDays += 1;
+    if (
+      (day.is_weekend && !day.check_in) ||
+      day.attendance_status === "weekly_off"
+    ) {
+      weeklyOffDays += 1;
+    }
+    if ((day.is_absent || status === "absent") && !day.is_weekend) absentDays += 1;
     if (status === "present") presentDays += 1;
     if (status === "late") lateDays += 1;
     if (status === "half_day") halfDayDays += 1;
@@ -487,6 +543,7 @@ export type CalendarDayExport = {
   day_name: string;
   day_short: string;
   is_sunday: boolean;
+  is_weekend: boolean;
   is_weekly_off: boolean;
   is_future: boolean;
   is_absent: boolean;
@@ -499,33 +556,42 @@ export type CalendarDayExport = {
 };
 
 export function applyRulesToCalendarDay(day: CalendarDayExport): CalendarDayExport {
+  const isWeekend =
+    day.is_weekend ?? (day.date ? isWeekendYmd(day.date) : Boolean(day.is_sunday));
+  const normalized: CalendarDayExport = { ...day, is_weekend: isWeekend };
+
   if (
-    day.is_future ||
-    day.attendance_status === "not_joined" ||
-    day.is_weekly_off
+    normalized.is_future ||
+    normalized.attendance_status === "not_joined"
   ) {
-    return day;
+    return normalized;
   }
 
-  if (!day.check_in) {
+  if (normalized.is_weekly_off && !normalized.check_in) {
+    return normalized;
+  }
+
+  if (!normalized.check_in) {
     return {
-      ...day,
-      attendance_status: day.is_sunday ? "weekly_off" : "absent",
-      is_absent: !day.is_sunday,
+      ...normalized,
+      attendance_status: isWeekend ? "weekly_off" : "absent",
+      is_absent: !isWeekend,
+      is_weekly_off: isWeekend,
     };
   }
 
   const derivedStatus = deriveFinalAttendanceStatus(
-    wallTimeToMinutesSinceMidnight(timePartFromDateTime(day.check_in)),
-    day.check_out
-      ? wallTimeToMinutesSinceMidnight(timePartFromDateTime(day.check_out))
+    wallTimeToMinutesSinceMidnight(timePartFromDateTime(normalized.check_in)),
+    normalized.check_out
+      ? wallTimeToMinutesSinceMidnight(timePartFromDateTime(normalized.check_out))
       : NaN,
-    day.working_time,
+    normalized.working_time,
   );
 
   return {
-    ...day,
+    ...normalized,
     attendance_status: derivedStatus,
-    is_absent: derivedStatus === "absent" && !day.is_sunday,
+    is_absent: derivedStatus === "absent" && !isWeekend,
+    is_weekly_off: false,
   };
 }
