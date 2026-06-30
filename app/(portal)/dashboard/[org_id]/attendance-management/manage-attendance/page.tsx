@@ -20,6 +20,7 @@ import {
   CalendarDays,
   Filter,
   X,
+  Download,
 } from "lucide-react";
 import { MdOpenInNew } from "react-icons/md";
 import {
@@ -29,6 +30,7 @@ import {
   type EmployeeAttendanceRow,
 } from "@/services/attendanceHistory";
 import { useBiometricAttendanceFeed } from "@/hooks/useBiometricAttendanceFeed";
+import ExportAttendanceHistoryModal from "@/components/portal-dashboard/attendance/ExportAttendanceHistoryModal";
 
 function getTodayYmd(): string {
   const now = new Date();
@@ -278,6 +280,7 @@ type EmployeeRowProps = {
   employee: EmployeeAttendanceRow;
   orgId: string;
   selectedDate: string;
+  onExport?: (employee: EmployeeAttendanceRow) => void;
 };
 
 function formatPortalUserId(employee: EmployeeAttendanceRow): string {
@@ -304,7 +307,7 @@ function employeeRowKey(employee: EmployeeAttendanceRow): string {
   return `emp-${employee.employee_name}`;
 }
 
-function MobileEmployeeRow({ employee, orgId, selectedDate }: EmployeeRowProps) {
+function MobileEmployeeRow({ employee, orgId, selectedDate, onExport }: EmployeeRowProps) {
   const userId = employee.user_id ?? employee.employee_id;
   const hasPortalUser = userId != null && Number(userId) > 0;
   const href = hasPortalUser
@@ -312,89 +315,102 @@ function MobileEmployeeRow({ employee, orgId, selectedDate }: EmployeeRowProps) 
     : "#";
   const parts = ymdToParts(selectedDate);
   const rowClass = "block px-3 py-3.5 sm:px-4";
+
   const inner = (
-        <div className="flex items-start gap-3">
-          {employee.employee_profile_img ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={employee.employee_profile_img}
-              alt=""
-              className="h-10 w-10 shrink-0 rounded-lg object-cover"
-            />
-          ) : (
-            <span
-              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[11px] font-semibold ${userColorClass(employee.employee_name)}`}
-            >
-              {userInitials(employee.employee_name)}
-            </span>
-          )}
-          <div className="min-w-0 flex-1">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="truncate text-[15px] font-medium text-[#1F2937]">
-                  {employee.employee_name}
-                </p>
-                <p className="truncate text-[12px] text-[#6B7280]">
-                  {employee.employee_designation}
-                </p>
-                <p className="truncate text-[11px] text-[#9CA3AF]">
-                  Employee ID {formatEmployeeId(employee)}
-                  {formatPortalUserId(employee) !== "—"
-                    ? ` · Portal user ${formatPortalUserId(employee)}`
-                    : ""}
-                </p>
-                {!hasPortalUser ? (
-                  <p className="text-[11px] text-amber-600">Not linked to portal</p>
-                ) : null}
-              </div>
-              <span
-                className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${statusBadgeClass(employee.employee_attendance_status)}`}
-              >
-                {formatStatusLabel(employee.employee_attendance_status)}
-              </span>
-            </div>
-            {employee.is_active_employee === false ? (
-              <span className="mt-1 inline-flex rounded-full bg-[#FEF3E6] px-2 py-0.5 text-[10px] font-semibold uppercase text-[#E8710A]">
-                Inactive member
-              </span>
-            ) : null}
-            <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[13px] text-[#6B7280]">
-              <p>
-                <span className="text-[#9CA3AF]">In </span>
-                {formatTime(employee.attendance_check_in_time)}
-              </p>
-              <p>
-                <span className="text-[#9CA3AF]">Out </span>
-                {formatTime(employee.attendance_check_out_time)}
-              </p>
-              <p>
-                <span className="text-[#9CA3AF]">Hours </span>
-                {formatWorkingHours(employee.employee_working_hours)}
-              </p>
-              <p>
-                <span className="text-[#9CA3AF]">Month P/L </span>
-                {employee.total_present_days}/{employee.total_check_in_late_days}
-              </p>
-            </div>
-            <p className="mt-1 text-[11px] text-[#9CA3AF]">
-              {parts.month}/{parts.year} · {employee.total_attendance_days} days logged
+    <div className="flex items-start gap-3">
+      {employee.employee_profile_img ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={employee.employee_profile_img}
+          alt=""
+          className="h-10 w-10 shrink-0 rounded-lg object-cover"
+        />
+      ) : (
+        <span
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[11px] font-semibold ${userColorClass(employee.employee_name)}`}
+        >
+          {userInitials(employee.employee_name)}
+        </span>
+      )}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="truncate text-[15px] font-medium text-[#1F2937]">
+              {employee.employee_name}
             </p>
+            <p className="truncate text-[12px] text-[#6B7280]">
+              {employee.employee_designation}
+            </p>
+            <p className="truncate text-[11px] text-[#9CA3AF]">
+              Employee ID {formatEmployeeId(employee)}
+              {formatPortalUserId(employee) !== "—"
+                ? ` · Portal user ${formatPortalUserId(employee)}`
+                : ""}
+            </p>
+            {!hasPortalUser ? (
+              <p className="text-[11px] text-amber-600">Not linked to portal</p>
+            ) : null}
           </div>
-          {hasPortalUser ? (
-            <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-[#9CA3AF]" aria-hidden />
-          ) : null}
+          <span
+            className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${statusBadgeClass(employee.employee_attendance_status)}`}
+          >
+            {formatStatusLabel(employee.employee_attendance_status)}
+          </span>
         </div>
+        {employee.is_active_employee === false ? (
+          <span className="mt-1 inline-flex rounded-full bg-[#FEF3E6] px-2 py-0.5 text-[10px] font-semibold uppercase text-[#E8710A]">
+            Inactive member
+          </span>
+        ) : null}
+        <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[13px] text-[#6B7280]">
+          <p>
+            <span className="text-[#9CA3AF]">In </span>
+            {formatTime(employee.attendance_check_in_time)}
+          </p>
+          <p>
+            <span className="text-[#9CA3AF]">Out </span>
+            {formatTime(employee.attendance_check_out_time)}
+          </p>
+          <p>
+            <span className="text-[#9CA3AF]">Hours </span>
+            {formatWorkingHours(employee.employee_working_hours)}
+          </p>
+          <p>
+            <span className="text-[#9CA3AF]">Month P/L </span>
+            {employee.total_present_days}/{employee.total_check_in_late_days}
+          </p>
+        </div>
+        <p className="mt-1 text-[11px] text-[#9CA3AF]">
+          {parts.month}/{parts.year} · {employee.total_attendance_days} days logged
+        </p>
+      </div>
+      {hasPortalUser ? (
+        <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-[#9CA3AF]" aria-hidden />
+      ) : null}
+    </div>
   );
 
   return (
-    <li>
-      {hasPortalUser ? (
-        <Link href={href} className={`${rowClass} active:bg-[#F5F7FA]`}>
-          {inner}
-        </Link>
-      ) : (
-        <div className={rowClass}>{inner}</div>
-      )}
+    <li className={rowClass}>
+      <div className="flex items-start gap-2">
+        {hasPortalUser ? (
+          <Link href={href} className="min-w-0 flex-1 active:opacity-80">
+            {inner}
+          </Link>
+        ) : (
+          <div className="min-w-0 flex-1">{inner}</div>
+        )}
+        {hasPortalUser && onExport ? (
+          <button
+            type="button"
+            onClick={() => onExport(employee)}
+            className="mt-1 inline-flex shrink-0 items-center gap-1 rounded-lg border border-[#E4E7EC] px-2 py-1.5 text-[11px] font-medium text-[#008CD3] transition hover:bg-[#E8F4FB]"
+            aria-label={`Export attendance for ${employee.employee_name}`}
+          >
+            <Download className="h-3.5 w-3.5" />
+          </button>
+        ) : null}
+      </div>
     </li>
   );
 }
@@ -421,6 +437,8 @@ function ManageAttendanceListPage() {
     useState<EmployeeMembershipTab>("active");
   const [mobileMainTab, setMobileMainTab] = useState<"team" | "overview">("team");
   const [dateToast, setDateToast] = useState<{ id: number; message: string } | null>(null);
+  const [exportEmployee, setExportEmployee] =
+    useState<EmployeeAttendanceRow | null>(null);
 
   const maxSelectableDate = useMemo(() => getTodayYmd(), []);
 
@@ -912,6 +930,7 @@ function ManageAttendanceListPage() {
                 employee={employee}
                 orgId={orgId}
                 selectedDate={appliedQuery.date || selectedDate}
+                onExport={setExportEmployee}
               />
             ))}
           </ul>
@@ -1268,13 +1287,23 @@ function ManageAttendanceListPage() {
                       </td>
                       <td className="px-4 py-3">
                         {hasPortalUser ? (
-                        <Link
-                          href={`/dashboard/${orgId}/attendance-management/manage-attendance/0?employee_id=${encodeURIComponent(String(portalUserId))}`}
-                          className="inline-flex items-center gap-1 rounded-lg border border-[#E4E7EC] px-2.5 py-1.5 text-[12px] font-medium text-[#008CD3] transition hover:bg-[#E8F4FB]"
-                        >
-                          <MdOpenInNew className="text-[14px]" />
-                          History
-                        </Link>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setExportEmployee(employee)}
+                              className="inline-flex items-center gap-1 rounded-lg border border-[#E4E7EC] px-2.5 py-1.5 text-[12px] font-medium text-[#374151] transition hover:bg-[#F9FAFB]"
+                            >
+                              <Download className="text-[14px]" />
+                              Export
+                            </button>
+                            <Link
+                              href={`/dashboard/${orgId}/attendance-management/manage-attendance/0?employee_id=${encodeURIComponent(String(portalUserId))}`}
+                              className="inline-flex items-center gap-1 rounded-lg border border-[#E4E7EC] px-2.5 py-1.5 text-[12px] font-medium text-[#008CD3] transition hover:bg-[#E8F4FB]"
+                            >
+                              <MdOpenInNew className="text-[14px]" />
+                              History
+                            </Link>
+                          </div>
                         ) : (
                           <span className="text-[11px] text-[#9CA3AF]">Unmapped</span>
                         )}
@@ -1323,6 +1352,13 @@ function ManageAttendanceListPage() {
             document.body,
           )
         : null}
+
+      <ExportAttendanceHistoryModal
+        open={exportEmployee != null}
+        onClose={() => setExportEmployee(null)}
+        orgId={orgId}
+        employee={exportEmployee}
+      />
     </div>
   );
 }

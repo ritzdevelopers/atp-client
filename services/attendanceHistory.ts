@@ -22,6 +22,72 @@ export type AttendanceHistoryQuery = {
   date?: number;
 };
 
+export type AttendanceExportMode = "full" | "monthly";
+
+export type AttendanceExportQuery =
+  | { mode: "full" }
+  | { mode: "monthly"; month: number; year: number };
+
+export type AttendanceExportResponse = {
+  success?: boolean;
+  message?: string;
+  employee: {
+    user_id: number | string;
+    user_name: string;
+    user_email: string;
+    user_phone: string;
+    user_role_name: string;
+    emp_code: string;
+    joining_date: string;
+  };
+  period: {
+    mode: AttendanceExportMode;
+    from_date: string;
+    to_date: string;
+    label: string;
+  };
+  summary: {
+    total_days: number;
+    present_days: number;
+    late_days: number;
+    absent_days: number;
+    half_day_days: number;
+    short_leave_days: number;
+    on_leave_days: number;
+    weekly_off_days?: number;
+    total_working_minutes: number;
+    total_working_hours: number;
+  };
+  attendance_rules?: {
+    late_after: string;
+    half_day_checkin_after: string;
+    half_day_checkout_until: string;
+    short_leave_from: string;
+    short_leave_until: string;
+    full_day_checkout_after: string;
+    min_full_day_hours: number;
+  };
+  calendar_days?: Array<{
+    date: string;
+    day_name: string;
+    day_short: string;
+    is_sunday: boolean;
+    is_weekly_off: boolean;
+    is_future: boolean;
+    is_absent: boolean;
+    check_in: string | null;
+    check_out: string | null;
+    attendance_status: string;
+    stored_status?: string | null;
+    working_time: number | null;
+    working_hours?: number | string | null;
+  }>;
+  rows: AttendanceHistoryRow[];
+};
+
+/** Alias used by Excel export utilities. */
+export type AttendanceExportPayload = AttendanceExportResponse;
+
 export type AllUsersAttendanceQuery = {
   date?: string;
   month?: number;
@@ -151,6 +217,65 @@ export async function fetchSingleUserAttendanceHistory(
     throw new Error(data.message || "Could not load attendance history.");
   }
   return Array.isArray(data.data) ? data.data : [];
+}
+
+export async function fetchAttendanceExportData(
+  token: string,
+  orgId: string,
+  employeeId: number | string,
+  query: AttendanceExportQuery,
+): Promise<AttendanceExportResponse> {
+  const params = new URLSearchParams({
+    org_id: orgId,
+    employee_id: String(employeeId),
+    mode: query.mode,
+  });
+  if (query.mode === "monthly") {
+    params.set("month", String(query.month));
+    params.set("year", String(query.year));
+  }
+
+  const res = await fetch(
+    `${API_URL}/api/attendance-history/export-single-user-attendance-history?${params.toString()}`,
+    {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+    },
+  );
+  const data = (await res.json()) as AttendanceExportResponse & {
+    message?: string;
+  };
+  if (!res.ok || data.success === false) {
+    throw new Error(data.message || "Could not load attendance export data.");
+  }
+
+  const period = data.period as AttendanceExportResponse["period"] & {
+    fromDate?: string;
+    toDate?: string;
+  };
+
+  return {
+    ...data,
+    employee: data.employee,
+    summary: data.summary ?? {
+      total_days: 0,
+      present_days: 0,
+      late_days: 0,
+      absent_days: 0,
+      half_day_days: 0,
+      short_leave_days: 0,
+      on_leave_days: 0,
+      total_working_minutes: 0,
+      total_working_hours: 0,
+    },
+    rows: Array.isArray(data.rows) ? data.rows : [],
+    period: {
+      mode: period?.mode ?? query.mode,
+      from_date: period?.from_date ?? period?.fromDate ?? "",
+      to_date: period?.to_date ?? period?.toDate ?? "",
+      label: period?.label ?? "Attendance export",
+    },
+  };
 }
 
 function buildAllUsersAttendanceUrl(

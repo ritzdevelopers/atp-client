@@ -16,7 +16,16 @@ import {
   CalendarDays,
   Clock,
   TrendingUp,
+  Download,
 } from "lucide-react";
+import ExportAttendanceHistoryModal from "@/components/portal-dashboard/attendance/ExportAttendanceHistoryModal";
+import type { EmployeeAttendanceRow } from "@/services/attendanceHistory";
+import {
+  buildMonthAttendanceView,
+  calendarHeatmapClass,
+  formatCalculatedStatusLabel,
+  type CalculatedAttendanceStatus,
+} from "@/lib/attendanceRules";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
@@ -105,6 +114,55 @@ function getCurrentQueryParts() {
     month: now.getMonth() + 1,
     year: now.getFullYear(),
   };
+}
+
+function normalizeCalculatedStatus(
+  status: string | undefined,
+): CalculatedAttendanceStatus | "other" {
+  const value = String(status || "").trim().toLowerCase();
+  if (!value) return "other";
+  if (value === "present_full_day") return "present_full_day";
+  if (value === "short_leave") return "short_leave";
+  if (value === "half_day") return "half_day";
+  if (value === "weekly_off") return "weekly_off";
+  if (value === "late") return "late";
+  if (value === "absent") return "absent";
+  if (value === "present") return "present";
+  return "other";
+}
+
+function calculatedStatusBadgeClass(status: string | undefined): string {
+  const bucket = normalizeCalculatedStatus(status);
+  if (bucket === "present" || bucket === "present_full_day") return "bg-emerald-50 text-emerald-700";
+  if (bucket === "late") return "bg-amber-50 text-amber-700";
+  if (bucket === "absent") return "bg-red-50 text-red-700";
+  if (bucket === "half_day") return "bg-violet-50 text-violet-700";
+  if (bucket === "short_leave") return "bg-sky-50 text-sky-700";
+  if (bucket === "weekly_off") return "bg-slate-100 text-slate-600";
+  return "bg-slate-100 text-slate-700";
+}
+
+function mobileCalculatedStatusBadgeCls(status: string | undefined): string {
+  const bucket = normalizeCalculatedStatus(status);
+  if (bucket === "present" || bucket === "present_full_day") return "bg-[#E6F4EA] text-[#0F9D58]";
+  if (bucket === "late") return "bg-[#FEF3E6] text-[#E8710A]";
+  if (bucket === "absent") return "bg-[#FEE2E2] text-[#DC2626]";
+  if (bucket === "half_day") return "bg-[#E8F4FB] text-[#008CD3]";
+  if (bucket === "short_leave") return "bg-[#FFF8E1] text-[#F9A825]";
+  if (bucket === "weekly_off") return "bg-[#E5E7EB] text-[#6B7280]";
+  return "bg-[#F5F7FA] text-[#6B7280]";
+}
+
+function calculatedStatusChartColor(status: string | undefined): string {
+  const bucket = normalizeCalculatedStatus(status);
+  if (bucket === "present") return "#0F9D58";
+  if (bucket === "present_full_day") return "#047857";
+  if (bucket === "late") return "#E8710A";
+  if (bucket === "absent") return "#DC2626";
+  if (bucket === "half_day") return "#008CD3";
+  if (bucket === "short_leave") return "#F9A825";
+  if (bucket === "weekly_off") return "#9CA3AF";
+  return "#9CA3AF";
 }
 
 function normalizeStatus(
@@ -335,7 +393,7 @@ function MonthCalendarHeatmap({
 }: {
   year: number;
   month: number;
-  cells: { day: number | null; status?: string }[];
+  cells: { day: number | null; status?: string; isSunday?: boolean }[];
 }) {
   const weekdays = ["S", "M", "T", "W", "T", "F", "S"];
   return (
@@ -352,14 +410,8 @@ function MonthCalendarHeatmap({
           ) : (
             <div
               key={`day-${cell.day}`}
-              title={
-                cell.status
-                  ? `Day ${cell.day}: ${formatStatusLabel(cell.status)}`
-                  : `Day ${cell.day}: no record`
-              }
-              className={`flex aspect-square items-center justify-center rounded-md text-[11px] font-semibold tabular-nums ${
-                cell.status ? statusHeatmapClass(cell.status) : "bg-[#F5F7FA] text-[#CBD5E1]"
-              }`}
+              title={`Day ${cell.day}: ${formatCalculatedStatusLabel(cell.status)}`}
+              className={`flex aspect-square items-center justify-center rounded-md text-[11px] font-semibold tabular-nums ${calendarHeatmapClass(cell.status, cell.isSunday)}`}
             >
               {cell.day}
             </div>
@@ -389,9 +441,9 @@ function EnhancedStatusBars({
             <span className="flex min-w-0 items-center gap-2 font-medium text-[#1F2937]">
               <span
                 className="h-2.5 w-2.5 shrink-0 rounded-full"
-                style={{ backgroundColor: statusChartColor(item.status) }}
+                style={{ backgroundColor: calculatedStatusChartColor(item.status) }}
               />
-              <span className="truncate capitalize">{formatStatusLabel(item.status)}</span>
+              <span className="truncate capitalize">{formatCalculatedStatusLabel(item.status)}</span>
             </span>
             <span className="shrink-0 tabular-nums text-[#6B7280]">
               {item.count} ({item.percentage}%)
@@ -402,7 +454,7 @@ function EnhancedStatusBars({
               className="h-full rounded-full transition-all duration-500"
               style={{
                 width: `${item.percentage}%`,
-                backgroundColor: statusChartColor(item.status),
+                backgroundColor: calculatedStatusChartColor(item.status),
               }}
             />
           </div>
@@ -441,12 +493,14 @@ function StackedMonthBar({ segments, total }: { segments: KpiSegment[]; total: n
 
 type MobileLogRowProps = {
   row: AttendanceDetailRow;
+  calculatedStatus?: string;
 };
 
-function MobileAttendanceLogRow({ row }: MobileLogRowProps) {
+function MobileAttendanceLogRow({ row, calculatedStatus }: MobileLogRowProps) {
   const dateValue = row.attendance_date || row.attendance_history;
   const block = dateBlockFromValue(dateValue);
-  const statusCls = mobileStatusBadgeCls(row.attendance_status);
+  const displayStatus = calculatedStatus ?? row.attendance_status;
+  const statusCls = mobileCalculatedStatusBadgeCls(displayStatus);
 
   return (
     <li>
@@ -464,7 +518,7 @@ function MobileAttendanceLogRow({ row }: MobileLogRowProps) {
               <span
                 className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase ${statusCls}`}
               >
-                {formatStatusLabel(row.attendance_status)}
+                {formatCalculatedStatusLabel(displayStatus)}
               </span>
             </div>
             <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1 text-[13px] text-[#6B7280]">
@@ -508,6 +562,7 @@ function ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
     return { month: now.getMonth() + 1, year: now.getFullYear() };
   });
   const [mobileMainTab, setMobileMainTab] = useState<"log" | "insights" | "overview">("log");
+  const [exportOpen, setExportOpen] = useState(false);
 
   const loadSingleEmployeeHistory = useCallback(
     async (
@@ -606,27 +661,17 @@ function ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
     [rows],
   );
 
-  const monthlyKpi = useMemo(() => {
-    let present = 0;
-    let late = 0;
-    let leave = 0;
-    let halfDay = 0;
-    let shortLeave = 0;
+  const monthAttendance = useMemo(
+    () =>
+      buildMonthAttendanceView(
+        appliedQuery.year,
+        appliedQuery.month,
+        attendanceRows,
+      ),
+    [appliedQuery.month, appliedQuery.year, attendanceRows],
+  );
 
-    for (const row of attendanceRows) {
-      const rowMonth = toMonthKey(row.attendance_date || row.attendance_history);
-      const appliedMonthKey = `${appliedQuery.year}-${String(appliedQuery.month).padStart(2, "0")}`;
-      if (!rowMonth || rowMonth !== appliedMonthKey) continue;
-      const bucket = normalizeStatus(row.attendance_status);
-      if (bucket === "present") present += 1;
-      if (bucket === "late") late += 1;
-      if (bucket === "leave") leave += 1;
-      if (bucket === "half_day") halfDay += 1;
-      if (bucket === "short_leave") shortLeave += 1;
-    }
-
-    return { present, late, leave, halfDay, shortLeave };
-  }, [appliedQuery.month, appliedQuery.year, attendanceRows]);
+  const monthlyKpi = monthAttendance.summary;
 
   const sortedRows = useMemo(() => {
     return [...attendanceRows].sort((a, b) => {
@@ -638,11 +683,12 @@ function ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
 
   const statusDistribution = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const row of attendanceRows) {
-      const status = String(row.attendance_status || "unknown").trim() || "unknown";
+    for (const day of monthAttendance.days) {
+      if (day.is_future || day.is_sunday) continue;
+      const status = String(day.attendance_status || "absent");
       counts.set(status, (counts.get(status) || 0) + 1);
     }
-    const total = attendanceRows.length || 1;
+    const total = monthAttendance.summary.kpiTotal || 1;
     return Array.from(counts.entries())
       .map(([status, count]) => ({
         status,
@@ -650,7 +696,7 @@ function ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
         percentage: Math.round((count / total) * 100),
       }))
       .sort((a, b) => b.count - a.count);
-  }, [attendanceRows]);
+  }, [monthAttendance]);
 
   const monthlyTrend = useMemo(() => {
     const bucket = new Map<string, number>();
@@ -667,7 +713,7 @@ function ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
   const monthAnalytics = useMemo(() => {
     const appliedMonthKey = `${appliedQuery.year}-${String(appliedQuery.month).padStart(2, "0")}`;
     const dayMap = new Map<string, { minutes: number; status?: string }>();
-    let totalMinutes = 0;
+    let totalMinutes = monthAttendance.summary.totalWorkingMinutes;
 
     for (const row of attendanceRows) {
       const dateVal = row.attendance_date || row.attendance_history;
@@ -677,23 +723,29 @@ function ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
       if (Number.isNaN(d.getTime())) continue;
       const dayKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
       const mins = workingMinutes(row.working_time);
-      totalMinutes += mins;
-      dayMap.set(dayKey, { minutes: mins, status: row.attendance_status });
+      const calculatedStatus = monthAttendance.statusByDate.get(dayKey);
+      dayMap.set(dayKey, {
+        minutes: mins,
+        status: calculatedStatus ?? row.attendance_status,
+      });
     }
 
     const daysInMonth = new Date(appliedQuery.year, appliedQuery.month, 0).getDate();
-    const kpiTotal =
-      monthlyKpi.present +
-      monthlyKpi.late +
-      monthlyKpi.leave +
-      monthlyKpi.halfDay +
-      monthlyKpi.shortLeave;
+    const kpiTotal = monthAttendance.summary.kpiTotal;
     const attendanceRate =
       kpiTotal > 0
-        ? Math.round(((monthlyKpi.present + monthlyKpi.late) / kpiTotal) * 100)
+        ? Math.round(
+            ((monthlyKpi.present + monthlyKpi.presentFullDay + monthlyKpi.late) /
+              kpiTotal) *
+              100,
+          )
         : 0;
     const onTimeRate =
-      kpiTotal > 0 ? Math.round((monthlyKpi.present / kpiTotal) * 100) : 0;
+      kpiTotal > 0
+        ? Math.round(
+            ((monthlyKpi.present + monthlyKpi.presentFullDay) / kpiTotal) * 100,
+          )
+        : 0;
 
     const dailyHours = Array.from(dayMap.entries())
       .map(([key, entry]) => {
@@ -708,14 +760,6 @@ function ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
 
     const maxDailyHours = dailyHours.reduce((max, p) => Math.max(max, p.hours), 0);
 
-    const firstDow = new Date(appliedQuery.year, appliedQuery.month - 1, 1).getDay();
-    const calendarCells: { day: number | null; status?: string }[] = [];
-    for (let i = 0; i < firstDow; i += 1) calendarCells.push({ day: null });
-    for (let d = 1; d <= daysInMonth; d += 1) {
-      const key = `${appliedQuery.year}-${String(appliedQuery.month).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-      calendarCells.push({ day: d, status: dayMap.get(key)?.status });
-    }
-
     return {
       totalMinutes,
       totalHours: totalMinutes / 60,
@@ -726,17 +770,23 @@ function ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
       onTimeRate,
       dailyHours,
       maxDailyHours,
-      calendarCells,
+      calendarCells: monthAttendance.calendarCells,
       dayMap,
     };
-  }, [appliedQuery.month, appliedQuery.year, attendanceRows, monthlyKpi]);
+  }, [appliedQuery.month, appliedQuery.year, attendanceRows, monthAttendance, monthlyKpi]);
 
   const kpiSegments = useMemo<KpiSegment[]>(
     () =>
       [
         { key: "present", label: "Present", count: monthlyKpi.present, color: "#0F9D58" },
+        {
+          key: "presentFullDay",
+          label: "Full day",
+          count: monthlyKpi.presentFullDay,
+          color: "#047857",
+        },
         { key: "late", label: "Late", count: monthlyKpi.late, color: "#E8710A" },
-        { key: "leave", label: "Leave", count: monthlyKpi.leave, color: "#D93025" },
+        { key: "absent", label: "Absent", count: monthlyKpi.absent, color: "#DC2626" },
         { key: "halfDay", label: "Half day", count: monthlyKpi.halfDay, color: "#008CD3" },
         {
           key: "shortLeave",
@@ -755,6 +805,32 @@ function ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
   const hasProfile = Boolean(profile?.user_name);
   const hasAttendance = attendanceRows.length > 0;
 
+  const exportEmployee = useMemo<EmployeeAttendanceRow | null>(() => {
+    if (!employeeId) return null;
+    return {
+      employee_id: employeeId,
+      user_id: profile?.user_id ?? employeeId,
+      employee_name: profile?.user_name?.trim() || "Employee",
+      employee_email: profile?.user_email || "",
+      org_id: orgId,
+      employee_designation: profile?.user_role_name || "",
+      employee_profile_img: "",
+      employee_phone: profile?.user_phone || "",
+      attendance_check_in_time: "",
+      attendance_check_out_time: "",
+      employee_working_hours: 0,
+      employee_attendance_status: "",
+      attendance_date: "",
+      is_active_employee: true,
+      total_attendance_days: 0,
+      total_present_days: 0,
+      total_absent_days: 0,
+      total_on_leave_days: 0,
+      total_check_in_on_time_days: 0,
+      total_check_in_late_days: 0,
+    };
+  }, [employeeId, orgId, profile]);
+
   const mobileTabs = [
     { id: "log" as const, label: "Log", count: attendanceRows.length },
     { id: "insights" as const, label: "Insights" },
@@ -762,6 +838,7 @@ function ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
   ];
 
   return (
+    <>
     <div className="min-h-full bg-[#F5F7FA] lg:bg-transparent">
       {/* Mobile & tablet: Zoho admin portal style */}
       <div className="lg:hidden">
@@ -790,6 +867,15 @@ function ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
                     : `${profile?.user_role_name || "employee"} · no records this period`}
               </p>
             </div>
+            <button
+              type="button"
+              onClick={() => setExportOpen(true)}
+              disabled={loading || !exportEmployee}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#008CD3] active:bg-[#F5F7FA] disabled:opacity-50"
+              aria-label="Export attendance"
+            >
+              <Download className="h-5 w-5" />
+            </button>
             <button
               type="button"
               onClick={refreshWithCurrentQuery}
@@ -966,6 +1052,14 @@ function ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
                   share={sharePct(monthlyKpi.present)}
                 />
                 <KpiStatCard
+                  label="Full day"
+                  value={monthlyKpi.presentFullDay}
+                  color="text-[#047857]"
+                  bg="bg-[#D1FAE5]/40"
+                  accent="#047857"
+                  share={sharePct(monthlyKpi.presentFullDay)}
+                />
+                <KpiStatCard
                   label="Late"
                   value={monthlyKpi.late}
                   color="text-[#E8710A]"
@@ -974,12 +1068,12 @@ function ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
                   share={sharePct(monthlyKpi.late)}
                 />
                 <KpiStatCard
-                  label="Leaves"
-                  value={monthlyKpi.leave}
-                  color="text-[#D93025]"
-                  bg="bg-[#FCE8E6]/40"
-                  accent="#D93025"
-                  share={sharePct(monthlyKpi.leave)}
+                  label="Total absent"
+                  value={monthlyKpi.absent}
+                  color="text-[#DC2626]"
+                  bg="bg-[#FEE2E2]/40"
+                  accent="#DC2626"
+                  share={sharePct(monthlyKpi.absent)}
                 />
                 <KpiStatCard
                   label="Half days"
@@ -988,6 +1082,14 @@ function ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
                   bg="bg-[#E8F4FB]/50"
                   accent="#008CD3"
                   share={sharePct(monthlyKpi.halfDay)}
+                />
+                <KpiStatCard
+                  label="Short leave"
+                  value={monthlyKpi.shortLeave}
+                  color="text-[#F9A825]"
+                  bg="bg-[#FFF8E1]/50"
+                  accent="#F9A825"
+                  share={sharePct(monthlyKpi.shortLeave)}
                 />
               </div>
             </div>
@@ -1026,12 +1128,12 @@ function ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
                   Late
                 </p>
                 <p>
-                  <span className="mr-1.5 inline-block h-2 w-2 rounded-sm bg-[#D93025]" />
-                  Leave
+                  <span className="mr-1.5 inline-block h-2 w-2 rounded-sm bg-[#DC2626]" />
+                  Absent
                 </p>
                 <p>
-                  <span className="mr-1.5 inline-block h-2 w-2 rounded-sm bg-[#F1F5F9]" />
-                  No record
+                  <span className="mr-1.5 inline-block h-2 w-2 rounded-sm bg-[#E5E7EB]" />
+                  Sunday
                 </p>
               </div>
             </div>
@@ -1107,6 +1209,9 @@ function ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
               <MobileAttendanceLogRow
                 key={`${String(row.attendance_date || row.attendance_history)}-${index}`}
                 row={row}
+                calculatedStatus={monthAttendance.statusByDate.get(
+                  String(row.attendance_date || row.attendance_history || "").slice(0, 10),
+                )}
               />
             ))}
           </ul>
@@ -1115,13 +1220,22 @@ function ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
 
       {/* Desktop layout */}
       <section className="hidden space-y-6 p-4 sm:p-6 lg:block">
-      <div>
+      <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={() => router.back()}
           className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
         >
           ← Back
+        </button>
+        <button
+          type="button"
+          onClick={() => setExportOpen(true)}
+          disabled={loading || !exportEmployee}
+          className="inline-flex items-center gap-2 rounded-lg border border-[#008CD3]/30 bg-[#E8F4FB] px-3 py-2 text-sm font-semibold text-[#008CD3] transition hover:bg-[#D6EBF8] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Download className="h-4 w-4" />
+          Export Excel
         </button>
       </div>
       <header className="overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-[#0C123A] via-[#151e59] to-[#008CD3] p-6 text-white shadow-sm sm:p-8">
@@ -1207,15 +1321,26 @@ function ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
                   </div>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={refreshWithCurrentQuery}
-                disabled={loading || refreshing}
-                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-              >
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setExportOpen(true)}
+                  disabled={loading || !exportEmployee}
+                  className="inline-flex items-center gap-2 rounded-lg border border-[#008CD3]/30 bg-[#E8F4FB] px-4 py-2 text-sm font-semibold text-[#008CD3] transition hover:bg-[#D6EBF8] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Download className="h-4 w-4" />
+                  Export Excel
+                </button>
+                <button
+                  type="button"
+                  onClick={refreshWithCurrentQuery}
+                  disabled={loading || refreshing}
+                  className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
                 <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
                 {refreshing ? "Refreshing…" : "Refresh"}
               </button>
+              </div>
             </div>
           </article>
 
@@ -1263,7 +1388,7 @@ function ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
             <div className="mb-4">
               <StackedMonthBar segments={kpiSegments} total={monthAnalytics.kpiTotal} />
             </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
               <KpiStatCard
                 label="Present"
                 value={monthlyKpi.present}
@@ -1271,6 +1396,14 @@ function ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
                 bg="bg-emerald-50/80"
                 accent="#0F9D58"
                 share={sharePct(monthlyKpi.present)}
+              />
+              <KpiStatCard
+                label="Full day"
+                value={monthlyKpi.presentFullDay}
+                color="text-emerald-800"
+                bg="bg-emerald-100/80"
+                accent="#047857"
+                share={sharePct(monthlyKpi.presentFullDay)}
               />
               <KpiStatCard
                 label="Late"
@@ -1281,12 +1414,12 @@ function ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
                 share={sharePct(monthlyKpi.late)}
               />
               <KpiStatCard
-                label="Leaves"
-                value={monthlyKpi.leave}
-                color="text-rose-700"
-                bg="bg-rose-50/80"
-                accent="#D93025"
-                share={sharePct(monthlyKpi.leave)}
+                label="Total absent"
+                value={monthlyKpi.absent}
+                color="text-red-700"
+                bg="bg-red-50/80"
+                accent="#DC2626"
+                share={sharePct(monthlyKpi.absent)}
               />
               <KpiStatCard
                 label="Half days"
@@ -1297,7 +1430,7 @@ function ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
                 share={sharePct(monthlyKpi.halfDay)}
               />
               <KpiStatCard
-                label="Short leaves"
+                label="Short leave"
                 value={monthlyKpi.shortLeave}
                 color="text-yellow-700"
                 bg="bg-yellow-50/80"
@@ -1387,13 +1520,16 @@ function ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
                 <span className="h-3 w-3 rounded-sm bg-[#E8710A]" /> Late
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="h-3 w-3 rounded-sm bg-[#D93025]" /> Leave
+                <span className="h-3 w-3 rounded-sm bg-[#DC2626]" /> Absent
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="h-3 w-3 rounded-sm bg-[#008CD3]" /> Half day
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="h-3 w-3 rounded-sm bg-[#F9A825]" /> Short leave
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-3 w-3 rounded-sm bg-[#E5E7EB]" /> Sunday
               </span>
             </div>
           </article>
@@ -1417,7 +1553,10 @@ function ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
-                  {sortedRows.map((row, index) => (
+                  {sortedRows.map((row, index) => {
+                    const dateKey = String(row.attendance_date || row.attendance_history || "").slice(0, 10);
+                    const calculatedStatus = monthAttendance.statusByDate.get(dateKey);
+                    return (
                     <tr
                       key={`${String(row.attendance_date || row.attendance_history)}-${index}`}
                       className="transition hover:bg-slate-50/80"
@@ -1431,12 +1570,13 @@ function ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
                         {formatWorkingTime(row.working_time)}
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${statusBadgeClass(row.attendance_status)}`}>
-                          {formatStatusLabel(row.attendance_status)}
+                        <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${calculatedStatusBadgeClass(calculatedStatus)}`}>
+                          {formatCalculatedStatusLabel(calculatedStatus)}
                         </span>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1445,6 +1585,15 @@ function ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
       ) : null}
     </section>
     </div>
+
+    <ExportAttendanceHistoryModal
+      open={exportOpen}
+      onClose={() => setExportOpen(false)}
+      orgId={orgId}
+      employee={exportEmployee}
+      clientSideCalculation
+    />
+    </>
   );
 }
 
