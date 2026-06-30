@@ -44,6 +44,7 @@ const ALWAYS_ALLOWED_SUFFIXES = [
   "/organization-employees/team-group",
   "/asset-handover",
   "/sync-connection",
+  "/map-users-with-emp-code",
 ];
 
 /** Users with these nav paths may also open team detail / exit routes. */
