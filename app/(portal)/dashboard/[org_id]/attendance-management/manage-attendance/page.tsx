@@ -32,6 +32,9 @@ import {
 import { useBiometricAttendanceFeed } from "@/hooks/useBiometricAttendanceFeed";
 import ExportAttendanceHistoryModal from "@/components/portal-dashboard/attendance/ExportAttendanceHistoryModal";
 
+/** Refresh today's attendance from the server every minute (not every few seconds). */
+const ATTENDANCE_POLL_MS = 60_000;
+
 function getTodayYmd(): string {
   const now = new Date();
   const y = now.getFullYear();
@@ -528,14 +531,14 @@ function ManageAttendanceListPage() {
     void loadAttendance(appliedQuery, true);
   }, [lastEvent, appliedQuery, loadAttendance]);
 
-  // Poll machine DB while viewing today so check-out appears after 6:30 punches.
+  // Poll while viewing today so check-out updates without hammering the API.
   useEffect(() => {
     const viewedDate = appliedQuery.date || selectedDate;
     if (!orgId || viewedDate !== getTodayYmd()) return;
 
     const timer = window.setInterval(() => {
       void loadAttendance(appliedQuery, true);
-    }, 5000);
+    }, ATTENDANCE_POLL_MS);
 
     return () => window.clearInterval(timer);
   }, [orgId, appliedQuery, selectedDate, loadAttendance]);
