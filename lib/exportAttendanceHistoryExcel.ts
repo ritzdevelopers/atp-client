@@ -305,6 +305,10 @@ function addGuideSheet(workbook: import("exceljs").Workbook) {
       "Payroll day credit (special employees)",
       "On the daily log, attended weekdays count as Full day (payroll rule) even if the employee was late or on half day. Only absent days reduce payable days.",
     ],
+    [
+      "Two payroll sheets (special employees)",
+      `Employees ${listPayrollExceptionEmpCodes().join(", ")} get two payroll summary sheets: (1) Special rule — only absent reduces pay; (2) Standard rules — normal late, half-day, and leave-from-lates calculations for comparison.`,
+    ],
   ];
 
   for (const [label, value] of rows) {
@@ -435,18 +439,42 @@ function buildCalendarDaysFromPayload(
   return days;
 }
 
+type PayrollSheetMode = "default" | "special" | "standard";
+
 function addOverviewSheet(
   workbook: import("exceljs").Workbook,
   payload: AttendanceExportPayload,
   calendarDays: CalendarDayExport[],
+  options?: {
+    sheetName?: string;
+    payroll?: PayrollExportSummary;
+    mode?: PayrollSheetMode;
+  },
 ) {
   const employee = payload.employee;
   const period = payload.period;
   const empCode = employee.emp_code || String(employee.user_id);
-  const payroll = payrollFromCalendarDays(calendarDays, empCode);
-  const sheet = workbook.addWorksheet("Payroll summary", {
+  const mode =
+    options?.mode ??
+    (isPayrollExceptionEmpCode(empCode) ? "special" : "default");
+  const payroll =
+    options?.payroll ?? payrollFromCalendarDays(calendarDays, empCode);
+  const sheetTitleByMode: Record<PayrollSheetMode, string> = {
+    default: "Employee attendance & payroll summary",
+    special: "Employee attendance & payroll summary (special rule)",
+    standard: "Employee attendance & payroll summary (standard rules)",
+  };
+  const sheetNameByMode: Record<PayrollSheetMode, string> = {
+    default: "Payroll summary",
+    special: "Payroll (special rule)",
+    standard: "Payroll (standard rules)",
+  };
+  const sheet = workbook.addWorksheet(
+    options?.sheetName ?? sheetNameByMode[mode],
+    {
     views: [{ state: "frozen", ySplit: 3 }],
-  });
+  },
+  );
 
   sheet.columns = [
     { width: 14 },
@@ -459,7 +487,7 @@ function addOverviewSheet(
     { width: 14 },
   ];
 
-  const titleRow = sheet.addRow(["Employee attendance & payroll summary"]);
+  const titleRow = sheet.addRow([sheetTitleByMode[mode]]);
   sheet.mergeCells(titleRow.number, 1, titleRow.number, 8);
   titleRow.height = 34;
   styleTitleCell(titleRow.getCell(1), "Employee Attendance Report");
@@ -487,7 +515,7 @@ function addOverviewSheet(
     sheet.mergeCells(row.number, 2, row.number, 8);
   }
 
-  if (payroll.payrollExceptionApplied) {
+  if (mode === "special") {
     const exceptionRow = sheet.addRow([
       "Special payroll rule",
       PAYROLL_EXCEPTION_DESCRIPTION,
@@ -498,6 +526,17 @@ function addOverviewSheet(
     styleValueCell(exceptionValue);
     exceptionValue.alignment = { vertical: "top", wrapText: true };
     sheet.mergeCells(exceptionRow.number, 2, exceptionRow.number, 8);
+  } else if (mode === "standard" && isPayrollExceptionEmpCode(empCode)) {
+    const standardRow = sheet.addRow([
+      "Standard rules comparison",
+      "Same employee calculated with normal company rules: late arrivals, half-day deductions (×0.5), and leave from lates (every 3 lates = 1 leave) all apply.",
+    ]);
+    standardRow.height = 36;
+    styleLabelCell(standardRow.getCell(1));
+    const standardValue = standardRow.getCell(2);
+    styleValueCell(standardValue);
+    standardValue.alignment = { vertical: "top", wrapText: true };
+    sheet.mergeCells(standardRow.number, 2, standardRow.number, 8);
   }
 
   sheet.addRow([]);
@@ -907,7 +946,23 @@ export async function downloadAttendanceHistoryExcel(
   workbook.created = new Date();
 
   addGuideSheet(workbook);
-  addOverviewSheet(workbook, exportPayload, calendarDays);
+
+  const empCode = employee.emp_code;
+  if (isPayrollExceptionEmpCode(empCode)) {
+    addOverviewSheet(workbook, exportPayload, calendarDays, {
+      mode: "special",
+      payroll: buildPayrollExportSummary(calendarDays, { empCode }),
+    });
+    addOverviewSheet(workbook, exportPayload, calendarDays, {
+      mode: "standard",
+      payroll: buildPayrollExportSummary(calendarDays, {
+        empCode,
+        forceStandardRules: true,
+      }),
+    });
+  } else {
+    addOverviewSheet(workbook, exportPayload, calendarDays);
+  }
 
   const monthGroups = groupDaysByMonth(calendarDays);
   for (const [monthKey, days] of monthGroups) {
@@ -941,6 +996,8 @@ export type PreparedEmployeeExport = {
   summary: AttendanceExportSummary;
   calendarDays: CalendarDayExport[];
   payroll: PayrollExportSummary;
+  /** Standard-rules payroll for special employees (comparison sheet). */
+  payrollStandard?: PayrollExportSummary;
 };
 
 export function prepareEmployeeExportPayload(
@@ -952,14 +1009,22 @@ export function prepareEmployeeExportPayload(
     ? summarizeCalendarDaysClient(calendarDays)
     : payload.summary;
 
+  const empCode = payload.employee.emp_code;
+  const payroll = buildPayrollExportSummary(calendarDays, { empCode });
+  const payrollStandard = isPayrollExceptionEmpCode(empCode)
+    ? buildPayrollExportSummary(calendarDays, {
+        empCode,
+        forceStandardRules: true,
+      })
+    : undefined;
+
   return {
     employee: payload.employee,
     period: payload.period,
     summary,
     calendarDays,
-    payroll: buildPayrollExportSummary(calendarDays, {
-      empCode: payload.employee.emp_code,
-    }),
+    payroll,
+    payrollStandard,
   };
 }
 
@@ -972,10 +1037,22 @@ function addAllEmployeesSummarySheet(
     toDate: string;
     filterDescription: string;
   },
+  options?: {
+    sheetName?: string;
+    title?: string;
+    tableTitle?: string;
+    payrollResolver?: (entry: PreparedEmployeeExport) => PayrollExportSummary;
+    formulaNote?: string;
+    showSpecialPayrollColumn?: boolean;
+  },
 ) {
-  const sheet = workbook.addWorksheet("All employees payroll", {
+  const showSpecialColumn = options?.showSpecialPayrollColumn ?? true;
+  const sheet = workbook.addWorksheet(
+    options?.sheetName ?? "All employees payroll",
+    {
     views: [{ state: "frozen", ySplit: 5 }],
-  });
+  },
+  );
 
   sheet.columns = [
     { width: 12 },
@@ -997,7 +1074,9 @@ function addAllEmployeesSummarySheet(
     { width: 10 },
   ];
 
-  const titleRow = sheet.addRow(["All employees — attendance & payroll summary"]);
+  const titleRow = sheet.addRow([
+    options?.title ?? "All employees — attendance & payroll summary",
+  ]);
   sheet.mergeCells(titleRow.number, 1, titleRow.number, 17);
   titleRow.height = 34;
   styleTitleCell(titleRow.getCell(1), "All employees attendance report");
@@ -1010,12 +1089,17 @@ function addAllEmployeesSummarySheet(
     ["List filters applied", meta.filterDescription],
     [
       "Payable days formula",
-      "Month days − Absent weekdays − (Half days × 0.5) − Leave from lates (every 3 lates = 1 leave). Special payroll employees: Month days − Absent only.",
+      options?.formulaNote ??
+        "Month days − Absent weekdays − (Half days × 0.5) − Leave from lates (every 3 lates = 1 leave). Special payroll employees: Month days − Absent only.",
     ],
-    [
-      "Special payroll employees",
-      `${listPayrollExceptionEmpCodes().join(", ")} — ${PAYROLL_EXCEPTION_DESCRIPTION}`,
-    ],
+    ...(showSpecialColumn
+      ? [
+          [
+            "Special payroll employees",
+            `${listPayrollExceptionEmpCodes().join(", ")} — ${PAYROLL_EXCEPTION_DESCRIPTION}`,
+          ] as [string, string],
+        ]
+      : []),
   ];
   for (const [label, value] of metaRows) {
     const row = sheet.addRow([label, value]);
@@ -1025,7 +1109,9 @@ function addAllEmployeesSummarySheet(
   }
 
   sheet.addRow([]);
-  const tableTitle = sheet.addRow(["Employee payroll summary"]);
+  const tableTitle = sheet.addRow([
+    options?.tableTitle ?? "Employee payroll summary",
+  ]);
   sheet.mergeCells(tableTitle.number, 1, tableTitle.number, 17);
   styleSectionTitle(tableTitle.getCell(1));
 
@@ -1045,7 +1131,7 @@ function addAllEmployeesSummarySheet(
     "Leave from\nlates",
     "Payable\ndays",
     "Total\nhours",
-    "Special\npayroll",
+    ...(showSpecialColumn ? ["Special\npayroll"] : []),
   ]);
   header.height = 44;
   header.eachCell((cell) => styleHeaderCell(cell));
@@ -1064,8 +1150,12 @@ function addAllEmployeesSummarySheet(
     totalHours: 0,
   };
 
+  const resolvePayroll =
+    options?.payrollResolver ?? ((entry: PreparedEmployeeExport) => entry.payroll);
+
   for (const entry of entries) {
-    const { employee, payroll } = entry;
+    const { employee } = entry;
+    const payroll = resolvePayroll(entry);
 
     totals.workingDays += payroll.workingDays;
     totals.daysPresent += payroll.daysPresent;
@@ -1095,7 +1185,9 @@ function addAllEmployeesSummarySheet(
       payroll.leaveFromLates,
       payroll.payDays,
       payroll.totalWorkingHours,
-      payroll.payrollExceptionApplied ? "Yes" : "No",
+      ...(showSpecialColumn
+        ? [payroll.payrollExceptionApplied ? "Yes" : "No"]
+        : []),
     ]);
     row.height = 22;
     row.eachCell((cell, colNumber) => {
@@ -1139,7 +1231,7 @@ function addAllEmployeesSummarySheet(
       totals.leaveFromLates,
       Math.round(totals.payDays * 100) / 100,
       Math.round(totals.totalHours * 100) / 100,
-      "",
+      ...(showSpecialColumn ? [""] : []),
     ]);
     totalsRow.height = 24;
     totalsRow.eachCell((cell, colNumber) => {
@@ -1300,7 +1392,48 @@ export async function downloadAllEmployeesAttendanceExcel(
   workbook.created = new Date();
 
   addGuideSheet(workbook);
-  addAllEmployeesSummarySheet(workbook, entries, meta);
+
+  const exceptionEntries = entries.filter((entry) =>
+    isPayrollExceptionEmpCode(entry.employee.emp_code),
+  );
+  const regularEntries = entries.filter(
+    (entry) => !isPayrollExceptionEmpCode(entry.employee.emp_code),
+  );
+
+  if (exceptionEntries.length > 0) {
+    addAllEmployeesSummarySheet(workbook, exceptionEntries, meta, {
+      sheetName: "Payroll (special rule)",
+      title: "Special employees — payroll (special rule)",
+      tableTitle: "Special payroll employees — special rule applied",
+      formulaNote:
+        "Month days − Absent only. Late and half-day do not reduce payable days.",
+      showSpecialPayrollColumn: false,
+    });
+    addAllEmployeesSummarySheet(workbook, exceptionEntries, meta, {
+      sheetName: "Payroll (standard rules)",
+      title: "Special employees — payroll (standard rules)",
+      tableTitle: "Standard company rules (for comparison)",
+      payrollResolver: (entry) =>
+        entry.payrollStandard ??
+        buildPayrollExportSummary(entry.calendarDays, {
+          empCode: entry.employee.emp_code,
+          forceStandardRules: true,
+        }),
+      formulaNote:
+        "Month days − Absent weekdays − (Half days × 0.5) − Leave from lates (every 3 lates = 1 leave).",
+      showSpecialPayrollColumn: false,
+    });
+  }
+
+  if (regularEntries.length > 0) {
+    addAllEmployeesSummarySheet(workbook, regularEntries, meta, {
+      sheetName:
+        exceptionEntries.length > 0
+          ? "All other employees payroll"
+          : "All employees payroll",
+    });
+  }
+
   addAllEmployeesDailyLogSheet(workbook, entries);
 
   const buffer = await workbook.xlsx.writeBuffer();

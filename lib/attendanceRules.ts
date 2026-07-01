@@ -631,7 +631,7 @@ function resolvePayrollMonthDayCount(days: CalendarDayExport[]): number {
 
 export function buildPayrollExportSummary(
   days: CalendarDayExport[],
-  options?: { empCode?: string | null },
+  options?: { empCode?: string | null; forceStandardRules?: boolean },
 ): PayrollExportSummary {
   const base = summarizeCalendarDaysClient(days);
   let daysPresent = 0;
@@ -639,7 +639,8 @@ export function buildPayrollExportSummary(
   let fullDayPresentDays = 0;
 
   const workingDays = resolvePayrollMonthDayCount(days);
-  const payrollExceptionApplied = isPayrollExceptionEmpCode(options?.empCode);
+  const payrollExceptionApplied =
+    !options?.forceStandardRules && isPayrollExceptionEmpCode(options?.empCode);
 
   for (const day of days) {
     if (day.is_future || day.attendance_status === "not_joined") continue;
