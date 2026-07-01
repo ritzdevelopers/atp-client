@@ -135,7 +135,18 @@ export function computeMonthAnalytics(
       color: "#047857",
     },
     { key: "late", label: "Late", count: monthlyKpi.late, color: "#E8710A" },
-    { key: "absent", label: "Absent", count: monthlyKpi.absent, color: "#DC2626" },
+    {
+      key: "lateDerivedLeaves",
+      label: "Leave (from lates)",
+      count: monthlyKpi.lateDerivedLeaves,
+      color: "#BE185D",
+    },
+    {
+      key: "absent",
+      label: "Absent (incl. leave from lates)",
+      count: monthlyKpi.totalAbsentWithLateLeaves,
+      color: "#DC2626",
+    },
     { key: "halfDay", label: "Half day", count: monthlyKpi.halfDay, color: "#008CD3" },
     {
       key: "shortLeave",

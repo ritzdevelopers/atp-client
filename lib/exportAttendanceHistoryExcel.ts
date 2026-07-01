@@ -372,11 +372,19 @@ function addOverviewSheet(
   const summaryRows: [string, string | number][] = [
     ["Working days in period", summary.total_days],
     ["Present", summary.present_days],
-    ["Late", summary.late_days],
+    ["Late (raw count)", summary.late_days],
+    [
+      "Leave from lates (floor(lates ÷ 3))",
+      summary.late_derived_leaves ?? summary.on_leave_days ?? 0,
+    ],
     ["Absent (weekdays only)", summary.absent_days],
+    [
+      "Total absent incl. leave from lates",
+      summary.total_absent_with_late_leaves ??
+        summary.absent_days + (summary.late_derived_leaves ?? summary.on_leave_days ?? 0),
+    ],
     ["Half day", summary.half_day_days],
     ["Short leave", summary.short_leave_days],
-    ["On leave", summary.on_leave_days],
     ["Sat / Sun (week off)", summary.weekly_off_days ?? calendarDays.filter((d) => dayIsWeekend(d) && !hasAttendanceOnDay(d)).length],
     ["Total working hours", `${summary.total_working_hours}h`],
   ];

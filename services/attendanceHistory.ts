@@ -17,10 +17,13 @@ export type AttendanceHistoryRow = {
   joining_date?: string;
 };
 
+export type AttendanceHistoryScope = "month" | "day";
+
 export type AttendanceHistoryQuery = {
   month: number;
   year: number;
   date?: number;
+  scope?: AttendanceHistoryScope;
 };
 
 export type AttendanceExportMode = "full" | "monthly";
@@ -55,18 +58,24 @@ export type AttendanceExportResponse = {
     half_day_days: number;
     short_leave_days: number;
     on_leave_days: number;
+    late_derived_leaves?: number;
+    total_absent_with_late_leaves?: number;
     weekly_off_days?: number;
     total_working_minutes: number;
     total_working_hours: number;
   };
   attendance_rules?: {
-    late_after: string;
+    on_time_until?: string;
+    late_from?: string;
+    late_after?: string;
     half_day_checkin_after: string;
     half_day_checkout_until: string;
     short_leave_from: string;
     short_leave_until: string;
     full_day_checkout_after: string;
     min_full_day_hours: number;
+    min_absent_hours?: number;
+    lates_per_derived_leave?: number;
   };
   calendar_days?: Array<{
     date: string;
@@ -158,8 +167,9 @@ function buildSingleUserHistoryUrl(
     employee_id: String(employeeId),
     month: String(query.month),
     year: String(query.year),
+    scope: query.scope || "month",
   });
-  if (query.date) {
+  if (query.scope === "day" && query.date) {
     params.set("date", String(query.date));
   }
   return `${API_URL}/api/attendance-history/get-single-user-with-attendance-history?${params.toString()}`;
@@ -177,8 +187,9 @@ function buildTeamMemberHistoryUrl(
     employee_id: String(employeeId),
     month: String(query.month),
     year: String(query.year),
+    scope: query.scope || "month",
   });
-  if (query.date) {
+  if (query.scope === "day" && query.date) {
     params.set("date", String(query.date));
   }
   return `${API_URL}/api/attendance-history/get-team-member-attendance-history?${params.toString()}`;

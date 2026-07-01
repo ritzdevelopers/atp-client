@@ -9,7 +9,6 @@ import {
   RefreshCw,
   Loader2,
   AlertCircle,
-  Info,
   User,
   ClipboardList,
   BarChart3,
@@ -19,6 +18,7 @@ import {
   Download,
 } from "lucide-react";
 import ExportAttendanceHistoryModal from "@/components/portal-dashboard/attendance/ExportAttendanceHistoryModal";
+import AttendanceRulesNotice from "@/components/portal-dashboard/attendance/AttendanceRulesNotice";
 import type { EmployeeAttendanceRow } from "@/services/attendanceHistory";
 import {
   buildMonthAttendanceView,
@@ -46,10 +46,13 @@ type AttendanceDetailRow = {
   joining_date?: string;
 };
 
+type AttendanceHistoryScope = "month" | "day";
+
 type AttendanceHistoryQuery = {
   month: number;
   year: number;
   date?: number;
+  scope?: AttendanceHistoryScope;
 };
 
 type SingleUserAttendanceResponse = {
@@ -68,8 +71,9 @@ function buildSingleUserHistoryUrl(
     employee_id: employeeId,
     month: String(query.month),
     year: String(query.year),
+    scope: query.scope || "month",
   });
-  if (query.date) {
+  if (query.scope === "day" && query.date) {
     params.set("date", String(query.date));
   }
   return `${API_URL}/api/attendance-history/get-single-user-with-attendance-history?${params.toString()}`;
@@ -103,10 +107,6 @@ function formatTime(dateValue: string | undefined): string {
   });
 }
 
-function getDefaultMonthValue(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-}
 
 function getCurrentQueryParts() {
   const now = new Date();
@@ -290,6 +290,34 @@ function formatMonthYearLabel(year: number, month: number): string {
     month: "long",
     year: "numeric",
   });
+}
+
+function formatAppliedPeriodLabel(query: AttendanceHistoryQuery): string {
+  if (query.scope === "day" && query.date) {
+    return new Date(query.year, query.month - 1, query.date).toLocaleDateString(undefined, {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+  }
+  return formatMonthYearLabel(query.year, query.month);
+}
+
+function buildInitialAttendanceQuery(
+  initialQuery?: Partial<AttendanceHistoryQuery>,
+): AttendanceHistoryQuery {
+  const now = new Date();
+  const scope = initialQuery?.scope === "day" ? "day" : "month";
+  return {
+    month: initialQuery?.month || now.getMonth() + 1,
+    year: initialQuery?.year || now.getFullYear(),
+    scope,
+    ...(scope === "day" && initialQuery?.date
+      ? { date: initialQuery.date }
+      : scope === "day"
+        ? { date: now.getDate() }
+        : {}),
+  };
 }
 
 function buildConicGradient(
@@ -544,10 +572,13 @@ function MobileAttendanceLogRow({ row, calculatedStatus }: MobileLogRowProps) {
 
 type ManageAttendanceDetailProps = {
   employeeId: string;
+  initialQuery?: Partial<AttendanceHistoryQuery>;
 };
 
-function 
-ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
+function ManageAttendanceDetail({
+  employeeId,
+  initialQuery,
+}: ManageAttendanceDetailProps) {
   const params = useParams();
   const router = useRouter();
   const orgId = String(params?.org_id ?? "");
@@ -556,13 +587,24 @@ ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedMonth, setSelectedMonth] = useState(getDefaultMonthValue());
-  const [selectedDate, setSelectedDate] = useState(String(new Date().getDate()));
-  const [selectedYear, setSelectedYear] = useState(String(new Date().getFullYear()));
-  const [appliedQuery, setAppliedQuery] = useState<AttendanceHistoryQuery>(() => {
-    const now = new Date();
-    return { month: now.getMonth() + 1, year: now.getFullYear() };
+  const [filterScope, setFilterScope] = useState<AttendanceHistoryScope>(
+    () => buildInitialAttendanceQuery(initialQuery).scope || "month",
+  );
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const query = buildInitialAttendanceQuery(initialQuery);
+    return `${query.year}-${String(query.month).padStart(2, "0")}`;
   });
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const query = buildInitialAttendanceQuery(initialQuery);
+    return String(query.date ?? new Date().getDate());
+  });
+  const [selectedYear, setSelectedYear] = useState(() => {
+    const query = buildInitialAttendanceQuery(initialQuery);
+    return String(query.year);
+  });
+  const [appliedQuery, setAppliedQuery] = useState<AttendanceHistoryQuery>(() =>
+    buildInitialAttendanceQuery(initialQuery),
+  );
   const [mobileMainTab, setMobileMainTab] = useState<"log" | "insights" | "overview">("log");
   const [exportOpen, setExportOpen] = useState(false);
 
@@ -612,18 +654,15 @@ ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
   );
 
   useEffect(() => {
-    const now = new Date();
-    const current: AttendanceHistoryQuery = {
-      month: now.getMonth() + 1,
-      year: now.getFullYear(),
-    };
+    const current = buildInitialAttendanceQuery(initialQuery);
     setAppliedQuery(current);
-    setSelectedDate(String(now.getDate()));
+    setFilterScope(current.scope || "month");
+    setSelectedDate(String(current.date ?? new Date().getDate()));
     setSelectedMonth(`${current.year}-${String(current.month).padStart(2, "0")}`);
     setSelectedYear(String(current.year));
     void loadSingleEmployeeHistory(false, current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [employeeId, orgId]);
+  }, [employeeId, orgId, initialQuery?.month, initialQuery?.year, initialQuery?.scope, initialQuery?.date]);
 
   const selectedMonthValue = useMemo(() => {
     const [year, month] = selectedMonth.split("-");
@@ -637,7 +676,10 @@ ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
     const query: AttendanceHistoryQuery = {
       month: selectedMonthValue.month,
       year: selectedMonthValue.year,
-      date: Number(selectedDate) || undefined,
+      scope: filterScope,
+      ...(filterScope === "day"
+        ? { date: Number(selectedDate) || undefined }
+        : {}),
     };
     setAppliedQuery(query);
     void loadSingleEmployeeHistory(false, query);
@@ -648,8 +690,10 @@ ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
     const current: AttendanceHistoryQuery = {
       month: now.getMonth() + 1,
       year: now.getFullYear(),
+      scope: "month",
     };
     setAppliedQuery(current);
+    setFilterScope("month");
     setSelectedDate(String(now.getDate()));
     setSelectedMonth(`${current.year}-${String(current.month).padStart(2, "0")}`);
     setSelectedYear(String(current.year));
@@ -794,7 +838,18 @@ ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
           color: "#047857",
         },
         { key: "late", label: "Late", count: monthlyKpi.late, color: "#E8710A" },
-        { key: "absent", label: "Absent", count: monthlyKpi.absent, color: "#DC2626" },
+        {
+          key: "lateDerivedLeaves",
+          label: "Leave (from lates)",
+          count: monthlyKpi.lateDerivedLeaves,
+          color: "#BE185D",
+        },
+        {
+          key: "absent",
+          label: "Absent (incl. leave from lates)",
+          count: monthlyKpi.totalAbsentWithLateLeaves,
+          color: "#DC2626",
+        },
         { key: "halfDay", label: "Half day", count: monthlyKpi.halfDay, color: "#008CD3" },
         {
           key: "shortLeave",
@@ -930,43 +985,98 @@ ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
 
           {mobileMainTab === "log" ? (
             <div className="space-y-2.5 border-t border-[#E4E7EC] px-4 py-2.5">
-              <div className="grid grid-cols-3 gap-2">
-                <input
-                  type="number"
-                  min={1}
-                  max={31}
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className={zohoSelectCls()}
-                  placeholder="Day"
-                  aria-label="Day"
-                />
-                <input
-                  type="month"
-                  value={selectedMonth}
-                  onChange={(e) => setSelectedMonth(e.target.value)}
-                  className={`col-span-2 ${zohoSelectCls()}`}
-                  aria-label="Month"
-                />
-              </div>
-              <div className="grid grid-cols-[1fr_auto] gap-2">
-                <input
-                  type="number"
-                  value={selectedYear}
-                  onChange={(e) => setSelectedYear(e.target.value)}
-                  className={zohoSelectCls()}
-                  placeholder="Year"
-                  aria-label="Year"
-                />
+              <div className="flex rounded-lg bg-[#F5F7FA] p-1">
                 <button
                   type="button"
-                  onClick={applySelectedQuery}
-                  disabled={loading || refreshing}
-                  className={zohoPrimaryBtnCls()}
+                  onClick={() => setFilterScope("month")}
+                  className={`flex-1 rounded-md py-2 text-[12px] font-medium transition ${
+                    filterScope === "month"
+                      ? "bg-white text-[#008CD3] shadow-sm"
+                      : "text-[#6B7280]"
+                  }`}
                 >
-                  Apply
+                  Full month
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterScope("day")}
+                  className={`flex-1 rounded-md py-2 text-[12px] font-medium transition ${
+                    filterScope === "day"
+                      ? "bg-white text-[#008CD3] shadow-sm"
+                      : "text-[#6B7280]"
+                  }`}
+                >
+                  Single day
                 </button>
               </div>
+
+              {filterScope === "month" ? (
+                <div className="grid grid-cols-[1fr_auto] gap-2">
+                  <input
+                    type="month"
+                    value={selectedMonth}
+                    onChange={(e) => {
+                      setSelectedMonth(e.target.value);
+                      const [year] = e.target.value.split("-");
+                      if (year) setSelectedYear(year);
+                    }}
+                    className={zohoSelectCls()}
+                    aria-label="Month"
+                  />
+                  <button
+                    type="button"
+                    onClick={applySelectedQuery}
+                    disabled={loading || refreshing}
+                    className={zohoPrimaryBtnCls()}
+                  >
+                    Apply
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-3 gap-2">
+                    <input
+                      type="number"
+                      min={1}
+                      max={31}
+                      value={selectedDate}
+                      onChange={(e) => setSelectedDate(e.target.value)}
+                      className={zohoSelectCls()}
+                      placeholder="Day"
+                      aria-label="Day"
+                    />
+                    <input
+                      type="month"
+                      value={selectedMonth}
+                      onChange={(e) => {
+                        setSelectedMonth(e.target.value);
+                        const [year] = e.target.value.split("-");
+                        if (year) setSelectedYear(year);
+                      }}
+                      className={`col-span-2 ${zohoSelectCls()}`}
+                      aria-label="Month"
+                    />
+                  </div>
+                  <div className="grid grid-cols-[1fr_auto] gap-2">
+                    <input
+                      type="number"
+                      value={selectedYear}
+                      onChange={(e) => setSelectedYear(e.target.value)}
+                      className={zohoSelectCls()}
+                      placeholder="Year"
+                      aria-label="Year"
+                    />
+                    <button
+                      type="button"
+                      onClick={applySelectedQuery}
+                      disabled={loading || refreshing}
+                      className={zohoPrimaryBtnCls()}
+                    >
+                      Apply
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           ) : null}
         </div>
@@ -1080,12 +1190,20 @@ ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
                   share={sharePct(monthlyKpi.late)}
                 />
                 <KpiStatCard
-                  label="Total absent"
-                  value={monthlyKpi.absent}
+                  label="Leave (from lates)"
+                  value={monthlyKpi.lateDerivedLeaves}
+                  color="text-[#BE185D]"
+                  bg="bg-[#FCE7F3]/50"
+                  accent="#BE185D"
+                  share={sharePct(monthlyKpi.lateDerivedLeaves)}
+                />
+                <KpiStatCard
+                  label="Absent (incl. leave from lates)"
+                  value={monthlyKpi.totalAbsentWithLateLeaves}
                   color="text-[#DC2626]"
                   bg="bg-[#FEE2E2]/40"
                   accent="#DC2626"
-                  share={sharePct(monthlyKpi.absent)}
+                  share={sharePct(monthlyKpi.totalAbsentWithLateLeaves)}
                 />
                 <KpiStatCard
                   label="Half days"
@@ -1150,15 +1268,7 @@ ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
               </div>
             </div>
 
-            <div className="rounded-xl border border-[#E4E7EC] bg-[#E8F4FB] p-4">
-              <div className="flex gap-3">
-                <Info className="h-5 w-5 shrink-0 text-[#008CD3]" />
-                <p className="text-[14px] leading-relaxed text-[#4B5563]">
-                  Charts reflect the applied query period ({appliedQuery.month}/{appliedQuery.year}
-                  ). Use the Log tab to change filters and view check-in/out details.
-                </p>
-              </div>
-            </div>
+            <AttendanceRulesNotice lateCount={monthlyKpi.late} className="border-[#E4E7EC] bg-[#E8F4FB]" />
           </div>
         ) : null}
 
@@ -1364,32 +1474,68 @@ ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
               <div>
                 <p className="text-sm font-semibold text-[#0C123A]">Query filters</p>
                 <p className="text-xs text-slate-500">
-                  Period: {formatMonthYearLabel(appliedQuery.year, appliedQuery.month)}
+                  Period: {formatAppliedPeriodLabel(appliedQuery)}
+                  {appliedQuery.scope === "month" ? " (full month)" : ""}
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <input
-                  type="number"
-                  min={1}
-                  max={31}
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="w-20 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none ring-indigo-200 focus:ring-2"
-                  placeholder="Date"
-                />
+                <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+                  <button
+                    type="button"
+                    onClick={() => setFilterScope("month")}
+                    className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${
+                      filterScope === "month"
+                        ? "bg-white text-[#0C123A] shadow-sm"
+                        : "text-slate-600"
+                    }`}
+                  >
+                    Full month
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFilterScope("day")}
+                    className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${
+                      filterScope === "day"
+                        ? "bg-white text-[#0C123A] shadow-sm"
+                        : "text-slate-600"
+                    }`}
+                  >
+                    Single day
+                  </button>
+                </div>
+                {filterScope === "day" ? (
+                  <input
+                    type="number"
+                    min={1}
+                    max={31}
+                    value={selectedDate}
+                    onChange={(e) => setSelectedDate(e.target.value)}
+                    className="w-20 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none ring-indigo-200 focus:ring-2"
+                    placeholder="Date"
+                    aria-label="Day"
+                  />
+                ) : null}
                 <input
                   type="month"
                   value={selectedMonth}
-                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  onChange={(e) => {
+                    setSelectedMonth(e.target.value);
+                    const [year] = e.target.value.split("-");
+                    if (year) setSelectedYear(year);
+                  }}
                   className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none ring-indigo-200 focus:ring-2"
+                  aria-label="Month"
                 />
-                <input
-                  type="number"
-                  value={selectedYear}
-                  onChange={(e) => setSelectedYear(e.target.value)}
-                  className="w-24 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none ring-indigo-200 focus:ring-2"
-                  placeholder="Year"
-                />
+                {filterScope === "day" ? (
+                  <input
+                    type="number"
+                    value={selectedYear}
+                    onChange={(e) => setSelectedYear(e.target.value)}
+                    className="w-24 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none ring-indigo-200 focus:ring-2"
+                    placeholder="Year"
+                    aria-label="Year"
+                  />
+                ) : null}
                 <button
                   type="button"
                   onClick={applySelectedQuery}
@@ -1429,12 +1575,20 @@ ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
                 share={sharePct(monthlyKpi.late)}
               />
               <KpiStatCard
-                label="Total absent"
-                value={monthlyKpi.absent}
+                label="Leave (from lates)"
+                value={monthlyKpi.lateDerivedLeaves}
+                color="text-rose-700"
+                bg="bg-rose-50/80"
+                accent="#BE185D"
+                share={sharePct(monthlyKpi.lateDerivedLeaves)}
+              />
+              <KpiStatCard
+                label="Absent (incl. leave from lates)"
+                value={monthlyKpi.totalAbsentWithLateLeaves}
                 color="text-red-700"
                 bg="bg-red-50/80"
                 accent="#DC2626"
-                share={sharePct(monthlyKpi.absent)}
+                share={sharePct(monthlyKpi.totalAbsentWithLateLeaves)}
               />
               <KpiStatCard
                 label="Half days"
@@ -1454,6 +1608,8 @@ ManageAttendanceDetail({ employeeId }: ManageAttendanceDetailProps) {
               />
             </div>
           </article>
+
+          <AttendanceRulesNotice lateCount={monthlyKpi.late} />
 
           <article className="grid gap-4 xl:grid-cols-3">
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm xl:col-span-1">
