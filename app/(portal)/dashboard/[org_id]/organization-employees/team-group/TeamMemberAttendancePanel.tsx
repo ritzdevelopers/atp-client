@@ -244,7 +244,14 @@ export default function TeamMemberAttendancePanel({
       if (bucket === "short_leave") shortLeave += 1;
     }
 
-    return { present, late, leave, halfDay, shortLeave };
+    return {
+      present,
+      late,
+      leave,
+      halfDay,
+      shortLeave,
+      daysPresent: present + late + halfDay + shortLeave,
+    };
   }, [appliedQuery.month, appliedQuery.year, attendanceRows]);
 
   const sortedRows = useMemo(
@@ -397,7 +404,7 @@ export default function TeamMemberAttendancePanel({
 
       <div className="shrink-0 grid grid-cols-5 gap-1.5 border-b border-[#E4E7EC] bg-[#FAFBFC] px-3 py-2.5">
         {[
-          { label: "Present", value: monthlyKpi.present, cls: "text-[#0F9D58]" },
+          { label: "Present", value: monthlyKpi.daysPresent, cls: "text-[#0F9D58]" },
           { label: "Late", value: monthlyKpi.late, cls: "text-[#E8710A]" },
           { label: "Leave", value: monthlyKpi.leave, cls: "text-[#D93025]" },
           { label: "Half", value: monthlyKpi.halfDay, cls: "text-[#008CD3]" },

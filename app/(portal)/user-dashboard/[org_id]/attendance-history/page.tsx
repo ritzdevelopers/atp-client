@@ -456,11 +456,11 @@ export default function AttendanceHistoryPage() {
               <div className="mt-4 grid grid-cols-2 gap-3">
                 <KpiStatCard
                   label="Present"
-                  value={monthlyKpi.present}
+                  value={monthlyKpi.daysPresent}
                   color="text-[#0F9D58]"
                   bg="bg-white"
                   accent="#0F9D58"
-                  share={sharePct(monthlyKpi.present)}
+                  share={sharePct(monthlyKpi.daysPresent)}
                 />
                 <KpiStatCard
                   label="Full day"
@@ -744,7 +744,7 @@ export default function AttendanceHistoryPage() {
         {!loading && !error ? (
           <>
             <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-              <KpiStatCard label="Present" value={monthlyKpi.present} color="text-emerald-600" bg="bg-white" accent="#0F9D58" share={sharePct(monthlyKpi.present)} />
+              <KpiStatCard label="Present" value={monthlyKpi.daysPresent} color="text-emerald-600" bg="bg-white" accent="#0F9D58" share={sharePct(monthlyKpi.daysPresent)} />
               <KpiStatCard label="Full day" value={monthlyKpi.presentFullDay} color="text-emerald-700" bg="bg-white" accent="#047857" share={sharePct(monthlyKpi.presentFullDay)} />
               <KpiStatCard label="Late" value={monthlyKpi.late} color="text-orange-500" bg="bg-white" accent="#E8710A" share={sharePct(monthlyKpi.late)} />
               <KpiStatCard label="Leave (from lates)" value={monthlyKpi.lateDerivedLeaves} color="text-rose-600" bg="bg-white" accent="#BE185D" share={sharePct(monthlyKpi.lateDerivedLeaves)} />

@@ -31,6 +31,7 @@ import {
 } from "@/services/attendanceHistory";
 import { useBiometricAttendanceFeed } from "@/hooks/useBiometricAttendanceFeed";
 import ExportAttendanceHistoryModal from "@/components/portal-dashboard/attendance/ExportAttendanceHistoryModal";
+import ExportAllEmployeesAttendanceModal from "@/components/portal-dashboard/attendance/ExportAllEmployeesAttendanceModal";
 import AttendanceRulesNotice from "@/components/portal-dashboard/attendance/AttendanceRulesNotice";
 
 /** Refresh today's attendance from the server every minute (not every few seconds). */
@@ -446,6 +447,7 @@ function ManageAttendanceListPage() {
   const [dateToast, setDateToast] = useState<{ id: number; message: string } | null>(null);
   const [exportEmployee, setExportEmployee] =
     useState<EmployeeAttendanceRow | null>(null);
+  const [exportAllOpen, setExportAllOpen] = useState(false);
 
   const maxSelectableDate = useMemo(() => getTodayYmd(), []);
 
@@ -659,6 +661,43 @@ function ManageAttendanceListPage() {
 
   const displayDateLabel = formatDisplayDate(appliedQuery.date || selectedDate);
 
+  const exportableEmployees = useMemo(
+    () =>
+      filteredEmployees.filter((employee) => {
+        const portalUserId = employee.user_id ?? employee.employee_id;
+        return portalUserId != null && String(portalUserId).trim() !== "";
+      }),
+    [filteredEmployees],
+  );
+
+  const exportFilterDescription = useMemo(() => {
+    const parts = [`Daily view: ${displayDateLabel}`];
+    parts.push(
+      employeeMembershipTab === "active" ? "Tab: Active employees" : "Tab: Inactive employees",
+    );
+    if (employeeMembershipTab === "active" && activeKpiFilter !== "all") {
+      parts.push(`KPI: ${kpiFilterLabel(activeKpiFilter)}`);
+    }
+    if (statusFilter) {
+      parts.push(`Status: ${statusFilter}`);
+    }
+    if (userSearchQuery.trim()) {
+      parts.push(`Search: "${userSearchQuery.trim()}"`);
+    }
+    parts.push(
+      `${exportableEmployees.length} portal-mapped employee${exportableEmployees.length === 1 ? "" : "s"} in filtered list (${filteredEmployees.length} shown)`,
+    );
+    return parts.join(" · ");
+  }, [
+    displayDateLabel,
+    employeeMembershipTab,
+    activeKpiFilter,
+    statusFilter,
+    userSearchQuery,
+    exportableEmployees.length,
+    filteredEmployees.length,
+  ]);
+
   return (
     <div className="min-h-full bg-[#F5F7FA] lg:bg-transparent">
       {/* Mobile & tablet */}
@@ -684,6 +723,16 @@ function ManageAttendanceListPage() {
               aria-label="Refresh"
             >
               <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setExportAllOpen(true)}
+              disabled={loading || exportableEmployees.length === 0}
+              className="flex h-9 shrink-0 items-center justify-center gap-1 rounded-lg border border-[#008CD3]/30 bg-[#E8F4FB] px-2.5 text-[#008CD3] active:bg-[#D6EBF8] disabled:opacity-50"
+              aria-label="Export all employees"
+            >
+              <Download className="h-4 w-4" />
+              <span className="hidden text-[12px] font-semibold sm:inline">Export all</span>
             </button>
           </div>
 
@@ -965,6 +1014,15 @@ function ManageAttendanceListPage() {
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setExportAllOpen(true)}
+                  disabled={loading || exportableEmployees.length === 0}
+                  className={zohoSecondaryBtnCls()}
+                >
+                  <Download className="h-4 w-4" />
+                  Export all employees
+                </button>
                 <button type="button" onClick={resetToToday} className={zohoSecondaryBtnCls()}>
                   <CalendarDays className="h-4 w-4" />
                   Today
@@ -1372,6 +1430,17 @@ function ManageAttendanceListPage() {
         onClose={() => setExportEmployee(null)}
         orgId={orgId}
         employee={exportEmployee}
+        clientSideCalculation
+      />
+
+      <ExportAllEmployeesAttendanceModal
+        open={exportAllOpen}
+        onClose={() => setExportAllOpen(false)}
+        orgId={orgId}
+        employees={filteredEmployees}
+        defaultMonth={appliedQuery.month ?? ymdToParts(appliedQuery.date || selectedDate).month}
+        defaultYear={appliedQuery.year ?? ymdToParts(appliedQuery.date || selectedDate).year}
+        filterDescription={exportFilterDescription}
       />
     </div>
   );

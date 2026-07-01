@@ -1257,7 +1257,7 @@ function AttendanceHistoryTable({
       <div className="grid shrink-0 grid-cols-2 gap-3 px-5 pt-4 sm:grid-cols-5">
         <AttendanceSummaryPill
           label="Present"
-          value={summary.present + summary.presentFullDay}
+          value={summary.daysPresent}
           accent="success"
         />
         <AttendanceSummaryPill label="Late" value={summary.late} accent="warning" />
@@ -4728,10 +4728,7 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
   const attendanceRate = useMemo(() => {
     const kpiTotal = monthAttendance.summary.kpiTotal;
     if (kpiTotal <= 0) return null;
-    const credited =
-      monthAttendance.summary.present +
-      monthAttendance.summary.presentFullDay +
-      monthAttendance.summary.late;
+    const credited = monthAttendance.summary.daysPresent;
     return Math.round((credited / kpiTotal) * 100);
   }, [monthAttendance]);
 
