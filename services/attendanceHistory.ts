@@ -1,3 +1,5 @@
+import { assertExportableMonth } from "@/lib/attendanceExportPeriod";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
 export type AttendanceHistoryRow = {
@@ -239,6 +241,10 @@ export async function fetchAttendanceExportData(
   employeeId: number | string,
   query: AttendanceExportQuery,
 ): Promise<AttendanceExportResponse> {
+  if (query.mode === "monthly") {
+    assertExportableMonth(query.year, query.month);
+  }
+
   const params = new URLSearchParams({
     org_id: orgId,
     employee_id: String(employeeId),

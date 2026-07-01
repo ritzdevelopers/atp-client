@@ -9,6 +9,11 @@ import {
   type AttendanceExportMode,
 } from "@/services/attendanceHistory";
 import { downloadAttendanceHistoryExcel } from "@/lib/exportAttendanceHistoryExcel";
+import {
+  clampMonthToExportable,
+  getExportableMonthsForYear,
+  isFutureCalendarMonth,
+} from "@/lib/attendanceExportPeriod";
 
 type ExportAttendanceHistoryModalProps = {
   open: boolean;
@@ -18,21 +23,6 @@ type ExportAttendanceHistoryModalProps = {
   /** Derive status from check-in/check-out on the client using company rules. */
   clientSideCalculation?: boolean;
 };
-
-const MONTHS = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
 
 function zohoInputCls() {
   return "w-full rounded-lg border border-[#E4E7EC] bg-white px-3 py-2.5 text-[13px] text-[#1F2937] outline-none transition focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15";
@@ -61,10 +51,23 @@ export default function ExportAttendanceHistoryModal({
     setExporting(false);
   }, [open, employee]);
 
+  useEffect(() => {
+    if (mode !== "monthly") return;
+    setMonth((current) => clampMonthToExportable(year, current, now));
+  }, [year, mode]);
+
   const yearOptions = useMemo(() => {
     const current = now.getFullYear();
     return Array.from({ length: 8 }, (_, i) => current - i);
   }, [now]);
+
+  const exportableMonths = useMemo(
+    () => getExportableMonthsForYear(year, now),
+    [year, now],
+  );
+
+  const isFutureMonthSelected =
+    mode === "monthly" && isFutureCalendarMonth(year, month, now);
 
   if (!open || !employee) return null;
 
@@ -194,8 +197,8 @@ export default function ExportAttendanceHistoryModal({
                   onChange={(e) => setMonth(Number(e.target.value))}
                   className={zohoInputCls()}
                 >
-                  {MONTHS.map((label, index) => (
-                    <option key={label} value={index + 1}>
+                  {exportableMonths.map(({ value, label }) => (
+                    <option key={label} value={value}>
                       {label}
                     </option>
                   ))}
@@ -227,6 +230,13 @@ export default function ExportAttendanceHistoryModal({
             </div>
           )}
 
+          {mode === "monthly" ? (
+            <div className="rounded-xl border border-[#E4E7EC] bg-[#F9FAFB] px-4 py-3 text-sm text-[#6B7280]">
+              Only completed or current months can be exported. Future months (for example
+              August while July is in progress) are not available.
+            </div>
+          ) : null}
+
           {error ? (
             <div className="rounded-lg border border-[#F5C2C0] bg-[#FCE8E6] px-3 py-2 text-sm text-[#B71C1C]">
               {error}
@@ -246,7 +256,7 @@ export default function ExportAttendanceHistoryModal({
           <button
             type="button"
             onClick={() => void handleExport()}
-            disabled={exporting}
+            disabled={exporting || isFutureMonthSelected}
             className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-[#008CD3] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#0070AA] disabled:opacity-50"
           >
             {exporting ? (
