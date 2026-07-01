@@ -3,12 +3,24 @@ import {
   applyRulesToCalendarDay,
   ATTENDANCE_RULE_LABELS,
   buildCalendarDaysFromPunches,
+  buildPayrollExportSummary,
+  dayCameToWork,
   dayIsWeekend,
+  dayWasHalfDay,
+  dayWasLate,
   hasAttendanceOnDay,
   isWeekendDay,
+  plainAttendanceResult,
   summarizeCalendarDaysClient,
   type CalendarDayExport,
+  type PayrollExportSummary,
 } from "@/lib/attendanceRules";
+import {
+  isPayrollExceptionEmpCode,
+  listPayrollExceptionEmpCodes,
+  PAYROLL_EXCEPTION_DESCRIPTION,
+  payrollDayCreditLabel,
+} from "@/lib/attendancePayrollExceptions";
 
 export type ExportExcelOptions = {
   /** When true, status/summary are derived from check-in/check-out only (company rules). */
@@ -198,6 +210,113 @@ function styleValueCell(cell: ExcelCell) {
   cell.border = thinBorder();
 }
 
+function stylePayrollValueCell(cell: ExcelCell, highlight = false) {
+  cell.font = {
+    name: FONT_FAMILY,
+    bold: true,
+    size: highlight ? 14 : 11,
+    color: { argb: highlight ? PALETTE.brandDark : PALETTE.brand },
+  };
+  cell.border = thinBorder();
+  cell.alignment = { vertical: "middle", horizontal: "center" };
+  cell.fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: highlight ? PALETTE.brandLight : "FFF9FAFB" },
+  };
+}
+
+function payrollFromCalendarDays(
+  calendarDays: CalendarDayExport[],
+  empCode?: string | null,
+): PayrollExportSummary {
+  return buildPayrollExportSummary(calendarDays, { empCode });
+}
+
+function formatPayableDaysFormula(payroll: PayrollExportSummary): string {
+  if (payroll.payrollExceptionApplied) {
+    return `Month days (${payroll.workingDays}) − Absent (${payroll.absentDays}) = ${payroll.payDays} payable days — late & half day not deducted (special payroll rule)`;
+  }
+
+  return `Month days (${payroll.workingDays}) − Absent (${payroll.absentDays}) − Half day (${payroll.halfDayDays} × 0.5 = ${payroll.halfDayDeduction}) − Leave from lates (${payroll.leaveFromLates}) = ${payroll.payDays} payable days`;
+}
+
+function addGuideSheet(workbook: import("exceljs").Workbook) {
+  const sheet = workbook.addWorksheet("How to read this report", {
+    views: [{ state: "frozen", ySplit: 2 }],
+  });
+  sheet.columns = [{ width: 34 }, { width: 72 }];
+
+  const titleRow = sheet.addRow(["Attendance report — quick guide"]);
+  sheet.mergeCells(titleRow.number, 1, titleRow.number, 2);
+  titleRow.height = 32;
+  styleTitleCell(titleRow.getCell(1), "Guide");
+
+  const rows: [string, string][] = [
+    [
+      "Days present (came to work)",
+      "Count of weekdays when the employee came to office. Includes on-time, late, half day, and short leave. One day = one mark, regardless of how late they were.",
+    ],
+    [
+      "Late arrivals",
+      "Number of weekdays when check-in was at or after 9:46 AM. Shown separately from days present.",
+    ],
+    [
+      "Leave from lates",
+      "For every 3 late arrivals in the month, 1 day is counted as leave (example: 5 lates → 1 leave).",
+    ],
+    [
+      "Payable days",
+      "Total days in the month minus absent weekdays minus half days (each half day = 0.5 day) minus leave deducted from lates.",
+    ],
+    [
+      "Half day in payable days",
+      "Each half day counts as 0.5 day less pay. Example: 2 half days = 1 day deducted from payable days.",
+    ],
+    [
+      "Working days (month total)",
+      "All calendar days in this month (e.g. 30 for June). Includes Saturdays and Sundays. Future dates in the current month are excluded.",
+    ],
+    [
+      "Absent",
+      "Weekdays with no attendance and no approved weekly off.",
+    ],
+    [
+      "Daily log — Came to work?",
+      "Yes = employee checked in that day (any time). No = absent or weekly off without work.",
+    ],
+    [
+      "Daily log — Was late?",
+      "Yes only when check-in was at or after 9:46 AM on a working day.",
+    ],
+    [
+      "Daily log — Half day?",
+      "Yes when attendance is marked as half day. Each half day reduces payable days by 0.5.",
+    ],
+    [
+      "Color coding",
+      "Green = present, Orange = late, Red = absent, Blue = half day, Grey = Saturday / Sunday off.",
+    ],
+    [
+      "Special payroll employees",
+      `${listPayrollExceptionEmpCodes().join(", ")} — ${PAYROLL_EXCEPTION_DESCRIPTION}`,
+    ],
+    [
+      "Payroll day credit (special employees)",
+      "On the daily log, attended weekdays count as Full day (payroll rule) even if the employee was late or on half day. Only absent days reduce payable days.",
+    ],
+  ];
+
+  for (const [label, value] of rows) {
+    const row = sheet.addRow([label, value]);
+    row.height = 42;
+    styleLabelCell(row.getCell(1));
+    const valueCell = row.getCell(2);
+    styleValueCell(valueCell);
+    valueCell.alignment = { vertical: "top", wrapText: true };
+  }
+}
+
 function styleHeaderCell(cell: ExcelCell, fill = PALETTE.brand) {
   cell.font = {
     name: FONT_FAMILY,
@@ -323,34 +442,37 @@ function addOverviewSheet(
 ) {
   const employee = payload.employee;
   const period = payload.period;
-  const summary = payload.summary;
-  const sheet = workbook.addWorksheet("Overview", {
+  const empCode = employee.emp_code || String(employee.user_id);
+  const payroll = payrollFromCalendarDays(calendarDays, empCode);
+  const sheet = workbook.addWorksheet("Payroll summary", {
     views: [{ state: "frozen", ySplit: 3 }],
   });
 
   sheet.columns = [
-    { width: 28 },
-    { width: 34 },
-    { width: 22 },
-    { width: 22 },
+    { width: 14 },
+    { width: 16 },
+    { width: 14 },
+    { width: 12 },
+    { width: 14 },
+    { width: 14 },
+    { width: 12 },
+    { width: 14 },
   ];
 
-  const titleRow = sheet.addRow(["Employee Attendance Report"]);
-  sheet.mergeCells(titleRow.number, 1, titleRow.number, 4);
+  const titleRow = sheet.addRow(["Employee attendance & payroll summary"]);
+  sheet.mergeCells(titleRow.number, 1, titleRow.number, 8);
   titleRow.height = 34;
   styleTitleCell(titleRow.getCell(1), "Employee Attendance Report");
 
   sheet.addRow([]);
   const infoTitle = sheet.addRow(["Employee information"]);
-  sheet.mergeCells(infoTitle.number, 1, infoTitle.number, 4);
+  sheet.mergeCells(infoTitle.number, 1, infoTitle.number, 8);
   styleSectionTitle(infoTitle.getCell(1));
 
   const infoRows: [string, string][] = [
     ["Employee name", employee.user_name],
     ["Employee code", employee.emp_code || String(employee.user_id)],
-    ["Portal user ID", String(employee.user_id)],
     ["Email", employee.user_email || "—"],
-    ["Phone", employee.user_phone || "—"],
     ["Role", employee.user_role_name || "—"],
     ["Joined on", employee.joining_date || "—"],
     ["Report period", period.label],
@@ -362,70 +484,111 @@ function addOverviewSheet(
     const row = sheet.addRow([label, value]);
     styleLabelCell(row.getCell(1));
     styleValueCell(row.getCell(2));
+    sheet.mergeCells(row.number, 2, row.number, 8);
+  }
+
+  if (payroll.payrollExceptionApplied) {
+    const exceptionRow = sheet.addRow([
+      "Special payroll rule",
+      PAYROLL_EXCEPTION_DESCRIPTION,
+    ]);
+    exceptionRow.height = 36;
+    styleLabelCell(exceptionRow.getCell(1));
+    const exceptionValue = exceptionRow.getCell(2);
+    styleValueCell(exceptionValue);
+    exceptionValue.alignment = { vertical: "top", wrapText: true };
+    sheet.mergeCells(exceptionRow.number, 2, exceptionRow.number, 8);
   }
 
   sheet.addRow([]);
-  const summaryTitle = sheet.addRow(["Attendance summary"]);
-  sheet.mergeCells(summaryTitle.number, 1, summaryTitle.number, 4);
-  styleSectionTitle(summaryTitle.getCell(1));
+  const payrollTitle = sheet.addRow(["Key numbers for payroll (this period)"]);
+  sheet.mergeCells(payrollTitle.number, 1, payrollTitle.number, 8);
+  styleSectionTitle(payrollTitle.getCell(1));
 
-  const summaryRows: [string, string | number][] = [
-    ["Working days in period", summary.total_days],
-    ["Present", summary.present_days],
-    ["Late (raw count)", summary.late_days],
-    [
-      "Leave from lates (floor(lates ÷ 3))",
-      summary.late_derived_leaves ?? summary.on_leave_days ?? 0,
-    ],
-    ["Absent (weekdays only)", summary.absent_days],
-    [
-      "Total absent incl. leave from lates",
-      summary.total_absent_with_late_leaves ??
-        summary.absent_days + (summary.late_derived_leaves ?? summary.on_leave_days ?? 0),
-    ],
-    ["Half day", summary.half_day_days],
-    ["Short leave", summary.short_leave_days],
-    ["Sat / Sun (week off)", summary.weekly_off_days ?? calendarDays.filter((d) => dayIsWeekend(d) && !hasAttendanceOnDay(d)).length],
-    ["Total working hours", `${summary.total_working_hours}h`],
+  const payrollHeader = sheet.addRow([
+    "Month days\n(full month)",
+    "Days present\n(came to work)",
+    "Late\narrivals",
+    "Half\ndays",
+    "Half day\ndeduct (×0.5)",
+    "Leave from\nlates",
+    "Absent\ndays",
+    "Payable days",
+  ]);
+  payrollHeader.height = 40;
+  payrollHeader.eachCell((cell) => styleHeaderCell(cell));
+
+  const payrollValues = sheet.addRow([
+    payroll.workingDays,
+    payroll.daysPresent,
+    payroll.lateDays,
+    payroll.halfDayDays,
+    payroll.halfDayDeduction,
+    payroll.leaveFromLates,
+    payroll.absentDays,
+    payroll.payDays,
+  ]);
+  payrollValues.height = 32;
+  payrollValues.eachCell((cell, colNumber) => {
+    stylePayrollValueCell(cell, colNumber === 2 || colNumber === 4 || colNumber === 8);
+  });
+
+  sheet.addRow([]);
+  const formulaRow = sheet.addRow([
+    "How payable days are calculated:",
+    formatPayableDaysFormula(payroll),
+  ]);
+  sheet.mergeCells(formulaRow.number, 2, formulaRow.number, 8);
+  styleLabelCell(formulaRow.getCell(1));
+  styleValueCell(formulaRow.getCell(2));
+  formulaRow.getCell(2).alignment = { wrapText: true, vertical: "middle" };
+
+  sheet.addRow([]);
+  const detailTitle = sheet.addRow(["Additional breakdown"]);
+  sheet.mergeCells(detailTitle.number, 1, detailTitle.number, 8);
+  styleSectionTitle(detailTitle.getCell(1));
+
+  const detailRows: [string, string | number][] = [
+    ["On-time arrivals only (before 9:46 AM)", payroll.onTimeDays],
+    ["Half days (count)", payroll.halfDayDays],
+    ["Half day pay deduction (days × 0.5)", payroll.halfDayDeduction],
+    ["Short leave", payroll.shortLeaveDays],
+    ["Saturday / Sunday (weekly off)", payroll.weeklyOffDays],
+    ["Total hours worked", `${payroll.totalWorkingHours}h`],
   ];
 
-  for (const [label, value] of summaryRows) {
+  for (const [label, value] of detailRows) {
     const row = sheet.addRow([label, value]);
     styleLabelCell(row.getCell(1));
-    const valueCell = row.getCell(2);
-    styleValueCell(valueCell);
-    valueCell.font = {
-      name: FONT_FAMILY,
-      bold: true,
-      size: 10,
-      color: { argb: PALETTE.brand },
-    };
+    styleValueCell(row.getCell(2));
+    sheet.mergeCells(row.number, 2, row.number, 8);
   }
 
   sheet.addRow([]);
   const rulesTitle = sheet.addRow(["Company attendance rules"]);
-  sheet.mergeCells(rulesTitle.number, 1, rulesTitle.number, 4);
+  sheet.mergeCells(rulesTitle.number, 1, rulesTitle.number, 8);
   styleSectionTitle(rulesTitle.getCell(1));
 
   for (const rule of ATTENDANCE_RULE_LABELS) {
     const row = sheet.addRow([rule.label, rule.value]);
     styleLabelCell(row.getCell(1));
     styleValueCell(row.getCell(2));
+    sheet.mergeCells(row.number, 2, row.number, 8);
   }
 
   sheet.addRow([]);
-  const legendTitle = sheet.addRow(["Color legend"]);
-  sheet.mergeCells(legendTitle.number, 1, legendTitle.number, 4);
+  const legendTitle = sheet.addRow(["Color legend (daily sheets)"]);
+  sheet.mergeCells(legendTitle.number, 1, legendTitle.number, 8);
   styleSectionTitle(legendTitle.getCell(1));
 
   const legendItems = [
-  ["Absent (weekday)", PALETTE.absentBg, PALETTE.absentText],
-  ["Sat / Sun week off", PALETTE.weeklyOffBg, PALETTE.muted],
-  ["Present on weekend", PALETTE.weekendPresentBg, PALETTE.weekendPresentText],
-  ["Present", PALETTE.presentBg, PALETTE.presentText],
-  ["Late", PALETTE.lateBg, PALETTE.lateText],
-  ["Half day", PALETTE.halfDayBg, PALETTE.halfDayText],
-  ["Short leave", PALETTE.shortLeaveBg, PALETTE.shortLeaveText],
+    ["Did not come (absent)", PALETTE.absentBg, PALETTE.absentText],
+    ["Saturday / Sunday off", PALETTE.weeklyOffBg, PALETTE.muted],
+    ["Worked on weekend", PALETTE.weekendPresentBg, PALETTE.weekendPresentText],
+    ["Came on time", PALETTE.presentBg, PALETTE.presentText],
+    ["Came late", PALETTE.lateBg, PALETTE.lateText],
+    ["Half day", PALETTE.halfDayBg, PALETTE.halfDayText],
+    ["Short leave", PALETTE.shortLeaveBg, PALETTE.shortLeaveText],
   ];
 
   for (const [label, fill, font] of legendItems) {
@@ -444,7 +607,9 @@ function addCalendarSheet(
   sheetName: string,
   monthLabel: string,
   days: CalendarDayExport[],
+  empCode?: string | null,
 ) {
+  const payrollExceptionApplied = isPayrollExceptionEmpCode(empCode);
   const sheet = workbook.addWorksheet(sheetName.slice(0, 31), {
     views: [{ state: "frozen", xSplit: 1, ySplit: 4 }],
   });
@@ -510,10 +675,31 @@ function addCalendarSheet(
       values: days.map((day) => formatTime(day.check_out)),
     },
     {
-      label: "Status",
-      values: days.map((day) => formatStatusLabel(day.attendance_status)),
+      label: "Result",
+      values: days.map((day) => plainAttendanceResult(day)),
       bold: true,
     },
+    {
+      label: "Came to work?",
+      values: days.map((day) => (dayCameToWork(day) ? "Yes" : "No")),
+    },
+    {
+      label: "Was late?",
+      values: days.map((day) => (dayWasLate(day) ? "Yes" : "No")),
+    },
+    {
+      label: "Half day?",
+      values: days.map((day) => (dayWasHalfDay(day) ? "Yes" : "No")),
+    },
+    ...(payrollExceptionApplied
+      ? [
+          {
+            label: "Payroll day credit",
+            values: days.map((day) => payrollDayCreditLabel(day, empCode)),
+            bold: true,
+          },
+        ]
+      : []),
     {
       label: "Working hours",
       values: days.map((day) => formatWorkingHours(day.working_time)),
@@ -539,7 +725,7 @@ function addCalendarSheet(
           argb:
             day.is_absent && !dayIsWeekend(day)
               ? PALETTE.absentBg
-              : metric.label === "Status"
+              : metric.label === "Status" || metric.label === "Result"
                 ? statusStyle.fill
                 : colors.fill,
         },
@@ -552,7 +738,7 @@ function addCalendarSheet(
           argb:
             day.is_absent && !dayIsWeekend(day)
               ? PALETTE.absentText
-              : metric.label === "Status"
+              : metric.label === "Status" || metric.label === "Result"
                 ? statusStyle.font
                 : colors.text,
         },
@@ -575,7 +761,9 @@ function addCalendarSheet(
 function addDailyLogSheet(
   workbook: import("exceljs").Workbook,
   calendarDays: CalendarDayExport[],
+  empCode?: string | null,
 ) {
+  const payrollExceptionApplied = isPayrollExceptionEmpCode(empCode);
   const sheet = workbook.addWorksheet("Daily log", {
     views: [{ state: "frozen", ySplit: 1 }],
   });
@@ -586,8 +774,14 @@ function addDailyLogSheet(
     { width: 12 },
     { width: 14 },
     { width: 14 },
-    { width: 16 },
+    { width: 12 },
+    { width: 12 },
+    { width: 22 },
+    ...(payrollExceptionApplied ? [{ width: 22 }] : []),
     { width: 14 },
+    { width: 12 },
+    { width: 14 },
+    { width: 28 },
   ];
 
   const header = sheet.addRow([
@@ -595,8 +789,13 @@ function addDailyLogSheet(
     "Day",
     "Check in",
     "Check out",
-    "Status",
-    "Working hours",
+    "Came to work?",
+    "Was late?",
+    "Half day?",
+    "Attendance result",
+    ...(payrollExceptionApplied ? ["Payroll day credit"] : []),
+    "Hours worked",
+    "Status code",
     "Notes",
   ]);
   header.height = 24;
@@ -620,13 +819,22 @@ function addDailyLogSheet(
       day.day_name,
       formatTime(day.check_in),
       formatTime(day.check_out),
-      formatStatusLabel(day.attendance_status),
+      dayCameToWork(day) ? "Yes" : "No",
+      dayWasLate(day) ? "Yes" : "No",
+      dayWasHalfDay(day) ? "Yes" : "No",
+      plainAttendanceResult(day),
+      ...(payrollExceptionApplied
+        ? [payrollDayCreditLabel(day, empCode)]
+        : []),
       formatWorkingHours(day.working_time),
+      formatStatusLabel(day.attendance_status),
       note,
     ]);
     row.height = 20;
 
     const statusStyle = resolveStatusStyle(day.attendance_status);
+    const resultCol = 8;
+    const statusCol = payrollExceptionApplied ? 11 : 10;
     row.eachCell((cell, colNumber) => {
       const isAbsentWeekday = day.is_absent && !dayIsWeekend(day);
       const isWeekendOff = dayIsWeekend(day) && !hasAttendanceOnDay(day);
@@ -639,11 +847,11 @@ function addDailyLogSheet(
         color: {
           argb: isAbsentWeekday
             ? PALETTE.absentText
-            : colNumber === 5
+            : colNumber === resultCol || colNumber === statusCol
               ? statusStyle.font
               : PALETTE.text,
         },
-        bold: colNumber === 5 || isAbsentWeekday,
+        bold: colNumber === resultCol || colNumber === statusCol || isAbsentWeekday,
       };
       cell.fill = {
         type: "pattern",
@@ -655,7 +863,7 @@ function addDailyLogSheet(
               ? PALETTE.weekendPresentBg
               : isWeekendOff
                 ? PALETTE.weeklyOffBg
-                : colNumber === 5
+                : colNumber === resultCol || colNumber === statusCol
                   ? statusStyle.fill
                   : PALETTE.white,
         },
@@ -698,16 +906,17 @@ export async function downloadAttendanceHistoryExcel(
   workbook.creator = "Attendance Portal";
   workbook.created = new Date();
 
+  addGuideSheet(workbook);
   addOverviewSheet(workbook, exportPayload, calendarDays);
 
   const monthGroups = groupDaysByMonth(calendarDays);
   for (const [monthKey, days] of monthGroups) {
     const label = monthLabelFromKey(monthKey);
     const sheetName = label.replace(/\s+/g, " ");
-    addCalendarSheet(workbook, sheetName, label, days);
+    addCalendarSheet(workbook, sheetName, label, days, employee.emp_code);
   }
 
-  addDailyLogSheet(workbook, calendarDays);
+  addDailyLogSheet(workbook, calendarDays, employee.emp_code);
 
   const buffer = await workbook.xlsx.writeBuffer();
   const blob = new Blob([buffer], {
@@ -731,6 +940,7 @@ export type PreparedEmployeeExport = {
   period: AttendanceExportPayload["period"];
   summary: AttendanceExportSummary;
   calendarDays: CalendarDayExport[];
+  payroll: PayrollExportSummary;
 };
 
 export function prepareEmployeeExportPayload(
@@ -747,6 +957,9 @@ export function prepareEmployeeExportPayload(
     period: payload.period,
     summary,
     calendarDays,
+    payroll: buildPayrollExportSummary(calendarDays, {
+      empCode: payload.employee.emp_code,
+    }),
   };
 }
 
@@ -760,28 +973,32 @@ function addAllEmployeesSummarySheet(
     filterDescription: string;
   },
 ) {
-  const sheet = workbook.addWorksheet("All employees summary", {
-    views: [{ state: "frozen", ySplit: 3 }],
+  const sheet = workbook.addWorksheet("All employees payroll", {
+    views: [{ state: "frozen", ySplit: 5 }],
   });
 
   sheet.columns = [
-    { width: 14 },
+    { width: 12 },
     { width: 24 },
-    { width: 28 },
-    { width: 16 },
+    { width: 26 },
+    { width: 14 },
+    { width: 12 },
+    { width: 14 },
+    { width: 12 },
+    { width: 12 },
     { width: 10 },
-    { width: 10 },
+    { width: 12 },
+    { width: 12 },
     { width: 12 },
     { width: 12 },
     { width: 14 },
+    { width: 12 },
+    { width: 12 },
     { width: 10 },
-    { width: 12 },
-    { width: 12 },
-    { width: 12 },
   ];
 
-  const titleRow = sheet.addRow(["All employees attendance report"]);
-  sheet.mergeCells(titleRow.number, 1, titleRow.number, 13);
+  const titleRow = sheet.addRow(["All employees — attendance & payroll summary"]);
+  sheet.mergeCells(titleRow.number, 1, titleRow.number, 17);
   titleRow.height = 34;
   styleTitleCell(titleRow.getCell(1), "All employees attendance report");
 
@@ -791,84 +1008,117 @@ function addAllEmployeesSummarySheet(
     ["From", meta.fromDate],
     ["To", meta.toDate],
     ["List filters applied", meta.filterDescription],
+    [
+      "Payable days formula",
+      "Month days − Absent weekdays − (Half days × 0.5) − Leave from lates (every 3 lates = 1 leave). Special payroll employees: Month days − Absent only.",
+    ],
+    [
+      "Special payroll employees",
+      `${listPayrollExceptionEmpCodes().join(", ")} — ${PAYROLL_EXCEPTION_DESCRIPTION}`,
+    ],
   ];
   for (const [label, value] of metaRows) {
     const row = sheet.addRow([label, value]);
     styleLabelCell(row.getCell(1));
     styleValueCell(row.getCell(2));
-    sheet.mergeCells(row.number, 2, row.number, 13);
+    sheet.mergeCells(row.number, 2, row.number, 17);
   }
 
   sheet.addRow([]);
-  const rulesTitle = sheet.addRow(["Company attendance rules"]);
-  sheet.mergeCells(rulesTitle.number, 1, rulesTitle.number, 13);
-  styleSectionTitle(rulesTitle.getCell(1));
-  for (const rule of ATTENDANCE_RULE_LABELS) {
-    const row = sheet.addRow([rule.label, rule.value]);
-    styleLabelCell(row.getCell(1));
-    styleValueCell(row.getCell(2));
-    sheet.mergeCells(row.number, 2, row.number, 13);
-  }
-
-  sheet.addRow([]);
-  const tableTitle = sheet.addRow(["Employee attendance summary"]);
-  sheet.mergeCells(tableTitle.number, 1, tableTitle.number, 13);
+  const tableTitle = sheet.addRow(["Employee payroll summary"]);
+  sheet.mergeCells(tableTitle.number, 1, tableTitle.number, 17);
   styleSectionTitle(tableTitle.getCell(1));
 
   const header = sheet.addRow([
     "Emp code",
-    "Employee",
+    "Employee name",
     "Email",
     "Role",
-    "Present",
-    "Late",
-    "Leave from lates",
-    "Absent",
-    "Absent incl. leave",
-    "Half day",
-    "Short leave",
-    "Weekly off",
-    "Total hours",
+    "Month days\n(full month)",
+    "Days present\n(came to work)",
+    "Late\narrivals",
+    "On-time\nonly",
+    "Half\ndays",
+    "Half day\ndeduct",
+    "Short\nleave",
+    "Absent\ndays",
+    "Leave from\nlates",
+    "Payable\ndays",
+    "Total\nhours",
+    "Special\npayroll",
   ]);
-  header.height = 24;
+  header.height = 44;
   header.eachCell((cell) => styleHeaderCell(cell));
 
-  let totalLate = 0;
-  let totalLeaveFromLates = 0;
-  let totalAbsentIncl = 0;
+  let totals = {
+    workingDays: 0,
+    daysPresent: 0,
+    lateDays: 0,
+    onTimeDays: 0,
+    halfDayDays: 0,
+    halfDayDeduction: 0,
+    shortLeaveDays: 0,
+    absentDays: 0,
+    leaveFromLates: 0,
+    payDays: 0,
+    totalHours: 0,
+  };
 
   for (const entry of entries) {
-    const { employee, summary } = entry;
-    const leaveFromLates =
-      summary.late_derived_leaves ?? summary.on_leave_days ?? 0;
-    const absentIncl =
-      summary.total_absent_with_late_leaves ??
-      summary.absent_days + leaveFromLates;
+    const { employee, payroll } = entry;
 
-    totalLate += summary.late_days;
-    totalLeaveFromLates += leaveFromLates;
-    totalAbsentIncl += absentIncl;
+    totals.workingDays += payroll.workingDays;
+    totals.daysPresent += payroll.daysPresent;
+    totals.lateDays += payroll.lateDays;
+    totals.onTimeDays += payroll.onTimeDays;
+    totals.halfDayDays += payroll.halfDayDays;
+    totals.halfDayDeduction += payroll.halfDayDeduction;
+    totals.shortLeaveDays += payroll.shortLeaveDays;
+    totals.absentDays += payroll.absentDays;
+    totals.leaveFromLates += payroll.leaveFromLates;
+    totals.payDays += payroll.payDays;
+    totals.totalHours += payroll.totalWorkingHours;
 
     const row = sheet.addRow([
       employee.emp_code || String(employee.user_id),
       employee.user_name,
       employee.user_email || "—",
       employee.user_role_name || "—",
-      summary.present_days,
-      summary.late_days,
-      leaveFromLates,
-      summary.absent_days,
-      absentIncl,
-      summary.half_day_days,
-      summary.short_leave_days,
-      summary.weekly_off_days ?? 0,
-      summary.total_working_hours,
+      payroll.workingDays,
+      payroll.daysPresent,
+      payroll.lateDays,
+      payroll.onTimeDays,
+      payroll.halfDayDays,
+      payroll.halfDayDeduction,
+      payroll.shortLeaveDays,
+      payroll.absentDays,
+      payroll.leaveFromLates,
+      payroll.payDays,
+      payroll.totalWorkingHours,
+      payroll.payrollExceptionApplied ? "Yes" : "No",
     ]);
-    row.height = 20;
-    row.eachCell((cell) => {
+    row.height = 22;
+    row.eachCell((cell, colNumber) => {
       cell.border = thinBorder();
-      cell.alignment = { vertical: "middle", wrapText: true };
-      cell.font = { name: FONT_FAMILY, size: 10, color: { argb: PALETTE.text } };
+      cell.alignment = { vertical: "middle", horizontal: colNumber >= 5 ? "center" : "left", wrapText: true };
+      cell.font = {
+        name: FONT_FAMILY,
+        size: 10,
+        color: {
+          argb:
+            colNumber === 6 || colNumber === 9 || colNumber === 15
+              ? PALETTE.brandDark
+              : PALETTE.text,
+        },
+        bold: colNumber === 6 || colNumber === 9 || colNumber === 15,
+      };
+      if (colNumber === 6 || colNumber === 9 || colNumber === 15) {
+        cell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: PALETTE.brandLight },
+        };
+      }
     });
   }
 
@@ -878,19 +1128,36 @@ function addAllEmployeesSummarySheet(
       `${entries.length} employees`,
       "",
       "",
-      "",
-      totalLate,
-      totalLeaveFromLates,
-      "",
-      totalAbsentIncl,
-      "",
-      "",
-      "",
+      totals.workingDays,
+      totals.daysPresent,
+      totals.lateDays,
+      totals.onTimeDays,
+      totals.halfDayDays,
+      Math.round(totals.halfDayDeduction * 100) / 100,
+      totals.shortLeaveDays,
+      totals.absentDays,
+      totals.leaveFromLates,
+      Math.round(totals.payDays * 100) / 100,
+      Math.round(totals.totalHours * 100) / 100,
       "",
     ]);
-    totalsRow.eachCell((cell) => {
+    totalsRow.height = 24;
+    totalsRow.eachCell((cell, colNumber) => {
       cell.border = thinBorder();
-      cell.font = { name: FONT_FAMILY, size: 10, bold: true, color: { argb: PALETTE.brandDark } };
+      cell.alignment = { vertical: "middle", horizontal: colNumber >= 5 ? "center" : "left" };
+      cell.font = {
+        name: FONT_FAMILY,
+        size: 10,
+        bold: true,
+        color: { argb: PALETTE.brandDark },
+      };
+      if (colNumber >= 5) {
+        cell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FFE5E7EB" },
+        };
+      }
     });
   }
 }
@@ -904,26 +1171,36 @@ function addAllEmployeesDailyLogSheet(
   });
 
   sheet.columns = [
-    { width: 14 },
+    { width: 12 },
     { width: 22 },
     { width: 12 },
     { width: 12 },
     { width: 12 },
     { width: 12 },
-    { width: 16 },
+    { width: 12 },
+    { width: 12 },
+    { width: 12 },
+    { width: 22 },
+    { width: 22 },
     { width: 14 },
+    { width: 12 },
     { width: 24 },
   ];
 
   const header = sheet.addRow([
     "Emp code",
-    "Employee",
+    "Employee name",
     "Date",
     "Day",
     "Check in",
     "Check out",
-    "Status",
-    "Working hours",
+    "Came to work?",
+    "Was late?",
+    "Half day?",
+    "Attendance result",
+    "Payroll day credit",
+    "Hours worked",
+    "Status code",
     "Notes",
   ]);
   header.height = 24;
@@ -953,8 +1230,13 @@ function addAllEmployeesDailyLogSheet(
         day.day_name,
         formatTime(day.check_in),
         formatTime(day.check_out),
-        formatStatusLabel(day.attendance_status),
+        dayCameToWork(day) ? "Yes" : "No",
+        dayWasLate(day) ? "Yes" : "No",
+        dayWasHalfDay(day) ? "Yes" : "No",
+        plainAttendanceResult(day),
+        payrollDayCreditLabel(day, empCode) || plainAttendanceResult(day),
         formatWorkingHours(day.working_time),
+        formatStatusLabel(day.attendance_status),
         note,
       ]);
       row.height = 20;
@@ -972,11 +1254,11 @@ function addAllEmployeesDailyLogSheet(
           color: {
             argb: isAbsentWeekday
               ? PALETTE.absentText
-              : colNumber === 7
+              : colNumber === 10 || colNumber === 12
                 ? statusStyle.font
                 : PALETTE.text,
           },
-          bold: colNumber === 7 || isAbsentWeekday,
+          bold: colNumber === 10 || colNumber === 12 || isAbsentWeekday,
         };
         cell.fill = {
           type: "pattern",
@@ -988,7 +1270,7 @@ function addAllEmployeesDailyLogSheet(
                 ? PALETTE.weekendPresentBg
                 : isWeekendOff
                   ? PALETTE.weeklyOffBg
-                  : colNumber === 7
+                  : colNumber === 10 || colNumber === 12
                     ? statusStyle.fill
                     : PALETTE.white,
           },
@@ -1017,6 +1299,7 @@ export async function downloadAllEmployeesAttendanceExcel(
   workbook.creator = "Attendance Portal";
   workbook.created = new Date();
 
+  addGuideSheet(workbook);
   addAllEmployeesSummarySheet(workbook, entries, meta);
   addAllEmployeesDailyLogSheet(workbook, entries);
 

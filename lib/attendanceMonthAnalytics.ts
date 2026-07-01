@@ -93,7 +93,7 @@ export function computeMonthAnalytics(
   const attendanceRate =
     kpiTotal > 0
       ? Math.round(
-          ((monthlyKpi.present + monthlyKpi.presentFullDay + monthlyKpi.late) / kpiTotal) *
+          ((monthlyKpi.daysPresent) / kpiTotal) *
             100,
         )
       : 0;
@@ -126,14 +126,12 @@ export function computeMonthAnalytics(
     calendarCells: monthAttendance.calendarCells,
   };
 
+  const onTimeDays = monthlyKpi.present + monthlyKpi.presentFullDay;
+
   const kpiSegments: KpiSegment[] = [
-    { key: "present", label: "Present", count: monthlyKpi.present, color: "#0F9D58" },
-    {
-      key: "presentFullDay",
-      label: "Full day",
-      count: monthlyKpi.presentFullDay,
-      color: "#047857",
-    },
+    ...(onTimeDays > 0
+      ? [{ key: "onTime", label: "On-time", count: onTimeDays, color: "#0F9D58" }]
+      : []),
     { key: "late", label: "Late", count: monthlyKpi.late, color: "#E8710A" },
     {
       key: "lateDerivedLeaves",

@@ -786,11 +786,7 @@ function ManageAttendanceDetail({
     const kpiTotal = monthAttendance.summary.kpiTotal;
     const attendanceRate =
       kpiTotal > 0
-        ? Math.round(
-            ((monthlyKpi.present + monthlyKpi.presentFullDay + monthlyKpi.late) /
-              kpiTotal) *
-              100,
-          )
+        ? Math.round((monthlyKpi.daysPresent / kpiTotal) * 100)
         : 0;
     const onTimeRate =
       kpiTotal > 0
@@ -828,15 +824,12 @@ function ManageAttendanceDetail({
   }, [appliedQuery.month, appliedQuery.year, attendanceRows, monthAttendance, monthlyKpi]);
 
   const kpiSegments = useMemo<KpiSegment[]>(
-    () =>
-      [
-        { key: "present", label: "Present", count: monthlyKpi.present, color: "#0F9D58" },
-        {
-          key: "presentFullDay",
-          label: "Full day",
-          count: monthlyKpi.presentFullDay,
-          color: "#047857",
-        },
+    () => {
+      const onTimeDays = monthlyKpi.present + monthlyKpi.presentFullDay;
+      return [
+        ...(onTimeDays > 0
+          ? [{ key: "onTime", label: "On-time", count: onTimeDays, color: "#0F9D58" }]
+          : []),
         { key: "late", label: "Late", count: monthlyKpi.late, color: "#E8710A" },
         {
           key: "lateDerivedLeaves",
@@ -857,7 +850,8 @@ function ManageAttendanceDetail({
           count: monthlyKpi.shortLeave,
           color: "#F9A825",
         },
-      ].filter((s) => s.count > 0),
+      ].filter((s) => s.count > 0);
+    },
     [monthlyKpi],
   );
 
@@ -1167,11 +1161,11 @@ function ManageAttendanceDetail({
               <div className="mt-4 grid grid-cols-2 gap-3">
                 <KpiStatCard
                   label="Present"
-                  value={monthlyKpi.present}
+                  value={monthlyKpi.daysPresent}
                   color="text-[#0F9D58]"
                   bg="bg-[#E6F4EA]/40"
                   accent="#0F9D58"
-                  share={sharePct(monthlyKpi.present)}
+                  share={sharePct(monthlyKpi.daysPresent)}
                 />
                 <KpiStatCard
                   label="Full day"
@@ -1552,11 +1546,11 @@ function ManageAttendanceDetail({
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
               <KpiStatCard
                 label="Present"
-                value={monthlyKpi.present}
+                value={monthlyKpi.daysPresent}
                 color="text-emerald-700"
                 bg="bg-emerald-50/80"
                 accent="#0F9D58"
-                share={sharePct(monthlyKpi.present)}
+                share={sharePct(monthlyKpi.daysPresent)}
               />
               <KpiStatCard
                 label="Full day"

@@ -1,0 +1,10 @@
+{
+  "full_day_present_emp_codes": [
+    "RMW04",
+    "CTMPL03",
+    "RMW05",
+    "MV07",
+    "RMW02"
+  ],
+  "description": "Excel payroll export: if the employee attended on a weekday, the day counts as full-day present regardless of late or half-day status. Only absent days and leave deductions reduce payable days."
+}

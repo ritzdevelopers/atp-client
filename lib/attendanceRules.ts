@@ -1,4 +1,5 @@
 import type { AttendanceHistoryRow } from "@/services/attendanceHistory";
+import { isPayrollExceptionEmpCode } from "@/lib/attendancePayrollExceptions";
 
 export const ATTENDANCE_RULES = {
   /** On time through 09:45:59; late from 09:46:00 onward. */
@@ -237,8 +238,11 @@ export function calendarHeatmapClass(
 }
 
 export type MonthAttendanceSummary = {
+  /** On-time present only (before late threshold, not full-day upgrade). */
   present: number;
   presentFullDay: number;
+  /** All days employee came to work (on-time, full day, late, half day, short leave). */
+  daysPresent: number;
   late: number;
   absent: number;
   halfDay: number;
@@ -362,6 +366,9 @@ export function buildMonthAttendanceView(
   const kpiTotal =
     present + presentFullDay + late + absent + halfDay + shortLeave;
 
+  const daysPresent =
+    present + presentFullDay + late + halfDay + shortLeave;
+
   const lateDerivedLeaves = computeLateDerivedLeaves(late);
   const totalAbsentWithLateLeaves = absent + lateDerivedLeaves;
 
@@ -370,6 +377,7 @@ export function buildMonthAttendanceView(
     summary: {
       present,
       presentFullDay,
+      daysPresent,
       late,
       absent,
       halfDay,
@@ -579,6 +587,137 @@ export function summarizeCalendarDaysClient(days: CalendarDayExport[]) {
     total_working_minutes: totalWorkingMinutes,
     total_working_hours: Math.round((totalWorkingMinutes / 60) * 100) / 100,
   };
+}
+
+/** Payroll-friendly totals for Excel exports (HR / non-technical readers). */
+export type PayrollExportSummary = {
+  /** Calendar days in the report period (full month — includes Sat/Sun, excludes future). */
+  workingDays: number;
+  /** Came to work — includes on-time, late, half day, and short leave. */
+  daysPresent: number;
+  onTimeDays: number;
+  lateDays: number;
+  absentDays: number;
+  halfDayDays: number;
+  shortLeaveDays: number;
+  weeklyOffDays: number;
+  leaveFromLates: number;
+  /** Each half day reduces payable days by 0.5. */
+  halfDayDeduction: number;
+  /** Payable days = month days − absent − half day (0.5 each) − leave from lates. */
+  payDays: number;
+  totalWorkingHours: number;
+  /** Weekdays counted as full-day present for payroll (exception employees). */
+  fullDayPresentDays?: number;
+  /** True when emp code is in attendancePayrollExceptions.json. */
+  payrollExceptionApplied?: boolean;
+};
+
+function resolvePayrollMonthDayCount(days: CalendarDayExport[]): number {
+  if (!days.length) return 0;
+
+  const monthKeys = new Set(days.map((day) => day.date.slice(0, 7)));
+  if (monthKeys.size === 1) {
+    const [year, month] = days[0].date.split("-").map(Number);
+    return new Date(year, month, 0).getDate();
+  }
+
+  return days.filter(
+    (day) =>
+      day.attendance_status !== "future" &&
+      day.attendance_status !== "not_joined",
+  ).length;
+}
+
+export function buildPayrollExportSummary(
+  days: CalendarDayExport[],
+  options?: { empCode?: string | null },
+): PayrollExportSummary {
+  const base = summarizeCalendarDaysClient(days);
+  let daysPresent = 0;
+  let onTimeDays = 0;
+  let fullDayPresentDays = 0;
+
+  const workingDays = resolvePayrollMonthDayCount(days);
+  const payrollExceptionApplied = isPayrollExceptionEmpCode(options?.empCode);
+
+  for (const day of days) {
+    if (day.is_future || day.attendance_status === "not_joined") continue;
+
+    const status = String(day.attendance_status || "").trim().toLowerCase();
+    if (day.is_weekend && !day.check_in) continue;
+    if (status === "absent" || day.is_absent) continue;
+
+    daysPresent += 1;
+    fullDayPresentDays += 1;
+    if (status === "present" || status === "present_full_day") onTimeDays += 1;
+  }
+
+  const rawLeaveFromLates = base.late_derived_leaves ?? base.on_leave_days ?? 0;
+  const rawHalfDayDeduction = base.half_day_days * 0.5;
+
+  const leaveFromLates = payrollExceptionApplied ? 0 : rawLeaveFromLates;
+  const halfDayDeduction = payrollExceptionApplied ? 0 : rawHalfDayDeduction;
+  const payDays = Math.max(
+    0,
+    Math.round(
+      (workingDays - base.absent_days - halfDayDeduction - leaveFromLates) * 100,
+    ) / 100,
+  );
+
+  return {
+    workingDays,
+    daysPresent: payrollExceptionApplied ? fullDayPresentDays : daysPresent,
+    onTimeDays,
+    lateDays: base.late_days,
+    absentDays: base.absent_days,
+    halfDayDays: base.half_day_days,
+    shortLeaveDays: base.short_leave_days,
+    weeklyOffDays: base.weekly_off_days ?? 0,
+    leaveFromLates,
+    halfDayDeduction,
+    payDays,
+    totalWorkingHours: base.total_working_hours,
+    fullDayPresentDays,
+    payrollExceptionApplied,
+  };
+}
+
+export function dayCameToWork(day: CalendarDayExport): boolean {
+  if (day.is_future || day.attendance_status === "not_joined") return false;
+  if (day.is_weekend && !day.check_in) return false;
+  const status = String(day.attendance_status || "").trim().toLowerCase();
+  return Boolean(day.check_in) && status !== "absent" && !day.is_absent;
+}
+
+export function dayWasLate(day: CalendarDayExport): boolean {
+  return String(day.attendance_status || "").trim().toLowerCase() === "late";
+}
+
+export function dayWasHalfDay(day: CalendarDayExport): boolean {
+  return String(day.attendance_status || "").trim().toLowerCase().includes("half");
+}
+
+export function plainAttendanceResult(day: CalendarDayExport): string {
+  if (day.is_future) return "Not yet occurred";
+  if (day.attendance_status === "not_joined") return "Before joining date";
+  if (dayIsWeekend(day) && !hasAttendanceOnDay(day)) return "Weekly off (Saturday / Sunday)";
+  if (dayIsWeekend(day) && hasAttendanceOnDay(day)) return "Worked on weekly off";
+
+  const status = String(day.attendance_status || "").trim().toLowerCase();
+  if (status === "present") return "Came on time";
+  if (status === "late") return "Came late";
+  if (status === "absent" || day.is_absent) return "Did not come (absent)";
+  if (status.includes("half")) return "Half day";
+  if (status.includes("short")) return "Short leave";
+  if (status.includes("leave")) return "On leave";
+  return formatStatusLabelForExport(status);
+}
+
+function formatStatusLabelForExport(status: string): string {
+  return status
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
 export type CalendarDayExport = {
