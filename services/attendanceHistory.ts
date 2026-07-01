@@ -17,10 +17,13 @@ export type AttendanceHistoryRow = {
   joining_date?: string;
 };
 
+export type AttendanceHistoryScope = "month" | "day";
+
 export type AttendanceHistoryQuery = {
   month: number;
   year: number;
   date?: number;
+  scope?: AttendanceHistoryScope;
 };
 
 export type AttendanceExportMode = "full" | "monthly";
@@ -158,8 +161,9 @@ function buildSingleUserHistoryUrl(
     employee_id: String(employeeId),
     month: String(query.month),
     year: String(query.year),
+    scope: query.scope || "month",
   });
-  if (query.date) {
+  if (query.scope === "day" && query.date) {
     params.set("date", String(query.date));
   }
   return `${API_URL}/api/attendance-history/get-single-user-with-attendance-history?${params.toString()}`;
@@ -177,8 +181,9 @@ function buildTeamMemberHistoryUrl(
     employee_id: String(employeeId),
     month: String(query.month),
     year: String(query.year),
+    scope: query.scope || "month",
   });
-  if (query.date) {
+  if (query.scope === "day" && query.date) {
     params.set("date", String(query.date));
   }
   return `${API_URL}/api/attendance-history/get-team-member-attendance-history?${params.toString()}`;

@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useMemo } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
 
@@ -15,6 +15,30 @@ function EmployeeAttendancePageContent() {
       ? String(params?.employee_id ?? "")
       : "");
 
+  const initialQuery = useMemo(() => {
+    const monthParam = searchParams.get("month");
+    const yearParam = searchParams.get("year");
+    const dateParam = searchParams.get("date");
+    const scopeParam = searchParams.get("scope");
+
+    const month = monthParam ? Number(monthParam) : undefined;
+    const year = yearParam ? Number(yearParam) : undefined;
+    const date = dateParam ? Number(dateParam) : undefined;
+    const scope: "month" | "day" | undefined =
+      scopeParam === "day" ? "day" : scopeParam === "month" ? "month" : undefined;
+
+    if (!month && !year && !date && !scope) {
+      return undefined;
+    }
+
+    return {
+      ...(month ? { month } : {}),
+      ...(year ? { year } : {}),
+      ...(date ? { date } : {}),
+      ...(scope ? { scope } : {}),
+    };
+  }, [searchParams]);
+
   if (!employeeId) {
     return (
       <div className="p-6 text-center text-sm text-slate-500">
@@ -23,7 +47,9 @@ function EmployeeAttendancePageContent() {
     );
   }
 
-  return <ManageAttendanceDetail employeeId={employeeId} />;
+  return (
+    <ManageAttendanceDetail employeeId={employeeId} initialQuery={initialQuery} />
+  );
 }
 
 export default function EmployeeAttendancePage() {

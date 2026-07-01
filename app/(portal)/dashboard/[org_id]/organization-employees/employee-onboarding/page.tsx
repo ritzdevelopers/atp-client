@@ -533,6 +533,7 @@ function EmployeOnboardingPageContent() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [empCode, setEmpCode] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -670,6 +671,7 @@ function EmployeOnboardingPageContent() {
     setName("");
     setEmail("");
     setPhone("");
+    setEmpCode("");
     setPassword("");
     setConfirmPassword("");
     setShowPassword(false);
@@ -781,6 +783,7 @@ function EmployeOnboardingPageContent() {
         phone: phone.trim(),
         user_role_id: Number(userRoleId),
         organization_id: organizationIdNum,
+        emp_code: empCode.trim() || undefined,
       });
       const newUserId = result.data?.user_id ?? result.user_id;
       if (!newUserId) {
@@ -801,6 +804,7 @@ function EmployeOnboardingPageContent() {
       setName("");
       setEmail("");
       setPhone("");
+      setEmpCode("");
       setPassword("");
       setConfirmPassword("");
       setShowPassword(false);
@@ -1265,7 +1269,7 @@ function EmployeOnboardingPageContent() {
             <div>
               <h2 className={stepTitleCls()}>Account basics</h2>
               <p className={stepDescCls()}>
-                Step 1 — name, contact, role, and password for {orgName}.
+                Step 1 — name, contact, employee code, role, and password for {orgName}.
               </p>
             </div>
           </div>
@@ -1360,6 +1364,22 @@ function EmployeOnboardingPageContent() {
               </div>
 
               <div>
+                <label htmlFor="emp-code" className={labelCls()}>
+                  Employee code
+                </label>
+                <input
+                  id="emp-code"
+                  name="emp_code"
+                  type="text"
+                  autoComplete="off"
+                  className={inputCls()}
+                  value={empCode}
+                  onChange={(e) => setEmpCode(e.target.value.toUpperCase())}
+                  placeholder="e.g. EMP001"
+                />
+              </div>
+
+              <div>
                 <label htmlFor="emp-role" className={labelCls()}>
                   Role <span className="text-red-500">*</span>
                 </label>
@@ -1390,8 +1410,6 @@ function EmployeOnboardingPageContent() {
                   </select>
                 )}
               </div>
-
-              <div className="hidden sm:block" aria-hidden />
 
               <div>
                 <label htmlFor="emp-password" className={labelCls()}>

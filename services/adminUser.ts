@@ -63,6 +63,7 @@ export type CreateEmployeePayload = {
   phone: string;
   user_role_id: number;
   organization_id: number;
+  emp_code?: string;
 };
 
 export type CreateEmployeeResponse = {
@@ -118,6 +119,7 @@ export async function createEmployee(
       phone: payload.phone,
       user_role_id: payload.user_role_id,
       organization_id: payload.organization_id,
+      emp_code: payload.emp_code?.trim().toUpperCase() || undefined,
     }),
   });
 
