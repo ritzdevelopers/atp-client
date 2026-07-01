@@ -726,4 +726,310 @@ export async function downloadAttendanceHistoryExcel(
   URL.revokeObjectURL(url);
 }
 
+export type PreparedEmployeeExport = {
+  employee: AttendanceExportPayload["employee"];
+  period: AttendanceExportPayload["period"];
+  summary: AttendanceExportSummary;
+  calendarDays: CalendarDayExport[];
+};
+
+export function prepareEmployeeExportPayload(
+  payload: AttendanceExportPayload,
+  options?: ExportExcelOptions,
+): PreparedEmployeeExport {
+  const calendarDays = buildCalendarDaysFromPayload(payload, options);
+  const summary = options?.clientSideCalculation
+    ? summarizeCalendarDaysClient(calendarDays)
+    : payload.summary;
+
+  return {
+    employee: payload.employee,
+    period: payload.period,
+    summary,
+    calendarDays,
+  };
+}
+
+function addAllEmployeesSummarySheet(
+  workbook: import("exceljs").Workbook,
+  entries: PreparedEmployeeExport[],
+  meta: {
+    periodLabel: string;
+    fromDate: string;
+    toDate: string;
+    filterDescription: string;
+  },
+) {
+  const sheet = workbook.addWorksheet("All employees summary", {
+    views: [{ state: "frozen", ySplit: 3 }],
+  });
+
+  sheet.columns = [
+    { width: 14 },
+    { width: 24 },
+    { width: 28 },
+    { width: 16 },
+    { width: 10 },
+    { width: 10 },
+    { width: 12 },
+    { width: 12 },
+    { width: 14 },
+    { width: 10 },
+    { width: 12 },
+    { width: 12 },
+    { width: 12 },
+  ];
+
+  const titleRow = sheet.addRow(["All employees attendance report"]);
+  sheet.mergeCells(titleRow.number, 1, titleRow.number, 13);
+  titleRow.height = 34;
+  styleTitleCell(titleRow.getCell(1), "All employees attendance report");
+
+  sheet.addRow([]);
+  const metaRows: [string, string][] = [
+    ["Report period", meta.periodLabel],
+    ["From", meta.fromDate],
+    ["To", meta.toDate],
+    ["List filters applied", meta.filterDescription],
+  ];
+  for (const [label, value] of metaRows) {
+    const row = sheet.addRow([label, value]);
+    styleLabelCell(row.getCell(1));
+    styleValueCell(row.getCell(2));
+    sheet.mergeCells(row.number, 2, row.number, 13);
+  }
+
+  sheet.addRow([]);
+  const rulesTitle = sheet.addRow(["Company attendance rules"]);
+  sheet.mergeCells(rulesTitle.number, 1, rulesTitle.number, 13);
+  styleSectionTitle(rulesTitle.getCell(1));
+  for (const rule of ATTENDANCE_RULE_LABELS) {
+    const row = sheet.addRow([rule.label, rule.value]);
+    styleLabelCell(row.getCell(1));
+    styleValueCell(row.getCell(2));
+    sheet.mergeCells(row.number, 2, row.number, 13);
+  }
+
+  sheet.addRow([]);
+  const tableTitle = sheet.addRow(["Employee attendance summary"]);
+  sheet.mergeCells(tableTitle.number, 1, tableTitle.number, 13);
+  styleSectionTitle(tableTitle.getCell(1));
+
+  const header = sheet.addRow([
+    "Emp code",
+    "Employee",
+    "Email",
+    "Role",
+    "Present",
+    "Late",
+    "Leave from lates",
+    "Absent",
+    "Absent incl. leave",
+    "Half day",
+    "Short leave",
+    "Weekly off",
+    "Total hours",
+  ]);
+  header.height = 24;
+  header.eachCell((cell) => styleHeaderCell(cell));
+
+  let totalLate = 0;
+  let totalLeaveFromLates = 0;
+  let totalAbsentIncl = 0;
+
+  for (const entry of entries) {
+    const { employee, summary } = entry;
+    const leaveFromLates =
+      summary.late_derived_leaves ?? summary.on_leave_days ?? 0;
+    const absentIncl =
+      summary.total_absent_with_late_leaves ??
+      summary.absent_days + leaveFromLates;
+
+    totalLate += summary.late_days;
+    totalLeaveFromLates += leaveFromLates;
+    totalAbsentIncl += absentIncl;
+
+    const row = sheet.addRow([
+      employee.emp_code || String(employee.user_id),
+      employee.user_name,
+      employee.user_email || "—",
+      employee.user_role_name || "—",
+      summary.present_days,
+      summary.late_days,
+      leaveFromLates,
+      summary.absent_days,
+      absentIncl,
+      summary.half_day_days,
+      summary.short_leave_days,
+      summary.weekly_off_days ?? 0,
+      summary.total_working_hours,
+    ]);
+    row.height = 20;
+    row.eachCell((cell) => {
+      cell.border = thinBorder();
+      cell.alignment = { vertical: "middle", wrapText: true };
+      cell.font = { name: FONT_FAMILY, size: 10, color: { argb: PALETTE.text } };
+    });
+  }
+
+  if (entries.length > 0) {
+    const totalsRow = sheet.addRow([
+      "TOTALS",
+      `${entries.length} employees`,
+      "",
+      "",
+      "",
+      totalLate,
+      totalLeaveFromLates,
+      "",
+      totalAbsentIncl,
+      "",
+      "",
+      "",
+      "",
+    ]);
+    totalsRow.eachCell((cell) => {
+      cell.border = thinBorder();
+      cell.font = { name: FONT_FAMILY, size: 10, bold: true, color: { argb: PALETTE.brandDark } };
+    });
+  }
+}
+
+function addAllEmployeesDailyLogSheet(
+  workbook: import("exceljs").Workbook,
+  entries: PreparedEmployeeExport[],
+) {
+  const sheet = workbook.addWorksheet("Daily log (all)", {
+    views: [{ state: "frozen", ySplit: 1 }],
+  });
+
+  sheet.columns = [
+    { width: 14 },
+    { width: 22 },
+    { width: 12 },
+    { width: 12 },
+    { width: 12 },
+    { width: 12 },
+    { width: 16 },
+    { width: 14 },
+    { width: 24 },
+  ];
+
+  const header = sheet.addRow([
+    "Emp code",
+    "Employee",
+    "Date",
+    "Day",
+    "Check in",
+    "Check out",
+    "Status",
+    "Working hours",
+    "Notes",
+  ]);
+  header.height = 24;
+  header.eachCell((cell) => styleHeaderCell(cell));
+
+  for (const entry of entries) {
+    const empCode = entry.employee.emp_code || String(entry.employee.user_id);
+    const empName = entry.employee.user_name;
+
+    for (const day of entry.calendarDays) {
+      if (day.attendance_status === "future" || day.attendance_status === "not_joined") {
+        continue;
+      }
+
+      const note = dayIsWeekend(day)
+        ? hasAttendanceOnDay(day)
+          ? "Worked on weekly off"
+          : "Weekly off"
+        : day.is_absent
+          ? "Absent — no attendance record"
+          : "";
+
+      const row = sheet.addRow([
+        empCode,
+        empName,
+        day.date,
+        day.day_name,
+        formatTime(day.check_in),
+        formatTime(day.check_out),
+        formatStatusLabel(day.attendance_status),
+        formatWorkingHours(day.working_time),
+        note,
+      ]);
+      row.height = 20;
+
+      const statusStyle = resolveStatusStyle(day.attendance_status);
+      row.eachCell((cell, colNumber) => {
+        const isAbsentWeekday = day.is_absent && !dayIsWeekend(day);
+        const isWeekendOff = dayIsWeekend(day) && !hasAttendanceOnDay(day);
+        const isWeekendPresent = dayIsWeekend(day) && hasAttendanceOnDay(day);
+        cell.border = thinBorder();
+        cell.alignment = { vertical: "middle", wrapText: true };
+        cell.font = {
+          name: FONT_FAMILY,
+          size: 10,
+          color: {
+            argb: isAbsentWeekday
+              ? PALETTE.absentText
+              : colNumber === 7
+                ? statusStyle.font
+                : PALETTE.text,
+          },
+          bold: colNumber === 7 || isAbsentWeekday,
+        };
+        cell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: {
+            argb: isAbsentWeekday
+              ? PALETTE.absentBg
+              : isWeekendPresent
+                ? PALETTE.weekendPresentBg
+                : isWeekendOff
+                  ? PALETTE.weeklyOffBg
+                  : colNumber === 7
+                    ? statusStyle.fill
+                    : PALETTE.white,
+          },
+        };
+      });
+    }
+  }
+}
+
+export async function downloadAllEmployeesAttendanceExcel(
+  entries: PreparedEmployeeExport[],
+  meta: {
+    periodLabel: string;
+    fromDate: string;
+    toDate: string;
+    filterDescription: string;
+    fileSlug: string;
+  },
+) {
+  if (!entries.length) {
+    throw new Error("No employees to export.");
+  }
+
+  const ExcelJS = (await import("exceljs")).default;
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "Attendance Portal";
+  workbook.created = new Date();
+
+  addAllEmployeesSummarySheet(workbook, entries, meta);
+  addAllEmployeesDailyLogSheet(workbook, entries);
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `all_employees_attendance_${meta.fileSlug}.xlsx`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
 export type { AttendanceExportPayload };
