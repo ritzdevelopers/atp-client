@@ -31,6 +31,7 @@ import {
 } from "@/services/attendanceHistory";
 import { useBiometricAttendanceFeed } from "@/hooks/useBiometricAttendanceFeed";
 import ExportAttendanceHistoryModal from "@/components/portal-dashboard/attendance/ExportAttendanceHistoryModal";
+import AttendanceRulesNotice from "@/components/portal-dashboard/attendance/AttendanceRulesNotice";
 
 /** Refresh today's attendance from the server every minute (not every few seconds). */
 const ATTENDANCE_POLL_MS = 60_000;
@@ -844,6 +845,7 @@ function ManageAttendanceListPage() {
         {!loading && !error && mobileMainTab === "overview" ? (
           <div className="space-y-2.5 p-3 sm:p-4">
             <p className="text-[13px] font-medium text-[#6B7280]">{displayDateLabel}</p>
+            <AttendanceRulesNotice compact className="mb-1" />
             <div className="grid grid-cols-2 gap-2">
               <KpiCard
                 label="Total employees"
@@ -1023,6 +1025,10 @@ function ManageAttendanceListPage() {
                 onClick={() => handleKpiFilterClick("late")}
               />
             </div>
+          ) : null}
+
+          {!loading && !error ? (
+            <AttendanceRulesNotice className="mb-4" />
           ) : null}
 
           <div className={`${zohoPanelCls()} p-1.5`}>

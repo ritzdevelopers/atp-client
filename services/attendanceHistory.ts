@@ -58,18 +58,24 @@ export type AttendanceExportResponse = {
     half_day_days: number;
     short_leave_days: number;
     on_leave_days: number;
+    late_derived_leaves?: number;
+    total_absent_with_late_leaves?: number;
     weekly_off_days?: number;
     total_working_minutes: number;
     total_working_hours: number;
   };
   attendance_rules?: {
-    late_after: string;
+    on_time_until?: string;
+    late_from?: string;
+    late_after?: string;
     half_day_checkin_after: string;
     half_day_checkout_until: string;
     short_leave_from: string;
     short_leave_until: string;
     full_day_checkout_after: string;
     min_full_day_hours: number;
+    min_absent_hours?: number;
+    lates_per_derived_leave?: number;
   };
   calendar_days?: Array<{
     date: string;

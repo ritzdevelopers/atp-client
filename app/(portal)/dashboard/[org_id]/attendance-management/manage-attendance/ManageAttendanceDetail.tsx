@@ -9,7 +9,6 @@ import {
   RefreshCw,
   Loader2,
   AlertCircle,
-  Info,
   User,
   ClipboardList,
   BarChart3,
@@ -19,6 +18,7 @@ import {
   Download,
 } from "lucide-react";
 import ExportAttendanceHistoryModal from "@/components/portal-dashboard/attendance/ExportAttendanceHistoryModal";
+import AttendanceRulesNotice from "@/components/portal-dashboard/attendance/AttendanceRulesNotice";
 import type { EmployeeAttendanceRow } from "@/services/attendanceHistory";
 import {
   buildMonthAttendanceView,
@@ -838,7 +838,18 @@ function ManageAttendanceDetail({
           color: "#047857",
         },
         { key: "late", label: "Late", count: monthlyKpi.late, color: "#E8710A" },
-        { key: "absent", label: "Absent", count: monthlyKpi.absent, color: "#DC2626" },
+        {
+          key: "lateDerivedLeaves",
+          label: "Leave (from lates)",
+          count: monthlyKpi.lateDerivedLeaves,
+          color: "#BE185D",
+        },
+        {
+          key: "absent",
+          label: "Absent (incl. leave from lates)",
+          count: monthlyKpi.totalAbsentWithLateLeaves,
+          color: "#DC2626",
+        },
         { key: "halfDay", label: "Half day", count: monthlyKpi.halfDay, color: "#008CD3" },
         {
           key: "shortLeave",
@@ -1179,12 +1190,20 @@ function ManageAttendanceDetail({
                   share={sharePct(monthlyKpi.late)}
                 />
                 <KpiStatCard
-                  label="Total absent"
-                  value={monthlyKpi.absent}
+                  label="Leave (from lates)"
+                  value={monthlyKpi.lateDerivedLeaves}
+                  color="text-[#BE185D]"
+                  bg="bg-[#FCE7F3]/50"
+                  accent="#BE185D"
+                  share={sharePct(monthlyKpi.lateDerivedLeaves)}
+                />
+                <KpiStatCard
+                  label="Absent (incl. leave from lates)"
+                  value={monthlyKpi.totalAbsentWithLateLeaves}
                   color="text-[#DC2626]"
                   bg="bg-[#FEE2E2]/40"
                   accent="#DC2626"
-                  share={sharePct(monthlyKpi.absent)}
+                  share={sharePct(monthlyKpi.totalAbsentWithLateLeaves)}
                 />
                 <KpiStatCard
                   label="Half days"
@@ -1249,15 +1268,7 @@ function ManageAttendanceDetail({
               </div>
             </div>
 
-            <div className="rounded-xl border border-[#E4E7EC] bg-[#E8F4FB] p-4">
-              <div className="flex gap-3">
-                <Info className="h-5 w-5 shrink-0 text-[#008CD3]" />
-                <p className="text-[14px] leading-relaxed text-[#4B5563]">
-                  Charts reflect the applied query period ({appliedQuery.month}/{appliedQuery.year}
-                  ). Use the Log tab to change filters and view check-in/out details.
-                </p>
-              </div>
-            </div>
+            <AttendanceRulesNotice lateCount={monthlyKpi.late} className="border-[#E4E7EC] bg-[#E8F4FB]" />
           </div>
         ) : null}
 
@@ -1564,12 +1575,20 @@ function ManageAttendanceDetail({
                 share={sharePct(monthlyKpi.late)}
               />
               <KpiStatCard
-                label="Total absent"
-                value={monthlyKpi.absent}
+                label="Leave (from lates)"
+                value={monthlyKpi.lateDerivedLeaves}
+                color="text-rose-700"
+                bg="bg-rose-50/80"
+                accent="#BE185D"
+                share={sharePct(monthlyKpi.lateDerivedLeaves)}
+              />
+              <KpiStatCard
+                label="Absent (incl. leave from lates)"
+                value={monthlyKpi.totalAbsentWithLateLeaves}
                 color="text-red-700"
                 bg="bg-red-50/80"
                 accent="#DC2626"
-                share={sharePct(monthlyKpi.absent)}
+                share={sharePct(monthlyKpi.totalAbsentWithLateLeaves)}
               />
               <KpiStatCard
                 label="Half days"
@@ -1589,6 +1608,8 @@ function ManageAttendanceDetail({
               />
             </div>
           </article>
+
+          <AttendanceRulesNotice lateCount={monthlyKpi.late} />
 
           <article className="grid gap-4 xl:grid-cols-3">
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm xl:col-span-1">

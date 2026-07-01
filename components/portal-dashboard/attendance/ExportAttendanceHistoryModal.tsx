@@ -176,9 +176,10 @@ export default function ExportAttendanceHistoryModal({
 
           {clientSideCalculation ? (
             <div className="rounded-xl border border-[#E4E7EC] bg-[#F9FAFB] px-4 py-3 text-sm text-[#6B7280]">
-              Status (present, late, half day, short leave, absent) is calculated
-              from check-in and check-out times using company attendance rules —
-              not from stored backend status.
+              Status (present, late, half day, short leave, absent) is calculated from
+              check-in/check-out using company rules: on time until 9:45 AM, late from
+              9:46 AM, absent if worked under 4 hours, and every 3 lates = 1 leave
+              (floor division) — not from stored backend status.
             </div>
           ) : null}
 

@@ -1,23 +1,45 @@
 import type { AttendanceHistoryRow } from "@/services/attendanceHistory";
 
 export const ATTENDANCE_RULES = {
-  LATE_AFTER: wallTimeToMinutesSinceMidnight("09:45:00"),
+  /** On time through 09:45:59; late from 09:46:00 onward. */
+  LATE_FROM: wallTimeToMinutesSinceMidnight("09:46:00"),
   HALF_DAY_CHECKIN_AFTER: wallTimeToMinutesSinceMidnight("10:30:00"),
   HALF_DAY_CHECKOUT_UNTIL: wallTimeToMinutesSinceMidnight("17:29:00"),
   SHORT_LEAVE_FROM: wallTimeToMinutesSinceMidnight("17:30:00"),
   SHORT_LEAVE_UNTIL: wallTimeToMinutesSinceMidnight("18:15:00"),
   FULL_DAY_CHECKOUT_AFTER: wallTimeToMinutesSinceMidnight("18:20:00"),
   MIN_FULL_DAY_MINUTES: 8 * 60,
+  /** Worked less than 4 hours with a check-in counts as absent. */
+  MIN_ABSENT_MINUTES: 4 * 60,
+  /** Every 3 lates in a month = 1 leave (floor division). */
+  LATES_PER_DERIVED_LEAVE: 3,
 } as const;
 
 export const ATTENDANCE_RULE_LABELS = [
-  { label: "Late after", value: "09:45 AM" },
+  { label: "On time until", value: "09:45 AM" },
+  { label: "Late from", value: "09:46 AM" },
   { label: "Half day (check-in after)", value: "10:30 AM" },
   { label: "Half day (check-out until)", value: "05:29 PM" },
   { label: "Short leave window", value: "05:30 PM – 06:15 PM" },
   { label: "Full day check-out after", value: "06:20 PM" },
   { label: "Minimum full day", value: "8 hours" },
+  { label: "Absent if worked less than", value: "4 hours" },
+  { label: "Late-to-leave rule", value: "Every 3 lates = 1 leave (floor(lates ÷ 3))" },
 ] as const;
+
+export function computeLateDerivedLeaves(lateCount: number): number {
+  const lates = Number.isFinite(lateCount) ? Math.max(0, Math.floor(lateCount)) : 0;
+  return Math.floor(lates / ATTENDANCE_RULES.LATES_PER_DERIVED_LEAVE);
+}
+
+export function formatLateLeaveExplanation(lateCount: number): string {
+  const lates = Number.isFinite(lateCount) ? Math.max(0, Math.floor(lateCount)) : 0;
+  const leaves = computeLateDerivedLeaves(lates);
+  if (leaves === 0) {
+    return `No leave counted from lates yet (${lates} late${lates === 1 ? "" : "s"}; 3 lates = 1 leave).`;
+  }
+  return `${leaves} leave${leaves === 1 ? "" : "s"} counted from ${lates} late${lates === 1 ? "" : "s"} — floor(${lates} ÷ 3) = ${leaves}. These are added to absent/leave totals for the month.`;
+}
 
 const STATUS_PRIORITY: Record<string, number> = {
   absent: 0,
@@ -52,7 +74,7 @@ function deriveCheckInStatus(checkInMinutes: number) {
   }
   if (
     Number.isFinite(checkInMinutes) &&
-    checkInMinutes > ATTENDANCE_RULES.LATE_AFTER
+    checkInMinutes >= ATTENDANCE_RULES.LATE_FROM
   ) {
     return "late";
   }
@@ -91,6 +113,14 @@ export function deriveFinalAttendanceStatus(
     workingMinutes < ATTENDANCE_RULES.MIN_FULL_DAY_MINUTES
   ) {
     status = pickStrongerStatus(status, "half_day");
+  }
+
+  if (
+    workingMinutes != null &&
+    workingMinutes > 0 &&
+    workingMinutes < ATTENDANCE_RULES.MIN_ABSENT_MINUTES
+  ) {
+    return "absent";
   }
 
   return status;
@@ -217,6 +247,10 @@ export type MonthAttendanceSummary = {
   future: number;
   totalWorkingMinutes: number;
   kpiTotal: number;
+  /** floor(late ÷ 3) — counted as leave against absent totals. */
+  lateDerivedLeaves: number;
+  /** absent + lateDerivedLeaves */
+  totalAbsentWithLateLeaves: number;
 };
 
 export type MonthCalendarCell = {
@@ -328,6 +362,9 @@ export function buildMonthAttendanceView(
   const kpiTotal =
     present + presentFullDay + late + absent + halfDay + shortLeave;
 
+  const lateDerivedLeaves = computeLateDerivedLeaves(late);
+  const totalAbsentWithLateLeaves = absent + lateDerivedLeaves;
+
   return {
     days,
     summary: {
@@ -341,6 +378,8 @@ export function buildMonthAttendanceView(
       future,
       totalWorkingMinutes,
       kpiTotal,
+      lateDerivedLeaves,
+      totalAbsentWithLateLeaves,
     },
     calendarCells,
     statusByDate,
@@ -520,6 +559,8 @@ export function summarizeCalendarDaysClient(days: CalendarDayExport[]) {
     }
   }
 
+  const lateDerivedLeaves = computeLateDerivedLeaves(lateDays);
+
   return {
     total_days: days.filter(
       (day) =>
@@ -531,7 +572,9 @@ export function summarizeCalendarDaysClient(days: CalendarDayExport[]) {
     absent_days: absentDays,
     half_day_days: halfDayDays,
     short_leave_days: shortLeaveDays,
-    on_leave_days: 0,
+    on_leave_days: lateDerivedLeaves,
+    late_derived_leaves: lateDerivedLeaves,
+    total_absent_with_late_leaves: absentDays + lateDerivedLeaves,
     weekly_off_days: weeklyOffDays,
     total_working_minutes: totalWorkingMinutes,
     total_working_hours: Math.round((totalWorkingMinutes / 60) * 100) / 100,

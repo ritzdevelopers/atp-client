@@ -85,6 +85,7 @@ import {
   formatCalculatedStatusLabel,
   type CalculatedAttendanceStatus,
 } from "@/lib/attendanceRules";
+import AttendanceRulesNotice from "@/components/portal-dashboard/attendance/AttendanceRulesNotice";
 import {
   createEmployeeBankInfo,
   updateEmployeeBankInfo,
@@ -1253,19 +1254,32 @@ function AttendanceHistoryTable({
         </div>
       </div>
 
-      <div className="grid shrink-0 grid-cols-2 gap-3 px-5 pt-4 sm:grid-cols-4">
+      <div className="grid shrink-0 grid-cols-2 gap-3 px-5 pt-4 sm:grid-cols-5">
         <AttendanceSummaryPill
           label="Present"
           value={summary.present + summary.presentFullDay}
           accent="success"
         />
         <AttendanceSummaryPill label="Late" value={summary.late} accent="warning" />
-        <AttendanceSummaryPill label="Absent" value={summary.absent} accent="danger" />
+        <AttendanceSummaryPill
+          label="Leave (from lates)"
+          value={summary.lateDerivedLeaves}
+          accent="danger"
+        />
+        <AttendanceSummaryPill
+          label="Absent (incl. leave from lates)"
+          value={summary.totalAbsentWithLateLeaves}
+          accent="danger"
+        />
         <AttendanceSummaryPill
           label="Work hrs"
           value={`${Math.round((summary.totalWorkingMinutes / 60) * 10) / 10}h`}
           accent="primary"
         />
+      </div>
+
+      <div className="mx-5 mt-3">
+        <AttendanceRulesNotice lateCount={summary.late} compact />
       </div>
 
       {error ? (

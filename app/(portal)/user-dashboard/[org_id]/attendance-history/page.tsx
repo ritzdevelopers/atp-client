@@ -13,7 +13,7 @@ import {
   stableFilterKey,
   writeOwnAttendanceHistoryCache,
 } from "@/lib/employeeManagementCache";
-import { ATTENDANCE_RULE_LABELS } from "@/lib/attendanceRules";
+import AttendanceRulesNotice from "@/components/portal-dashboard/attendance/AttendanceRulesNotice";
 import {
   calculatedStatusBadgeClass,
   computeMonthAnalytics,
@@ -36,7 +36,6 @@ import {
   RefreshCw,
   Loader2,
   AlertCircle,
-  Info,
   ChevronLeft,
   ChevronRight,
   CalendarDays,
@@ -480,12 +479,20 @@ export default function AttendanceHistoryPage() {
                   share={sharePct(monthlyKpi.late)}
                 />
                 <KpiStatCard
-                  label="Absent"
-                  value={monthlyKpi.absent}
+                  label="Leave (from lates)"
+                  value={monthlyKpi.lateDerivedLeaves}
+                  color="text-[#BE185D]"
+                  bg="bg-white"
+                  accent="#BE185D"
+                  share={sharePct(monthlyKpi.lateDerivedLeaves)}
+                />
+                <KpiStatCard
+                  label="Absent (incl. leave from lates)"
+                  value={monthlyKpi.totalAbsentWithLateLeaves}
                   color="text-[#DC2626]"
                   bg="bg-white"
                   accent="#DC2626"
-                  share={sharePct(monthlyKpi.absent)}
+                  share={sharePct(monthlyKpi.totalAbsentWithLateLeaves)}
                 />
               </div>
             </div>
@@ -516,22 +523,7 @@ export default function AttendanceHistoryPage() {
               />
             </div>
 
-            <div className="rounded-xl border border-[#E4E7EC] bg-[#E8F4FB] p-4">
-              <div className="flex gap-3">
-                <Info className="h-5 w-5 shrink-0 text-[#008CD3]" />
-                <div className="text-[13px] leading-relaxed text-[#4B5563]">
-                  <p className="font-medium text-[#1F2937]">Company attendance rules</p>
-                  <ul className="mt-2 space-y-1">
-                    {ATTENDANCE_RULE_LABELS.map((rule) => (
-                      <li key={rule.label}>
-                        {rule.label}: {rule.value}
-                      </li>
-                    ))}
-                  </ul>
-                  <p className="mt-2">Sat/Sun are week off — absent is not counted on weekends without attendance.</p>
-                </div>
-              </div>
-            </div>
+            <AttendanceRulesNotice lateCount={monthlyKpi.late} />
           </div>
         ) : null}
 
@@ -755,10 +747,13 @@ export default function AttendanceHistoryPage() {
               <KpiStatCard label="Present" value={monthlyKpi.present} color="text-emerald-600" bg="bg-white" accent="#0F9D58" share={sharePct(monthlyKpi.present)} />
               <KpiStatCard label="Full day" value={monthlyKpi.presentFullDay} color="text-emerald-700" bg="bg-white" accent="#047857" share={sharePct(monthlyKpi.presentFullDay)} />
               <KpiStatCard label="Late" value={monthlyKpi.late} color="text-orange-500" bg="bg-white" accent="#E8710A" share={sharePct(monthlyKpi.late)} />
-              <KpiStatCard label="Absent" value={monthlyKpi.absent} color="text-red-600" bg="bg-white" accent="#DC2626" share={sharePct(monthlyKpi.absent)} />
+              <KpiStatCard label="Leave (from lates)" value={monthlyKpi.lateDerivedLeaves} color="text-rose-600" bg="bg-white" accent="#BE185D" share={sharePct(monthlyKpi.lateDerivedLeaves)} />
+              <KpiStatCard label="Absent (incl. leave from lates)" value={monthlyKpi.totalAbsentWithLateLeaves} color="text-red-600" bg="bg-white" accent="#DC2626" share={sharePct(monthlyKpi.totalAbsentWithLateLeaves)} />
               <KpiStatCard label="Half day" value={monthlyKpi.halfDay} color="text-sky-500" bg="bg-white" accent="#008CD3" share={sharePct(monthlyKpi.halfDay)} />
               <KpiStatCard label="Short leave" value={monthlyKpi.shortLeave} color="text-yellow-600" bg="bg-white" accent="#F9A825" share={sharePct(monthlyKpi.shortLeave)} />
             </section>
+
+            <AttendanceRulesNotice lateCount={monthlyKpi.late} />
 
             <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <p className="text-sm font-semibold text-slate-700">Month status mix</p>
