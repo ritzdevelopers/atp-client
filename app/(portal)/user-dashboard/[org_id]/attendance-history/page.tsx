@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import {
   formatAttendanceTimeLocal,
-  getLocalYmdFromDate,
   localYmdFromAttendanceValue,
 } from "@/lib/attendanceDates";
 import {
@@ -14,6 +13,24 @@ import {
   stableFilterKey,
   writeOwnAttendanceHistoryCache,
 } from "@/lib/employeeManagementCache";
+import { ATTENDANCE_RULE_LABELS } from "@/lib/attendanceRules";
+import {
+  calculatedStatusBadgeClass,
+  computeMonthAnalytics,
+  formatCalculatedStatusLabel,
+  mapOwnRowsToHistoryRows,
+  matchesCalculatedStatusFilter,
+  mobileCalculatedStatusBadgeCls,
+} from "@/lib/attendanceMonthAnalytics";
+import {
+  AttendanceDonutChart,
+  EnhancedStatusBars,
+  KpiStatCard,
+  MonthCalendarHeatmap,
+  StackedMonthBar,
+} from "@/components/portal-dashboard/attendance/AttendanceAnalyticsCharts";
+import DailyHoursRechartsChart from "@/app/(portal)/dashboard/[org_id]/attendance-management/manage-attendance/DailyHoursRechartsChart";
+import MonthlyActivityRechartsChart from "@/app/(portal)/dashboard/[org_id]/attendance-management/manage-attendance/MonthlyActivityRechartsChart";
 import {
   BarChart3,
   RefreshCw,
@@ -23,6 +40,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CalendarDays,
+  TrendingUp,
 } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
@@ -50,15 +68,7 @@ function toNumberWorkingHours(value: string | number | null | undefined): number
   return Number.isNaN(n) ? 0 : n / 60;
 }
 
-function statusColorClass(status: string | null | undefined): string {
-  const s = String(status || "").toLowerCase();
-  if (s.includes("late")) return "bg-orange-500 text-white";
-  if (s.includes("absent")) return "bg-red-600 text-white";
-  if (s.includes("half_day")) return "bg-sky-400 text-white";
-  if (s.includes("short_leave")) return "bg-yellow-400 text-slate-900";
-  if (s.includes("full_day")) return "bg-emerald-600 text-white";
-  return "bg-slate-100 text-slate-700";
-}
+const PAGE_SIZE = 20;
 
 const MONTH_LABELS = Array.from({ length: 12 }, (_, i) =>
   new Date(2000, i, 1).toLocaleDateString(undefined, { month: "long" }),
@@ -87,26 +97,15 @@ function zohoSecondaryBtnCls(full = false) {
 }
 
 function mobileStatusBadgeCls(status: string | null | undefined): string {
-  const s = String(status || "").toLowerCase();
-  if (s.includes("late")) return "bg-[#FEF3E6] text-[#E8710A]";
-  if (s.includes("absent")) return "bg-[#FCE8E6] text-[#D93025]";
-  if (s.includes("half_day")) return "bg-[#E8F4FB] text-[#008CD3]";
-  if (s.includes("short_leave")) return "bg-[#FFF8E1] text-[#F9A825]";
-  if (s.includes("full_day")) return "bg-[#E6F4EA] text-[#0F9D58]";
-  return "bg-[#F5F7FA] text-[#6B7280]";
-}
-
-function formatStatusLabel(status: string | null | undefined): string {
-  const s = String(status || "").trim();
-  if (!s) return "—";
-  return s.replace(/_/g, " ");
+  return mobileCalculatedStatusBadgeCls(status ?? undefined);
 }
 
 type MobileAttendanceRowProps = {
   row: AttendanceRow;
+  calculatedStatus?: string;
 };
 
-function MobileAttendanceRow({ row }: MobileAttendanceRowProps) {
+function MobileAttendanceRow({ row, calculatedStatus }: MobileAttendanceRowProps) {
   const dateLabel = localYmdFromAttendanceValue(row.date) || "—";
   const [y, m, d] = dateLabel.split("-");
   const dayNum = d ? String(Number(d)).padStart(2, "0") : "--";
@@ -116,7 +115,8 @@ function MobileAttendanceRow({ row }: MobileAttendanceRowProps) {
         .toUpperCase()
     : "---";
   const hours = toNumberWorkingHours(row.working_time);
-  const statusCls = mobileStatusBadgeCls(row.status);
+  const displayStatus = calculatedStatus ?? row.status ?? "";
+  const statusCls = mobileStatusBadgeCls(displayStatus);
 
   return (
     <li>
@@ -134,7 +134,7 @@ function MobileAttendanceRow({ row }: MobileAttendanceRowProps) {
               <span
                 className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ${statusCls}`}
               >
-                {formatStatusLabel(row.status)}
+                {formatCalculatedStatusLabel(displayStatus)}
               </span>
             </div>
             <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1 text-[13px] text-[#6B7280]">
@@ -171,7 +171,6 @@ export default function AttendanceHistoryPage() {
   const historyFilterKey = stableFilterKey({
     month,
     year,
-    status,
     page,
     limit,
     sort: "DESC",
@@ -204,7 +203,6 @@ export default function AttendanceHistoryPage() {
       const filterKey = stableFilterKey({
         month,
         year,
-        status,
         page,
         limit,
         sort: "DESC",
@@ -246,7 +244,6 @@ export default function AttendanceHistoryPage() {
           limit: String(limit),
           sort: "DESC",
         });
-        if (status) search.set("status", status);
         const res = await fetch(
           `${API_URL}/api/attendance-history/get-attendance-history-of-employee?${search.toString()}`,
           {
@@ -274,67 +271,52 @@ export default function AttendanceHistoryPage() {
         setRefreshing(false);
       }
     },
-    [orgId, month, year, status, page, limit],
+    [orgId, month, year, page, limit],
   );
 
   useEffect(() => {
     void loadHistory(false);
   }, [loadHistory]);
 
-  const stats = useMemo(() => {
-    let fullDay = 0;
-    let late = 0;
-    let absent = 0;
-    let halfDay = 0;
-    let shortLeave = 0;
-    let totalHours = 0;
-    for (const r of rows) {
-      const s = String(r.status || "").toLowerCase();
-      if (s.includes("full_day")) fullDay += 1;
-      if (s.includes("late")) late += 1;
-      if (s.includes("absent")) absent += 1;
-      if (s.includes("half_day")) halfDay += 1;
-      if (s.includes("short_leave")) shortLeave += 1;
-      totalHours += toNumberWorkingHours(r.working_time);
-    }
-    return { fullDay, late, absent, halfDay, shortLeave, totalHours };
-  }, [rows]);
+  const historyRows = useMemo(() => mapOwnRowsToHistoryRows(rows), [rows]);
+  const yearNum = Number(year);
+  const monthNum = Number(month);
 
-  const maxHours = useMemo(() => {
-    let m = 1;
-    for (const r of rows) {
-      const h = toNumberWorkingHours(r.working_time);
-      if (h > m) m = h;
-    }
-    return m;
-  }, [rows]);
+  const analytics = useMemo(
+    () => computeMonthAnalytics(yearNum, monthNum, historyRows),
+    [yearNum, monthNum, historyRows],
+  );
 
-  const monthCalendar = useMemo(() => {
-    const y = Number(year);
-    const m = Number(month);
-    if (Number.isNaN(y) || Number.isNaN(m)) return [];
-    const first = new Date(y, m - 1, 1);
-    const total = new Date(y, m, 0).getDate();
-    const firstWeekday = first.getDay();
-    const map = new Map<string, AttendanceRow>();
-    for (const r of rows) {
-      const key = localYmdFromAttendanceValue(r.date);
-      if (key) map.set(key, r);
-    }
-    const cells: Array<{ dateNum: number | null; row?: AttendanceRow }> = [];
-    for (let i = 0; i < firstWeekday; i += 1) cells.push({ dateNum: null });
-    for (let d = 1; d <= total; d += 1) {
-      const date = new Date(y, m - 1, d);
-      const key = getLocalYmdFromDate(date);
-      cells.push({ dateNum: d, row: map.get(key) });
-    }
-    return cells;
-  }, [rows, month, year]);
+  const { monthlyKpi, monthAnalytics, kpiSegments, statusDistribution, monthlyTrend } =
+    analytics;
 
-  const hasNextPage = rows.length >= limit;
+  const sharePct = (count: number) =>
+    monthAnalytics.kpiTotal > 0 ? Math.round((count / monthAnalytics.kpiTotal) * 100) : 0;
+
+  const getCalculatedStatus = useCallback(
+    (row: AttendanceRow) => {
+      const ymd = localYmdFromAttendanceValue(row.date);
+      if (!ymd) return row.status ?? "";
+      return analytics.monthAttendance.statusByDate.get(ymd) ?? row.status ?? "";
+    },
+    [analytics.monthAttendance.statusByDate],
+  );
+
+  const filteredRows = useMemo(
+    () =>
+      rows.filter((row) => matchesCalculatedStatusFilter(getCalculatedStatus(row), status)),
+    [rows, status, getCalculatedStatus],
+  );
+
+  const pagedRows = useMemo(
+    () => filteredRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filteredRows, page],
+  );
+
+  const hasNextPage = page * PAGE_SIZE < filteredRows.length;
 
   const mobileTabs = [
-    { id: "log" as const, label: "Log", count: rows.length },
+    { id: "log" as const, label: "Log", count: filteredRows.length },
     { id: "calendar" as const, label: "Calendar" },
     { id: "overview" as const, label: "Overview" },
   ];
@@ -353,7 +335,7 @@ export default function AttendanceHistoryPage() {
               <p className="truncate text-[13px] text-[#6B7280]">
                 {loading
                   ? "Loading…"
-                  : `${rows.length} record${rows.length === 1 ? "" : "s"} · ${formatMonthYearLabel(month, year)}`}
+                  : `${filteredRows.length} record${filteredRows.length === 1 ? "" : "s"} · ${formatMonthYearLabel(month, year)} · ${monthAnalytics.attendanceRate}% attendance`}
               </p>
             </div>
             <button
@@ -420,7 +402,8 @@ export default function AttendanceHistoryPage() {
                 className={zohoSelectCls()}
               >
                 <option value="">All statuses</option>
-                <option value="full_day">Full day</option>
+                <option value="present">Present</option>
+                <option value="present_full_day">Full day</option>
                 <option value="late">Late</option>
                 <option value="absent">Absent</option>
                 <option value="half_day">Half day</option>
@@ -446,40 +429,107 @@ export default function AttendanceHistoryPage() {
 
         {!loading && !error && mobileMainTab === "overview" ? (
           <div className="space-y-3 p-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
-                <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">Full day</p>
-                <p className="mt-1 text-2xl font-semibold text-[#0F9D58]">{stats.fullDay}</p>
+            <div className="overflow-hidden rounded-xl border border-[#E4E7EC] bg-gradient-to-br from-[#008CD3] to-[#0070AA] p-4 text-white shadow-sm">
+              <div className="grid grid-cols-3 gap-2 border-b border-white/20 pb-4">
+                <div className="text-center">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-white/70">Attendance</p>
+                  <p className="mt-0.5 text-xl font-bold tabular-nums">{monthAnalytics.attendanceRate}%</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-white/70">On time</p>
+                  <p className="mt-0.5 text-xl font-bold tabular-nums">{monthAnalytics.onTimeRate}%</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-white/70">Hours</p>
+                  <p className="mt-0.5 text-xl font-bold tabular-nums">{monthAnalytics.totalHours.toFixed(1)}h</p>
+                </div>
               </div>
-              <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
-                <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">Late</p>
-                <p className="mt-1 text-2xl font-semibold text-[#E8710A]">{stats.late}</p>
-              </div>
-              <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
-                <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">Absent</p>
-                <p className="mt-1 text-2xl font-semibold text-[#D93025]">{stats.absent}</p>
-              </div>
-              <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
-                <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">Half day</p>
-                <p className="mt-1 text-2xl font-semibold text-[#008CD3]">{stats.halfDay}</p>
-              </div>
+              <p className="mt-3 text-center text-[12px] text-white/80">
+                {monthAnalytics.daysWithRecord}/{monthAnalytics.daysInMonth} days logged · calculated from check-in/out rules
+              </p>
             </div>
+
             <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
-              <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">
-                Recorded hours (page)
-              </p>
-              <p className="mt-1 text-3xl font-semibold text-[#008CD3]">{stats.totalHours.toFixed(1)}h</p>
-              <p className="mt-1 text-[14px] text-[#6B7280]">
-                Short leave: {stats.shortLeave} · Page {meta.page}
-              </p>
+              <p className="text-[13px] font-semibold text-[#1F2937]">Month breakdown</p>
+              <div className="mt-3">
+                <StackedMonthBar segments={kpiSegments} total={monthAnalytics.kpiTotal} />
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <KpiStatCard
+                  label="Present"
+                  value={monthlyKpi.present}
+                  color="text-[#0F9D58]"
+                  bg="bg-white"
+                  accent="#0F9D58"
+                  share={sharePct(monthlyKpi.present)}
+                />
+                <KpiStatCard
+                  label="Full day"
+                  value={monthlyKpi.presentFullDay}
+                  color="text-[#047857]"
+                  bg="bg-white"
+                  accent="#047857"
+                  share={sharePct(monthlyKpi.presentFullDay)}
+                />
+                <KpiStatCard
+                  label="Late"
+                  value={monthlyKpi.late}
+                  color="text-[#E8710A]"
+                  bg="bg-white"
+                  accent="#E8710A"
+                  share={sharePct(monthlyKpi.late)}
+                />
+                <KpiStatCard
+                  label="Absent"
+                  value={monthlyKpi.absent}
+                  color="text-[#DC2626]"
+                  bg="bg-white"
+                  accent="#DC2626"
+                  share={sharePct(monthlyKpi.absent)}
+                />
+              </div>
             </div>
+
+            <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
+              <p className="text-[13px] font-semibold text-[#1F2937]">Status distribution</p>
+              <div className="mt-4">
+                <AttendanceDonutChart
+                  segments={kpiSegments}
+                  total={monthAnalytics.kpiTotal}
+                  centerLabel="Work days"
+                  centerValue={String(monthAnalytics.kpiTotal)}
+                  size={120}
+                />
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
+              <div className="mb-3 flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-[#008CD3]" />
+                <p className="text-[13px] font-semibold text-[#1F2937]">Daily working hours</p>
+              </div>
+              <DailyHoursRechartsChart
+                year={yearNum}
+                month={monthNum}
+                daysInMonth={monthAnalytics.daysInMonth}
+                points={monthAnalytics.dailyHours}
+              />
+            </div>
+
             <div className="rounded-xl border border-[#E4E7EC] bg-[#E8F4FB] p-4">
               <div className="flex gap-3">
                 <Info className="h-5 w-5 shrink-0 text-[#008CD3]" />
-                <p className="text-[14px] leading-relaxed text-[#4B5563]">
-                  Stats reflect the currently loaded page (up to {limit} rows). Use the Log tab for
-                  check-in/out details and the Calendar tab for a month heatmap.
-                </p>
+                <div className="text-[13px] leading-relaxed text-[#4B5563]">
+                  <p className="font-medium text-[#1F2937]">Company attendance rules</p>
+                  <ul className="mt-2 space-y-1">
+                    {ATTENDANCE_RULE_LABELS.map((rule) => (
+                      <li key={rule.label}>
+                        {rule.label}: {rule.value}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-2">Sat/Sun are week off — absent is not counted on weekends without attendance.</p>
+                </div>
               </div>
             </div>
           </div>
@@ -493,7 +543,7 @@ export default function AttendanceHistoryPage() {
                   <p className="text-[15px] font-semibold text-[#1F2937]">
                     {formatMonthYearLabel(month, year)}
                   </p>
-                  <p className="text-[13px] text-[#6B7280]">Color-coded by status</p>
+                  <p className="text-[13px] text-[#6B7280]">Calculated status · Sat/Sun week off</p>
                 </div>
                 <div className="flex items-center gap-1">
                   <button
@@ -525,38 +575,23 @@ export default function AttendanceHistoryPage() {
                 </div>
               </div>
               <div className="px-4 py-3">
-                <div className="grid grid-cols-7 gap-1.5 text-center text-[11px] font-semibold text-[#6B7280]">
-                  {["S", "M", "T", "W", "T", "F", "S"].map((d, idx) => (
-                    <span key={`${d}-${idx}`}>{d}</span>
-                  ))}
-                </div>
-                <div className="mt-2 grid grid-cols-7 gap-1.5">
-                  {monthCalendar.map((cell, idx) => (
-                    <div
-                      key={idx}
-                      className={`flex aspect-square items-center justify-center rounded-lg text-[13px] font-semibold ${
-                        cell.dateNum == null
-                          ? "bg-transparent text-transparent"
-                          : statusColorClass(cell.row?.status)
-                      }`}
-                      title={cell.row?.status ? String(cell.row.status) : "No record"}
-                    >
-                      {cell.dateNum ?? ""}
-                    </div>
-                  ))}
-                </div>
+                <MonthCalendarHeatmap
+                  year={yearNum}
+                  month={monthNum}
+                  cells={monthAnalytics.calendarCells}
+                />
               </div>
               <div className="grid grid-cols-2 gap-2 border-t border-[#E4E7EC] px-4 py-3 text-[12px] text-[#6B7280]">
                 <p>
                   <span className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full bg-[#0F9D58]" />
-                  Full day
+                  Present
                 </p>
                 <p>
                   <span className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full bg-[#E8710A]" />
                   Late
                 </p>
                 <p>
-                  <span className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full bg-[#D93025]" />
+                  <span className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full bg-[#DC2626]" />
                   Absent
                 </p>
                 <p>
@@ -564,15 +599,15 @@ export default function AttendanceHistoryPage() {
                   Half day
                 </p>
                 <p className="col-span-2">
-                  <span className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full bg-[#F9A825]" />
-                  Short leave
+                  <span className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full bg-[#E5E7EB]" />
+                  Sat / Sun off
                 </p>
               </div>
             </div>
           </div>
         ) : null}
 
-        {!loading && !error && mobileMainTab === "log" && rows.length === 0 ? (
+        {!loading && !error && mobileMainTab === "log" && filteredRows.length === 0 ? (
           <div className="mx-4 mt-4 rounded-xl border border-dashed border-[#E4E7EC] bg-white px-6 py-16 text-center">
             <CalendarDays className="mx-auto h-10 w-10 text-[#9CA3AF]" />
             <p className="mt-4 text-[17px] font-semibold text-[#1F2937]">No records found</p>
@@ -582,11 +617,15 @@ export default function AttendanceHistoryPage() {
           </div>
         ) : null}
 
-        {!loading && !error && mobileMainTab === "log" && rows.length > 0 ? (
+        {!loading && !error && mobileMainTab === "log" && filteredRows.length > 0 ? (
           <>
             <ul className="mt-1 divide-y divide-[#E4E7EC] border-t border-[#E4E7EC] bg-white">
-              {rows.map((row) => (
-                <MobileAttendanceRow key={String(row.attendance_id)} row={row} />
+              {pagedRows.map((row) => (
+                <MobileAttendanceRow
+                  key={String(row.attendance_id)}
+                  row={row}
+                  calculatedStatus={getCalculatedStatus(row)}
+                />
               ))}
             </ul>
             <div className="flex items-center gap-2 border-t border-[#E4E7EC] bg-white px-4 py-3">
@@ -614,14 +653,36 @@ export default function AttendanceHistoryPage() {
         ) : null}
       </div>
 
-      {/* Desktop layout (unchanged) */}
+      {/* Desktop layout */}
       <section className="hidden w-full max-w-none space-y-6 p-6 lg:block">
-        <header className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-slate-500">Attendance</p>
-          <h1 className="mt-1 text-2xl font-bold text-[#0C123A]">Attendance History Analytics</h1>
-          <p className="mt-2 text-sm text-slate-600">
-            Filter by month, year and status. Track work hours and day-wise attendance distribution.
+        <header className="overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-[#0C123A] via-[#151e59] to-[#008CD3] p-6 text-white shadow-sm">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-white/70">My attendance</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">Attendance History Analytics</h1>
+          <p className="mt-2 max-w-2xl text-sm text-white/85">
+            Status is calculated from your check-in and check-out times using company rules — same as admin manage-attendance.
           </p>
+          {!loading ? (
+            <div className="mt-6 grid gap-3 sm:grid-cols-4">
+              <div className="rounded-xl bg-white/10 px-4 py-3 backdrop-blur-sm">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-white/70">Attendance rate</p>
+                <p className="mt-1 text-2xl font-bold tabular-nums">{monthAnalytics.attendanceRate}%</p>
+              </div>
+              <div className="rounded-xl bg-white/10 px-4 py-3 backdrop-blur-sm">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-white/70">On-time rate</p>
+                <p className="mt-1 text-2xl font-bold tabular-nums">{monthAnalytics.onTimeRate}%</p>
+              </div>
+              <div className="rounded-xl bg-white/10 px-4 py-3 backdrop-blur-sm">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-white/70">Total hours</p>
+                <p className="mt-1 text-2xl font-bold tabular-nums">{monthAnalytics.totalHours.toFixed(1)}h</p>
+              </div>
+              <div className="rounded-xl bg-white/10 px-4 py-3 backdrop-blur-sm">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-white/70">Days logged</p>
+                <p className="mt-1 text-2xl font-bold tabular-nums">
+                  {monthAnalytics.daysWithRecord}/{monthAnalytics.daysInMonth}
+                </p>
+              </div>
+            </div>
+          ) : null}
         </header>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -658,26 +719,30 @@ export default function AttendanceHistoryPage() {
               }}
               className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
             >
-              <option value="">All Status</option>
-              <option value="full_day">Full Day</option>
+              <option value="">All statuses</option>
+              <option value="present">Present</option>
+              <option value="present_full_day">Full day</option>
               <option value="late">Late</option>
               <option value="absent">Absent</option>
-              <option value="half_day">Half Day</option>
-              <option value="short_leave">Short Leave</option>
+              <option value="half_day">Half day</option>
+              <option value="short_leave">Short leave</option>
             </select>
             <button
               type="button"
-              onClick={() => setPage(1)}
-              className="rounded-lg bg-[#0C123A] px-4 py-2 text-sm font-semibold text-white"
+              onClick={() => void loadHistory(true)}
+              disabled={loading || refreshing}
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#008CD3] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
             >
-              Apply Filters
+              <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+              Refresh
             </button>
           </div>
         </section>
 
         {loading ? (
-          <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
-            Loading attendance history...
+          <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white py-16 text-sm text-slate-500">
+            <Loader2 className="h-8 w-8 animate-spin text-[#008CD3]" />
+            Loading attendance history…
           </div>
         ) : null}
         {error ? (
@@ -686,122 +751,137 @@ export default function AttendanceHistoryPage() {
 
         {!loading && !error ? (
           <>
-            <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
-              <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <p className="text-xs text-slate-500">Full Day</p>
-                <p className="mt-1 text-xl font-bold text-emerald-600">{stats.fullDay}</p>
+            <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+              <KpiStatCard label="Present" value={monthlyKpi.present} color="text-emerald-600" bg="bg-white" accent="#0F9D58" share={sharePct(monthlyKpi.present)} />
+              <KpiStatCard label="Full day" value={monthlyKpi.presentFullDay} color="text-emerald-700" bg="bg-white" accent="#047857" share={sharePct(monthlyKpi.presentFullDay)} />
+              <KpiStatCard label="Late" value={monthlyKpi.late} color="text-orange-500" bg="bg-white" accent="#E8710A" share={sharePct(monthlyKpi.late)} />
+              <KpiStatCard label="Absent" value={monthlyKpi.absent} color="text-red-600" bg="bg-white" accent="#DC2626" share={sharePct(monthlyKpi.absent)} />
+              <KpiStatCard label="Half day" value={monthlyKpi.halfDay} color="text-sky-500" bg="bg-white" accent="#008CD3" share={sharePct(monthlyKpi.halfDay)} />
+              <KpiStatCard label="Short leave" value={monthlyKpi.shortLeave} color="text-yellow-600" bg="bg-white" accent="#F9A825" share={sharePct(monthlyKpi.shortLeave)} />
+            </section>
+
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <p className="text-sm font-semibold text-slate-700">Month status mix</p>
+              <div className="mt-4">
+                <StackedMonthBar segments={kpiSegments} total={monthAnalytics.kpiTotal} />
+              </div>
+            </section>
+
+            <section className="grid gap-6 xl:grid-cols-2">
+              <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                <h2 className="text-sm font-semibold text-slate-700">Status distribution</h2>
+                <div className="mt-4">
+                  <AttendanceDonutChart
+                    segments={kpiSegments}
+                    total={monthAnalytics.kpiTotal}
+                    centerLabel="Work days"
+                    centerValue={String(monthAnalytics.kpiTotal)}
+                  />
+                </div>
               </article>
-              <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <p className="text-xs text-slate-500">Late</p>
-                <p className="mt-1 text-xl font-bold text-orange-500">{stats.late}</p>
-              </article>
-              <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <p className="text-xs text-slate-500">Absent</p>
-                <p className="mt-1 text-xl font-bold text-red-600">{stats.absent}</p>
-              </article>
-              <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <p className="text-xs text-slate-500">Half Day</p>
-                <p className="mt-1 text-xl font-bold text-sky-500">{stats.halfDay}</p>
-              </article>
-              <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <p className="text-xs text-slate-500">Short Leave</p>
-                <p className="mt-1 text-xl font-bold text-yellow-500">{stats.shortLeave}</p>
-              </article>
-              <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <p className="text-xs text-slate-500">Total Hours</p>
-                <p className="mt-1 text-xl font-bold text-[#0C123A]">{stats.totalHours.toFixed(1)}</p>
+
+              <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                <h2 className="text-sm font-semibold text-slate-700">Status breakdown bars</h2>
+                <div className="mt-4">
+                  <EnhancedStatusBars items={statusDistribution} />
+                </div>
               </article>
             </section>
 
             <section className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
               <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                <h2 className="text-sm font-semibold text-slate-700">Working Hours Bar</h2>
-                <div className="mt-4 space-y-3">
-                  {rows.length === 0 ? (
-                    <p className="text-sm text-slate-500">No attendance records for selected filters.</p>
-                  ) : (
-                    rows.slice(0, 20).map((r) => {
-                      const hours = toNumberWorkingHours(r.working_time);
-                      const pct = Math.max(4, Math.round((hours / maxHours) * 100));
-                      const dateLabel = localYmdFromAttendanceValue(r.date) || "N/A";
-                      return (
-                        <div key={String(r.attendance_id)} className="space-y-1">
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="font-medium text-slate-700">{dateLabel}</span>
-                            <span className="text-slate-500">{hours.toFixed(2)}h</span>
-                          </div>
-                          <div className="h-2 rounded-full bg-slate-100">
-                            <div className="h-2 rounded-full bg-indigo-600" style={{ width: `${pct}%` }} />
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
+                <div className="mb-4 flex items-center justify-between gap-2">
+                  <h2 className="text-sm font-semibold text-slate-700">Daily working hours</h2>
+                  <span className="text-xs text-slate-500">{monthAnalytics.totalHours.toFixed(1)}h total</span>
                 </div>
+                <DailyHoursRechartsChart
+                  year={yearNum}
+                  month={monthNum}
+                  daysInMonth={monthAnalytics.daysInMonth}
+                  points={monthAnalytics.dailyHours}
+                />
               </article>
 
               <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                <h2 className="text-sm font-semibold text-slate-700">Attendance Calendar</h2>
-                <div className="mt-4 grid grid-cols-7 gap-2 text-center text-[11px] text-slate-500">
-                  {["S", "M", "T", "W", "T", "F", "S"].map((d, idx) => (
-                    <span key={`${d}-${idx}`}>{d}</span>
-                  ))}
-                </div>
-                <div className="mt-2 grid grid-cols-7 gap-2">
-                  {monthCalendar.map((cell, idx) => (
-                    <div
-                      key={idx}
-                      className={`flex h-9 items-center justify-center rounded-md text-xs font-semibold ${
-                        cell.dateNum == null ? "bg-transparent text-transparent" : statusColorClass(cell.row?.status)
-                      }`}
-                      title={cell.row?.status ? String(cell.row.status) : "No record"}
-                    >
-                      {cell.dateNum ?? "-"}
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-4 grid grid-cols-2 gap-2 text-xs text-slate-600">
-                  <p><span className="inline-block h-2 w-2 rounded bg-orange-500" /> Late</p>
-                  <p><span className="inline-block h-2 w-2 rounded bg-red-600" /> Absent</p>
-                  <p><span className="inline-block h-2 w-2 rounded bg-sky-400" /> Half Day</p>
-                  <p><span className="inline-block h-2 w-2 rounded bg-yellow-400" /> Short Leave</p>
-                  <p><span className="inline-block h-2 w-2 rounded bg-emerald-600" /> Full Day</p>
+                <h2 className="text-sm font-semibold text-slate-700">Attendance calendar</h2>
+                <div className="mt-4">
+                  <MonthCalendarHeatmap
+                    year={yearNum}
+                    month={monthNum}
+                    cells={monthAnalytics.calendarCells}
+                  />
                 </div>
               </article>
             </section>
 
+            {monthlyTrend.length > 1 ? (
+              <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="mb-4 flex items-center gap-2">
+                  <BarChart3 className="h-4 w-4 text-[#008CD3]" />
+                  <h2 className="text-sm font-semibold text-slate-700">Monthly activity trend</h2>
+                </div>
+                <MonthlyActivityRechartsChart items={monthlyTrend} />
+              </article>
+            ) : null}
+
             <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-700">Attendance Logs</h2>
+              <h2 className="text-sm font-semibold text-slate-700">Attendance logs</h2>
               <div className="mt-4 overflow-x-auto">
                 <table className="min-w-full text-left text-sm">
                   <thead>
                     <tr className="border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500">
                       <th className="px-2 py-2">Date</th>
-                      <th className="px-2 py-2">Check In</th>
-                      <th className="px-2 py-2">Check Out</th>
-                      <th className="px-2 py-2">Working Hours</th>
-                      <th className="px-2 py-2">Status</th>
+                      <th className="px-2 py-2">Check in</th>
+                      <th className="px-2 py-2">Check out</th>
+                      <th className="px-2 py-2">Working hours</th>
+                      <th className="px-2 py-2">Calculated status</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.map((r) => (
-                      <tr key={String(r.attendance_id)} className="border-b border-slate-100 last:border-b-0">
-                        <td className="px-2 py-2 font-medium text-slate-700">
-                          {localYmdFromAttendanceValue(r.date) || "—"}
-                        </td>
-                        <td className="px-2 py-2 text-slate-600">{formatAttendanceTimeLocal(r.check_in)}</td>
-                        <td className="px-2 py-2 text-slate-600">{formatAttendanceTimeLocal(r.check_out)}</td>
-                        <td className="px-2 py-2 text-slate-600">{toNumberWorkingHours(r.working_time).toFixed(2)}h</td>
-                        <td className="px-2 py-2">
-                          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${statusColorClass(r.status)}`}>
-                            {String(r.status || "N/A").replace(/_/g, " ")}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
+                    {pagedRows.map((r) => {
+                      const calcStatus = getCalculatedStatus(r);
+                      return (
+                        <tr key={String(r.attendance_id)} className="border-b border-slate-100 last:border-b-0">
+                          <td className="px-2 py-2 font-medium text-slate-700">
+                            {localYmdFromAttendanceValue(r.date) || "—"}
+                          </td>
+                          <td className="px-2 py-2 text-slate-600">{formatAttendanceTimeLocal(r.check_in)}</td>
+                          <td className="px-2 py-2 text-slate-600">{formatAttendanceTimeLocal(r.check_out)}</td>
+                          <td className="px-2 py-2 text-slate-600">{toNumberWorkingHours(r.working_time).toFixed(2)}h</td>
+                          <td className="px-2 py-2">
+                            <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${calculatedStatusBadgeClass(calcStatus)}`}>
+                              {formatCalculatedStatusLabel(calcStatus)}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
+              {filteredRows.length > PAGE_SIZE ? (
+                <div className="mt-4 flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-600 disabled:opacity-50"
+                  >
+                    Previous
+                  </button>
+                  <span className="text-sm text-slate-500">
+                    Page {page} · {filteredRows.length} records
+                  </span>
+                  <button
+                    type="button"
+                    disabled={!hasNextPage}
+                    onClick={() => setPage((p) => p + 1)}
+                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-600 disabled:opacity-50"
+                  >
+                    Next
+                  </button>
+                </div>
+              ) : null}
             </section>
           </>
         ) : null}

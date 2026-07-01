@@ -486,6 +486,7 @@ function formatExitStatusLabel(status: string | undefined | null): string | null
 
 function mapApiUserToCard(row: OrgUserRow): EmployeeCard {
   const id = row.id != null ? String(row.id) : "";
+  const empCodeRaw = String(row.emp_code ?? "").trim();
   const email = String(row.user_email ?? "");
   const roleRaw = row.role_name ?? row.user_role_name;
   const roleLabel = formatRoleLabel(roleRaw);
@@ -502,7 +503,7 @@ function mapApiUserToCard(row: OrgUserRow): EmployeeCard {
 
   return {
     id,
-    empCode: id ? `U-${id}` : "—",
+    empCode: empCodeRaw || "—",
     name: String(row.user_name ?? "Unknown"),
     roleLabel,
     memberSince: formatMemberSince(row.created_at),

@@ -3,6 +3,9 @@ import {
   applyRulesToCalendarDay,
   ATTENDANCE_RULE_LABELS,
   buildCalendarDaysFromPunches,
+  dayIsWeekend,
+  hasAttendanceOnDay,
+  isWeekendDay,
   summarizeCalendarDaysClient,
   type CalendarDayExport,
 } from "@/lib/attendanceRules";
@@ -31,6 +34,8 @@ const PALETTE = {
   absentText: "FF991B1B",
   presentBg: "FFD1FAE5",
   presentText: "FF047857",
+  weekendPresentBg: "FF0F9D58",
+  weekendPresentText: "FFFFFFFF",
   lateBg: "FFFEF3C7",
   lateText: "FFB45309",
   halfDayBg: "FFDBEAFE",
@@ -214,11 +219,22 @@ function styleHeaderCell(cell: ExcelCell, fill = PALETTE.brand) {
 }
 
 function getColumnFill(day: CalendarDayExport) {
-  if (day.is_absent && !day.is_sunday) {
+  const isWeekend = dayIsWeekend(day);
+  if (isWeekend) {
+    if (hasAttendanceOnDay(day)) {
+      return {
+        fill: PALETTE.weekendPresentBg,
+        header: PALETTE.weekendPresentBg,
+        text: PALETTE.weekendPresentText,
+      };
+    }
+    return { fill: PALETTE.weeklyOffBg, header: PALETTE.sundayHeader, text: PALETTE.muted };
+  }
+  if (day.is_absent) {
     return { fill: PALETTE.absentBg, header: PALETTE.absentHeader, text: PALETTE.absentText };
   }
-  if (day.is_sunday || day.is_weekly_off) {
-    return { fill: PALETTE.sundayBg, header: PALETTE.sundayHeader, text: PALETTE.muted };
+  if (day.is_weekly_off) {
+    return { fill: PALETTE.weeklyOffBg, header: PALETTE.sundayHeader, text: PALETTE.muted };
   }
   if (day.is_future) {
     return { fill: PALETTE.futureBg, header: PALETTE.sundayHeader, text: PALETTE.muted };
@@ -274,6 +290,7 @@ function buildCalendarDaysFromPayload(
     ];
     const record = rowByDate.get(current);
     const isSunday = dayIndex === 0;
+    const isWeekend = isWeekendDay(dayIndex);
 
     days.push(
       applyRulesToCalendarDay({
@@ -281,12 +298,14 @@ function buildCalendarDaysFromPayload(
         day_name: dayNames[dayIndex],
         day_short: dayNames[dayIndex].slice(0, 3),
         is_sunday: isSunday,
-        is_weekly_off: isSunday,
+        is_weekend: isWeekend,
+        is_weekly_off: isWeekend && !record,
         is_future: current > new Date().toISOString().slice(0, 10),
-        is_absent: !record && !isSunday,
+        is_absent: !record && !isWeekend,
         check_in: record?.check_in ?? null,
         check_out: record?.check_out ?? null,
-        attendance_status: record?.attendance_status ?? (isSunday ? "weekly_off" : "absent"),
+        attendance_status:
+          record?.attendance_status ?? (isWeekend ? "weekly_off" : "absent"),
         working_time: Number(record?.working_time ?? 0) || null,
       }),
     );
@@ -358,7 +377,7 @@ function addOverviewSheet(
     ["Half day", summary.half_day_days],
     ["Short leave", summary.short_leave_days],
     ["On leave", summary.on_leave_days],
-    ["Sundays / weekly off", summary.weekly_off_days ?? calendarDays.filter((d) => d.is_sunday).length],
+    ["Sat / Sun (week off)", summary.weekly_off_days ?? calendarDays.filter((d) => dayIsWeekend(d) && !hasAttendanceOnDay(d)).length],
     ["Total working hours", `${summary.total_working_hours}h`],
   ];
 
@@ -393,7 +412,8 @@ function addOverviewSheet(
 
   const legendItems = [
   ["Absent (weekday)", PALETTE.absentBg, PALETTE.absentText],
-  ["Sunday / weekly off", PALETTE.sundayBg, PALETTE.muted],
+  ["Sat / Sun week off", PALETTE.weeklyOffBg, PALETTE.muted],
+  ["Present on weekend", PALETTE.weekendPresentBg, PALETTE.weekendPresentText],
   ["Present", PALETTE.presentBg, PALETTE.presentText],
   ["Late", PALETTE.lateBg, PALETTE.lateText],
   ["Half day", PALETTE.halfDayBg, PALETTE.halfDayText],
@@ -443,14 +463,14 @@ function addCalendarSheet(
     const cell = headerRow.getCell(index + 2);
     const colors = getColumnFill(day);
     styleHeaderCell(cell, colors.header);
-    if (day.is_absent && !day.is_sunday) {
+    if (day.is_absent && !dayIsWeekend(day)) {
       cell.font = {
         name: FONT_FAMILY,
         bold: true,
         size: 10,
         color: { argb: PALETTE.white },
       };
-    } else if (day.is_sunday) {
+    } else if (dayIsWeekend(day) && !hasAttendanceOnDay(day)) {
       cell.font = {
         name: FONT_FAMILY,
         bold: true,
@@ -509,7 +529,7 @@ function addCalendarSheet(
         pattern: "solid",
         fgColor: {
           argb:
-            day.is_absent && !day.is_sunday
+            day.is_absent && !dayIsWeekend(day)
               ? PALETTE.absentBg
               : metric.label === "Status"
                 ? statusStyle.fill
@@ -519,10 +539,10 @@ function addCalendarSheet(
       cell.font = {
         name: FONT_FAMILY,
         size: 10,
-        bold: metric.bold || (day.is_absent && !day.is_sunday),
+        bold: metric.bold || (day.is_absent && !dayIsWeekend(day)),
         color: {
           argb:
-            day.is_absent && !day.is_sunday
+            day.is_absent && !dayIsWeekend(day)
               ? PALETTE.absentText
               : metric.label === "Status"
                 ? statusStyle.font
@@ -579,8 +599,10 @@ function addDailyLogSheet(
       continue;
     }
 
-    const note = day.is_sunday
-      ? "Weekly off"
+    const note = dayIsWeekend(day)
+      ? hasAttendanceOnDay(day)
+        ? "Worked on weekly off"
+        : "Weekly off"
       : day.is_absent
         ? "Absent — no attendance record"
         : "";
@@ -598,7 +620,9 @@ function addDailyLogSheet(
 
     const statusStyle = resolveStatusStyle(day.attendance_status);
     row.eachCell((cell, colNumber) => {
-      const isAbsentWeekday = day.is_absent && !day.is_sunday;
+      const isAbsentWeekday = day.is_absent && !dayIsWeekend(day);
+      const isWeekendOff = dayIsWeekend(day) && !hasAttendanceOnDay(day);
+      const isWeekendPresent = dayIsWeekend(day) && hasAttendanceOnDay(day);
       cell.border = thinBorder();
       cell.alignment = { vertical: "middle", wrapText: true };
       cell.font = {
@@ -619,11 +643,13 @@ function addDailyLogSheet(
         fgColor: {
           argb: isAbsentWeekday
             ? PALETTE.absentBg
-            : day.is_sunday
-              ? PALETTE.sundayBg
-              : colNumber === 5
-                ? statusStyle.fill
-                : PALETTE.white,
+            : isWeekendPresent
+              ? PALETTE.weekendPresentBg
+              : isWeekendOff
+                ? PALETTE.weeklyOffBg
+                : colNumber === 5
+                  ? statusStyle.fill
+                  : PALETTE.white,
         },
       };
     });

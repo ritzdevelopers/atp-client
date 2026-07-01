@@ -7,6 +7,7 @@ export type AttendanceHistoryRow = {
   user_email?: string;
   user_phone?: string;
   user_role_name?: string;
+  emp_code?: string;
   attendance_history?: string;
   attendance_date?: string;
   check_in?: string;
@@ -72,6 +73,7 @@ export type AttendanceExportResponse = {
     day_name: string;
     day_short: string;
     is_sunday: boolean;
+    is_weekend: boolean;
     is_weekly_off: boolean;
     is_future: boolean;
     is_absent: boolean;
@@ -108,6 +110,7 @@ export type AttendanceHeaderData = {
 export type EmployeeAttendanceRow = {
   employee_id: number | string;
   user_id?: number | string | null;
+  emp_code?: string;
   biometric_employee_code?: string;
   biometric_employee_id?: number | string;
   employee_name: string;
