@@ -7,6 +7,7 @@ const PIN_PRIORITY = [
   "manage-attendance",
   "asset-handover",
   "my-attendance-history",
+  "my-leaves",
   "manage-employees-tasks",
   "sync-connection",
 ] as const;

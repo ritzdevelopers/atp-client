@@ -269,6 +269,13 @@ function templatesForOrg(orgId: string | number): NavTemplate[] {
       icon: MdHistory,
     },
     {
+      id: "my-leaves",
+      label: "My leaves",
+      description: "Apply and track your leave",
+      path: "/my-leaves",
+      icon: MdOutlineEventNote,
+    },
+    {
       id: "sync-connection",
       label: "Chat",
       description: "Messages & calls",

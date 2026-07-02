@@ -48,6 +48,7 @@ import HomeDashboardHeader from "@/components/portal-dashboard/home/HomeDashboar
 import ManagementQuickNavRail from "@/components/portal-dashboard/home/ManagementQuickNavRail";
 import HomeAttendanceCard from "@/components/portal-dashboard/home/HomeAttendanceCard";
 import AssetHandoverCard from "@/components/portal-dashboard/home/AssetHandoverCard";
+import HomeLeaveQuickActions from "@/components/portal-dashboard/home/HomeLeaveQuickActions";
 import {
   btnBrandCls,
   btnGhostCls,
@@ -77,6 +78,7 @@ import {
   fetchOrganizationFeatureGroups,
   readOrganizationFeatureSnapshot,
 } from "@/lib/orgFeatureAccess";
+import { fetchMyEmployeeLeaves } from "@/services/employeeLeaveManagement";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
@@ -553,6 +555,7 @@ function HomeOverview({
   );
   const [navTiles, setNavTiles] = useState<ManagementNavTile[]>([]);
   const [navTilesLoading, setNavTilesLoading] = useState(true);
+  const [leavePendingCount, setLeavePendingCount] = useState(0);
   const pathname = usePathname();
 
   const handoverHref =
@@ -646,6 +649,32 @@ function HomeOverview({
   useEffect(() => {
     void loadHomeOverviewData();
   }, [loadHomeOverviewData]);
+
+  useEffect(() => {
+    if (!orgId || Number.isNaN(orgId)) return;
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    const authToken = token;
+    let cancelled = false;
+
+    async function loadLeavePending() {
+      try {
+        const rows = await fetchMyEmployeeLeaves(authToken, orgId);
+        if (!cancelled) {
+          setLeavePendingCount(
+            rows.filter((row) => row.leave_status === "pending").length,
+          );
+        }
+      } catch {
+        if (!cancelled) setLeavePendingCount(0);
+      }
+    }
+
+    void loadLeavePending();
+    return () => {
+      cancelled = true;
+    };
+  }, [orgId, attendanceLoading]);
 
   useEffect(() => {
     let cancelled = false;
@@ -954,6 +983,12 @@ function HomeOverview({
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12 lg:gap-6">
         <div className="flex flex-col gap-5 lg:col-span-8">
+          <HomeLeaveQuickActions
+            orgId={orgId}
+            pendingCount={leavePendingCount}
+            delayMs={40}
+          />
+
           {showAttendance ? (
             <HomeAttendanceCard
               loading={attendanceLoading}

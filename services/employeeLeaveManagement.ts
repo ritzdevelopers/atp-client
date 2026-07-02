@@ -422,6 +422,25 @@ export type ReviewerLeaveRow = EmployeeLeaveRow & {
   my_review_comment: string | null;
 };
 
+export function filterManagementLeaveReviewers(
+  reviewers: LeaveReviewerOption[],
+  applicantRoleKey: string,
+): LeaveReviewerOption[] {
+  const role = applicantRoleKey.trim().toLowerCase();
+  if (role === "hr") {
+    return reviewers.filter((row) => row.approval_role === "admin");
+  }
+  return reviewers.filter(
+    (row) => row.approval_role === "hr" || row.approval_role === "admin",
+  );
+}
+
+export function allReviewerOptionKeys(
+  reviewers: LeaveReviewerOption[],
+): string[] {
+  return reviewers.map((row) => reviewerOptionKey(row));
+}
+
 export async function fetchLeaveReviewersHrAdmin(
   token: string,
   orgId: number | string,

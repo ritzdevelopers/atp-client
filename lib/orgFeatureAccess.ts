@@ -42,6 +42,7 @@ const ALWAYS_ALLOWED_SUFFIXES = [
   "/not-authorized",
   "/home",
   "/my-attendance-history",
+  "/my-leaves",
   "/organization-employees/team-group",
   "/asset-handover",
   "/sync-connection",
