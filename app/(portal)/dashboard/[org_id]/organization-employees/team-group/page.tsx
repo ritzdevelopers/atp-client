@@ -33,7 +33,7 @@ import { getAllOrgUsers, type OrgUserRow } from "@/services/adminUser";
 import {
   applyForLeave,
   fetchMyLeaveQueries,
-  respondToLeaveRequest,
+  updateLeaveQueryStatus,
   validateLeaveApplication,
   type LeaveQueryRow as EmployeeLeaveRow,
 } from "@/services/employeeLeaves";
@@ -727,7 +727,8 @@ function TeamGroupPageContent() {
       setDetail(my);
       setNoTeam(false);
 
-      if (my.is_admin) {
+      const isHrViewer = jwtRoleName(token) === "hr";
+      if (my.is_admin || isHrViewer) {
         await loadAdminTeamFeed(token, orgIdNum, my);
       } else {
         await loadMemberTeamData(token, orgIdNum);
@@ -743,7 +744,9 @@ function TeamGroupPageContent() {
 
   const refreshActivityFeed = useCallback(async () => {
     const token = localStorage.getItem("token");
-    if (!token || !detail?.is_admin) return;
+    if (!token || !detail) return;
+    const isHrViewer = jwtRoleName(token) === "hr";
+    if (!detail.is_admin && !isHrViewer) return;
     const orgIdNum = Number(orgId);
     if (Number.isNaN(orgIdNum)) return;
     await loadAdminTeamFeed(token, orgIdNum, detail);
@@ -751,10 +754,17 @@ function TeamGroupPageContent() {
 
   const focusRow = useMemo(() => (detail ? detailToRow(detail) : null), [detail]);
   const isTeamAdmin = Boolean(detail?.is_admin);
-  const showTeamActivity = isTeamAdmin;
+  const isHrRole =
+    jwtRoleName(
+      typeof window !== "undefined" ? localStorage.getItem("token") : null,
+    ) === "hr";
+  const canModerateTeamRequests = isTeamAdmin || isHrRole;
+  const showTeamActivity = canModerateTeamRequests;
   const showMemberHrSection = true;
   const showDesktopRightPanel =
-    showMemberHrSection || showTeamActivity || (isTeamAdmin && attendancePanelMember);
+    showMemberHrSection ||
+    showTeamActivity ||
+    (isTeamAdmin && attendancePanelMember);
 
   useEffect(() => {
     if (mobileMainTab === "activity" && !showTeamActivity) {
@@ -803,15 +813,7 @@ function TeamGroupPageContent() {
     [myAttRows],
   );
 
-  function roleCanApproveLeaves(): boolean {
-    const t =
-      typeof window !== "undefined" ? localStorage.getItem("token") : null;
-    const role = jwtRoleName(t);
-    return ["admin", "hr", "manager"].includes(role);
-  }
-
-  /** Matches `leaveResponseController`: admin, HR, or manager only (not team-admin alone). */
-  const showLeaveApproveButtons = roleCanApproveLeaves();
+  const showLeaveApproveButtons = canModerateTeamRequests;
 
   const orgUserImageById = useMemo(() => {
     const map: Record<number, string> = {};
@@ -936,6 +938,7 @@ function TeamGroupPageContent() {
         query_id: attResolveModal.id,
         updated_query_status: attResolveModal.action,
         admin_response: note,
+        team_id: detail?.team_id ?? null,
       });
       setBanner({
         type: "ok",
@@ -970,13 +973,17 @@ function TeamGroupPageContent() {
     }
     const orgIdNum = Number(orgId);
     if (Number.isNaN(orgIdNum)) return;
+    if (!detail) {
+      setBanner({ type: "err", text: "Team details not loaded." });
+      return;
+    }
     setLeaveBusyId(leaveId);
     setBanner(null);
     try {
-      await respondToLeaveRequest(t, {
-        leave_id: leaveId,
-        org_id: orgIdNum,
-        status,
+      await updateLeaveQueryStatus(t, {
+        query_id: leaveId,
+        query_status: status,
+        team_id: detail.team_id,
       });
       setBanner({
         type: "ok",
@@ -2309,7 +2316,7 @@ function TeamGroupPageContent() {
                             ) : null}
                             {pending && !showLeaveApproveButtons ? (
                               <p className="mt-2 text-[11px] text-amber-800/90">
-                                Pending — only organization admin, HR, or manager
+                                Pending — only the reporting manager or HR
                                 can approve or reject.
                               </p>
                             ) : null}
@@ -2429,7 +2436,7 @@ function TeamGroupPageContent() {
                             ) : null}
                             {pending && !showLeaveApproveButtons ? (
                               <p className="mt-2 text-[11px] text-amber-800/90">
-                                Pending — only organization admin, HR, or manager
+                                Pending — only the reporting manager or HR
                                 can approve or reject.
                               </p>
                             ) : null}

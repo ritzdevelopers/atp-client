@@ -28,6 +28,7 @@ export const SUB_FEATURE_ALIASES: Record<string, string[]> = {
   "manage-employees": ["manage-employee"],
   "manage-employee-leaves": ["employee-leave-management"],
   "manage-teams": ["team-management"],
+  "create-team": ["team-management"],
   "organization-holidays": ["manage-holidays"],
   "manage-company-shifts": ["manage-shifts"],
   "create-company-shifts": ["create-new-shift"],

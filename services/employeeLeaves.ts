@@ -18,7 +18,7 @@ export type LeaveQueryRow = {
   updated_at?: string | null;
 };
 
-export const UNPAID_LEAVE_TYPE_ID = "000";
+export const UNPAID_LEAVE_TYPE_ID = 0;
 
 export const UNPAID_LEAVE_OPTION: AssignedLeaveBalanceRow = {
   leave_type_id: UNPAID_LEAVE_TYPE_ID,
@@ -51,7 +51,8 @@ export function countInclusiveLeaveDays(
 }
 
 export function isUnpaidLeaveTypeId(leaveTypeId: string | number | null | undefined): boolean {
-  return String(leaveTypeId ?? "") === UNPAID_LEAVE_TYPE_ID;
+  const normalized = String(leaveTypeId ?? "");
+  return normalized === "0" || normalized === "000";
 }
 
 export function validateLeaveApplication(input: {
@@ -194,6 +195,36 @@ export async function applyForLeave(
     message: json.message as string | undefined,
     id: data?.id,
   };
+}
+
+/** Team reporting manager or HR — approve/reject on team-group page. */
+export async function updateLeaveQueryStatus(
+  token: string,
+  payload: {
+    query_id: number;
+    query_status: "approved" | "rejected";
+    team_id?: number | null;
+  },
+): Promise<{ message?: string }> {
+  const res = await fetch(`${API_URL}/api/user/update-leave-query-status`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      query_id: payload.query_id,
+      query_status: payload.query_status,
+      ...(payload.team_id != null ? { team_id: payload.team_id } : {}),
+    }),
+  });
+  const json = await parseJson(res);
+  if (!res.ok) {
+    throw new Error(
+      (json.message as string) || "Could not update leave request",
+    );
+  }
+  return { message: json.message as string | undefined };
 }
 
 /** Admin / HR / manager — `POST /api/user/respond-to-leave`. */

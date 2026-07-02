@@ -14,15 +14,8 @@ import {
   MdMenu,
   MdOutlineChat,
 } from "react-icons/md";
-import { LuFileSpreadsheet } from "react-icons/lu";
-import AssignedLeaveTypeSelect from "./AssignedLeaveTypeSelect";
-import { useAssignedLeaveTypes } from "@/hooks/useAssignedLeaveTypes";
-import {
-  countInclusiveLeaveDays,
-  isUnpaidLeaveTypeId,
-  validateLeaveApplication,
-} from "@/services/employeeLeaves";
 import { BiTask } from "react-icons/bi";
+import { LuFileSpreadsheet } from "react-icons/lu";
 
 type NavIcon = ComponentType<{ className?: string }>;
 
@@ -45,6 +38,12 @@ const navigationItems: { id: string; label: string; icon: NavIcon; href: string 
       label: "Asset handover",
       icon: MdInventory2,
       href: "/user-dashboard/[org_id]/asset-handover",
+    },
+    {
+      id: "my-leaves",
+      label: "My Leaves",
+      icon: MdCalendarMonth,
+      href: "/user-dashboard/[org_id]/my-leaves",
     },
     {
       id: "attendance-history",
@@ -78,8 +77,6 @@ const MAX_MOBILE_BOTTOM_NAV_SLOTS = 3;
 const MOBILE_BOTTOM_LIGHT =
   "border-t border-slate-200 bg-[#FAFAF8] text-slate-700 shadow-[0_-1px_0_0_rgba(15,23,42,0.06)]";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
-
 function resolveHref(template: string, orgId: string): string {
   return template.replace("[org_id]", orgId);
 }
@@ -98,6 +95,8 @@ function bottomTabShortLabel(item: (typeof navigationItems)[number]): string {
       return "Team";
     case "asset-handover":
       return "Handover";
+    case "my-leaves":
+      return "Leaves";
     case "attendance-history":
       return "History";
     case "tasks-management":
@@ -117,49 +116,15 @@ function LeftSideBar() {
   const pathname = usePathname();
   const orgIdParam = params?.org_id;
   const orgSlug = String(orgIdParam ?? "");
-  const orgIdNum = Number(orgIdParam);
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
-  const [showLeaveModal, setShowLeaveModal] = useState(false);
-  const {
-    options: assignedLeaveOptions,
-    selectedLeaveTypeId,
-    setSelectedLeaveTypeId,
-    loading: assignedLeavesLoading,
-    error: assignedLeavesError,
-  } = useAssignedLeaveTypes(
-    Number.isNaN(orgIdNum) ? undefined : orgIdNum,
-    showLeaveModal,
-  );
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [reason, setReason] = useState("");
-  const [submittingLeave, setSubmittingLeave] = useState(false);
-  const [leaveError, setLeaveError] = useState<string | null>(null);
-  const [leaveSuccess, setLeaveSuccess] = useState<string | null>(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
-  const leaveDaysRequested = useMemo(
-    () => countInclusiveLeaveDays(startDate, endDate),
-    [startDate, endDate],
+  const myLeavesHref = resolveHref(
+    "/user-dashboard/[org_id]/my-leaves",
+    orgSlug,
   );
-
-  const leaveValidationError = useMemo(() => {
-    if (!showLeaveModal || !selectedLeaveTypeId || !startDate) return null;
-    return validateLeaveApplication({
-      startDate,
-      endDate,
-      selectedLeaveTypeId,
-      assignedOptions: assignedLeaveOptions,
-    });
-  }, [
-    showLeaveModal,
-    startDate,
-    endDate,
-    selectedLeaveTypeId,
-    assignedLeaveOptions,
-  ]);
+  const applyLeaveHref = `${myLeavesHref}?apply=1`;
 
   const bottomNavItems = useMemo(
     () => navigationItems.slice(0, MAX_MOBILE_BOTTOM_NAV_SLOTS),
@@ -197,67 +162,6 @@ function LeftSideBar() {
     [router, closeMobileMenu],
   );
 
-  async function submitLeave(e: React.FormEvent) {
-    e.preventDefault();
-    setLeaveError(null);
-    setLeaveSuccess(null);
-
-    if (!orgIdNum || Number.isNaN(orgIdNum)) {
-      setLeaveError("Invalid organization.");
-      return;
-    }
-    const validationError = validateLeaveApplication({
-      startDate,
-      endDate,
-      selectedLeaveTypeId,
-      assignedOptions: assignedLeaveOptions,
-    });
-    if (validationError) {
-      setLeaveError(validationError);
-      return;
-    }
-
-    const token = localStorage.getItem("token");
-    if (!token) {
-      setLeaveError("Not signed in.");
-      return;
-    }
-
-    setSubmittingLeave(true);
-    try {
-      const res = await fetch(`${API_URL}/api/employees/apply-for-leave`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          org_id: orgIdNum,
-          leave_type_id: isUnpaidLeaveTypeId(selectedLeaveTypeId)
-            ? "000"
-            : selectedLeaveTypeId,
-          start_date: startDate,
-          end_date: endDate || null,
-          reason: reason.trim() || null,
-        }),
-      });
-      const result = (await res.json()) as { message?: string };
-      if (!res.ok) {
-        throw new Error(result.message || "Could not submit leave request");
-      }
-      setLeaveSuccess(result.message || "Leave request submitted successfully.");
-      setStartDate("");
-      setEndDate("");
-      setReason("");
-    } catch (error) {
-      setLeaveError(
-        error instanceof Error ? error.message : "Could not submit leave request.",
-      );
-    } finally {
-      setSubmittingLeave(false);
-    }
-  }
-
   function confirmLogout() {
     try {
       localStorage.removeItem("token");
@@ -271,7 +175,7 @@ function LeftSideBar() {
 
   function openLeaveFromMenu() {
     setMobileMenuOpen(false);
-    setShowLeaveModal(true);
+    router.push(applyLeaveHref);
   }
 
   function openLogoutFromMenu() {
@@ -333,127 +237,6 @@ function LeftSideBar() {
       </div>
     ) : null;
 
-  const leaveModal =
-    showLeaveModal && typeof document !== "undefined" ? (
-      <div
-        className="fixed inset-0 z-[99998] flex items-center justify-center bg-slate-900/40 p-4"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="user-leave-dialog-title"
-        onClick={(e) =>
-          !submittingLeave &&
-          e.target === e.currentTarget &&
-          setShowLeaveModal(false)
-        }
-      >
-        <div className="relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl">
-          <div className="border-b border-slate-100 px-5 py-4">
-            <h3
-              id="user-leave-dialog-title"
-              className="text-base font-semibold text-slate-800"
-            >
-              Apply for Leave
-            </h3>
-            <p className="mt-1 text-xs text-slate-500">
-              Submit your leave query to management.
-            </p>
-          </div>
-          <form onSubmit={submitLeave} className="space-y-3 px-5 py-4">
-            {leaveError ? (
-              <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-                {leaveError}
-              </div>
-            ) : null}
-            {leaveSuccess ? (
-              <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
-                {leaveSuccess}
-              </div>
-            ) : null}
-
-            <AssignedLeaveTypeSelect
-              options={assignedLeaveOptions}
-              loading={assignedLeavesLoading}
-              error={assignedLeavesError}
-              selectedLeaveTypeId={selectedLeaveTypeId}
-              onSelectLeaveTypeId={setSelectedLeaveTypeId}
-            />
-
-            {startDate && selectedLeaveTypeId && !isUnpaidLeaveTypeId(selectedLeaveTypeId) ? (
-              <p className="text-xs text-slate-500">
-                Requesting {leaveDaysRequested} day
-                {leaveDaysRequested === 1 ? "" : "s"}
-                {leaveValidationError ? (
-                  <span className="mt-1 block text-red-600">{leaveValidationError}</span>
-                ) : null}
-              </p>
-            ) : null}
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Start date
-                </label>
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  required
-                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  End date
-                </label>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Reason
-              </label>
-              <textarea
-                rows={3}
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                placeholder="Optional reason..."
-                className="w-full resize-none rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200"
-              />
-            </div>
-
-            <div className="flex justify-end gap-2 pt-1">
-              <button
-                type="button"
-                disabled={submittingLeave}
-                onClick={() => setShowLeaveModal(false)}
-                className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={
-                  submittingLeave ||
-                  assignedLeavesLoading ||
-                  !selectedLeaveTypeId ||
-                  Boolean(leaveValidationError)
-                }
-                className="inline-flex items-center gap-2 rounded-md bg-indigo-700 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-800 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {submittingLeave ? "Submitting..." : "Submit Query"}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    ) : null;
-
   return (
     <>
       {/* Desktop / tablet landscape: fixed sidebar */}
@@ -493,7 +276,7 @@ function LeftSideBar() {
         <div className="px-3 pb-3">
           <button
             type="button"
-            onClick={() => setShowLeaveModal(true)}
+            onClick={() => router.push(applyLeaveHref)}
             className="flex w-full items-center justify-center gap-2 rounded-md bg-indigo-700 px-3 py-2.5 text-sm font-medium text-white hover:bg-indigo-800"
           >
             <MdCalendarMonth className="text-[18px]" />
@@ -651,7 +434,6 @@ function LeftSideBar() {
       </div>
 
       {logoutDialog ? createPortal(logoutDialog, document.body) : null}
-      {leaveModal ? createPortal(leaveModal, document.body) : null}
     </>
   );
 }

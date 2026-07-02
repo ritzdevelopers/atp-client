@@ -7,6 +7,7 @@ import {
   readOrganizationFeatureSnapshot,
   type OrgFeatureGroup,
 } from "@/lib/orgFeatureAccess";
+import { isCurrentUserOrgAdmin, readRoleNameFromToken } from "@/lib/orgAdminAccess";
 import { useManagementDashboardContext } from "@/components/portal-dashboard/Layout/ManagementDashboardContext";
 import { useRouter, useParams, usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -121,20 +122,6 @@ function shortBottomLabel(item: NavItem): string {
   );
 }
 
-function readRoleNameFromToken(): string | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const token = localStorage.getItem("token");
-    if (!token) return null;
-    const part = token.split(".")[1];
-    if (!part) return null;
-    const payload = JSON.parse(atob(part)) as { user_role_name?: string };
-    return payload.user_role_name ?? null;
-  } catch {
-    return null;
-  }
-}
-
 type NavSubItem = {
   id: string;
   name: string;
@@ -174,11 +161,9 @@ function LeftSideBar({
   }, []);
   const effectiveRoleName =
     dashboardCtx?.user?.user_role_name ?? readRoleNameFromToken();
-  const isAdmin =
-    roleHydrated &&
-    String(effectiveRoleName || "")
-      .trim()
-      .toLowerCase() === "admin";
+  const isAdmin = isCurrentUserOrgAdmin(
+    roleHydrated ? effectiveRoleName : null,
+  );
   const myHistoryActive = Boolean(pathname?.includes("/my-attendance-history"));
   const chatActive = Boolean(pathname?.includes("/sync-connection"));
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -530,17 +515,28 @@ function LeftSideBar({
     hasSubFeatureAccess,
   ]);
 
+  const allNavItemsForAdmin = useMemo(
+    () =>
+      navItems.map((item) => ({
+        ...item,
+        path: item.path ?? item.children[0]?.path,
+      })),
+    [navItems],
+  );
+
+  const visibleNavItems = isAdmin ? allNavItemsForAdmin : filteredNavItems;
+
   useEffect(() => {
     if (!featuresLoaded) return;
     const allowedPaths: string[] = [];
-    for (const item of filteredNavItems) {
+    for (const item of visibleNavItems) {
       if (item.path) allowedPaths.push(item.path);
       for (const sub of item.children) {
         if (sub.path) allowedPaths.push(sub.path);
       }
     }
     persistOrganizationFeatureAccess(orgId, orgFeatureGroups, allowedPaths);
-  }, [orgId, orgFeatureGroups, filteredNavItems, featuresLoaded, pathname]);
+  }, [orgId, orgFeatureGroups, visibleNavItems, featuresLoaded, pathname]);
 
   const [activeMain, setActiveMain] = useState("organization");
   const [activeSub, setActiveSub] = useState("employee");
@@ -553,29 +549,29 @@ function LeftSideBar({
     if (isAdmin) {
       const slots: BottomSlot[] = [];
       for (const id of ADMIN_BOTTOM_TAB_IDS) {
-        const item = filteredNavItems.find((i) => i.id === id);
+        const item = visibleNavItems.find((i) => i.id === id);
         if (item) slots.push({ kind: "nav", item });
       }
       return slots.slice(0, MAX_MOBILE_BOTTOM_NAV_SLOTS);
     }
     const slots: BottomSlot[] = [];
-    const home = filteredNavItems.find((i) => i.id === "home");
+    const home = visibleNavItems.find((i) => i.id === "home");
     if (home) slots.push({ kind: "nav", item: home });
     slots.push({ kind: "my-attendance" });
-    for (const item of filteredNavItems) {
+    for (const item of visibleNavItems) {
       if (item.id === "home") continue;
       if (slots.length >= MAX_MOBILE_BOTTOM_NAV_SLOTS) break;
       slots.push({ kind: "nav", item });
     }
     return slots.slice(0, MAX_MOBILE_BOTTOM_NAV_SLOTS);
-  }, [isAdmin, filteredNavItems]);
+  }, [isAdmin, visibleNavItems]);
 
   useEffect(() => {
-    if (!pathname || filteredNavItems.length === 0) return;
+    if (!pathname || visibleNavItems.length === 0) return;
     let bestMain: string | null = null;
     let bestSubId: string | null = null;
     let bestLen = -1;
-    for (const item of filteredNavItems) {
+    for (const item of visibleNavItems) {
       for (const sub of item.children) {
         if (
           sub.path &&
@@ -602,7 +598,7 @@ function LeftSideBar({
       if (bestSubId)
         setActiveSub((prev) => (prev === bestSubId ? prev : bestSubId));
     }
-  }, [pathname, filteredNavItems]);
+  }, [pathname, visibleNavItems]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -629,12 +625,12 @@ function LeftSideBar({
   }, []);
 
   useEffect(() => {
-    if (filteredNavItems.length === 0) return;
+    if (visibleNavItems.length === 0) return;
     const t = window.setTimeout(() => {
-      const active = filteredNavItems.find((item) => item.id === activeMain);
+      const active = visibleNavItems.find((item) => item.id === activeMain);
       if (!active) {
-        setActiveMain(filteredNavItems[0].id);
-        setActiveSub(filteredNavItems[0].children[0]?.id ?? "");
+        setActiveMain(visibleNavItems[0].id);
+        setActiveSub(visibleNavItems[0].children[0]?.id ?? "");
         return;
       }
       if (
@@ -645,9 +641,9 @@ function LeftSideBar({
       }
     }, 0);
     return () => window.clearTimeout(t);
-  }, [filteredNavItems, activeMain, activeSub]);
+  }, [visibleNavItems, activeMain, activeSub]);
 
-  const activeItem = filteredNavItems.find((item) => item.id === activeMain);
+  const activeItem = visibleNavItems.find((item) => item.id === activeMain);
   const subItems = activeItem?.children || [];
 
   const handleMainClick = (item: NavItem) => {
@@ -759,7 +755,7 @@ function LeftSideBar({
         {/* ── LEFT RAIL ── */}
         <div className="lg-sidebar-rail-in flex w-[58px] flex-shrink-0 flex-col items-center overflow-y-auto overflow-x-hidden border-r border-[#E4E7EC] bg-white py-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
           <div className="flex w-full flex-1 flex-col items-center">
-            {filteredNavItems.map((item) => {
+            {visibleNavItems.map((item) => {
               const isActive = activeMain === item.id;
               return (
                 <button
@@ -1074,12 +1070,12 @@ function LeftSideBar({
             </button>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-            {filteredNavItems.length === 0 ? (
+            {visibleNavItems.length === 0 ? (
               <p className="border-b border-slate-200 px-4 py-3 text-sm text-slate-500">
                 No features available for your role.
               </p>
             ) : (
-              filteredNavItems.map((item) => {
+              visibleNavItems.map((item) => {
                 const itemActive =
                   activeMain === item.id ||
                   Boolean(item.path && pathname?.startsWith(item.path)) ||
