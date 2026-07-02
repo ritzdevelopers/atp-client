@@ -149,6 +149,7 @@ export async function updateAttendanceQueryStatus(
     query_id: number;
     updated_query_status: "approved" | "rejected";
     admin_response: string;
+    team_id?: number | null;
   },
 ): Promise<{ message?: string }> {
   const res = await fetch(`${API_URL}/api/user/update-attendance-query-status`, {
@@ -163,6 +164,7 @@ export async function updateAttendanceQueryStatus(
       query_id: payload.query_id,
       updated_query_status: payload.updated_query_status,
       admin_response: payload.admin_response.trim(),
+      ...(payload.team_id != null ? { team_id: payload.team_id } : {}),
     }),
   });
   const json = await parseJson(res);

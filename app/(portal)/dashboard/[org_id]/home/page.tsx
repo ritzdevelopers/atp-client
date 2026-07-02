@@ -5,14 +5,14 @@ import {
   useEffect,
   useMemo,
   useState,
+  type ReactNode,
 } from "react";
-import { useParams } from "next/navigation";
+import { useParams, usePathname } from "next/navigation";
 import Link from "next/link";
 import {
   Building2,
   ChevronRight,
   MapPin,
-  Package,
   Plus,
   UsersRound,
 } from "lucide-react";
@@ -21,7 +21,6 @@ import {
   fetchHandoverAssignedToMe,
 } from "@/services/handoverAssigned";
 import type { OrganizationAddress } from "@/services/organization";
-import { MdWorkspacePremium } from "react-icons/md";
 import { useManagementDashboardContext } from "@/components/portal-dashboard/Layout/ManagementDashboardContext";
 import type {
   RightMainSideOrganization,
@@ -45,7 +44,41 @@ import {
 } from "@/lib/employeeDashboardHomeCache";
 import OrgLiveUsersPanel from "@/components/portal-dashboard/home/OrgLiveUsersPanel";
 import BiometricLiveAttendanceFeed from "@/components/portal-dashboard/home/BiometricLiveAttendanceFeed";
+import HomeDashboardHeader from "@/components/portal-dashboard/home/HomeDashboardHeader";
+import ManagementQuickNavRail from "@/components/portal-dashboard/home/ManagementQuickNavRail";
+import HomeAttendanceCard from "@/components/portal-dashboard/home/HomeAttendanceCard";
+import AssetHandoverCard from "@/components/portal-dashboard/home/AssetHandoverCard";
+import HomeLeaveQuickActions from "@/components/portal-dashboard/home/HomeLeaveQuickActions";
+import {
+  btnBrandCls,
+  btnGhostCls,
+  dashCardCls,
+  dashLabelCls,
+  dashPageCls,
+  dashSectionBodyCls,
+  dashSectionHeadCls,
+  dashSectionMetaCls,
+  dashSectionTitleCls,
+  iconBadgeCls,
+  mobileCaptionCls,
+} from "@/components/portal-dashboard/home/dashboardTokens";
+import {
+  AddressesSkeleton,
+  MyTeamsSkeleton,
+  ProfileSummarySkeleton,
+  HomePageLoadingSkeleton,
+} from "@/components/portal-dashboard/home/skeletons/HomeDashboardSkeletons";
 import { useDeviceLiveAttendance } from "@/hooks/useDeviceLiveAttendance";
+import {
+  buildManagementDashboardNavTiles,
+  filterManagementNavTiles,
+  type ManagementNavTile,
+} from "@/lib/managementDashboardNav";
+import {
+  fetchOrganizationFeatureGroups,
+  readOrganizationFeatureSnapshot,
+} from "@/lib/orgFeatureAccess";
+import { fetchMyEmployeeLeaves } from "@/services/employeeLeaveManagement";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
@@ -170,76 +203,50 @@ function formatRoleLabel(role: string | null | undefined): string {
   return r.charAt(0).toUpperCase() + r.slice(1).toLowerCase();
 }
 
-/** Zoho-style density for mobile & tablet (max-lg). Desktop uses existing classes. */
-const mobileLabelCls =
-  "text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]";
-const mobileCaptionCls = "text-[11px] leading-snug text-[#6B7280]";
-
-function mobilePrimaryBtnCls(full = false) {
-  return `inline-flex min-h-[34px] items-center justify-center gap-1 rounded-md bg-[#008CD3] px-2.5 py-1.5 text-[12px] font-medium text-white transition active:scale-[0.98] hover:bg-[#0070AA] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full" : ""}`;
-}
-
-function mobileDangerBtnCls(full = false) {
-  return `inline-flex min-h-[34px] items-center justify-center gap-1 rounded-md bg-[#D93025] px-2.5 py-1.5 text-[12px] font-medium text-white transition active:scale-[0.98] hover:bg-[#B71C1C] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full" : ""}`;
-}
-
-function mobileSecondaryBtnCls(full = false) {
-  return `inline-flex min-h-[34px] items-center justify-center gap-1 rounded-md border border-[#E4E7EC] bg-white px-2.5 py-1.5 text-[12px] font-medium text-[#1F2937] transition active:scale-[0.98] hover:bg-[#F5F7FA] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full flex-1" : ""}`;
-}
-
-function mobileGoldBtnCls(full = false) {
-  return `inline-flex min-h-[36px] items-center justify-center gap-1.5 rounded-lg bg-[#C99237] px-3 py-2 text-[12px] font-semibold text-[#0C123A] transition active:scale-[0.98] hover:bg-[#b87d2e] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full" : ""}`;
-}
-
-const dashCardCls =
-  "dashboard-enter relative overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-sm";
-const dashCardAccent =
-  "pointer-events-none absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-[#008CD3] via-[#0C123A] to-[#C99237]";
-const dashSectionHeadCls =
-  "flex items-center gap-2 border-b border-[#E8EBF0] bg-[#FAFBFC] px-3 py-2";
-const dashSectionBodyCls = "p-3";
-
 function MyTeamsSection({
   teams,
   orgId,
   currentUserName,
   delayMs,
+  loading = false,
 }: {
   teams: EmployeeTeamAssignment[];
   orgId: number;
   currentUserName: string;
   delayMs: number;
+  loading?: boolean;
 }) {
   const activeTeams = activeTeamAssignments(teams);
 
+  if (loading) {
+    return <MyTeamsSkeleton />;
+  }
+
   return (
-    <section
-      className={`${dashCardCls}`}
-      style={{ animationDelay: `${delayMs}ms` }}
-    >
-      <div className={dashCardAccent} />
-      <div className={`${dashSectionHeadCls} bg-gradient-to-r from-[#F0F7FC] to-white`}>
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#008CD3] text-white">
+    <section className={dashCardCls} style={{ animationDelay: `${delayMs}ms` }}>
+      <div className={dashSectionHeadCls}>
+        <span className={iconBadgeCls("blue")}>
           <UsersRound className="h-4 w-4" aria-hidden />
         </span>
         <div className="min-w-0 flex-1">
-          <h2 className="text-sm font-semibold text-[#0C123A]">
-            My teams · {activeTeams.length}
-          </h2>
+          <h2 className={dashSectionTitleCls}>My teams</h2>
+          <p className={dashSectionMetaCls}>
+            {activeTeams.length} active team{activeTeams.length === 1 ? "" : "s"}
+          </p>
         </div>
       </div>
 
       <div className={dashSectionBodyCls}>
         {activeTeams.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-[#E4E7EC] bg-[#F9FAFB] px-3 py-5 text-center">
-            <UsersRound className="mx-auto h-7 w-7 text-[#9CA3AF]" aria-hidden />
-            <p className="mt-1.5 text-xs font-semibold text-[#374151]">No team assigned</p>
+          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 px-4 py-8 text-center">
+            <UsersRound className="mx-auto h-8 w-8 text-slate-300" aria-hidden />
+            <p className="mt-2 text-[14px] font-medium text-slate-800">No team assigned</p>
             <p className={`mt-1 ${mobileCaptionCls}`}>
               Your reporting manager or HR will add you to a team.
             </p>
           </div>
         ) : (
-          <ul className="grid gap-2 sm:grid-cols-2">
+          <ul className="grid gap-2.5 sm:grid-cols-2">
             {activeTeams.map((team) => {
               const teamId = team.team_id;
               const title = displayTeamTitle(team.team_name);
@@ -254,26 +261,26 @@ function MyTeamsSection({
               return (
                 <li
                   key={String(team.id ?? teamId)}
-                  className="rounded-lg border border-[#E8EBF0] bg-[#FAFBFC] p-3 transition hover:border-[#008CD3]/30 hover:bg-white"
+                  className="rounded-xl border border-slate-200 bg-slate-50/40 p-4 transition-colors hover:border-slate-300 hover:bg-white"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      <h3 className="truncate text-sm font-semibold text-[#0C123A]">
+                      <h3 className="truncate text-[14px] font-semibold text-slate-900">
                         {title}
                       </h3>
-                      <p className="mt-0.5 text-[11px] text-[#6B7280]">
+                      <p className="mt-1 text-[12px] text-slate-500">
                         {managerName} · {memberCount || "—"} members
                       </p>
                     </div>
                     {isReportingManager ? (
-                      <span className="shrink-0 rounded bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-emerald-700">
+                      <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-emerald-700">
                         Lead
                       </span>
                     ) : null}
                   </div>
                   <Link
                     href={teamGroupHref(orgId, teamId)}
-                    className={`mt-2.5 ${mobilePrimaryBtnCls(true)} !min-h-[32px] !py-1.5 !text-xs`}
+                    className={`mt-3 ${btnGhostCls(true)} !min-h-[36px] !text-[12px]`}
                   >
                     Open team
                     <ChevronRight className="h-3.5 w-3.5" aria-hidden />
@@ -297,12 +304,39 @@ function InfoRow({
 }) {
   const display =
     value != null && String(value).length > 0 ? String(value) : "—";
+
   return (
-    <div className="flex items-center justify-between gap-2 border-b border-[#F1F3F6] py-2 last:border-0">
-      <span className="text-[11px] text-[#6B7280]">{label}</span>
-      <span className="min-w-0 truncate text-right text-[12px] font-medium text-[#0C123A]">
+    <div className="min-w-0 border-b border-slate-100/80 py-2.5 last:border-0">
+      <dt className="text-[11px] font-medium text-slate-500">{label}</dt>
+      <dd className="mt-0.5 break-words text-[13px] font-medium leading-snug text-slate-900 [overflow-wrap:anywhere]">
         {display}
-      </span>
+      </dd>
+    </div>
+  );
+}
+
+function ProfileInfoBlock({
+  title,
+  children,
+  variant = "default",
+}: {
+  title: string;
+  children: ReactNode;
+  variant?: "default" | "owner";
+}) {
+  const boxCls =
+    variant === "owner"
+      ? "rounded-xl border border-amber-100 bg-amber-50/30 p-4"
+      : "rounded-xl border border-slate-100 bg-slate-50/40 p-4";
+  const titleCls =
+    variant === "owner"
+      ? "mb-1 text-[11px] font-semibold uppercase tracking-wide text-amber-600/80"
+      : "mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400";
+
+  return (
+    <div className={`min-w-0 ${boxCls}`}>
+      <p className={titleCls}>{title}</p>
+      <dl className="min-w-0">{children}</dl>
     </div>
   );
 }
@@ -315,6 +349,7 @@ function ProfileSummaryCard({
   ownerPhone,
   ownerMatchesUser,
   delayMs,
+  loading = false,
 }: {
   organization: RightMainSideOrganization;
   user: RightMainSideUser;
@@ -323,43 +358,45 @@ function ProfileSummaryCard({
   ownerPhone: string | null | undefined;
   ownerMatchesUser: boolean;
   delayMs: number;
+  loading?: boolean;
 }) {
+  if (loading) {
+    return <ProfileSummarySkeleton />;
+  }
+
   return (
-    <section className={dashCardCls} style={{ animationDelay: `${delayMs}ms` }}>
-      <div className={dashCardAccent} />
-      <div className={dashSectionHeadCls}>
-        <Building2 className="h-4 w-4 text-[#008CD3]" aria-hidden />
-        <h2 className="text-sm font-semibold text-[#0C123A]">Company & profile</h2>
-      </div>
-      <div className={`${dashSectionBodyCls} grid gap-3 sm:grid-cols-2`}>
-        <div>
-          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[#008CD3]">
-            Organization
+    <section className={`${dashCardCls} min-w-0`} style={{ animationDelay: `${delayMs}ms` }}>
+      <div className={`${dashSectionHeadCls} min-w-0`}>
+        <span className={iconBadgeCls("slate")}>
+          <Building2 className="h-4 w-4" aria-hidden />
+        </span>
+        <div className="min-w-0">
+          <h2 className={dashSectionTitleCls}>Company & profile</h2>
+          <p className={`${dashSectionMetaCls} break-words`}>
+            Organization and account details
           </p>
+        </div>
+      </div>
+      <div className={`${dashSectionBodyCls} flex min-w-0 flex-col gap-4`}>
+        <ProfileInfoBlock title="Organization">
           <InfoRow label="Name" value={organization.org_name} />
           <InfoRow label="Email" value={organization.org_email} />
           <InfoRow label="Phone" value={organization.org_phone} />
-        </div>
-        <div>
-          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[#008CD3]">
-            {ownerMatchesUser ? "Your account" : "You"}
-          </p>
+        </ProfileInfoBlock>
+
+        <ProfileInfoBlock title={ownerMatchesUser ? "Your account" : "You"}>
           <InfoRow label="Name" value={user.user_name} />
           <InfoRow label="Email" value={user.user_email} />
           <InfoRow label="Role" value={formatRoleLabel(user.user_role_name)} />
           <InfoRow label="Since" value={formatJoinedDate(user.user_created_at)} />
-        </div>
+        </ProfileInfoBlock>
+
         {!ownerMatchesUser ? (
-          <div className="sm:col-span-2">
-            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[#C99237]">
-              Owner
-            </p>
-            <div className="grid gap-0 sm:grid-cols-3">
-              <InfoRow label="Name" value={ownerName} />
-              <InfoRow label="Email" value={ownerEmail} />
-              <InfoRow label="Phone" value={ownerPhone} />
-            </div>
-          </div>
+          <ProfileInfoBlock title="Owner" variant="owner">
+            <InfoRow label="Name" value={ownerName} />
+            <InfoRow label="Email" value={ownerEmail} />
+            <InfoRow label="Phone" value={ownerPhone} />
+          </ProfileInfoBlock>
         ) : null}
       </div>
     </section>
@@ -370,13 +407,19 @@ function OrganizationAddressesSection({
   addresses,
   orgId,
   delayMs,
+  loading = false,
 }: {
   addresses: OrganizationAddress[];
   orgId: number;
   delayMs: number;
+  loading?: boolean;
 }) {
   const manageHref = `/dashboard/${orgId}/organization-settings/manage-organization-information`;
   const hasAddresses = addresses.length > 0;
+
+  if (loading) {
+    return <AddressesSkeleton />;
+  }
 
   return (
     <section
@@ -385,18 +428,24 @@ function OrganizationAddressesSection({
       className={dashCardCls}
       style={{ animationDelay: `${delayMs}ms` }}
     >
-      <div className={dashCardAccent} />
       <div className={`${dashSectionHeadCls} justify-between`}>
-        <div className="flex items-center gap-2">
-          <MapPin className="h-4 w-4 text-[#C99237]" aria-hidden />
-          <h2 id="dash-addresses-title" className="text-sm font-semibold text-[#0C123A]">
-            Addresses · {hasAddresses ? addresses.length : 0}
-          </h2>
+        <div className="flex items-center gap-3">
+          <span className={iconBadgeCls("violet")}>
+            <MapPin className="h-4 w-4" aria-hidden />
+          </span>
+          <div>
+            <h2 id="dash-addresses-title" className={dashSectionTitleCls}>
+              Locations
+            </h2>
+            <p className={dashSectionMetaCls}>
+              {hasAddresses ? `${addresses.length} address${addresses.length === 1 ? "" : "es"}` : "No addresses yet"}
+            </p>
+          </div>
         </div>
         {hasAddresses ? (
           <Link
             href={manageHref}
-            className="shrink-0 text-xs font-semibold text-[#008CD3] hover:underline"
+            className="shrink-0 text-[13px] font-medium text-sky-600 hover:text-sky-700"
           >
             Manage
           </Link>
@@ -405,26 +454,26 @@ function OrganizationAddressesSection({
 
       <div className={dashSectionBodyCls}>
         {!hasAddresses ? (
-          <div className="rounded-xl border border-dashed border-[#E4E7EC] bg-[#F8FAFC] px-4 py-8 text-center">
-            <MapPin className="mx-auto h-8 w-8 text-[#9CA3AF]" aria-hidden />
-            <p className="mt-2 text-sm font-semibold text-[#0C123A]">No address added yet</p>
+          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 px-4 py-10 text-center">
+            <MapPin className="mx-auto h-8 w-8 text-slate-300" aria-hidden />
+            <p className="mt-2 text-[14px] font-medium text-slate-800">No address added yet</p>
             <p className={`mt-1 ${mobileCaptionCls}`}>
               Add office or branch locations for this organization.
             </p>
-            <Link href={manageHref} className={`mt-4 ${mobilePrimaryBtnCls()}`}>
+            <Link href={manageHref} className={`mt-4 ${btnBrandCls()}`}>
               <Plus className="h-3.5 w-3.5" aria-hidden />
               Add address
             </Link>
           </div>
         ) : (
-          <ul className="grid gap-2 sm:grid-cols-2">
+          <ul className="grid gap-2.5 sm:grid-cols-2">
             {addresses.map((addr, index) => (
               <li
                 key={String(addr.id ?? index)}
-                className="rounded-lg border border-[#EEF1F5] bg-[#F8FAFC] p-3"
+                className="rounded-xl border border-slate-200 bg-slate-50/40 p-4"
               >
-                <p className={mobileLabelCls}>{addressLocationLabel(addr, index)}</p>
-                <p className="mt-1.5 whitespace-pre-line text-xs leading-relaxed text-[#0C123A]">
+                <p className={dashLabelCls}>{addressLocationLabel(addr, index)}</p>
+                <p className="mt-2 whitespace-pre-line text-[13px] leading-relaxed text-slate-700">
                   {formatOrganizationAddress(addr)}
                 </p>
               </li>
@@ -434,9 +483,9 @@ function OrganizationAddressesSection({
         {hasAddresses ? (
           <Link
             href={manageHref}
-            className={`mt-3 ${mobileSecondaryBtnCls(true)} !border-dashed !border-[#C99237]/40 !text-[#0C123A]`}
+            className={`mt-3 ${btnGhostCls(true)} !border-dashed`}
           >
-            <Plus className="h-4 w-4 text-[#C99237]" aria-hidden />
+            <Plus className="h-4 w-4 text-slate-500" aria-hidden />
             Add another address
           </Link>
         ) : null}
@@ -504,6 +553,10 @@ function HomeOverview({
   const [handoverPendingCount, setHandoverPendingCount] = useState(
     () => cachedHome?.handoverPendingCount ?? 0,
   );
+  const [navTiles, setNavTiles] = useState<ManagementNavTile[]>([]);
+  const [navTilesLoading, setNavTilesLoading] = useState(true);
+  const [leavePendingCount, setLeavePendingCount] = useState(0);
+  const pathname = usePathname();
 
   const handoverHref =
     orgId && !Number.isNaN(orgId)
@@ -596,6 +649,94 @@ function HomeOverview({
   useEffect(() => {
     void loadHomeOverviewData();
   }, [loadHomeOverviewData]);
+
+  useEffect(() => {
+    if (!orgId || Number.isNaN(orgId)) return;
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    const authToken = token;
+    let cancelled = false;
+
+    async function loadLeavePending() {
+      try {
+        const rows = await fetchMyEmployeeLeaves(authToken, orgId);
+        if (!cancelled) {
+          setLeavePendingCount(
+            rows.filter((row) => row.leave_status === "pending").length,
+          );
+        }
+      } catch {
+        if (!cancelled) setLeavePendingCount(0);
+      }
+    }
+
+    void loadLeavePending();
+    return () => {
+      cancelled = true;
+    };
+  }, [orgId, attendanceLoading]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const allTiles = buildManagementDashboardNavTiles(orgId);
+    const isAdminRole = roleKey === "admin";
+
+    async function loadNavTiles() {
+      setNavTilesLoading(true);
+      if (isAdminRole) {
+        if (!cancelled) {
+          setNavTiles(allTiles);
+          setNavTilesLoading(false);
+        }
+        return;
+      }
+
+      const cachedFeatures = readOrganizationFeatureSnapshot(String(orgId));
+      if (cachedFeatures?.groups?.length) {
+        if (!cancelled) {
+          setNavTiles(
+            filterManagementNavTiles(allTiles, cachedFeatures.groups, false),
+          );
+          setNavTilesLoading(false);
+        }
+        return;
+      }
+
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) {
+          if (!cancelled) {
+            setNavTiles(
+              allTiles.filter(
+                (tile) => !tile.requiredFeature && !tile.requiredFeatureAny?.length,
+              ),
+            );
+            setNavTilesLoading(false);
+          }
+          return;
+        }
+        const groups = await fetchOrganizationFeatureGroups(String(orgId), token);
+        if (!cancelled) {
+          setNavTiles(filterManagementNavTiles(allTiles, groups, false));
+          setNavTilesLoading(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setNavTiles(
+            allTiles.filter(
+              (tile) => !tile.requiredFeature && !tile.requiredFeatureAny?.length,
+            ),
+          );
+          setNavTilesLoading(false);
+        }
+      }
+    }
+
+    void loadNavTiles();
+    return () => {
+      cancelled = true;
+    };
+  }, [orgId, roleKey]);
 
   async function refreshAttendanceData(token: string) {
     if (!orgId || Number.isNaN(orgId) || !showAttendance) return;
@@ -806,159 +947,102 @@ function HomeOverview({
     }
   }
 
-  const roleBadgeClass =
-    roleKey === "admin"
-      ? "bg-[#C99237] text-[#0C123A]"
-      : roleKey === "hr"
-        ? "bg-[#0C123A] text-white"
-        : roleKey === "manager" || roleKey === "manger"
-          ? "border-2 border-[#C99237] bg-white text-[#0C123A]"
-          : "bg-slate-200 text-[#0C123A]";
-
   const statusLabel = effectiveTodayRecord?.attendance_status
     ? String(effectiveTodayRecord.attendance_status).replace(/_/g, " ")
     : "No status";
   const statusTone = String(effectiveTodayRecord?.attendance_status || "")
     .toLowerCase()
     .includes("late")
-    ? "bg-orange-500/20 text-orange-100"
+    ? "bg-amber-100 text-amber-800"
     : String(effectiveTodayRecord?.attendance_status || "")
           .toLowerCase()
           .includes("full_day")
-      ? "bg-emerald-500/20 text-emerald-100"
-      : "bg-white/10 text-slate-200";
+      ? "bg-emerald-100 text-emerald-800"
+      : "bg-slate-100 text-slate-700";
   const dayVisual = getAttendanceDayVisual(effectiveTodayRecord?.attendance_status);
+  const overviewDataLoading = showAttendance && attendanceLoading;
 
   return (
-    <div className="flex flex-col gap-2 lg:gap-3">
-      {/* Mobile */}
-      <header className={`${dashCardCls} overflow-hidden lg:hidden`} style={{ animationDelay: "0ms" }}>
-        <div className="bg-[#0C123A] px-3 py-3">
-          <div className="flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <p className="text-[9px] font-bold uppercase tracking-wide text-[#C99237]">{greetingForHour()}</p>
-              <h1 className="mt-0.5 flex items-center gap-1 text-base font-bold text-white">
-                <span className="truncate">{displayName}</span>
-                <MdWorkspacePremium className="h-4 w-4 shrink-0 text-[#C99237]" aria-hidden />
-              </h1>
-              <p className="truncate text-[11px] text-slate-400">{orgTitle}</p>
-            </div>
-            <span className={`shrink-0 rounded px-2 py-0.5 text-[8px] font-bold uppercase ${roleBadgeClass}`}>{roleBadgeLabel}</span>
+    <div className={dashPageCls}>
+      <HomeDashboardHeader
+        greeting={greetingForHour()}
+        displayName={displayName}
+        orgTitle={orgTitle}
+        roleBadgeLabel={roleBadgeLabel}
+        roleKey={roleKey}
+        refreshing={attendanceLoading}
+        onRefresh={() => void loadHomeOverviewData(true)}
+      />
+
+      <ManagementQuickNavRail
+        tiles={navTiles}
+        pathname={pathname}
+        handoverPendingCount={handoverPendingCount}
+        loading={navTilesLoading}
+      />
+
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12 lg:gap-6">
+        <div className="flex flex-col gap-5 lg:col-span-8">
+          <HomeLeaveQuickActions
+            orgId={orgId}
+            pendingCount={leavePendingCount}
+            delayMs={40}
+          />
+
+          {showAttendance ? (
+            <HomeAttendanceCard
+              loading={attendanceLoading}
+              workingHoursDisplay={String(workingHoursDisplay)}
+              showLiveTimer={showLiveTimer}
+              statusLabel={statusLabel}
+              statusTone={statusTone}
+              attendanceError={attendanceError}
+              hasCheckedInToday={hasCheckedInToday}
+              hasCheckedOutToday={hasCheckedOutToday}
+              effectiveCheckIn={effectiveTodayRecord?.check_in}
+              effectiveCheckOut={effectiveTodayRecord?.check_out}
+              showLatestMachinePunch={showLatestMachinePunch}
+              latestMachinePunch={latestMachinePunch}
+              formatCheckIn={formatAttendanceLogLocal}
+              formatCheckOut={formatAttendanceTimeLocal}
+              lateAfter={lateAfter}
+              dayVisual={dayVisual}
+              checkInSubmitting={checkInSubmitting}
+              checkOutSubmitting={checkOutSubmitting}
+              logSubmitting={logSubmitting}
+              canLog={
+                hasCheckedInToday &&
+                !hasCheckedOutToday &&
+                todayRecord?.id != null &&
+                todayRecord?.id !== ""
+              }
+              logSuccessMessage={logSuccessMessage}
+              attendanceActionError={attendanceActionError}
+              onCheckIn={() => void markCheckIn()}
+              onCheckOut={() => void markCheckOut()}
+              onLog={() => void markAttendanceLog()}
+              onDismissSuccess={() => setLogSuccessMessage(null)}
+              delayMs={50}
+            />
+          ) : null}
+
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            <OrgLiveUsersPanel orgId={String(orgId)} className="w-full" />
+            <BiometricLiveAttendanceFeed orgId={String(orgId)} className="w-full" />
           </div>
+
+          {roleKey !== "admin" ? (
+            <MyTeamsSection
+              teams={attendanceData?.teams ?? []}
+              orgId={orgId}
+              currentUserName={user.user_name?.trim() || displayName}
+              delayMs={100}
+              loading={overviewDataLoading}
+            />
+          ) : null}
         </div>
-      </header>
-      <div className="lg:hidden">
-        <OrgLiveUsersPanel orgId={String(orgId)} className="w-full" />
-      </div>
-      <div className="lg:hidden">
-        <BiometricLiveAttendanceFeed orgId={String(orgId)} className="w-full" />
-      </div>
 
-      {/* Desktop hero — compact, no dead space */}
-      <div
-        className={`${dashCardCls} hidden lg:grid lg:h-[280px] lg:grid-cols-[1fr_300px_300px]`}
-        style={{ animationDelay: "0ms" }}
-      >
-        <div className={dashCardAccent} />
-        <div className="flex flex-col justify-center border-r border-[#E8EBF0] bg-[#0C123A] px-5 py-4">
-          <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-[#C99237]">{greetingForHour()}</p>
-          <h1 className="mt-1 flex items-center gap-2 text-xl font-bold text-white">
-            {displayName}
-            <MdWorkspacePremium className="h-5 w-5 text-[#C99237]" aria-hidden />
-          </h1>
-          <p className="mt-1 text-sm text-slate-300">{orgTitle}</p>
-          <span className={`mt-3 inline-flex w-fit rounded px-2.5 py-1 text-[9px] font-bold uppercase ${roleBadgeClass}`}>
-            {roleBadgeLabel}
-          </span>
-        </div>
-        <OrgLiveUsersPanel orgId={String(orgId)} embedded className="h-full" />
-        <BiometricLiveAttendanceFeed orgId={String(orgId)} embedded className="h-full" />
-      </div>
-
-      {/* Bento grid */}
-      <div className="grid grid-cols-1 gap-2 lg:grid-cols-12 lg:gap-3">
-        {showAttendance ? (
-          <section className={`${dashCardCls} lg:col-span-8`} style={{ animationDelay: "50ms" }}>
-            <div className={dashCardAccent} />
-            <div className="flex flex-col sm:flex-row">
-              <div className="shrink-0 border-b border-[#E8EBF0] bg-[#0C123A] px-4 py-3 sm:w-44 sm:border-b-0 sm:border-r">
-                <p className="text-[9px] font-bold uppercase text-[#C99237]">Today</p>
-                <p className="mt-1 text-2xl font-bold tabular-nums text-white">{String(workingHoursDisplay)}</p>
-                <p className="mt-0.5 text-[10px] text-slate-400">{showLiveTimer ? "Live timer" : "Working hours"}</p>
-                <span className={`mt-2 inline-block rounded px-2 py-0.5 text-[9px] font-bold uppercase ${statusTone}`}>{statusLabel}</span>
-                {attendanceError ? <p className="mt-1 text-[10px] text-rose-300">{attendanceError}</p> : null}
-              </div>
-              <div className="min-w-0 flex-1 p-3">
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  <div className="rounded-md bg-[#F8FAFC] px-2 py-1.5">
-                    <p className={mobileLabelCls}>Check in</p>
-                    <p className="mt-0.5 text-xs font-semibold text-[#0C123A]">{hasCheckedInToday ? formatAttendanceLogLocal(effectiveTodayRecord?.check_in) : "—"}</p>
-                  </div>
-                  <div className="rounded-md bg-[#F8FAFC] px-2 py-1.5">
-                    <p className={mobileLabelCls}>Check out</p>
-                    <p className="mt-0.5 text-xs font-semibold text-[#0C123A]">{hasCheckedOutToday ? formatAttendanceTimeLocal(effectiveTodayRecord?.check_out) : "—"}</p>
-                  </div>
-                  {showLatestMachinePunch ? (
-                    <div className="rounded-md bg-[#F8FAFC] px-2 py-1.5">
-                      <p className={mobileLabelCls}>Last machine punch</p>
-                      <p className="mt-0.5 text-xs font-semibold text-[#008CD3]">
-                        {formatAttendanceTimeLocal(latestMachinePunch)}
-                      </p>
-                    </div>
-                  ) : null}
-                  <div className="rounded-md bg-[#F8FAFC] px-2 py-1.5">
-                    <p className={mobileLabelCls}>Late after</p>
-                    <p className="mt-0.5 text-xs font-semibold text-[#E8710A]">{lateAfter}</p>
-                  </div>
-                  <div className="rounded-md bg-[#F8FAFC] px-2 py-1.5">
-                    <p className={mobileLabelCls}>Status</p>
-                    <span className={`mt-0.5 inline-block rounded px-1 py-0.5 text-[9px] font-semibold ${dayVisual.boxClass}`}>{dayVisual.meaning}</span>
-                  </div>
-                </div>
-                <div className="mt-2.5 flex flex-wrap gap-1.5">
-                  <button type="button" onClick={() => void markCheckIn()} disabled={hasCheckedInToday || checkInSubmitting} className={mobilePrimaryBtnCls()}>
-                    {checkInSubmitting ? "…" : hasCheckedInToday ? "Checked in" : "Check in"}
-                  </button>
-                  <button type="button" onClick={() => void markCheckOut()} disabled={!hasCheckedInToday || hasCheckedOutToday || checkOutSubmitting} className={mobileDangerBtnCls()}>
-                    {checkOutSubmitting ? "…" : hasCheckedOutToday ? "Out" : "Check out"}
-                  </button>
-                  <button type="button" onClick={() => void markAttendanceLog()} disabled={!hasCheckedInToday || hasCheckedOutToday || logSubmitting || todayRecord?.id == null || todayRecord?.id === ""} className={mobileSecondaryBtnCls()} title="Mark log">
-                    {logSubmitting ? "…" : "Log"}
-                  </button>
-                </div>
-                {logSuccessMessage ? <p className="mt-1.5 text-[11px] text-emerald-600">{logSuccessMessage}</p> : null}
-                {attendanceActionError ? <p className="mt-1.5 text-[11px] text-red-600">{attendanceActionError}</p> : null}
-              </div>
-            </div>
-          </section>
-        ) : null}
-
-        <section
-          className={`${dashCardCls} ${showAttendance ? "lg:col-span-4" : "lg:col-span-12"}`}
-          style={{ animationDelay: "75ms" }}
-        >
-          <div className={dashCardAccent} />
-          <div className={`${dashSectionHeadCls} justify-between`}>
-            <div className="flex items-center gap-2">
-              <Package className="h-4 w-4 text-amber-600" aria-hidden />
-              <h2 className="text-sm font-semibold text-[#0C123A]">Asset handover</h2>
-              {handoverPendingCount > 0 ? (
-                <span className="rounded-full bg-[#E8710A] px-1.5 py-0.5 text-[9px] font-bold text-white">{handoverPendingCount}</span>
-              ) : null}
-            </div>
-            <Link href={handoverHref} className={`${mobilePrimaryBtnCls()} !py-1 !text-[11px]`}>
-              Open
-            </Link>
-          </div>
-        </section>
-
-        {roleKey !== "admin" ? (
-          <div className="lg:col-span-6">
-            <MyTeamsSection teams={attendanceData?.teams ?? []} orgId={orgId} currentUserName={user.user_name?.trim() || displayName} delayMs={100} />
-          </div>
-        ) : null}
-
-        <div className={roleKey !== "admin" ? "lg:col-span-6" : "lg:col-span-12"}>
+        <div className="flex flex-col gap-5 lg:col-span-4 lg:min-w-0">
           <ProfileSummaryCard
             organization={organization}
             user={user}
@@ -966,12 +1050,23 @@ function HomeOverview({
             ownerEmail={ownerEmail}
             ownerPhone={ownerPhone}
             ownerMatchesUser={ownerMatchesUser}
-            delayMs={125}
+            delayMs={75}
+          />
+
+          <AssetHandoverCard
+            handoverHref={handoverHref}
+            handoverPendingCount={handoverPendingCount}
+            loading={attendanceLoading && !cachedHome}
+            delayMs={100}
           />
         </div>
 
         <div className="lg:col-span-12">
-          <OrganizationAddressesSection addresses={organizationAddresses} orgId={orgId} delayMs={150} />
+          <OrganizationAddressesSection
+            addresses={organizationAddresses}
+            orgId={orgId}
+            delayMs={125}
+          />
         </div>
       </div>
     </div>
@@ -993,12 +1088,15 @@ export default function HomePage() {
 
   const { organization, user, organizationAddresses, loading } = ctx;
 
-  if (loading || !organization || !user) {
+  if (loading) {
+    return <HomePageLoadingSkeleton showAttendance />;
+  }
+
+  if (!organization || !user) {
     return (
-      <div className={`${dashCardCls} p-6`} style={{ animationDelay: "0ms" }}>
-        <div className={dashCardAccent} />
-        <p className="text-sm font-medium text-[#0C123A]">
-          {loading ? "Loading dashboard…" : "Could not load organization."}
+      <div className={`${dashCardCls} p-6`}>
+        <p className="text-[14px] font-medium text-slate-800">
+          Could not load organization.
         </p>
       </div>
     );

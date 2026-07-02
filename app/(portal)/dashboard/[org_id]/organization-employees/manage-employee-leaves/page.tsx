@@ -22,6 +22,16 @@ import {
   type AttendanceQueryRow,
 } from "@/services/attendanceQueries";
 import {
+  approvalRoleLabel,
+  canActOnReviewerLeave,
+  fetchLeavesWhereIAmReviewer,
+  leaveDurationLabel,
+  performLeaveReview,
+  type LeaveDuration,
+  type LeaveStatus as EmployeeLeaveStatus,
+  type ReviewerLeaveRow,
+} from "@/services/employeeLeaveManagement";
+import {
   clearAttendanceQueriesCaches,
   clearLeaveRequestsCaches,
   readAttendanceQueriesCache,
@@ -35,25 +45,10 @@ import {
   writeManageOrgUsersCache,
 } from "@/lib/employeeManagementCache";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+type LeaveStatus = EmployeeLeaveStatus;
+type LeaveType = LeaveDuration;
 
-type LeaveStatus = "pending" | "approved" | "rejected";
-type LeaveType = "full_day" | "half_day" | "short_leave";
-
-export type LeaveRow = {
-  id: number;
-  user_id: number | null;
-  user_name: string;
-  user_email: string;
-  org_id: number;
-  leave_type: LeaveType | string;
-  start_date: string;
-  end_date: string | null;
-  reason: string | null;
-  status: LeaveStatus | string;
-  approved_by: number | null;
-  created_at?: string;
-};
+export type LeaveRow = ReviewerLeaveRow;
 
 type Filters = {
   leave_type: "" | LeaveType;
@@ -110,9 +105,9 @@ function formatDateTime(value: string | null | undefined): string {
 }
 
 function leaveTypeLabel(t: string): string {
-  if (t === "full_day") return "Full day";
-  if (t === "half_day") return "Half day";
-  if (t === "short_leave") return "Short leave";
+  if (t === "full_day" || t === "half_day" || t === "short_leave") {
+    return leaveDurationLabel(t as LeaveDuration);
+  }
   return t;
 }
 
@@ -216,8 +211,8 @@ function ManageEmployeeLeavesPage() {
 
   const buildQueryString = useCallback((f: Filters) => {
     const q = new URLSearchParams();
-    if (f.leave_type) q.set("leave_type", f.leave_type);
-    if (f.status) q.set("status", f.status);
+    if (f.leave_type) q.set("leave_duration", f.leave_type);
+    if (f.status) q.set("leave_status", f.status);
     if (f.user_name.trim()) q.set("user_name", f.user_name.trim());
     if (f.created_at) q.set("created_at", f.created_at);
     q.set("is_ascending", f.is_ascending);
@@ -261,16 +256,13 @@ function ManageEmployeeLeavesPage() {
       }
 
       try {
-        const qs = filterKey;
-        const res = await fetch(`${API_URL}/api/user/get-all-leaves?${qs}`, {
-          method: "GET",
-          headers: { Authorization: `Bearer ${token}` },
+        const nextRows = await fetchLeavesWhereIAmReviewer(token, orgId, {
+          leave_duration: f.leave_type || undefined,
+          leave_status: f.status || undefined,
+          user_name: f.user_name.trim() || undefined,
+          created_at: f.created_at || undefined,
+          is_ascending: f.is_ascending,
         });
-        const data = (await res.json()) as { data?: LeaveRow[]; message?: string };
-        if (!res.ok) {
-          throw new Error(data.message || "Could not load leave requests.");
-        }
-        const nextRows = Array.isArray(data.data) ? data.data : [];
         setRows(nextRows);
         writeLeaveRequestsCache(orgId, filterKey, nextRows);
       } catch (e) {
@@ -411,18 +403,10 @@ function ManageEmployeeLeavesPage() {
     setNotice(null);
     setUpdatingId(leaveId);
     try {
-      const res = await fetch(`${API_URL}/api/user/update-leave-query-status`, {
-        method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ query_id: leaveId, query_status: status }),
+      const data = await performLeaveReview(token, orgId, {
+        leave_id: leaveId,
+        action: status,
       });
-      const data = (await res.json()) as { message?: string };
-      if (!res.ok) {
-        throw new Error(data.message || "Update failed.");
-      }
       setNotice({ type: "ok", text: data.message || "Leave updated." });
       clearLeaveRequestsCaches(orgId);
       await loadLeaves(appliedFilters, true);
@@ -502,7 +486,7 @@ function ManageEmployeeLeavesPage() {
     let approved = 0;
     let rejected = 0;
     for (const r of rows) {
-      const s = String(r.status).toLowerCase();
+      const s = String(r.my_query_status).toLowerCase();
       if (s === "pending") pending += 1;
       else if (s === "approved") approved += 1;
       else if (s === "rejected") rejected += 1;
@@ -753,7 +737,9 @@ function ManageEmployeeLeavesPage() {
           </span>
           <div>
             <h2 className="text-[15px] font-semibold text-[#1F2937]">Filters</h2>
-            <p className="text-[12px] text-[#6B7280]">Narrow the list, then apply to reload from the server.</p>
+            <p className="text-[12px] text-[#6B7280]">
+              Leave requests assigned to you as a reviewer. Apply filters to reload from the server.
+            </p>
           </div>
         </div>
 
@@ -902,10 +888,12 @@ function ManageEmployeeLeavesPage() {
               <thead>
                 <tr className="border-b border-[#E4E7EC] bg-[#F9FAFB] text-[10px] font-semibold uppercase tracking-wide text-[#6B7280]">
                   <th className="px-4 py-3.5 sm:px-5">Employee</th>
+                  <th className="px-4 py-3.5 sm:px-5">Your role</th>
                   <th className="px-4 py-3.5 sm:px-5">Type</th>
                   <th className="px-4 py-3.5 sm:px-5">Dates</th>
                   <th className="px-4 py-3.5 sm:px-5">Reason</th>
-                  <th className="px-4 py-3.5 sm:px-5">Status</th>
+                  <th className="px-4 py-3.5 sm:px-5">Leave status</th>
+                  <th className="px-4 py-3.5 sm:px-5">Your review</th>
                   <th className="px-4 py-3.5 sm:px-5">Submitted</th>
                   <th className="px-4 py-3.5 text-right sm:px-5">Actions</th>
                 </tr>
@@ -913,7 +901,7 @@ function ManageEmployeeLeavesPage() {
               <tbody className="divide-y divide-[#E4E7EC]">
                 {rows.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center text-[#6B7280]">
+                    <td colSpan={9} className="px-4 py-12 text-center text-[#6B7280]">
                       <p className="font-medium text-[#374151]">No leave requests match your filters.</p>
                       <p className="mt-1 text-[12px] text-[#6B7280]">
                         Adjust filters or refresh to see new submissions.
@@ -927,11 +915,19 @@ function ManageEmployeeLeavesPage() {
                       className="bg-white transition hover:bg-[#F9FAFB]"
                     >
                       <td className="px-4 py-4 sm:px-5">
-                        <div className="text-[14px] font-semibold text-[#1F2937]">{row.user_name}</div>
-                        <div className="mt-0.5 text-[12px] text-[#6B7280]">{row.user_email}</div>
+                        <div className="text-[14px] font-semibold text-[#1F2937]">
+                          {row.employee_name || `User #${row.user_id}`}
+                        </div>
+                        <div className="mt-0.5 text-[12px] text-[#6B7280]">
+                          {row.employee_email || "—"}
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-[13px] text-[#374151] sm:px-5">
-                        {leaveTypeLabel(String(row.leave_type))}
+                        {row.my_designation ||
+                          approvalRoleLabel(row.my_approval_role)}
+                      </td>
+                      <td className="px-4 py-3 text-[13px] text-[#374151] sm:px-5">
+                        {leaveTypeLabel(String(row.leave_duration))}
                       </td>
                       <td className="px-4 py-3 text-[13px] text-[#374151] sm:px-5">
                         <div>{formatDate(row.start_date)}</div>
@@ -946,9 +942,16 @@ function ManageEmployeeLeavesPage() {
                       </td>
                       <td className="px-4 py-4 sm:px-5">
                         <span
-                          className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium ${statusBadgeClass(String(row.status))}`}
+                          className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium ${statusBadgeClass(String(row.leave_status))}`}
                         >
-                          {String(row.status)}
+                          {String(row.leave_status)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4 sm:px-5">
+                        <span
+                          className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium ${statusBadgeClass(String(row.my_query_status))}`}
+                        >
+                          {String(row.my_query_status)}
                         </span>
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-[12px] text-[#6B7280] sm:px-5">
@@ -956,7 +959,7 @@ function ManageEmployeeLeavesPage() {
                       </td>
                       <td className="px-4 py-4 text-right sm:px-5">
                         <LeaveActions
-                          current={String(row.status).toLowerCase() as LeaveStatus}
+                          row={row}
                           disabled={updatingId === row.id}
                           onApprove={() => void updateStatus(row.id, "approved")}
                           onReject={() => void updateStatus(row.id, "rejected")}
@@ -1433,19 +1436,32 @@ function LeaveRowCard({
     <article className="rounded-lg border border-[#E4E7EC] bg-white p-3 transition active:bg-[#F9FAFB]">
       <div className="flex items-start justify-between gap-2 border-b border-[#E4E7EC] pb-2.5">
         <div className="min-w-0 flex-1">
-          <h3 className="truncate text-[15px] font-semibold text-[#1F2937]">{row.user_name}</h3>
-          {row.user_email ? (
-            <p className="mt-0.5 truncate text-[12px] text-[#6B7280]">{row.user_email}</p>
+          <h3 className="truncate text-[15px] font-semibold text-[#1F2937]">
+            {row.employee_name || `User #${row.user_id}`}
+          </h3>
+          {row.employee_email ? (
+            <p className="mt-0.5 truncate text-[12px] text-[#6B7280]">{row.employee_email}</p>
           ) : null}
+          <p className="mt-1 text-[11px] font-medium text-[#008CD3]">
+            Reviewing as{" "}
+            {row.my_designation || approvalRoleLabel(row.my_approval_role)}
+          </p>
         </div>
-        <span
-          className={`inline-flex shrink-0 items-center rounded-md px-2 py-0.5 text-[11px] font-medium ${statusBadgeClass(String(row.status))}`}
-        >
-          {String(row.status)}
-        </span>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <span
+            className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium ${statusBadgeClass(String(row.leave_status))}`}
+          >
+            Leave: {String(row.leave_status)}
+          </span>
+          <span
+            className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium ${statusBadgeClass(String(row.my_query_status))}`}
+          >
+            You: {String(row.my_query_status)}
+          </span>
+        </div>
       </div>
       <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
-        <CardField label="Type">{leaveTypeLabel(String(row.leave_type))}</CardField>
+        <CardField label="Type">{leaveTypeLabel(String(row.leave_duration))}</CardField>
         <CardField label="Dates">
           <span className="block">{formatDate(row.start_date)}</span>
           {row.end_date ? (
@@ -1464,7 +1480,7 @@ function LeaveRowCard({
       <div className="mt-3 border-t border-[#E4E7EC] pt-2.5">
         <LeaveActions
           layout="stacked"
-          current={String(row.status).toLowerCase() as LeaveStatus}
+          row={row}
           disabled={disabled}
           onApprove={onApprove}
           onReject={onReject}
@@ -1563,19 +1579,19 @@ function AttendanceQueryCard({
 }
 
 function LeaveActions({
-  current,
+  row,
   disabled,
   onApprove,
   onReject,
   layout = "inline",
 }: {
-  current: LeaveStatus;
+  row: LeaveRow;
   disabled: boolean;
   onApprove: () => void;
   onReject: () => void;
   layout?: "inline" | "stacked";
 }) {
-  const isPending = current === "pending";
+  const canAct = canActOnReviewerLeave(row);
   const stacked = layout === "stacked";
   return (
     <div
@@ -1585,26 +1601,45 @@ function LeaveActions({
           : "inline-flex flex-wrap justify-end gap-1.5"
       }
     >
-      <button
-        type="button"
-        disabled={disabled || !isPending}
-        onClick={onApprove}
-        title={isPending ? "Approve" : "Only pending requests can be approved"}
-        className={stacked ? zohoApproveBtnCls(true) : zohoApproveBtnCls()}
-      >
-        <CheckCircle2 className={stacked ? "h-4 w-4" : "h-3.5 w-3.5"} aria-hidden />
-        Approve
-      </button>
-      <button
-        type="button"
-        disabled={disabled || !isPending}
-        onClick={onReject}
-        title={isPending ? "Reject" : "Only pending requests can be rejected"}
-        className={stacked ? zohoRejectBtnCls(true) : zohoRejectBtnCls()}
-      >
-        <XCircle className={stacked ? "h-4 w-4" : "h-3.5 w-3.5"} aria-hidden />
-        Reject
-      </button>
+      {canAct ? (
+        <>
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={onApprove}
+            title="Approve"
+            className={stacked ? zohoApproveBtnCls(true) : zohoApproveBtnCls()}
+          >
+            <CheckCircle2 className={stacked ? "h-4 w-4" : "h-3.5 w-3.5"} aria-hidden />
+            Approve
+          </button>
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={onReject}
+            title="Reject"
+            className={stacked ? zohoRejectBtnCls(true) : zohoRejectBtnCls()}
+          >
+            <XCircle className={stacked ? "h-4 w-4" : "h-3.5 w-3.5"} aria-hidden />
+            Reject
+          </button>
+        </>
+      ) : (
+        <div className="text-left text-[12px] text-[#6B7280] sm:text-right">
+          {row.my_query_status !== "pending" ? (
+            <p>
+              You {row.my_query_status} this request
+              {row.my_review_comment ? `: ${row.my_review_comment}` : "."}
+            </p>
+          ) : row.my_approval_role === "reporting_manager" ? (
+            <p className="text-[#9CA3AF]">Awaiting your review.</p>
+          ) : (
+            <p className="text-[#9CA3AF]">
+              Waiting for reporting manager approval before HR/admin review.
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, Suspense } from "react";
 import Link from "next/link";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   Building2,
@@ -19,9 +19,7 @@ import {
   X,
 } from "lucide-react";
 import type { ApiError } from "@/services/auth";
-import { applyForLeave, type LeaveQueryRow } from "@/services/employeeLeaves";
-import AssignedLeaveTypeSelect from "@/components/portal-dashboard/user-layout/AssignedLeaveTypeSelect";
-import { useAssignedLeaveTypes } from "@/hooks/useAssignedLeaveTypes";
+import type { LeaveQueryRow } from "@/services/employeeLeaves";
 import {
   attendanceCategoryLabel,
   correctAttendanceQuery,
@@ -481,6 +479,7 @@ export default function UserMyTeamPage() {
 
 function UserMyTeamPageContent() {
   const params = useParams();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const selectedTeamId = searchParams.get("team_id");
   const orgIdParam = params?.org_id;
@@ -505,20 +504,16 @@ function UserMyTeamPageContent() {
     [team],
   );
 
-  const [leaveModalOpen, setLeaveModalOpen] = useState(false);
-  const {
-    options: assignedLeaveOptions,
-    selectedLeaveTypeId,
-    setSelectedLeaveTypeId,
-    loading: assignedLeavesLoading,
-    error: assignedLeavesError,
-  } = useAssignedLeaveTypes(orgId, leaveModalOpen);
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [reason, setReason] = useState("");
-  const [leaveSubmitting, setLeaveSubmitting] = useState(false);
-  const [leaveFormError, setLeaveFormError] = useState<string | null>(null);
-  const [leaveFormSuccess, setLeaveFormSuccess] = useState<string | null>(null);
+  function openLeaveApplication() {
+    const teamQuery = team?.team_id ?? selectedTeamId;
+    const query = new URLSearchParams({ apply: "1" });
+    if (teamQuery != null && String(teamQuery).trim() !== "") {
+      query.set("team_id", String(teamQuery));
+    }
+    router.push(
+      `/user-dashboard/${orgIdParam}/my-leaves?${query.toString()}`,
+    );
+  }
 
   const [attModalOpen, setAttModalOpen] = useState(false);
   const [attEditRow, setAttEditRow] = useState<AttendanceQueryRow | null>(null);
@@ -716,50 +711,6 @@ function UserMyTeamPageContent() {
       );
     } finally {
       setAttSubmitting(false);
-    }
-  }
-
-  async function onSubmitLeave(e: React.FormEvent) {
-    e.preventDefault();
-    setLeaveFormError(null);
-    setLeaveFormSuccess(null);
-    const t = token ?? localStorage.getItem("token");
-    if (!t) {
-      setLeaveFormError("Not signed in.");
-      return;
-    }
-    if (!startDate) {
-      setLeaveFormError("Start date is required.");
-      return;
-    }
-    if (!selectedLeaveTypeId) {
-      setLeaveFormError("Select an assigned leave type.");
-      return;
-    }
-    setLeaveSubmitting(true);
-    try {
-      await applyForLeave(t, {
-        org_id: orgId,
-        leave_type_id: selectedLeaveTypeId,
-        start_date: startDate,
-        end_date: endDate || null,
-        reason: reason.trim() || null,
-        team_id: team?.team_id ?? null,
-      });
-      setLeaveFormSuccess("Leave request submitted successfully.");
-      setStartDate("");
-      setEndDate("");
-      setReason("");
-      const refreshed = await fetchMyOrgTeam(t, orgId, selectedTeamId ?? undefined);
-      setTeam(refreshed);
-      setNoTeam(false);
-      writeMyOrgTeamCache(orgId, selectedTeamId, { team: refreshed, noTeam: false });
-    } catch (err) {
-      setLeaveFormError(
-        err instanceof Error ? err.message : "Could not submit leave request.",
-      );
-    } finally {
-      setLeaveSubmitting(false);
     }
   }
 
@@ -1135,16 +1086,12 @@ function UserMyTeamPageContent() {
           </div>
         ) : null}
 
-        {!loading && !leaveModalOpen && !attModalOpen ? (
+        {!loading && !attModalOpen ? (
           <div className={mobileActionBarCls}>
             <div className="mx-auto flex max-w-lg gap-2">
               <button
                 type="button"
-                onClick={() => {
-                  setLeaveModalOpen(true);
-                  setLeaveFormError(null);
-                  setLeaveFormSuccess(null);
-                }}
+                onClick={openLeaveApplication}
                 className={mobileActionPrimaryBtnCls(true)}
               >
                 <CalendarDays className="h-4 w-4 shrink-0" aria-hidden />
@@ -1218,11 +1165,7 @@ function UserMyTeamPageContent() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      setLeaveModalOpen(true);
-                      setLeaveFormError(null);
-                      setLeaveFormSuccess(null);
-                    }}
+                    onClick={openLeaveApplication}
                     className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg bg-[#008CD3] px-3 py-1.5 text-[13px] font-semibold text-white transition hover:bg-[#0070AA]"
                   >
                     <CalendarDays className="h-4 w-4" aria-hidden />
@@ -1562,112 +1505,6 @@ function UserMyTeamPageContent() {
         alt={photoZoom?.alt ?? ""}
         onClose={() => setPhotoZoom(null)}
       />
-
-      {/* Leave modal */}
-      {leaveModalOpen ? (
-        <ModalScrim onClose={() => setLeaveModalOpen(false)}>
-          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white shadow-[0_24px_80px_-12px_rgba(15,23,42,0.35)] ring-1 ring-slate-900/10 lg:rounded-2xl lg:[border-top:3px_solid_#008CD3]">
-            <div className="flex justify-center pt-2 pb-0 lg:hidden" aria-hidden>
-              <span className="h-1 w-10 rounded-full bg-[#E4E7EC]" />
-            </div>
-            <div className="sticky top-0 z-[1] flex items-center justify-between border-b border-[#E4E7EC] bg-white px-4 py-4 lg:px-6">
-              <div>
-                <h2 className="text-lg font-semibold text-[#1F2937]">
-                  Request time off
-                </h2>
-                <p className="text-xs text-[#6B7280]">
-                  Submit to your approver for this organization.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setLeaveModalOpen(false)}
-                className="rounded-lg p-2 text-[#9CA3AF] hover:bg-[#F5F7FA] hover:text-[#1F2937]"
-                aria-label="Close"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <form onSubmit={onSubmitLeave} className="space-y-4 p-4 lg:p-6">
-              {leaveFormError ? (
-                <p className="rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] p-3 text-[14px] text-[#D93025] lg:rounded-xl lg:bg-red-50 lg:text-red-800 lg:ring-1 lg:ring-red-100">
-                  {leaveFormError}
-                </p>
-              ) : null}
-              {leaveFormSuccess ? (
-                <p className="rounded-lg border border-[#C8E6C9] bg-[#E6F4EA] p-3 text-[14px] text-[#0F9D58] lg:rounded-xl lg:bg-emerald-50 lg:text-emerald-900 lg:ring-1 lg:ring-emerald-100">
-                  {leaveFormSuccess}
-                </p>
-              ) : null}
-              <AssignedLeaveTypeSelect
-                options={assignedLeaveOptions}
-                loading={assignedLeavesLoading}
-                error={assignedLeavesError}
-                selectedLeaveTypeId={selectedLeaveTypeId}
-                onSelectLeaveTypeId={setSelectedLeaveTypeId}
-                className={zohoInputCls()}
-                labelClassName="text-[13px] font-medium text-[#374151] lg:text-xs lg:font-semibold lg:text-slate-600"
-              />
-              <label className="block">
-                <span className="text-[13px] font-medium text-[#374151] lg:text-xs lg:font-semibold lg:text-slate-600">
-                  Start date
-                </span>
-                <input
-                  type="date"
-                  required
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className={zohoInputCls()}
-                />
-              </label>
-              <label className="block">
-                <span className="text-[13px] font-medium text-[#374151] lg:text-xs lg:font-semibold lg:text-slate-600">
-                  End date <span className="font-normal text-[#9CA3AF] lg:text-slate-400">(optional)</span>
-                </span>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className={zohoInputCls()}
-                />
-              </label>
-              <label className="block">
-                <span className="text-[13px] font-medium text-[#374151] lg:text-xs lg:font-semibold lg:text-slate-600">
-                  Reason <span className="font-normal text-[#9CA3AF] lg:text-slate-400">(optional)</span>
-                </span>
-                <textarea
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  rows={3}
-                  placeholder="Context for your manager…"
-                  className={zohoInputCls()}
-                />
-              </label>
-              <div className="flex flex-col-reverse gap-2 border-t border-[#E4E7EC] pt-4 lg:flex-row lg:gap-3 lg:border-0 lg:pt-2">
-                <button
-                  type="button"
-                  onClick={() => setLeaveModalOpen(false)}
-                  className={zohoSecondaryBtnCls(true)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={
-                    leaveSubmitting ||
-                    assignedLeavesLoading ||
-                    assignedLeaveOptions.length === 0 ||
-                    !selectedLeaveTypeId
-                  }
-                  className={zohoPrimaryBtnCls(true)}
-                >
-                  {leaveSubmitting ? "Submitting…" : "Submit"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </ModalScrim>
-      ) : null}
 
       {/* Attendance modal */}
       {attModalOpen ? (

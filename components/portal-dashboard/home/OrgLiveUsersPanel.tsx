@@ -8,6 +8,8 @@ import {
   formatLastActiveLabel,
   type ChatOrgUser,
 } from "@/services/chatApplication";
+import { LivePanelListSkeleton } from "@/components/portal-dashboard/home/skeletons/HomeDashboardSkeletons";
+import { dashPanelCls } from "@/components/portal-dashboard/home/dashboardTokens";
 
 type OrgLiveUsersPanelProps = {
   orgId: string;
@@ -114,78 +116,78 @@ export default function OrgLiveUsersPanel({
     employees.length > 0 ? Math.round((liveCount / employees.length) * 100) : 0;
 
   const shellClass = embedded
-    ? `flex h-full min-h-0 flex-col overflow-hidden bg-[#FAFBFC] ${className}`
-    : `flex h-[340px] min-h-0 flex-col overflow-hidden rounded-xl border border-[#E4E7EC] bg-white shadow-sm ${className}`;
+    ? `flex h-full min-h-0 flex-col overflow-hidden bg-slate-50/50 ${className}`
+    : `${dashPanelCls} ${className}`;
 
   return (
     <aside className={shellClass} aria-label="Organization live users">
-      <div className="shrink-0 border-b border-[#E8EBF0] bg-white px-3 py-2">
+      <div className="shrink-0 border-b border-slate-100 px-4 py-3">
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-[#008CD3]">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
               Team presence
             </p>
-            <p className="text-xs font-semibold text-[#0C123A]">
+            <p className="mt-0.5 text-[14px] font-semibold text-slate-900">
               <span className="text-emerald-600">{loading ? "—" : liveCount}</span>
-              <span className="font-normal text-[#6B7280]"> live · </span>
+              <span className="font-normal text-slate-500"> online · </span>
               <span>{loading ? "—" : employees.length}</span>
-              <span className="font-normal text-[#6B7280]"> total</span>
+              <span className="font-normal text-slate-500"> total</span>
             </p>
           </div>
           <div className="w-20">
-            <div className="h-1 overflow-hidden rounded-full bg-[#EEF2F6]">
+            <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
               <div
-                className="h-full rounded-full bg-emerald-500 transition-all"
+                className="h-full rounded-full bg-emerald-500 transition-all duration-500"
                 style={{ width: `${livePercent}%` }}
               />
             </div>
-            <p className="mt-0.5 text-right text-[9px] text-[#9CA3AF]">{livePercent}%</p>
+            <p className="mt-1 text-right text-[10px] text-slate-400">{livePercent}%</p>
           </div>
         </div>
 
-        <div className="mt-2 flex gap-1 rounded-lg bg-[#F1F3F6] p-0.5">
+        <div className="mt-3 flex gap-1 rounded-lg bg-slate-100/80 p-1">
           <button
             type="button"
             onClick={() => setTab("live")}
-            className={`flex flex-1 items-center justify-center gap-1 rounded-md border-0 py-1 text-[11px] font-semibold outline-none ${
+            className={`flex flex-1 items-center justify-center gap-1 rounded-md border-0 py-1.5 text-[12px] font-medium outline-none transition-colors ${
               tab === "live"
                 ? "bg-white text-emerald-700 shadow-sm"
-                : "text-[#6B7280]"
+                : "text-slate-500 hover:text-slate-700"
             }`}
           >
-            <Wifi className="h-3 w-3" />
+            <Wifi className="h-3.5 w-3.5" />
             Live ({liveCount})
           </button>
           <button
             type="button"
             onClick={() => setTab("offline")}
-            className={`flex flex-1 items-center justify-center gap-1 rounded-md border-0 py-1 text-[11px] font-semibold outline-none ${
+            className={`flex flex-1 items-center justify-center gap-1 rounded-md border-0 py-1.5 text-[12px] font-medium outline-none transition-colors ${
               tab === "offline"
-                ? "bg-white text-[#374151] shadow-sm"
-                : "text-[#6B7280]"
+                ? "bg-white text-slate-800 shadow-sm"
+                : "text-slate-500 hover:text-slate-700"
             }`}
           >
-            <Activity className="h-3 w-3" />
+            <Activity className="h-3.5 w-3.5" />
             Away ({offlineUsers.length})
           </button>
         </div>
 
-        <label className="relative mt-2 block">
+        <label className="relative mt-3 block">
           <span className="sr-only">Search</span>
-          <Search className="pointer-events-none absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-[#9CA3AF]" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
           <input
             type="search"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search name or email"
-            className="w-full rounded-md border border-[#E4E7EC] bg-[#F9FAFB] py-1.5 pl-7 pr-2 text-[11px] outline-none focus:border-[#008CD3] focus:bg-white"
+            placeholder="Search people…"
+            className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-[12px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-sky-300 focus:bg-white focus:ring-2 focus:ring-sky-100"
           />
         </label>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-width:thin]">
         {loading ? (
-          <p className="px-3 py-6 text-center text-[11px] text-[#9CA3AF]">Loading…</p>
+          <LivePanelListSkeleton />
         ) : error ? (
           <p className="px-3 py-6 text-center text-[11px] text-red-600">{error}</p>
         ) : filteredList.length === 0 ? (
@@ -202,7 +204,7 @@ export default function OrgLiveUsersPanel({
               return (
                 <li
                   key={String(employee.user_id)}
-                  className="flex items-center gap-2.5 px-3 py-2 hover:bg-white"
+                  className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-slate-50"
                 >
                   <div className="relative shrink-0">
                     {employee.user_profile ? (
@@ -226,10 +228,10 @@ export default function OrgLiveUsersPanel({
                     />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[12px] font-semibold text-[#111827]">
+                    <p className="truncate text-[13px] font-medium text-slate-900">
                       {name}
                     </p>
-                    <p className="truncate text-[10px] text-[#6B7280]">{email}</p>
+                    <p className="truncate text-[11px] text-slate-500">{email}</p>
                     {tab === "offline" ? (
                       <p className="truncate text-[9px] text-[#9CA3AF]">
                         {formatLastActiveLabel(status.lastActiveTime, false)}
@@ -244,7 +246,7 @@ export default function OrgLiveUsersPanel({
       </div>
 
       {!embedded ? (
-        <div className="shrink-0 border-t border-[#E8EBF0] px-3 py-1.5 text-center text-[9px] text-[#9CA3AF]">
+        <div className="shrink-0 border-t border-slate-100 px-4 py-2 text-center text-[10px] text-slate-400">
           <Users className="mr-1 inline h-3 w-3" />
           Real-time presence
         </div>

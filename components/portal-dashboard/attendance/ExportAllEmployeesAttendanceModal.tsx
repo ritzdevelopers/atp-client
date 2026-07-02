@@ -12,6 +12,11 @@ import {
   downloadAllEmployeesAttendanceExcel,
   prepareEmployeeExportPayload,
 } from "@/lib/exportAttendanceHistoryExcel";
+import {
+  clampMonthToExportable,
+  getExportableMonthsForYear,
+  isFutureCalendarMonth,
+} from "@/lib/attendanceExportPeriod";
 
 type ExportAllEmployeesAttendanceModalProps = {
   open: boolean;
@@ -71,12 +76,25 @@ export default function ExportAllEmployeesAttendanceModal({
   useEffect(() => {
     if (!open) return;
     setMode("monthly");
-    setMonth(defaultMonth);
+    setMonth(clampMonthToExportable(defaultYear, defaultMonth, now));
     setYear(defaultYear);
     setError(null);
     setExporting(false);
     setProgress({ done: 0, total: 0 });
   }, [open, defaultMonth, defaultYear]);
+
+  useEffect(() => {
+    if (mode !== "monthly") return;
+    setMonth((current) => clampMonthToExportable(year, current, now));
+  }, [year, mode]);
+
+  const exportableMonths = useMemo(
+    () => getExportableMonthsForYear(year, now),
+    [year, now],
+  );
+
+  const isFutureMonthSelected =
+    mode === "monthly" && isFutureCalendarMonth(year, month, now);
 
   if (!open) return null;
 
@@ -258,8 +276,8 @@ export default function ExportAllEmployeesAttendanceModal({
                   disabled={exporting}
                   className={zohoInputCls()}
                 >
-                  {MONTHS.map((label, index) => (
-                    <option key={label} value={index + 1}>
+                  {exportableMonths.map(({ value, label }) => (
+                    <option key={label} value={value}>
                       {label}
                     </option>
                   ))}
@@ -290,6 +308,13 @@ export default function ExportAllEmployeesAttendanceModal({
             </div>
           )}
 
+          {mode === "monthly" ? (
+            <div className="rounded-xl border border-[#E4E7EC] bg-[#F9FAFB] px-4 py-3 text-sm text-[#6B7280]">
+              Only completed or current months can be exported. Future months are not
+              available for download.
+            </div>
+          ) : null}
+
           {exporting && progress.total > 0 ? (
             <div className="rounded-lg border border-[#CFE8F7] bg-[#E8F4FB] px-3 py-2 text-sm text-[#0070AA]">
               Preparing export {progress.done} of {progress.total}…
@@ -315,7 +340,7 @@ export default function ExportAllEmployeesAttendanceModal({
           <button
             type="button"
             onClick={() => void handleExport()}
-            disabled={exporting || exportableEmployees.length === 0}
+            disabled={exporting || exportableEmployees.length === 0 || isFutureMonthSelected}
             className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-[#008CD3] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#0070AA] disabled:opacity-50"
           >
             {exporting ? (
