@@ -68,6 +68,91 @@
   animation: badge-pulse-dot 1.8s ease-in-out infinite;
 }
 
+@keyframes success-banner-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.success-banner-enter {
+  animation: success-banner-enter 0.25s ease-out forwards;
+}
+
+@keyframes drawer-backdrop-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.drawer-backdrop-enter {
+  animation: drawer-backdrop-enter 0.2s ease-out forwards;
+}
+
+@keyframes drawer-panel-enter {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (min-width: 640px) {
+  @keyframes drawer-panel-enter {
+    from {
+      opacity: 0;
+      transform: translateX(100%);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+}
+
+.drawer-panel-enter {
+  animation: drawer-panel-enter 0.25s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.timer-pulse {
+  animation: timer-pulse 2s ease-in-out infinite;
+}
+
+@keyframes timer-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-enter,
+  .card-fade-in,
+  .success-banner-enter,
+  .drawer-backdrop-enter,
+  .drawer-panel-enter,
+  .skeleton-shimmer,
+  .badge-pulse-dot,
+  .timer-pulse {
+    animation: none !important;
+    opacity: 1;
+    transform: none;
+  }
+}
+
 :root {
   --background: #ffffff;
   --foreground: #0c123a;

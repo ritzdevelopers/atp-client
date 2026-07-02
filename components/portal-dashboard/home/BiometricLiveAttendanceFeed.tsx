@@ -2,6 +2,7 @@
 
 import { Fingerprint, LogIn, LogOut, Radio } from "lucide-react";
 import { useLivePunchFeed } from "@/hooks/useLivePunchFeed";
+import { dashPanelCls } from "@/components/portal-dashboard/home/dashboardTokens";
 import {
   formatAttendanceTimeLocal,
   getTodayLocalYmd,
@@ -26,36 +27,30 @@ export default function BiometricLiveAttendanceFeed({
   compact = false,
   embedded = false,
 }: BiometricLiveAttendanceFeedProps) {
-  const { events, isPolling } = useLivePunchFeed(orgId);
+  const { events } = useLivePunchFeed(orgId);
   const today = getTodayLocalYmd();
 
   const visibleEvents = events.filter((e) => e.punch_date === today);
 
   const shellClass = compact
-    ? `rounded-lg border border-[#E4E7EC] bg-white ${className}`
+    ? `rounded-xl border border-slate-200 bg-white ${className}`
     : embedded
-      ? `flex h-full min-h-0 flex-col overflow-hidden bg-[#FAFBFC] ${className}`
-      : `flex h-[340px] min-h-0 flex-col overflow-hidden rounded-xl border border-[#E4E7EC] bg-white shadow-sm ${className}`;
+      ? `flex h-full min-h-0 flex-col overflow-hidden bg-slate-50/50 ${className}`
+      : `${dashPanelCls} ${className}`;
 
   return (
     <aside className={shellClass} aria-label="Live biometric attendance feed">
-      <div className="shrink-0 border-b border-[#E8EBF0] bg-white px-3 py-2">
+      <div className="shrink-0 border-b border-slate-100 px-4 py-3">
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-[#008CD3]">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
               Biometric feed
             </p>
-            <p className="text-xs font-semibold text-[#0C123A]">
+            <p className="mt-0.5 text-[14px] font-semibold text-slate-900">
               Live machine punches
             </p>
           </div>
-          <span
-            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-              !isPolling
-                ? "bg-emerald-50 text-emerald-700"
-                : "bg-sky-50 text-sky-700"
-            }`}
-          >
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
             <Radio className="h-3 w-3" />
             Live
           </span>
@@ -64,7 +59,7 @@ export default function BiometricLiveAttendanceFeed({
 
       <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-width:thin]">
         {visibleEvents.length === 0 ? (
-          <p className="px-3 py-8 text-center text-[11px] text-[#9CA3AF]">
+          <p className="px-4 py-10 text-center text-[12px] text-slate-400">
             Waiting for biometric check-ins and check-outs…
           </p>
         ) : (
@@ -80,7 +75,7 @@ export default function BiometricLiveAttendanceFeed({
               return (
                 <li
                   key={event.device_log_id}
-                  className="flex items-start gap-2.5 px-3 py-2.5"
+                  className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-slate-50"
                 >
                   <span
                     className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
@@ -96,13 +91,13 @@ export default function BiometricLiveAttendanceFeed({
                     )}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[12px] font-semibold text-[#111827]">
+                    <p className="truncate text-[13px] font-medium text-slate-900">
                       {name}
                     </p>
-                    <p className="text-[10px] text-[#6B7280]">
+                    <p className="text-[11px] text-slate-500">
                       {eventLabel(event.direction)} · {time}
                     </p>
-                    <p className="truncate text-[9px] text-[#9CA3AF]">
+                    <p className="truncate text-[10px] text-slate-400">
                       <Fingerprint className="mr-0.5 inline h-3 w-3" />
                       {event.employee_code}
                       {event.device_id ? ` · Device ${event.device_id}` : ""}
