@@ -20,8 +20,6 @@ type ExportAttendanceHistoryModalProps = {
   onClose: () => void;
   orgId: string;
   employee: EmployeeAttendanceRow | null;
-  /** Derive status from check-in/check-out on the client using company rules. */
-  clientSideCalculation?: boolean;
 };
 
 function zohoInputCls() {
@@ -33,7 +31,6 @@ export default function ExportAttendanceHistoryModal({
   onClose,
   orgId,
   employee,
-  clientSideCalculation = false,
 }: ExportAttendanceHistoryModalProps) {
   const now = new Date();
   const [mode, setMode] = useState<AttendanceExportMode>("monthly");
@@ -90,9 +87,7 @@ export default function ExportAttendanceHistoryModal({
         portalUserId,
         mode === "monthly" ? { mode, month, year } : { mode },
       );
-      await downloadAttendanceHistoryExcel(payload, {
-        clientSideCalculation,
-      });
+      await downloadAttendanceHistoryExcel(payload);
       onClose();
     } catch (err) {
       setError(
@@ -177,14 +172,10 @@ export default function ExportAttendanceHistoryModal({
             </button>
           </div>
 
-          {clientSideCalculation ? (
-            <div className="rounded-xl border border-[#E4E7EC] bg-[#F9FAFB] px-4 py-3 text-sm text-[#6B7280]">
-              Status (present, late, half day, short leave, absent) is calculated from
-              check-in/check-out using company rules: on time until 9:45 AM, late from
-              9:46 AM, absent if worked under 4 hours, and every 3 lates = 1 leave
-              (floor division) — not from stored backend status.
-            </div>
-          ) : null}
+          <div className="rounded-xl border border-[#E4E7EC] bg-[#F9FAFB] px-4 py-3 text-sm text-[#6B7280]">
+            Attendance status, payable days, approved leaves, comp off balance, and
+            regularization adjustments are calculated on the server using company rules.
+          </div>
 
           {mode === "monthly" ? (
             <div className="grid grid-cols-2 gap-3">

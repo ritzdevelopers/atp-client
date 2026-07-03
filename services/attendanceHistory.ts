@@ -34,6 +34,28 @@ export type AttendanceExportQuery =
   | { mode: "full" }
   | { mode: "monthly"; month: number; year: number };
 
+export type AttendanceSheetReport = {
+  calendar_days_in_month: number | null;
+  present_days: number;
+  absent_days: number;
+  working_days: number;
+  full_days: number;
+  half_days: number;
+  short_leaves: number;
+  paid_leaves: number;
+  unpaid_leaves: number;
+  half_day_leaves: number;
+  late_marks: number;
+  weekly_offs: number;
+  comp_off_balance: number;
+  late_leave_deduction: number;
+  payable_days: number;
+  weekly_off_days?: number;
+  total_working_minutes: number;
+  total_working_hours: number;
+  total_days: number;
+};
+
 export type AttendanceExportResponse = {
   success?: boolean;
   message?: string;
@@ -94,7 +116,11 @@ export type AttendanceExportResponse = {
     stored_status?: string | null;
     working_time: number | null;
     working_hours?: number | string | null;
+    on_approved_leave?: boolean;
+    regularization_applied?: boolean;
+    leave_type_name?: string | null;
   }>;
+  sheet_report?: AttendanceSheetReport;
   rows: AttendanceHistoryRow[];
 };
 
@@ -256,7 +282,7 @@ export async function fetchAttendanceExportData(
   }
 
   const res = await fetch(
-    `${API_URL}/api/attendance-history/export-single-user-attendance-history?${params.toString()}`,
+    `${API_URL}/api/attendance-history/calculate-attendance-sheet-export?${params.toString()}`,
     {
       method: "GET",
       headers: { Authorization: `Bearer ${token}` },
@@ -266,7 +292,7 @@ export async function fetchAttendanceExportData(
     message?: string;
   };
   if (!res.ok || data.success === false) {
-    throw new Error(data.message || "Could not load attendance export data.");
+    throw new Error(data.message || "Could not load attendance sheet calculation.");
   }
 
   const period = data.period as AttendanceExportResponse["period"] & {

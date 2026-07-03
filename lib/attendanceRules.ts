@@ -611,6 +611,13 @@ export type PayrollExportSummary = {
   fullDayPresentDays?: number;
   /** True when emp code is in attendancePayrollExceptions.json. */
   payrollExceptionApplied?: boolean;
+  /** Server sheet report fields (normal employees). */
+  attendanceWorkingDays?: number;
+  paidLeaves?: number;
+  unpaidLeaves?: number;
+  halfDayLeaves?: number;
+  compOffBalance?: number;
+  usesSheetReportFormula?: boolean;
 };
 
 function resolvePayrollMonthDayCount(days: CalendarDayExport[]): number {

@@ -7444,7 +7444,6 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
         onClose={() => setExportOpen(false)}
         orgId={orgId}
         employee={exportEmployee}
-        clientSideCalculation
       />
     </div>
   );

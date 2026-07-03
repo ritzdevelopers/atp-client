@@ -141,9 +141,7 @@ export default function ExportAllEmployeesAttendanceModal({
           };
         }
 
-        prepared.push(
-          prepareEmployeeExportPayload(payload, { clientSideCalculation: true }),
-        );
+        prepared.push(prepareEmployeeExportPayload(payload));
         setProgress({ done: index + 1, total: exportableEmployees.length });
       }
 
@@ -213,9 +211,8 @@ export default function ExportAllEmployeesAttendanceModal({
 
         <div className="space-y-4 px-5 py-4">
           <div className="rounded-xl border border-[#E4E7EC] bg-[#F9FAFB] px-4 py-3 text-sm text-[#6B7280]">
-            Uses the same company attendance rules as single-employee export: on time until
-            9:45 AM, late from 9:46 AM, absent if worked under 4 hours, and every 3 lates = 1
-            leave (floor division).
+            Uses server-side attendance calculation: company punch rules, approved
+            regularization, approved leaves, comp off balance, and payable days formula.
           </div>
 
           <div className="rounded-xl border border-[#E4E7EC] bg-white px-4 py-3 text-sm text-[#4B5563]">

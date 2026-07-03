@@ -1,4 +1,7 @@
-import type { AttendanceExportPayload } from "@/services/attendanceHistory";
+import type {
+  AttendanceExportPayload,
+  AttendanceSheetReport,
+} from "@/services/attendanceHistory";
 import {
   applyRulesToCalendarDay,
   ATTENDANCE_RULE_LABELS,
@@ -23,9 +26,47 @@ import {
 } from "@/lib/attendancePayrollExceptions";
 
 export type ExportExcelOptions = {
-  /** When true, status/summary are derived from check-in/check-out only (company rules). */
+  /** @deprecated Server now calculates attendance; kept for special payroll fallback only. */
   clientSideCalculation?: boolean;
 };
+
+function payrollFromSheetReport(
+  sheetReport: AttendanceSheetReport,
+): PayrollExportSummary {
+  return {
+    workingDays:
+      sheetReport.calendar_days_in_month ?? sheetReport.total_days,
+    daysPresent: sheetReport.present_days,
+    onTimeDays: Math.max(0, sheetReport.full_days - sheetReport.late_marks),
+    lateDays: sheetReport.late_marks,
+    absentDays: sheetReport.absent_days,
+    halfDayDays: sheetReport.half_days,
+    shortLeaveDays: sheetReport.short_leaves,
+    weeklyOffDays: sheetReport.weekly_offs ?? sheetReport.weekly_off_days ?? 0,
+    leaveFromLates: sheetReport.late_leave_deduction,
+    halfDayDeduction: sheetReport.half_days * 0.5,
+    payDays: sheetReport.payable_days,
+    totalWorkingHours: sheetReport.total_working_hours,
+    attendanceWorkingDays: sheetReport.working_days,
+    paidLeaves: sheetReport.paid_leaves,
+    unpaidLeaves: sheetReport.unpaid_leaves,
+    halfDayLeaves: sheetReport.half_day_leaves,
+    compOffBalance: sheetReport.comp_off_balance,
+    usesSheetReportFormula: true,
+  };
+}
+
+function formatSheetReportPayableFormula(sheetReport: AttendanceSheetReport): string {
+  const weeklyOffs = sheetReport.weekly_offs ?? sheetReport.weekly_off_days ?? 0;
+  return [
+    `Working days (${sheetReport.working_days})`,
+    `+ Paid leaves (${sheetReport.paid_leaves})`,
+    `+ Weekly offs (${weeklyOffs})`,
+    `+ Comp off balance (${sheetReport.comp_off_balance})`,
+    `− Late leave deduction (${sheetReport.late_leave_deduction})`,
+    `= ${sheetReport.payable_days} payable days`,
+  ].join(" ");
+}
 
 export type AttendanceExportSummary = AttendanceExportPayload["summary"];
 
@@ -74,6 +115,7 @@ const STATUS_STYLES: Record<
     label: "Short leave",
   },
   leave: { fill: PALETTE.leaveBg, font: PALETTE.leaveText, label: "On leave" },
+  on_leave: { fill: PALETTE.leaveBg, font: PALETTE.leaveText, label: "On leave" },
   weekly_off: {
     fill: PALETTE.weeklyOffBg,
     font: PALETTE.muted,
@@ -233,7 +275,14 @@ function payrollFromCalendarDays(
   return buildPayrollExportSummary(calendarDays, { empCode });
 }
 
-function formatPayableDaysFormula(payroll: PayrollExportSummary): string {
+function formatPayableDaysFormula(
+  payroll: PayrollExportSummary,
+  sheetReport?: AttendanceSheetReport,
+): string {
+  if (sheetReport) {
+    return formatSheetReportPayableFormula(sheetReport);
+  }
+
   if (payroll.payrollExceptionApplied) {
     return `Month days (${payroll.workingDays}) − Absent (${payroll.absentDays}) = ${payroll.payDays} payable days — late & half day not deducted (special payroll rule)`;
   }
@@ -448,6 +497,7 @@ function addOverviewSheet(
   options?: {
     sheetName?: string;
     payroll?: PayrollExportSummary;
+    sheetReport?: AttendanceSheetReport;
     mode?: PayrollSheetMode;
   },
 ) {
@@ -458,7 +508,11 @@ function addOverviewSheet(
     options?.mode ??
     (isPayrollExceptionEmpCode(empCode) ? "special" : "default");
   const payroll =
-    options?.payroll ?? payrollFromCalendarDays(calendarDays, empCode);
+    options?.payroll ??
+    (options?.sheetReport
+      ? payrollFromSheetReport(options.sheetReport)
+      : payrollFromCalendarDays(calendarDays, empCode));
+  const sheetReport = options?.sheetReport;
   const sheetTitleByMode: Record<PayrollSheetMode, string> = {
     default: "Employee attendance & payroll summary",
     special: "Employee attendance & payroll summary (special rule)",
@@ -575,7 +629,7 @@ function addOverviewSheet(
   sheet.addRow([]);
   const formulaRow = sheet.addRow([
     "How payable days are calculated:",
-    formatPayableDaysFormula(payroll),
+    formatPayableDaysFormula(payroll, sheetReport),
   ]);
   sheet.mergeCells(formulaRow.number, 2, formulaRow.number, 8);
   styleLabelCell(formulaRow.getCell(1));
@@ -587,14 +641,27 @@ function addOverviewSheet(
   sheet.mergeCells(detailTitle.number, 1, detailTitle.number, 8);
   styleSectionTitle(detailTitle.getCell(1));
 
-  const detailRows: [string, string | number][] = [
-    ["On-time arrivals only (before 9:46 AM)", payroll.onTimeDays],
-    ["Half days (count)", payroll.halfDayDays],
-    ["Half day pay deduction (days × 0.5)", payroll.halfDayDeduction],
-    ["Short leave", payroll.shortLeaveDays],
-    ["Saturday / Sunday (weekly off)", payroll.weeklyOffDays],
-    ["Total hours worked", `${payroll.totalWorkingHours}h`],
-  ];
+  const detailRows: [string, string | number][] = sheetReport
+    ? [
+        ["Attendance working days (full=1, half=0.5, short leave=1)", sheetReport.working_days],
+        ["Paid leaves (approved)", sheetReport.paid_leaves],
+        ["Unpaid leaves (approved)", sheetReport.unpaid_leaves],
+        ["Half day leaves (approved)", sheetReport.half_day_leaves],
+        ["Weekly offs", sheetReport.weekly_offs ?? sheetReport.weekly_off_days ?? 0],
+        ["Comp off balance", sheetReport.comp_off_balance],
+        ["Late marks", sheetReport.late_marks],
+        ["Late leave deduction (floor(lates ÷ 3))", sheetReport.late_leave_deduction],
+        ["Short leave (attendance)", sheetReport.short_leaves],
+        ["Total hours worked", `${sheetReport.total_working_hours}h`],
+      ]
+    : [
+        ["On-time arrivals only (before 9:46 AM)", payroll.onTimeDays],
+        ["Half days (count)", payroll.halfDayDays],
+        ["Half day pay deduction (days × 0.5)", payroll.halfDayDeduction],
+        ["Short leave", payroll.shortLeaveDays],
+        ["Saturday / Sunday (weekly off)", payroll.weeklyOffDays],
+        ["Total hours worked", `${payroll.totalWorkingHours}h`],
+      ];
 
   for (const [label, value] of detailRows) {
     const row = sheet.addRow([label, value]);
@@ -932,13 +999,15 @@ export async function downloadAttendanceHistoryExcel(
   };
 
   const calendarDays = buildCalendarDaysFromPayload(payload, options);
-  const exportPayload: AttendanceExportPayload = options?.clientSideCalculation
-    ? {
-        ...payload,
-        summary: summarizeCalendarDaysClient(calendarDays),
-        calendar_days: calendarDays,
-      }
-    : payload;
+  const empCode = employee.emp_code;
+  const isSpecial = isPayrollExceptionEmpCode(empCode);
+  const sheetReport = !isSpecial ? payload.sheet_report : undefined;
+
+  const exportPayload: AttendanceExportPayload = {
+    ...payload,
+    summary: payload.summary ?? summarizeCalendarDaysClient(calendarDays),
+    calendar_days: calendarDays,
+  };
 
   const ExcelJS = (await import("exceljs")).default;
   const workbook = new ExcelJS.Workbook();
@@ -947,8 +1016,7 @@ export async function downloadAttendanceHistoryExcel(
 
   addGuideSheet(workbook);
 
-  const empCode = employee.emp_code;
-  if (isPayrollExceptionEmpCode(empCode)) {
+  if (isSpecial) {
     addOverviewSheet(workbook, exportPayload, calendarDays, {
       mode: "special",
       payroll: buildPayrollExportSummary(calendarDays, { empCode }),
@@ -961,7 +1029,12 @@ export async function downloadAttendanceHistoryExcel(
       }),
     });
   } else {
-    addOverviewSheet(workbook, exportPayload, calendarDays);
+    addOverviewSheet(workbook, exportPayload, calendarDays, {
+      sheetReport,
+      payroll: sheetReport
+        ? payrollFromSheetReport(sheetReport)
+        : buildPayrollExportSummary(calendarDays, { empCode }),
+    });
   }
 
   const monthGroups = groupDaysByMonth(calendarDays);
@@ -998,6 +1071,7 @@ export type PreparedEmployeeExport = {
   payroll: PayrollExportSummary;
   /** Standard-rules payroll for special employees (comparison sheet). */
   payrollStandard?: PayrollExportSummary;
+  sheetReport?: AttendanceSheetReport;
 };
 
 export function prepareEmployeeExportPayload(
@@ -1005,13 +1079,15 @@ export function prepareEmployeeExportPayload(
   options?: ExportExcelOptions,
 ): PreparedEmployeeExport {
   const calendarDays = buildCalendarDaysFromPayload(payload, options);
-  const summary = options?.clientSideCalculation
-    ? summarizeCalendarDaysClient(calendarDays)
-    : payload.summary;
+  const summary = payload.summary ?? summarizeCalendarDaysClient(calendarDays);
 
   const empCode = payload.employee.emp_code;
-  const payroll = buildPayrollExportSummary(calendarDays, { empCode });
-  const payrollStandard = isPayrollExceptionEmpCode(empCode)
+  const isSpecial = isPayrollExceptionEmpCode(empCode);
+  const sheetReport = !isSpecial ? payload.sheet_report : undefined;
+  const payroll = sheetReport
+    ? payrollFromSheetReport(sheetReport)
+    : buildPayrollExportSummary(calendarDays, { empCode });
+  const payrollStandard = isSpecial
     ? buildPayrollExportSummary(calendarDays, {
         empCode,
         forceStandardRules: true,
@@ -1025,6 +1101,7 @@ export function prepareEmployeeExportPayload(
     calendarDays,
     payroll,
     payrollStandard,
+    sheetReport,
   };
 }
 
@@ -1431,6 +1508,8 @@ export async function downloadAllEmployeesAttendanceExcel(
         exceptionEntries.length > 0
           ? "All other employees payroll"
           : "All employees payroll",
+      formulaNote:
+        "Working days + Paid leaves + Weekly offs + Comp off balance − Late leave deduction (floor(lates ÷ 3)).",
     });
   }
 

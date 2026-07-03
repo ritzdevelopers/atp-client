@@ -1756,7 +1756,6 @@ function ManageAttendanceDetail({
       onClose={() => setExportOpen(false)}
       orgId={orgId}
       employee={exportEmployee}
-      clientSideCalculation
     />
     </>
   );
