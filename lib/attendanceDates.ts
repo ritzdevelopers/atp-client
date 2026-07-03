@@ -70,11 +70,17 @@ export function getTodayLocalYmd(ref: Date = new Date()): string {
  * - Naive `YYYY-MM-DD hh:mm:ss` (no TZ) uses the date part from the string (wall date from DB).
  */
 export function wallClockMinutesFromDateTime(
-  value: string | number | null | undefined,
+  value: string | number | Date | null | undefined,
 ): number {
   if (value == null || value === "") return NaN;
   if (value instanceof Date && !Number.isNaN(value.getTime())) {
     return value.getHours() * 60 + value.getMinutes() + value.getSeconds() / 60;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const d = new Date(value);
+    if (!Number.isNaN(d.getTime())) {
+      return d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60;
+    }
   }
   if (typeof value === "string") {
     const parts = matchNaiveDateTimeParts(value);
