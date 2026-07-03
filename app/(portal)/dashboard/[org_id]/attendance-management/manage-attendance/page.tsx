@@ -1430,7 +1430,6 @@ function ManageAttendanceListPage() {
         onClose={() => setExportEmployee(null)}
         orgId={orgId}
         employee={exportEmployee}
-        clientSideCalculation
       />
 
       <ExportAllEmployeesAttendanceModal

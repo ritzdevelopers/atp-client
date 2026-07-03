@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import {
+  CalendarCheck,
   CalendarClock,
   ClipboardList,
   Fingerprint,
   MessageSquare,
   Package,
   Palmtree,
+  RotateCcw,
   UsersRound,
   Video,
 } from "lucide-react";
@@ -27,6 +29,22 @@ const actions = [
     icon: Fingerprint,
     color: "bg-emerald-50 text-emerald-600 group-hover:bg-emerald-100",
     path: "attendance-history",
+  },
+  {
+    key: "regularization",
+    label: "Regularization",
+    desc: "Fix attendance",
+    icon: RotateCcw,
+    color: "bg-indigo-50 text-indigo-600 group-hover:bg-indigo-100",
+    path: "regularization",
+  },
+  {
+    key: "comp-off",
+    label: "Comp off",
+    desc: "Earn time off",
+    icon: CalendarCheck,
+    color: "bg-teal-50 text-teal-600 group-hover:bg-teal-100",
+    path: "comp-off",
   },
   {
     key: "leave",

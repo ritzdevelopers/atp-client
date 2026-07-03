@@ -82,12 +82,45 @@ function deriveCheckInStatus(checkInMinutes: number) {
   return "present";
 }
 
+function deriveStatusFromWorkingHours(workingMinutes: number | null) {
+  if (workingMinutes == null || !Number.isFinite(workingMinutes) || workingMinutes <= 0) {
+    return "absent";
+  }
+  if (workingMinutes >= ATTENDANCE_RULES.MIN_FULL_DAY_MINUTES) {
+    return "present";
+  }
+  if (workingMinutes >= ATTENDANCE_RULES.MIN_ABSENT_MINUTES) {
+    return "half_day";
+  }
+  return "absent";
+}
+
 export function deriveFinalAttendanceStatus(
   checkInMinutes: number,
   checkOutMinutes: number,
   workingMinutes: number | null,
 ) {
-  let status = deriveCheckInStatus(checkInMinutes);
+  const hasFullDayHours =
+    workingMinutes != null &&
+    Number.isFinite(workingMinutes) &&
+    workingMinutes >= ATTENDANCE_RULES.MIN_FULL_DAY_MINUTES;
+
+  let status = deriveStatusFromWorkingHours(workingMinutes);
+  if (status === "absent") {
+    return status;
+  }
+
+  if (hasFullDayHours) {
+    if (
+      Number.isFinite(checkInMinutes) &&
+      checkInMinutes >= ATTENDANCE_RULES.LATE_FROM
+    ) {
+      return "late";
+    }
+    return "present";
+  }
+
+  status = deriveCheckInStatus(checkInMinutes);
 
   if (!Number.isFinite(checkOutMinutes)) {
     return status;
@@ -100,13 +133,6 @@ export function deriveFinalAttendanceStatus(
     checkOutMinutes <= ATTENDANCE_RULES.SHORT_LEAVE_UNTIL
   ) {
     status = pickStrongerStatus(status, "short_leave");
-  } else if (checkOutMinutes >= ATTENDANCE_RULES.FULL_DAY_CHECKOUT_AFTER) {
-    if (
-      workingMinutes != null &&
-      workingMinutes >= ATTENDANCE_RULES.MIN_FULL_DAY_MINUTES
-    ) {
-      status = status === "late" ? "late" : "present";
-    }
   }
 
   if (
@@ -611,6 +637,13 @@ export type PayrollExportSummary = {
   fullDayPresentDays?: number;
   /** True when emp code is in attendancePayrollExceptions.json. */
   payrollExceptionApplied?: boolean;
+  /** Server sheet report fields (normal employees). */
+  attendanceWorkingDays?: number;
+  paidLeaves?: number;
+  unpaidLeaves?: number;
+  halfDayLeaves?: number;
+  compOffBalance?: number;
+  usesSheetReportFormula?: boolean;
 };
 
 function resolvePayrollMonthDayCount(days: CalendarDayExport[]): number {
