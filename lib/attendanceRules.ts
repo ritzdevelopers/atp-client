@@ -254,6 +254,7 @@ export function formatCalculatedStatusLabel(status: string | undefined): string 
   if (value === "half_day") return "Half day";
   if (value === "late") return "Late";
   if (value === "present") return "Present";
+  if (value === "future") return "Upcoming";
   return value.replace(/_/g, " ");
 }
 
@@ -282,7 +283,7 @@ export function calendarHeatmapClass(
     return "bg-[#0F9D58] text-white shadow-sm";
   }
   if (normalized === "future") {
-    return "bg-[#F5F7FA] text-[#CBD5E1]";
+    return "bg-[#F5F7FA] text-[#94A3B8] border border-dashed border-[#E2E8F0]";
   }
   if (isWeekend) {
     return "bg-[#E5E7EB] text-[#6B7280]";

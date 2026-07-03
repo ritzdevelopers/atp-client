@@ -7,9 +7,10 @@ import {
   buildMonthAttendanceView,
   deriveStatusFromRowPunches,
   formatCalculatedStatusLabel,
+  isWeekendDay,
   type CalculatedAttendanceStatus,
 } from "@/lib/attendanceRules";
-import { localYmdFromAttendanceValue } from "@/lib/attendanceDates";
+import { getTodayLocalYmd, localYmdFromAttendanceValue } from "@/lib/attendanceDates";
 
 export type KpiSegment = { key: string; label: string; count: number; color: string };
 
@@ -276,6 +277,8 @@ type CalendarDayLike = {
   working_hours?: number | string | null;
   attendance_status?: string;
   is_future?: boolean;
+  is_weekend?: boolean;
+  is_sunday?: boolean;
   is_late?: boolean;
 };
 
@@ -306,8 +309,13 @@ function resolveDayStatusFromCalendarDay(
   day: CalendarDayLike | undefined,
   row?: AttendanceRowLike,
 ): CalculatedAttendanceStatus {
-  if (!day && !row?.check_in) return "absent";
-  if (day?.is_future) return "future";
+  if (day?.is_future || day?.attendance_status === "future") {
+    const dayIndex = day?.date
+      ? new Date(`${day.date}T12:00:00`).getDay()
+      : -1;
+    if (day?.is_weekend || dayIndex === 0 || dayIndex === 6) return "weekly_off";
+    return "future";
+  }
   if (day?.attendance_status === "not_joined") return "absent";
   if (day?.attendance_status === "weekly_off" && !row?.check_in && !day?.check_in) {
     return "weekly_off";
@@ -332,7 +340,25 @@ function resolveDayStatusFromCalendarDay(
 
   const fallback = String(day?.attendance_status || "").trim().toLowerCase();
   if (fallback === "weekly_off") return "weekly_off";
+  if (!day && !row?.check_in) return "absent";
   return "absent";
+}
+
+/** Calendar heatmap status — future weekdays are upcoming, not absent. */
+function resolveCalendarCellStatus(
+  dateYmd: string,
+  day: CalendarDayLike | undefined,
+  row: AttendanceRowLike | undefined,
+): CalculatedAttendanceStatus {
+  const todayYmd = getTodayLocalYmd();
+  const dayIndex = new Date(`${dateYmd}T12:00:00`).getDay();
+  const isWeekend = isWeekendDay(dayIndex);
+
+  if (dateYmd > todayYmd) {
+    return isWeekend ? "weekly_off" : "future";
+  }
+
+  return resolveDayStatusFromCalendarDay(day, row);
 }
 
 export function resolveCalculatedStatusForRow(
@@ -385,7 +411,7 @@ export function computeMonthAnalyticsFromSheet(
   );
 
   const resolveStatusForDate = (dateYmd: string, day?: CalendarDayLike) =>
-    resolveDayStatusFromCalendarDay(day, rowByDate.get(dateYmd));
+    resolveCalendarCellStatus(dateYmd, day, rowByDate.get(dateYmd));
 
   const statusByDate = new Map<string, CalculatedAttendanceStatus>();
   for (const day of calendarDays) {
@@ -393,21 +419,28 @@ export function computeMonthAnalyticsFromSheet(
   }
   for (const [dateYmd, row] of rowByDate) {
     if (!dateYmd.startsWith(monthKey)) continue;
-    statusByDate.set(dateYmd, resolveStatusForDate(dateYmd, calendarDays.find((d) => d.date === dateYmd)));
+    statusByDate.set(
+      dateYmd,
+      resolveStatusForDate(dateYmd, calendarDays.find((d) => d.date === dateYmd)),
+    );
   }
 
   const daysInMonth = new Date(year, month, 0).getDate();
   const firstDow = new Date(year, month - 1, 1).getDay();
   const calendarCells: MonthAnalyticsResult["monthAnalytics"]["calendarCells"] = [];
+  let futureDayCount = 0;
   for (let i = 0; i < firstDow; i += 1) calendarCells.push({ day: null });
   for (let d = 1; d <= daysInMonth; d += 1) {
     const dateYmd = `${monthKey}-${String(d).padStart(2, "0")}`;
     const day = calendarDays.find((entry) => entry.date === dateYmd);
+    const dayIndex = new Date(`${dateYmd}T12:00:00`).getDay();
+    const status = resolveStatusForDate(dateYmd, day);
+    if (status === "future") futureDayCount += 1;
     calendarCells.push({
       day: d,
-      status: resolveStatusForDate(dateYmd, day),
-      isSunday: day?.is_sunday,
-      isWeekend: day?.is_weekend,
+      status,
+      isSunday: day?.is_sunday ?? dayIndex === 0,
+      isWeekend: day?.is_weekend ?? isWeekendDay(dayIndex),
     });
   }
 
@@ -420,7 +453,7 @@ export function computeMonthAnalyticsFromSheet(
     halfDay: sheet?.half_days ?? 0,
     shortLeave: sheet?.short_leaves ?? 0,
     weeklyOff: sheet?.weekly_offs ?? sheet?.weekly_off_days ?? 0,
-    future: 0,
+    future: futureDayCount,
     totalWorkingMinutes: sheet?.total_working_minutes ?? 0,
     kpiTotal: sheet
       ? sheet.present_days + sheet.absent_days + sheet.half_days
@@ -509,9 +542,12 @@ export function computeMonthAnalyticsFromSheet(
   ];
 
   const statusCounts = new Map<string, number>();
-  for (const day of calendarDays) {
-    if (day.is_future || day.attendance_status === "not_joined") continue;
-    const status = resolveStatusForDate(day.date, day);
+  for (let d = 1; d <= daysInMonth; d += 1) {
+    const dateYmd = `${monthKey}-${String(d).padStart(2, "0")}`;
+    const day = calendarDays.find((entry) => entry.date === dateYmd);
+    const status = resolveStatusForDate(dateYmd, day);
+    if (status === "future" || status === "weekly_off") continue;
+    if (day?.attendance_status === "not_joined") continue;
     statusCounts.set(status, (statusCounts.get(status) || 0) + 1);
   }
   const statusDistribution = Array.from(statusCounts.entries())
