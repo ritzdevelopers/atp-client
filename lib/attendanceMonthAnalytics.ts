@@ -5,9 +5,11 @@ import type {
 } from "@/services/attendanceHistory";
 import {
   buildMonthAttendanceView,
+  deriveStatusFromRowPunches,
   formatCalculatedStatusLabel,
   type CalculatedAttendanceStatus,
 } from "@/lib/attendanceRules";
+import { localYmdFromAttendanceValue } from "@/lib/attendanceDates";
 
 export type KpiSegment = { key: string; label: string; count: number; color: string };
 
@@ -266,6 +268,102 @@ export function matchesCalculatedStatusFilter(
   return normalized === f;
 }
 
+type CalendarDayLike = {
+  date?: string;
+  check_in?: string | null;
+  check_out?: string | null;
+  working_time?: number | null;
+  working_hours?: number | string | null;
+  attendance_status?: string;
+  is_future?: boolean;
+  is_late?: boolean;
+};
+
+type AttendanceRowLike = {
+  attendance_date?: string | null;
+  check_in?: string | null;
+  check_out?: string | null;
+  working_time?: string | number | null;
+  working_hours?: string | number | null;
+};
+
+function resolveStatusFromPunchRecord(
+  check_in?: string | null,
+  check_out?: string | null,
+  working_time?: string | number | null,
+  working_hours?: string | number | null,
+): CalculatedAttendanceStatus {
+  if (!check_in) return "absent";
+  return deriveStatusFromRowPunches({
+    check_in,
+    check_out,
+    working_time,
+    working_hours,
+  });
+}
+
+function resolveDayStatusFromCalendarDay(
+  day: CalendarDayLike | undefined,
+  row?: AttendanceRowLike,
+): CalculatedAttendanceStatus {
+  if (!day && !row?.check_in) return "absent";
+  if (day?.is_future) return "future";
+  if (day?.attendance_status === "not_joined") return "absent";
+  if (day?.attendance_status === "weekly_off" && !row?.check_in && !day?.check_in) {
+    return "weekly_off";
+  }
+  if (day?.attendance_status === "on_leave" && !row?.check_in && !day?.check_in) {
+    return "on_leave" as CalculatedAttendanceStatus;
+  }
+
+  const check_in = row?.check_in ?? day?.check_in;
+  const check_out = row?.check_out ?? day?.check_out;
+  const working_time = row?.working_time ?? day?.working_time;
+  const working_hours = row?.working_hours ?? day?.working_hours;
+
+  if (check_in) {
+    return resolveStatusFromPunchRecord(
+      check_in,
+      check_out,
+      working_time,
+      working_hours,
+    );
+  }
+
+  const fallback = String(day?.attendance_status || "").trim().toLowerCase();
+  if (fallback === "weekly_off") return "weekly_off";
+  return "absent";
+}
+
+export function resolveCalculatedStatusForRow(
+  row: {
+    date?: string | null;
+    check_in?: string | null;
+    check_out?: string | null;
+    working_time?: string | number | null;
+    working_hours?: string | number | null;
+    status?: string | null;
+  },
+  statusByDate: Map<string, CalculatedAttendanceStatus>,
+): string {
+  if (row.check_in) {
+    return deriveStatusFromRowPunches({
+      check_in: row.check_in,
+      check_out: row.check_out,
+      working_time: row.working_time,
+      working_hours: row.working_hours,
+    });
+  }
+
+  const ymd = localYmdFromAttendanceValue(row.date ?? null);
+  if (ymd) {
+    const fromSheet = statusByDate.get(ymd);
+    if (fromSheet) return fromSheet;
+  }
+
+  return row.status ?? "";
+}
+
 export type SheetMonthAnalyticsResult = MonthAnalyticsResult & {
   sheetReport: AttendanceSheetReport | null;
 };
@@ -274,6 +372,7 @@ export function computeMonthAnalyticsFromSheet(
   response: {
     calendar_days?: AttendanceExportResponse["calendar_days"];
     sheet_report?: AttendanceExportResponse["sheet_report"];
+    rows?: AttendanceExportResponse["rows"];
   },
   year: number,
   month: number,
@@ -281,13 +380,20 @@ export function computeMonthAnalyticsFromSheet(
   const calendarDays = response.calendar_days ?? [];
   const sheet = response.sheet_report ?? null;
   const monthKey = `${year}-${String(month).padStart(2, "0")}`;
+  const rowByDate = new Map(
+    (response.rows ?? []).map((row) => [String(row.attendance_date), row]),
+  );
+
+  const resolveStatusForDate = (dateYmd: string, day?: CalendarDayLike) =>
+    resolveDayStatusFromCalendarDay(day, rowByDate.get(dateYmd));
 
   const statusByDate = new Map<string, CalculatedAttendanceStatus>();
   for (const day of calendarDays) {
-    statusByDate.set(
-      day.date,
-      String(day.attendance_status || "absent") as CalculatedAttendanceStatus,
-    );
+    statusByDate.set(day.date, resolveStatusForDate(day.date, day));
+  }
+  for (const [dateYmd, row] of rowByDate) {
+    if (!dateYmd.startsWith(monthKey)) continue;
+    statusByDate.set(dateYmd, resolveStatusForDate(dateYmd, calendarDays.find((d) => d.date === dateYmd)));
   }
 
   const daysInMonth = new Date(year, month, 0).getDate();
@@ -299,9 +405,7 @@ export function computeMonthAnalyticsFromSheet(
     const day = calendarDays.find((entry) => entry.date === dateYmd);
     calendarCells.push({
       day: d,
-      status: day
-        ? (String(day.attendance_status || "absent") as CalculatedAttendanceStatus)
-        : "absent",
+      status: resolveStatusForDate(dateYmd, day),
       isSunday: day?.is_sunday,
       isWeekend: day?.is_weekend,
     });
@@ -332,7 +436,7 @@ export function computeMonthAnalyticsFromSheet(
     .map((day) => ({
       day: Number(day.date.split("-")[2]),
       hours: Number(day.working_time ?? 0) / 60,
-      status: day.attendance_status,
+      status: resolveStatusForDate(day.date, day),
     }))
     .sort((a, b) => a.day - b.day);
 
@@ -407,7 +511,7 @@ export function computeMonthAnalyticsFromSheet(
   const statusCounts = new Map<string, number>();
   for (const day of calendarDays) {
     if (day.is_future || day.attendance_status === "not_joined") continue;
-    const status = String(day.attendance_status || "absent");
+    const status = resolveStatusForDate(day.date, day);
     statusCounts.set(status, (statusCounts.get(status) || 0) + 1);
   }
   const statusDistribution = Array.from(statusCounts.entries())

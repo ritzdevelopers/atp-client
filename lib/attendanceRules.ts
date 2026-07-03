@@ -1,30 +1,36 @@
 import type { AttendanceHistoryRow } from "@/services/attendanceHistory";
 import { isPayrollExceptionEmpCode } from "@/lib/attendancePayrollExceptions";
+import { wallClockMinutesFromDateTime } from "@/lib/attendanceDates";
 
 export const ATTENDANCE_RULES = {
-  /** On time through 09:45:59; late from 09:46:00 onward. */
-  LATE_FROM: wallTimeToMinutesSinceMidnight("09:46:00"),
+  ON_TIME_UNTIL: wallTimeToMinutesSinceMidnight("09:45:00"),
+  LATE_FROM: wallTimeToMinutesSinceMidnight("09:45:00"),
   HALF_DAY_CHECKIN_AFTER: wallTimeToMinutesSinceMidnight("10:30:00"),
-  HALF_DAY_CHECKOUT_UNTIL: wallTimeToMinutesSinceMidnight("17:29:00"),
-  SHORT_LEAVE_FROM: wallTimeToMinutesSinceMidnight("17:30:00"),
-  SHORT_LEAVE_UNTIL: wallTimeToMinutesSinceMidnight("18:15:00"),
+  HALF_DAY_CHECKOUT_BEFORE: wallTimeToMinutesSinceMidnight("17:30:00"),
+  SHORT_LEAVE_FROM: wallTimeToMinutesSinceMidnight("17:40:00"),
+  SHORT_LEAVE_UNTIL: wallTimeToMinutesSinceMidnight("18:20:00"),
   FULL_DAY_CHECKOUT_AFTER: wallTimeToMinutesSinceMidnight("18:20:00"),
   MIN_FULL_DAY_MINUTES: 8 * 60,
-  /** Worked less than 4 hours with a check-in counts as absent. */
+  MIN_HALF_DAY_MINUTES: 4 * 60,
   MIN_ABSENT_MINUTES: 4 * 60,
-  /** Every 3 lates in a month = 1 leave (floor division). */
   LATES_PER_DERIVED_LEAVE: 3,
+  FULL_DAY_CREDIT: 1,
+  HALF_DAY_CREDIT: 0.5,
+  SHORT_LEAVE_CREDIT: 0.75,
 } as const;
 
 export const ATTENDANCE_RULE_LABELS = [
-  { label: "On time until", value: "09:45 AM" },
-  { label: "Late from", value: "09:46 AM" },
+  { label: "On time until", value: "Before 9:45 AM" },
+  { label: "Late mark", value: "Check-in on or after 9:45 AM (before 10:30 AM)" },
   { label: "Half day (check-in after)", value: "10:30 AM" },
-  { label: "Half day (check-out until)", value: "05:29 PM" },
-  { label: "Short leave window", value: "05:30 PM – 06:15 PM" },
-  { label: "Full day check-out after", value: "06:20 PM" },
-  { label: "Minimum full day", value: "8 hours" },
-  { label: "Absent if worked less than", value: "4 hours" },
+  { label: "Half day (check-out before)", value: "5:30 PM" },
+  { label: "Short leave window", value: "5:40 PM – 6:20 PM" },
+  { label: "Full day (check-out after)", value: "6:20 PM" },
+  { label: "Full day (hours)", value: "8 hours or more" },
+  { label: "Half day (hours)", value: "4 to under 8 hours" },
+  { label: "Absent (hours)", value: "Under 4 hours" },
+  { label: "Working day credit", value: "Full = 1, Half = 0.5, Short leave = 0.75" },
+  { label: "Payable days", value: "Working days + Paid leaves + Weekly offs + Comp off − Late leave deduction" },
   { label: "Late-to-leave rule", value: "Every 3 lates = 1 leave (floor(lates ÷ 3))" },
 ] as const;
 
@@ -42,14 +48,6 @@ export function formatLateLeaveExplanation(lateCount: number): string {
   return `${leaves} leave${leaves === 1 ? "" : "s"} counted from ${lates} late${lates === 1 ? "" : "s"} — floor(${lates} ÷ 3) = ${leaves}. These are added to absent/leave totals for the month.`;
 }
 
-const STATUS_PRIORITY: Record<string, number> = {
-  absent: 0,
-  present: 1,
-  late: 2,
-  short_leave: 3,
-  half_day: 4,
-};
-
 export function wallTimeToMinutesSinceMidnight(value: string) {
   const m = String(value).trim().match(/(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
   if (!m) return NaN;
@@ -60,111 +58,104 @@ export function wallTimeToMinutesSinceMidnight(value: string) {
   return h * 60 + mi + sec / 60;
 }
 
-function pickStrongerStatus(current: string, next: string) {
-  const currentRank = STATUS_PRIORITY[current] ?? 0;
-  const nextRank = STATUS_PRIORITY[next] ?? 0;
-  return nextRank >= currentRank ? next : current;
+
+/** Late: check-in at or after 9:45 AM and before 10:30 AM (half day from 10:30). */
+export function isLateCheckIn(checkInMinutes: number) {
+  return (
+    Number.isFinite(checkInMinutes) &&
+    checkInMinutes >= ATTENDANCE_RULES.LATE_FROM &&
+    checkInMinutes < ATTENDANCE_RULES.HALF_DAY_CHECKIN_AFTER
+  );
 }
 
-function deriveCheckInStatus(checkInMinutes: number) {
-  if (
+function isHalfDayCheckIn(checkInMinutes: number) {
+  return (
     Number.isFinite(checkInMinutes) &&
     checkInMinutes > ATTENDANCE_RULES.HALF_DAY_CHECKIN_AFTER
-  ) {
-    return "half_day";
-  }
-  if (
-    Number.isFinite(checkInMinutes) &&
-    checkInMinutes >= ATTENDANCE_RULES.LATE_FROM
-  ) {
-    return "late";
-  }
-  return "present";
+  );
 }
 
-function deriveStatusFromWorkingHours(workingMinutes: number | null) {
-  if (workingMinutes == null || !Number.isFinite(workingMinutes) || workingMinutes <= 0) {
-    return "absent";
-  }
-  if (workingMinutes >= ATTENDANCE_RULES.MIN_FULL_DAY_MINUTES) {
-    return "present";
-  }
-  if (workingMinutes >= ATTENDANCE_RULES.MIN_ABSENT_MINUTES) {
-    return "half_day";
-  }
-  return "absent";
+function isEarlyCheckout(checkOutMinutes: number) {
+  return (
+    Number.isFinite(checkOutMinutes) &&
+    checkOutMinutes < ATTENDANCE_RULES.HALF_DAY_CHECKOUT_BEFORE
+  );
 }
 
+function isShortLeaveCheckout(checkOutMinutes: number) {
+  return (
+    Number.isFinite(checkOutMinutes) &&
+    checkOutMinutes >= ATTENDANCE_RULES.SHORT_LEAVE_FROM &&
+    checkOutMinutes <= ATTENDANCE_RULES.SHORT_LEAVE_UNTIL
+  );
+}
+
+function isCheckoutOkForFullDay(checkOutMinutes: number) {
+  return (
+    Number.isFinite(checkOutMinutes) &&
+    checkOutMinutes > ATTENDANCE_RULES.FULL_DAY_CHECKOUT_AFTER
+  );
+}
+
+function normalizeStoredWorkingMinutes(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  if (value <= 24) return Math.round(value * 60);
+  return Math.round(value);
+}
+
+/** Per-day work status — same rules as server (UI + Excel). */
 export function deriveFinalAttendanceStatus(
   checkInMinutes: number,
   checkOutMinutes: number,
   workingMinutes: number | null,
 ) {
-  const hasFullDayHours =
-    workingMinutes != null &&
-    Number.isFinite(workingMinutes) &&
-    workingMinutes >= ATTENDANCE_RULES.MIN_FULL_DAY_MINUTES;
-
-  let status = deriveStatusFromWorkingHours(workingMinutes);
-  if (status === "absent") {
-    return status;
-  }
-
-  if (hasFullDayHours) {
-    if (
-      Number.isFinite(checkInMinutes) &&
-      checkInMinutes >= ATTENDANCE_RULES.LATE_FROM
-    ) {
-      return "late";
-    }
-    return "present";
-  }
-
-  status = deriveCheckInStatus(checkInMinutes);
-
-  if (!Number.isFinite(checkOutMinutes)) {
-    return status;
-  }
-
-  if (checkOutMinutes <= ATTENDANCE_RULES.HALF_DAY_CHECKOUT_UNTIL) {
-    status = pickStrongerStatus(status, "half_day");
-  } else if (
-    checkOutMinutes >= ATTENDANCE_RULES.SHORT_LEAVE_FROM &&
-    checkOutMinutes <= ATTENDANCE_RULES.SHORT_LEAVE_UNTIL
+  let resolvedMinutes = workingMinutes;
+  if (
+    (resolvedMinutes == null || !Number.isFinite(resolvedMinutes) || resolvedMinutes <= 0) &&
+    Number.isFinite(checkInMinutes) &&
+    Number.isFinite(checkOutMinutes)
   ) {
-    status = pickStrongerStatus(status, "short_leave");
+    resolvedMinutes = Math.max(0, Math.round(checkOutMinutes - checkInMinutes));
   }
 
   if (
-    workingMinutes != null &&
-    workingMinutes < ATTENDANCE_RULES.MIN_FULL_DAY_MINUTES
-  ) {
-    status = pickStrongerStatus(status, "half_day");
-  }
-
-  if (
-    workingMinutes != null &&
-    workingMinutes > 0 &&
-    workingMinutes < ATTENDANCE_RULES.MIN_ABSENT_MINUTES
+    resolvedMinutes == null ||
+    !Number.isFinite(resolvedMinutes) ||
+    resolvedMinutes < ATTENDANCE_RULES.MIN_ABSENT_MINUTES
   ) {
     return "absent";
   }
 
-  return status;
+  if (isHalfDayCheckIn(checkInMinutes)) {
+    return "half_day";
+  }
+
+  if (isEarlyCheckout(checkOutMinutes)) {
+    return "half_day";
+  }
+
+  if (resolvedMinutes < ATTENDANCE_RULES.MIN_FULL_DAY_MINUTES) {
+    return "half_day";
+  }
+
+  if (isShortLeaveCheckout(checkOutMinutes)) {
+    return "short_leave";
+  }
+
+  if (Number.isFinite(checkOutMinutes) && !isCheckoutOkForFullDay(checkOutMinutes)) {
+    return "half_day";
+  }
+
+  if (isLateCheckIn(checkInMinutes)) {
+    return "late";
+  }
+
+  return "present";
 }
 
-function timePartFromDateTime(value: string | undefined) {
-  if (!value) return "";
-  const normalized = value.includes("T") ? value : value.replace(" ", "T");
-  const d = new Date(normalized);
-  if (Number.isNaN(d.getTime())) {
-    const parts = value.split(" ");
-    return parts[1] ?? "";
-  }
-  const h = String(d.getHours()).padStart(2, "0");
-  const m = String(d.getMinutes()).padStart(2, "0");
-  const s = String(d.getSeconds()).padStart(2, "0");
-  return `${h}:${m}:${s}`;
+function checkInMinutesFromValue(checkIn: string | null | undefined) {
+  if (!checkIn) return NaN;
+  return wallClockMinutesFromDateTime(checkIn);
 }
 
 export function workingMinutesFromPunches(
@@ -172,16 +163,29 @@ export function workingMinutesFromPunches(
   checkOut: string | null | undefined,
 ) {
   if (!checkIn || !checkOut) return null;
-  const checkInMinutes = wallTimeToMinutesSinceMidnight(
-    timePartFromDateTime(checkIn),
-  );
-  const checkOutMinutes = wallTimeToMinutesSinceMidnight(
-    timePartFromDateTime(checkOut),
-  );
+  const checkInMinutes = wallClockMinutesFromDateTime(checkIn);
+  const checkOutMinutes = wallClockMinutesFromDateTime(checkOut);
   if (!Number.isFinite(checkInMinutes) || !Number.isFinite(checkOutMinutes)) {
     return null;
   }
   return Math.max(0, Math.round(checkOutMinutes - checkInMinutes));
+}
+
+export function resolveWorkingMinutesFromRow(row: {
+  working_time?: string | number | null;
+  working_hours?: string | number | null;
+  check_in?: string | null;
+  check_out?: string | null;
+}): number | null {
+  const stored = normalizeStoredWorkingMinutes(Number(row.working_time ?? 0));
+  if (stored > 0) {
+    return stored;
+  }
+  const hours = Number(row.working_hours ?? 0);
+  if (Number.isFinite(hours) && hours > 0) {
+    return Math.round(hours * 60);
+  }
+  return workingMinutesFromPunches(row.check_in, row.check_out);
 }
 
 export type CalculatedAttendanceStatus =
@@ -193,6 +197,25 @@ export type CalculatedAttendanceStatus =
   | "late"
   | "present"
   | "present_full_day";
+
+export function deriveStatusFromRowPunches(row: {
+  check_in?: string | null;
+  check_out?: string | null;
+  working_time?: string | number | null;
+  working_hours?: string | number | null;
+}): CalculatedAttendanceStatus {
+  if (!row.check_in) return "absent";
+  const checkInMinutes = wallClockMinutesFromDateTime(row.check_in);
+  const checkOutMinutes = row.check_out
+    ? wallClockMinutesFromDateTime(row.check_out)
+    : NaN;
+  const workingMinutes = resolveWorkingMinutesFromRow(row);
+  return deriveFinalAttendanceStatus(
+    checkInMinutes,
+    checkOutMinutes,
+    workingMinutes,
+  ) as CalculatedAttendanceStatus;
+}
 
 export function calculateDetailedStatusFromPunches(
   checkIn: string | null | undefined,
@@ -207,7 +230,7 @@ export function calculateDetailedStatusFromPunches(
 
   const workingMinutes = workingMinutesFromPunches(checkIn, checkOut);
   const checkOutMinutes = checkOut
-    ? wallTimeToMinutesSinceMidnight(timePartFromDateTime(checkOut))
+    ? wallClockMinutesFromDateTime(checkOut)
     : NaN;
 
   if (
@@ -229,6 +252,8 @@ export function formatCalculatedStatusLabel(status: string | undefined): string 
   if (value === "weekly_off") return "Weekly off";
   if (value === "short_leave") return "Short leave";
   if (value === "half_day") return "Half day";
+  if (value === "late") return "Late";
+  if (value === "present") return "Present";
   return value.replace(/_/g, " ");
 }
 
@@ -236,30 +261,32 @@ export function calendarHeatmapClass(
   status: string | undefined,
   isWeekend = false,
 ): string {
-  if (isWeekend) {
-    if (
-      status &&
-      status !== "absent" &&
-      status !== "weekly_off" &&
-      status !== "future"
-    ) {
-      return "bg-[#0F9D58] text-white shadow-sm";
-    }
+  const normalized = String(status || "").trim().toLowerCase();
+
+  if (normalized === "weekly_off") {
     return "bg-[#E5E7EB] text-[#6B7280]";
   }
-  if (status === "weekly_off") {
-    return "bg-[#E5E7EB] text-[#6B7280]";
-  }
-  if (!status || status === "absent") {
+  if (!normalized || normalized === "absent") {
     return "bg-[#DC2626] text-white shadow-sm";
   }
-  if (status === "present" || status === "present_full_day") {
+  if (normalized === "late") {
+    return "bg-[#E8710A] text-white shadow-sm";
+  }
+  if (normalized === "half_day") {
+    return "bg-[#008CD3] text-white shadow-sm";
+  }
+  if (normalized === "short_leave") {
+    return "bg-[#F9A825] text-white shadow-sm";
+  }
+  if (normalized === "present" || normalized === "present_full_day") {
     return "bg-[#0F9D58] text-white shadow-sm";
   }
-  if (status === "late") return "bg-[#E8710A] text-white shadow-sm";
-  if (status === "half_day") return "bg-[#008CD3] text-white shadow-sm";
-  if (status === "short_leave") return "bg-[#F9A825] text-white shadow-sm";
-  if (status === "future") return "bg-[#F5F7FA] text-[#CBD5E1]";
+  if (normalized === "future") {
+    return "bg-[#F5F7FA] text-[#CBD5E1]";
+  }
+  if (isWeekend) {
+    return "bg-[#E5E7EB] text-[#6B7280]";
+  }
   return "bg-[#F1F5F9] text-[#9CA3AF]";
 }
 
@@ -423,16 +450,16 @@ export function buildMonthAttendanceView(
 export function deriveStatusFromPunches(
   checkIn: string | null | undefined,
   checkOut: string | null | undefined,
+  workingMinutesOverride?: number | null,
 ) {
   if (!checkIn) return "absent";
 
-  const checkInMinutes = wallTimeToMinutesSinceMidnight(
-    timePartFromDateTime(checkIn),
-  );
+  const checkInMinutes = wallClockMinutesFromDateTime(checkIn);
   const checkOutMinutes = checkOut
-    ? wallTimeToMinutesSinceMidnight(timePartFromDateTime(checkOut))
+    ? wallClockMinutesFromDateTime(checkOut)
     : NaN;
-  const workingMinutes = workingMinutesFromPunches(checkIn, checkOut);
+  const workingMinutes =
+    workingMinutesOverride ?? workingMinutesFromPunches(checkIn, checkOut);
 
   return deriveFinalAttendanceStatus(
     checkInMinutes,
@@ -520,7 +547,14 @@ export function buildCalendarDaysFromPunches(
     const record = rowByDate.get(current);
     const checkIn = record?.check_in ?? null;
     const checkOut = record?.check_out ?? null;
-    const workingMinutes = workingMinutesFromPunches(checkIn, checkOut);
+    const workingMinutes = record
+      ? resolveWorkingMinutesFromRow({
+          working_time: record.working_time,
+          working_hours: (record as { working_hours?: number | string | null }).working_hours,
+          check_in: checkIn,
+          check_out: checkOut,
+        })
+      : workingMinutesFromPunches(checkIn, checkOut);
     const isFuture = current > todayYmd;
 
     let attendance_status = "absent";
@@ -536,7 +570,7 @@ export function buildCalendarDaysFromPunches(
       attendance_status = "absent";
       is_absent = true;
     } else {
-      attendance_status = deriveStatusFromPunches(checkIn, checkOut);
+      attendance_status = deriveStatusFromPunches(checkIn, checkOut, workingMinutes);
       is_absent = attendance_status === "absent";
     }
 
@@ -725,7 +759,12 @@ export function dayCameToWork(day: CalendarDayExport): boolean {
 }
 
 export function dayWasLate(day: CalendarDayExport): boolean {
-  return String(day.attendance_status || "").trim().toLowerCase() === "late";
+  if (day.is_late) return true;
+  if (String(day.attendance_status || "").trim().toLowerCase() === "late") {
+    return true;
+  }
+  const checkInMinutes = checkInMinutesFromValue(day.check_in);
+  return isLateCheckIn(checkInMinutes);
 }
 
 export function dayWasHalfDay(day: CalendarDayExport): boolean {
@@ -740,7 +779,13 @@ export function plainAttendanceResult(day: CalendarDayExport): string {
 
   const status = String(day.attendance_status || "").trim().toLowerCase();
   if (status === "present") return "Came on time";
-  if (status === "late") return "Came late";
+  if (status === "late") {
+    const mins = Number(day.working_time ?? 0);
+    if (mins >= ATTENDANCE_RULES.MIN_FULL_DAY_MINUTES) {
+      return "Came late (full day)";
+    }
+    return "Came late";
+  }
   if (status === "absent" || day.is_absent) return "Did not come (absent)";
   if (status.includes("half")) return "Half day";
   if (status.includes("short")) return "Short leave";
@@ -763,6 +808,7 @@ export type CalendarDayExport = {
   is_weekly_off: boolean;
   is_future: boolean;
   is_absent: boolean;
+  is_late?: boolean;
   check_in: string | null;
   check_out: string | null;
   attendance_status: string;
@@ -787,26 +833,41 @@ export function applyRulesToCalendarDay(day: CalendarDayExport): CalendarDayExpo
     return normalized;
   }
 
+  if (normalized.attendance_status === "on_leave" && !normalized.check_in) {
+    return normalized;
+  }
+
   if (!normalized.check_in) {
     return {
       ...normalized,
       attendance_status: isWeekend ? "weekly_off" : "absent",
       is_absent: !isWeekend,
       is_weekly_off: isWeekend,
+      is_late: false,
     };
   }
 
+  const checkInMinutes = wallClockMinutesFromDateTime(normalized.check_in);
+  const checkOutMinutes = normalized.check_out
+    ? wallClockMinutesFromDateTime(normalized.check_out)
+    : NaN;
+  const workingMinutes = resolveWorkingMinutesFromRow({
+    working_time: normalized.working_time,
+    working_hours: normalized.working_hours,
+    check_in: normalized.check_in,
+    check_out: normalized.check_out,
+  });
+
   const derivedStatus = deriveFinalAttendanceStatus(
-    wallTimeToMinutesSinceMidnight(timePartFromDateTime(normalized.check_in)),
-    normalized.check_out
-      ? wallTimeToMinutesSinceMidnight(timePartFromDateTime(normalized.check_out))
-      : NaN,
-    normalized.working_time,
+    checkInMinutes,
+    checkOutMinutes,
+    workingMinutes,
   );
 
   return {
     ...normalized,
     attendance_status: derivedStatus,
+    is_late: derivedStatus === "late",
     is_absent: derivedStatus === "absent" && !isWeekend,
     is_weekly_off: false,
   };

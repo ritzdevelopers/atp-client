@@ -21,6 +21,7 @@ import {
   mapOwnRowsToHistoryRows,
   matchesCalculatedStatusFilter,
   mobileCalculatedStatusBadgeCls,
+  resolveCalculatedStatusForRow,
 } from "@/lib/attendanceMonthAnalytics";
 import { useAttendanceSheetCalculation } from "@/hooks/useAttendanceSheetCalculation";
 import {
@@ -308,11 +309,17 @@ export default function AttendanceHistoryPage() {
       : 0;
 
   const getCalculatedStatus = useCallback(
-    (row: AttendanceRow) => {
-      const ymd = localYmdFromAttendanceValue(row.date);
-      if (!ymd) return row.status ?? "";
-      return statusByDate.get(ymd) ?? row.status ?? "";
-    },
+    (row: AttendanceRow) =>
+      resolveCalculatedStatusForRow(
+        {
+          date: row.date,
+          check_in: row.check_in,
+          check_out: row.check_out,
+          working_time: row.working_time,
+          status: row.status,
+        },
+        statusByDate,
+      ),
     [statusByDate],
   );
 

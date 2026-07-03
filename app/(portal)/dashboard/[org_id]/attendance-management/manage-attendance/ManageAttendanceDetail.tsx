@@ -27,6 +27,7 @@ import {
   type CalculatedAttendanceStatus,
 } from "@/lib/attendanceRules";
 import { useAttendanceSheetCalculation } from "@/hooks/useAttendanceSheetCalculation";
+import { resolveCalculatedStatusForRow } from "@/lib/attendanceMonthAnalytics";
 import AttendanceSheetOverview from "@/components/portal-dashboard/attendance/AttendanceSheetOverview";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
@@ -98,17 +99,26 @@ function formatDate(dateValue: string | undefined): string {
   return `${day}-${month}-${year}`;
 }
 
+import { formatAttendanceTimeLocal } from "@/lib/attendanceDates";
+
+
 function formatTime(dateValue: string | undefined): string {
   if (!dateValue) return "-";
-  const d = new Date(dateValue);
-  if (Number.isNaN(d.getTime())) return String(dateValue);
-  return d.toLocaleTimeString(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
+  const formatted = formatAttendanceTimeLocal(dateValue);
+  if (formatted === "—") return String(dateValue);
+  const timePart = formatted.includes("•")
+    ? formatted.split("•").pop()?.trim()
+    : formatted;
+  if (!timePart || timePart === "—") return "-";
+  const [hh, mm] = timePart.split(":");
+  if (!hh || !mm) return timePart;
+  const hour = Number(hh);
+  const minute = Number(mm);
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return timePart;
+  const period = hour >= 12 ? "PM" : "AM";
+  const hour12 = hour % 12 || 12;
+  return `${hour12}:${String(minute).padStart(2, "0")} ${period}`;
 }
-
 
 function getCurrentQueryParts() {
   const now = new Date();
@@ -725,6 +735,21 @@ function ManageAttendanceDetail({
   });
 
   const monthAttendance = sheetAnalytics?.monthAttendance;
+  const statusByDate = monthAttendance?.statusByDate ?? new Map();
+  const getCalculatedStatus = useCallback(
+    (row: AttendanceDetailRow) =>
+      resolveCalculatedStatusForRow(
+        {
+          date: row.attendance_date || row.attendance_history,
+          check_in: row.check_in,
+          check_out: row.check_out,
+          working_time: row.working_time,
+          status: row.attendance_status,
+        },
+        statusByDate,
+      ),
+    [statusByDate],
+  );
   const kpi = monthAttendance?.summary ?? {
     present: 0,
     presentFullDay: 0,
@@ -1268,9 +1293,7 @@ function ManageAttendanceDetail({
               <MobileAttendanceLogRow
                 key={`${String(row.attendance_date || row.attendance_history)}-${index}`}
                 row={row}
-                calculatedStatus={monthAttendance?.statusByDate.get(
-                  String(row.attendance_date || row.attendance_history || "").slice(0, 10),
-                )}
+                calculatedStatus={getCalculatedStatus(row)}
               />
             ))}
           </ul>
@@ -1683,8 +1706,7 @@ function ManageAttendanceDetail({
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
                   {sortedRows.map((row, index) => {
-                    const dateKey = String(row.attendance_date || row.attendance_history || "").slice(0, 10);
-                    const calculatedStatus = monthAttendance?.statusByDate.get(dateKey);
+                    const calculatedStatus = getCalculatedStatus(row);
                     return (
                     <tr
                       key={`${String(row.attendance_date || row.attendance_history)}-${index}`}

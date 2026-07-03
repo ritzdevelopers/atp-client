@@ -24,6 +24,7 @@ import {
   PAYROLL_EXCEPTION_DESCRIPTION,
   payrollDayCreditLabel,
 } from "@/lib/attendancePayrollExceptions";
+import { formatAttendanceTimeLocal } from "@/lib/attendanceDates";
 
 export type ExportExcelOptions = {
   /** @deprecated Server now calculates attendance; kept for special payroll fallback only. */
@@ -147,14 +148,20 @@ function formatStatusLabel(status: string | undefined) {
 
 function formatTime(value: string | undefined | null) {
   if (!value) return "—";
-  const normalized = value.includes("T") ? value : value.replace(" ", "T");
-  const d = new Date(normalized);
-  if (Number.isNaN(d.getTime())) return value;
-  return d.toLocaleTimeString(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
+  const formatted = formatAttendanceTimeLocal(value);
+  if (formatted === "—") return String(value);
+  const timePart = formatted.includes("•")
+    ? formatted.split("•").pop()?.trim()
+    : formatted;
+  if (!timePart) return formatted;
+  const [hh, mm] = timePart.split(":");
+  if (!hh || !mm) return timePart;
+  const hour = Number(hh);
+  const minute = Number(mm);
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return timePart;
+  const period = hour >= 12 ? "PM" : "AM";
+  const hour12 = hour % 12 || 12;
+  return `${hour12}:${String(minute).padStart(2, "0")} ${period}`;
 }
 
 function formatWorkingHours(minutes: number | null | undefined) {
@@ -308,7 +315,7 @@ function addGuideSheet(workbook: import("exceljs").Workbook) {
     ],
     [
       "Late arrivals",
-      "Number of weekdays when check-in was at or after 9:46 AM. Shown separately from days present.",
+      "Number of weekdays when check-in was after 9:45 AM. Shown separately from days present. Late with 8+ hours still counts as a full day.",
     ],
     [
       "Leave from lates",
@@ -316,11 +323,15 @@ function addGuideSheet(workbook: import("exceljs").Workbook) {
     ],
     [
       "Payable days",
-      "Total days in the month minus absent weekdays minus half days (each half day = 0.5 day) minus leave deducted from lates.",
+      "Working days + Paid leaves + Weekly offs + Comp off balance − Late leave deduction (floor(lates ÷ 3)).",
     ],
     [
-      "Half day in payable days",
-      "Each half day counts as 0.5 day less pay. Example: 2 half days = 1 day deducted from payable days.",
+      "Working day credits",
+      "Full day (present/late) = 1, Half day = 0.5, Short leave = 0.75. Working days can be decimals (e.g. 22.5, 25.75).",
+    ],
+    [
+      "Half day in working days",
+      "Each half day counts as 0.5 working day. Short leave counts as 0.75.",
     ],
     [
       "Working days (month total)",
@@ -336,15 +347,19 @@ function addGuideSheet(workbook: import("exceljs").Workbook) {
     ],
     [
       "Daily log — Was late?",
-      "Yes only when check-in was at or after 9:46 AM on a working day.",
+      "Yes when check-in was after 9:45 AM on a working day (including full-day attendance with 8+ hours).",
     ],
     [
       "Daily log — Half day?",
-      "Yes when attendance is marked as half day. Each half day reduces payable days by 0.5.",
+      "Yes when: check-in after 10:30 AM, check-out before 5:30 PM, worked under 8 hours, or 8+ hours but check-out not after 6:20 PM (and not in short-leave window). Each half day = 0.5 working day.",
+    ],
+    [
+      "Daily log — Short leave?",
+      "Yes when check-out is between 5:40 PM and 6:20 PM with 8+ hours worked. Counts as 0.75 working day.",
     ],
     [
       "Color coding",
-      "Green = present, Orange = late, Red = absent, Blue = half day, Grey = Saturday / Sunday off.",
+      "Green = present, Orange = late, Red = absent, Blue = half day, Yellow = short leave, Grey = weekly off.",
     ],
     [
       "Special payroll employees",
@@ -437,7 +452,27 @@ function buildCalendarDaysFromPayload(
   }
 
   if (payload.calendar_days?.length) {
-    return payload.calendar_days.map(applyRulesToCalendarDay);
+    return payload.calendar_days.map((day) => {
+      const mapped: CalendarDayExport = {
+        date: day.date,
+        day_name: day.day_name,
+        day_short: day.day_short,
+        is_sunday: day.is_sunday,
+        is_weekend: day.is_weekend,
+        is_weekly_off: day.is_weekly_off,
+        is_future: day.is_future,
+        is_absent: day.is_absent,
+        is_late: day.is_late,
+        check_in: day.check_in ?? null,
+        check_out: day.check_out ?? null,
+        attendance_status: day.attendance_status,
+        stored_status: day.stored_status ?? null,
+        working_time:
+          day.working_time != null ? Number(day.working_time) : null,
+        working_hours: day.working_hours ?? null,
+      };
+      return applyRulesToCalendarDay(mapped);
+    });
   }
 
   const from = payload.period.from_date;
@@ -643,7 +678,7 @@ function addOverviewSheet(
 
   const detailRows: [string, string | number][] = sheetReport
     ? [
-        ["Attendance working days (full=1, half=0.5, short leave=1)", sheetReport.working_days],
+        ["Attendance working days (full=1, half=0.5, short leave=0.75)", sheetReport.working_days],
         ["Paid leaves (approved)", sheetReport.paid_leaves],
         ["Unpaid leaves (approved)", sheetReport.unpaid_leaves],
         ["Half day leaves (approved)", sheetReport.half_day_leaves],
@@ -655,7 +690,7 @@ function addOverviewSheet(
         ["Total hours worked", `${sheetReport.total_working_hours}h`],
       ]
     : [
-        ["On-time arrivals only (before 9:46 AM)", payroll.onTimeDays],
+        ["On-time arrivals only (by 9:45 AM)", payroll.onTimeDays],
         ["Half days (count)", payroll.halfDayDays],
         ["Half day pay deduction (days × 0.5)", payroll.halfDayDeduction],
         ["Short leave", payroll.shortLeaveDays],
