@@ -1,6 +1,7 @@
 "use client";
 
-import { Fingerprint, LogIn, LogOut } from "lucide-react";
+import Link from "next/link";
+import { CalendarCheck, Fingerprint, LogIn, LogOut, RotateCcw } from "lucide-react";
 import {
   formatAttendanceTimeLocal,
   getAttendanceDayVisual,
@@ -25,6 +26,8 @@ type AttendanceCardProps = {
   actionError?: string | null;
   onCheckIn: () => void;
   onCheckOut: () => void;
+  orgId?: string;
+  regularizationRemaining?: number | null;
 };
 
 export default function AttendanceCard({
@@ -39,6 +42,8 @@ export default function AttendanceCard({
   actionError,
   onCheckIn,
   onCheckOut,
+  orgId,
+  regularizationRemaining,
 }: AttendanceCardProps) {
   return (
     <article className={`${cardBase} ${cardPadding}`}>
@@ -102,6 +107,29 @@ export default function AttendanceCard({
               ? "Checked out"
               : "Check out"}
         </button>
+        {orgId ? (
+          <>
+            <Link
+              href={`/user-dashboard/${encodeURIComponent(orgId)}/regularization`}
+              className="inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-100"
+            >
+              <RotateCcw className="h-4 w-4" aria-hidden />
+              Regularization
+              {regularizationRemaining != null && regularizationRemaining > 0 ? (
+                <span className="rounded-full bg-indigo-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                  {regularizationRemaining}
+                </span>
+              ) : null}
+            </Link>
+            <Link
+              href={`/user-dashboard/${encodeURIComponent(orgId)}/comp-off`}
+              className="inline-flex items-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-4 py-2.5 text-sm font-semibold text-teal-700 transition hover:bg-teal-100"
+            >
+              <CalendarCheck className="h-4 w-4" aria-hidden />
+              Comp off
+            </Link>
+          </>
+        ) : null}
       </div>
 
       {actionError ? (

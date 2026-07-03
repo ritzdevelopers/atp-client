@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { AlertCircle } from "lucide-react";
 import PortalPageLoader from "@/components/portal-dashboard/ui/PortalPageLoader";
+import { fetchMyRegularizationBalance } from "@/services/regularization";
 import {
   formatAttendanceTimeLocal,
   getLocalYmdFromDate,
@@ -39,8 +40,10 @@ import {
 
 export default function EmployeeDashboardV2() {
   const [activeTab, setActiveTab] = useState<DashboardTab>("home");
+  const [regBalanceRemaining, setRegBalanceRemaining] = useState<number | null>(null);
 
   const {
+    orgId,
     orgIdParam,
     orgResolving,
     loading,
@@ -67,6 +70,25 @@ export default function EmployeeDashboardV2() {
     markCheckOut,
     refresh,
   } = useEmployeeDashboardV2Data();
+
+  useEffect(() => {
+    if (orgResolving || orgId == null || Number.isNaN(orgId)) return;
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    let cancelled = false;
+    void fetchMyRegularizationBalance(token, orgId)
+      .then((balance) => {
+        if (!cancelled) {
+          setRegBalanceRemaining(balance.is_available ? balance.remaining : 0);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setRegBalanceRemaining(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [orgId, orgResolving, data]);
 
   const [tick, setTick] = useState(0);
   const todayYmd = getTodayLocalYmd();
@@ -214,6 +236,8 @@ export default function EmployeeDashboardV2() {
               actionError={attendanceActionError}
               onCheckIn={() => void markCheckIn()}
               onCheckOut={() => void markCheckOut()}
+              orgId={orgIdParam}
+              regularizationRemaining={regBalanceRemaining}
             />
           </DashboardPanel>
         ) : null}
