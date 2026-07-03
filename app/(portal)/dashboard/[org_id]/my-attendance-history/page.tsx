@@ -6,6 +6,7 @@ import { MonthCalendarHeatmap } from "@/components/portal-dashboard/attendance/A
 import {
   formatCalculatedStatusLabel,
   mobileCalculatedStatusBadgeCls,
+  resolveCalculatedStatusForRow,
 } from "@/lib/attendanceMonthAnalytics";
 import { useAttendanceSheetCalculation } from "@/hooks/useAttendanceSheetCalculation";
 import {
@@ -175,11 +176,17 @@ export default function MyAttendanceHistoryPage() {
   });
 
   const getCalculatedStatus = useCallback(
-    (row: AttendanceRow) => {
-      const ymd = localYmdFromAttendanceValue(row.date);
-      if (!ymd) return row.status ?? "";
-      return statusByDate.get(ymd) ?? row.status ?? "";
-    },
+    (row: AttendanceRow) =>
+      resolveCalculatedStatusForRow(
+        {
+          date: row.date,
+          check_in: row.check_in,
+          check_out: row.check_out,
+          working_time: row.working_time,
+          status: row.status,
+        },
+        statusByDate,
+      ),
     [statusByDate],
   );
 

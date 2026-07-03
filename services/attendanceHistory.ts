@@ -110,6 +110,7 @@ export type AttendanceExportResponse = {
     is_weekly_off: boolean;
     is_future: boolean;
     is_absent: boolean;
+    is_late?: boolean;
     check_in: string | null;
     check_out: string | null;
     attendance_status: string;

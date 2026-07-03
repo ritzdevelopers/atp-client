@@ -86,6 +86,7 @@ import {
   type CalculatedAttendanceStatus,
 } from "@/lib/attendanceRules";
 import { useAttendanceSheetCalculation } from "@/hooks/useAttendanceSheetCalculation";
+import { resolveCalculatedStatusForRow } from "@/lib/attendanceMonthAnalytics";
 import AttendanceSheetOverview from "@/components/portal-dashboard/attendance/AttendanceSheetOverview";
 import AttendanceRulesNotice from "@/components/portal-dashboard/attendance/AttendanceRulesNotice";
 import {
@@ -1341,8 +1342,16 @@ function AttendanceHistoryTable({
             </thead>
             <tbody>
               {attendanceRows.map((row, index) => {
-                const dateKey = String(row.attendance_date || row.attendance_history || "").slice(0, 10);
-                const calculatedStatus = statusByDate.get(dateKey);
+                const calculatedStatus = resolveCalculatedStatusForRow(
+                  {
+                    date: row.attendance_date || row.attendance_history,
+                    check_in: row.check_in,
+                    check_out: row.check_out,
+                    working_time: row.working_time,
+                    status: row.attendance_status,
+                  },
+                  statusByDate,
+                );
                 return (
                 <tr
                   key={String(row.attendance_id ?? index)}

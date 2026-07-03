@@ -69,6 +69,41 @@ export function getTodayLocalYmd(ref: Date = new Date()): string {
  * - Strings with `Z` or `±offset` are treated as instants → local calendar day (matches browser).
  * - Naive `YYYY-MM-DD hh:mm:ss` (no TZ) uses the date part from the string (wall date from DB).
  */
+export function wallClockMinutesFromDateTime(
+  value: string | number | Date | null | undefined,
+): number {
+  if (value == null || value === "") return NaN;
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.getHours() * 60 + value.getMinutes() + value.getSeconds() / 60;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const d = new Date(value);
+    if (!Number.isNaN(d.getTime())) {
+      return d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60;
+    }
+  }
+  if (typeof value === "string") {
+    const parts = matchNaiveDateTimeParts(value);
+    if (parts) {
+      const h = Number(parts.hh);
+      const mi = Number(parts.mm);
+      if (Number.isFinite(h) && Number.isFinite(mi)) {
+        return h * 60 + mi;
+      }
+    }
+    const timeOnly = value.trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+    if (timeOnly) {
+      const h = Number(timeOnly[1]);
+      const mi = Number(timeOnly[2]);
+      const sec = Number(timeOnly[3] ?? 0);
+      if ([h, mi, sec].every(Number.isFinite)) {
+        return h * 60 + mi + sec / 60;
+      }
+    }
+  }
+  return NaN;
+}
+
 export function localYmdFromAttendanceValue(value: string | null | undefined): string | null {
   if (value == null) return null;
   const s = String(value).trim();
