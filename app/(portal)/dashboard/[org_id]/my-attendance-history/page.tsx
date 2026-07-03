@@ -1,6 +1,13 @@
 "use client";
 
 import { useManagementDashboardContext } from "@/components/portal-dashboard/Layout/ManagementDashboardContext";
+import AttendanceSheetOverview from "@/components/portal-dashboard/attendance/AttendanceSheetOverview";
+import { MonthCalendarHeatmap } from "@/components/portal-dashboard/attendance/AttendanceAnalyticsCharts";
+import {
+  formatCalculatedStatusLabel,
+  mobileCalculatedStatusBadgeCls,
+} from "@/lib/attendanceMonthAnalytics";
+import { useAttendanceSheetCalculation } from "@/hooks/useAttendanceSheetCalculation";
 import {
   formatAttendanceTimeLocal,
   getLocalYmdFromDate,
@@ -35,16 +42,6 @@ function toNumberWorkingHours(value: string | number | null | undefined): number
   return Number.isNaN(n) ? 0 : n / 60;
 }
 
-function statusColorClass(status: string | null | undefined): string {
-  const s = String(status || "").toLowerCase();
-  if (s.includes("late")) return "bg-orange-500 text-white";
-  if (s.includes("absent")) return "bg-red-600 text-white";
-  if (s.includes("half_day")) return "bg-sky-400 text-white";
-  if (s.includes("short_leave")) return "bg-yellow-400 text-slate-900";
-  if (s.includes("full_day")) return "bg-emerald-600 text-white";
-  return "bg-slate-100 text-slate-700";
-}
-
 function getDefaultMonthValue(): string {
   const now = new Date();
   const y = now.getFullYear();
@@ -74,26 +71,19 @@ function zohoSecondaryBtnCls(full = false) {
 }
 
 function mobileStatusBadgeCls(status: string | null | undefined): string {
-  const s = String(status || "").toLowerCase();
-  if (s.includes("late")) return "bg-[#FEF3E6] text-[#E8710A]";
-  if (s.includes("absent")) return "bg-[#FCE8E6] text-[#D93025]";
-  if (s.includes("half_day")) return "bg-[#E8F4FB] text-[#008CD3]";
-  if (s.includes("short_leave")) return "bg-[#FFF8E1] text-[#F9A825]";
-  if (s.includes("full_day")) return "bg-[#E6F4EA] text-[#0F9D58]";
-  return "bg-[#F5F7FA] text-[#6B7280]";
+  return mobileCalculatedStatusBadgeCls(status ?? undefined);
 }
 
 function formatStatusLabel(status: string | null | undefined): string {
-  const s = String(status || "").trim();
-  if (!s) return "—";
-  return s.replace(/_/g, " ");
+  return formatCalculatedStatusLabel(status ?? undefined);
 }
 
 type MobileAttendanceRowProps = {
   row: AttendanceRow;
+  calculatedStatus?: string;
 };
 
-function MobileAttendanceRow({ row }: MobileAttendanceRowProps) {
+function MobileAttendanceRow({ row, calculatedStatus }: MobileAttendanceRowProps) {
   const dateLabel = localYmdFromAttendanceValue(row.date) || "—";
   const [y, m, d] = dateLabel.split("-");
   const dayNum = d ? String(Number(d)).padStart(2, "0") : "--";
@@ -103,7 +93,8 @@ function MobileAttendanceRow({ row }: MobileAttendanceRowProps) {
         .toUpperCase()
     : "---";
   const hours = toNumberWorkingHours(row.working_time);
-  const statusCls = mobileStatusBadgeCls(row.status);
+  const displayStatus = calculatedStatus ?? row.status ?? "";
+  const statusCls = mobileStatusBadgeCls(displayStatus);
 
   return (
     <li>
@@ -121,7 +112,7 @@ function MobileAttendanceRow({ row }: MobileAttendanceRowProps) {
               <span
                 className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ${statusCls}`}
               >
-                {formatStatusLabel(row.status)}
+                {formatStatusLabel(displayStatus)}
               </span>
             </div>
             <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1 text-[13px] text-[#6B7280]">
@@ -164,8 +155,33 @@ export default function MyAttendanceHistoryPage() {
   const [mobileMainTab, setMobileMainTab] = useState<"log" | "calendar" | "overview">("log");
 
   const [yStr, mStr] = monthYear.split("-");
-  const year = yStr || String(new Date().getFullYear());
-  const month = mStr || "1";
+  const year = Number(yStr) || new Date().getFullYear();
+  const month = Number(mStr) || new Date().getMonth() + 1;
+  const employeeId = dashboardCtx?.user?.user_id;
+
+  const {
+    analytics,
+    statusByDate,
+    sheetReport,
+    loading: sheetLoading,
+    error: sheetError,
+    reload: reloadSheet,
+  } = useAttendanceSheetCalculation({
+    orgId,
+    employeeId,
+    month,
+    year,
+    enabled: Boolean(orgId && employeeId),
+  });
+
+  const getCalculatedStatus = useCallback(
+    (row: AttendanceRow) => {
+      const ymd = localYmdFromAttendanceValue(row.date);
+      if (!ymd) return row.status ?? "";
+      return statusByDate.get(ymd) ?? row.status ?? "";
+    },
+    [statusByDate],
+  );
 
   const loadHistory = useCallback(
     async (isRefresh = false) => {
@@ -226,55 +242,9 @@ export default function MyAttendanceHistoryPage() {
     return () => window.clearTimeout(t);
   }, [loadHistory]);
 
-  const stats = useMemo(() => {
-    let fullDay = 0;
-    let late = 0;
-    let absent = 0;
-    let halfDay = 0;
-    let shortLeave = 0;
-    let totalHours = 0;
-    for (const r of rows) {
-      const s = String(r.status || "").toLowerCase();
-      if (s.includes("full_day")) fullDay += 1;
-      if (s.includes("late")) late += 1;
-      if (s.includes("absent")) absent += 1;
-      if (s.includes("half_day")) halfDay += 1;
-      if (s.includes("short_leave")) shortLeave += 1;
-      totalHours += toNumberWorkingHours(r.working_time);
-    }
-    return { fullDay, late, absent, halfDay, shortLeave, totalHours };
-  }, [rows]);
+  const monthAnalytics = analytics?.monthAnalytics;
 
-  const maxHours = useMemo(() => {
-    let m = 1;
-    for (const r of rows) {
-      const h = toNumberWorkingHours(r.working_time);
-      if (h > m) m = h;
-    }
-    return m;
-  }, [rows]);
-
-  const monthCalendar = useMemo(() => {
-    const y = Number(year);
-    const m = Number(month);
-    if (Number.isNaN(y) || Number.isNaN(m)) return [];
-    const first = new Date(y, m - 1, 1);
-    const total = new Date(y, m, 0).getDate();
-    const firstWeekday = first.getDay();
-    const map = new Map<string, AttendanceRow>();
-    for (const r of rows) {
-      const key = localYmdFromAttendanceValue(r.date);
-      if (key) map.set(key, r);
-    }
-    const cells: Array<{ dateNum: number | null; row?: AttendanceRow }> = [];
-    for (let i = 0; i < firstWeekday; i += 1) cells.push({ dateNum: null });
-    for (let d = 1; d <= total; d += 1) {
-      const date = new Date(y, m - 1, d);
-      const key = getLocalYmdFromDate(date);
-      cells.push({ dateNum: d, row: map.get(key) });
-    }
-    return cells;
-  }, [rows, month, year]);
+  const monthCalendar = monthAnalytics?.calendarCells ?? [];
 
   const hasNextPage = rows.length >= limit;
 
@@ -303,7 +273,10 @@ export default function MyAttendanceHistoryPage() {
             </div>
             <button
               type="button"
-              onClick={() => void loadHistory(true)}
+              onClick={() => {
+                void loadHistory(true);
+                void reloadSheet();
+              }}
               disabled={loading || refreshing}
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#008CD3] active:bg-[#F5F7FA] disabled:opacity-50"
               aria-label="Refresh attendance"
@@ -409,39 +382,31 @@ export default function MyAttendanceHistoryPage() {
 
         {!loading && !error && mobileMainTab === "overview" ? (
           <div className="space-y-3 p-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
-                <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">Full day</p>
-                <p className="mt-1 text-2xl font-semibold text-[#0F9D58]">{stats.fullDay}</p>
+            {sheetError ? (
+              <div className="flex items-start gap-2 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-4 py-3 text-[14px] text-[#D93025]">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{sheetError}</span>
               </div>
-              <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
-                <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">Late</p>
-                <p className="mt-1 text-2xl font-semibold text-[#E8710A]">{stats.late}</p>
+            ) : null}
+            {sheetLoading && !sheetReport ? (
+              <div className="flex flex-col items-center justify-center gap-3 py-12 text-[#6B7280]">
+                <Loader2 className="h-8 w-8 animate-spin text-[#008CD3]" />
+                <p className="text-[14px]">Calculating attendance summary…</p>
               </div>
-              <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
-                <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">Absent</p>
-                <p className="mt-1 text-2xl font-semibold text-[#D93025]">{stats.absent}</p>
-              </div>
-              <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
-                <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">Half day</p>
-                <p className="mt-1 text-2xl font-semibold text-[#008CD3]">{stats.halfDay}</p>
-              </div>
-            </div>
-            <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
-              <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">
-                Recorded hours (page)
-              </p>
-              <p className="mt-1 text-3xl font-semibold text-[#008CD3]">{stats.totalHours.toFixed(1)}h</p>
-              <p className="mt-1 text-[14px] text-[#6B7280]">
-                Short leave: {stats.shortLeave} · Page {meta.page}
-              </p>
-            </div>
+            ) : null}
+            {sheetReport && analytics ? (
+              <AttendanceSheetOverview
+                sheetReport={sheetReport}
+                kpiSegments={analytics.kpiSegments}
+                kpiTotal={analytics.monthAnalytics.kpiTotal}
+                compact
+              />
+            ) : null}
             <div className="rounded-xl border border-[#E4E7EC] bg-[#E8F4FB] p-4">
               <div className="flex gap-3">
                 <Info className="h-5 w-5 shrink-0 text-[#008CD3]" />
                 <p className="text-[14px] leading-relaxed text-[#4B5563]">
-                  Stats reflect the currently loaded page (up to {limit} rows). Use the Log tab for
-                  check-in/out details and the Calendar tab for a month heatmap.
+                  Summary is calculated on the server from punches, approved leaves, regularization, and comp off balance.
                 </p>
               </div>
             </div>
@@ -484,26 +449,7 @@ export default function MyAttendanceHistoryPage() {
                 </div>
               </div>
               <div className="px-4 py-3">
-                <div className="grid grid-cols-7 gap-1.5 text-center text-[11px] font-semibold text-[#6B7280]">
-                  {["S", "M", "T", "W", "T", "F", "S"].map((d, idx) => (
-                    <span key={`${d}-${idx}`}>{d}</span>
-                  ))}
-                </div>
-                <div className="mt-2 grid grid-cols-7 gap-1.5">
-                  {monthCalendar.map((cell, idx) => (
-                    <div
-                      key={idx}
-                      className={`flex aspect-square items-center justify-center rounded-lg text-[13px] font-semibold ${
-                        cell.dateNum == null
-                          ? "bg-transparent text-transparent"
-                          : statusColorClass(cell.row?.status)
-                      }`}
-                      title={cell.row?.status ? String(cell.row.status) : "No record"}
-                    >
-                      {cell.dateNum ?? ""}
-                    </div>
-                  ))}
-                </div>
+                <MonthCalendarHeatmap year={year} month={month} cells={monthCalendar} />
               </div>
               <div className="grid grid-cols-2 gap-2 border-t border-[#E4E7EC] px-4 py-3 text-[12px] text-[#6B7280]">
                 <p>
@@ -545,7 +491,11 @@ export default function MyAttendanceHistoryPage() {
           <>
             <ul className="mt-1 divide-y divide-[#E4E7EC] border-t border-[#E4E7EC] bg-white">
               {rows.map((row) => (
-                <MobileAttendanceRow key={String(row.attendance_id)} row={row} />
+                <MobileAttendanceRow
+                  key={String(row.attendance_id)}
+                  row={row}
+                  calculatedStatus={getCalculatedStatus(row)}
+                />
               ))}
             </ul>
             <div className="flex items-center gap-2 border-t border-[#E4E7EC] bg-white px-4 py-3">
@@ -594,7 +544,10 @@ export default function MyAttendanceHistoryPage() {
             </div>
             <button
               type="button"
-              onClick={() => void loadHistory(true)}
+              onClick={() => {
+                void loadHistory(true);
+                void reloadSheet();
+              }}
               disabled={loading || refreshing}
               className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-indigo-200 hover:bg-indigo-50/60 disabled:cursor-not-allowed disabled:opacity-55"
             >
@@ -698,52 +651,36 @@ export default function MyAttendanceHistoryPage() {
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</div>
       ) : null}
 
+      {!loading && !error && sheetReport && analytics ? (
+        <AttendanceSheetOverview
+          sheetReport={sheetReport}
+          kpiSegments={analytics.kpiSegments}
+          kpiTotal={analytics.monthAnalytics.kpiTotal}
+        />
+      ) : null}
+
       {!loading && !error ? (
         <>
-          <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
-            <article className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
-              <p className="text-xs font-medium text-slate-500">Full day</p>
-              <p className="mt-1 text-2xl font-bold text-emerald-600">{stats.fullDay}</p>
-            </article>
-            <article className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
-              <p className="text-xs font-medium text-slate-500">Late</p>
-              <p className="mt-1 text-2xl font-bold text-orange-500">{stats.late}</p>
-            </article>
-            <article className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
-              <p className="text-xs font-medium text-slate-500">Absent</p>
-              <p className="mt-1 text-2xl font-bold text-red-600">{stats.absent}</p>
-            </article>
-            <article className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
-              <p className="text-xs font-medium text-slate-500">Half day</p>
-              <p className="mt-1 text-2xl font-bold text-sky-500">{stats.halfDay}</p>
-            </article>
-            <article className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
-              <p className="text-xs font-medium text-slate-500">Short leave</p>
-              <p className="mt-1 text-2xl font-bold text-amber-500">{stats.shortLeave}</p>
-            </article>
-            <article className="rounded-2xl border border-slate-200/80 bg-gradient-to-br from-indigo-600 to-indigo-800 p-4 text-white shadow-sm">
-              <p className="text-xs font-medium text-indigo-100">Recorded hours (page)</p>
-              <p className="mt-1 text-2xl font-bold">{stats.totalHours.toFixed(1)}h</p>
-            </article>
-          </section>
-
           <section className="grid gap-6 xl:grid-cols-[1.35fr_1fr]">
             <article className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
               <h2 className="text-sm font-semibold text-slate-800">Working time by day</h2>
-              <p className="mt-1 text-xs text-slate-500">Based on loaded page (up to {limit} rows).</p>
+              <p className="mt-1 text-xs text-slate-500">Server-calculated hours from punches and regularization.</p>
               <div className="mt-5 space-y-3">
-                {rows.length === 0 ? (
+                {(analytics?.monthAnalytics.dailyHours ?? []).length === 0 ? (
                   <p className="text-sm text-slate-500">No rows for these filters.</p>
                 ) : (
-                  rows.slice(0, 31).map((r) => {
-                    const hours = toNumberWorkingHours(r.working_time);
-                    const pct = Math.max(4, Math.round((hours / maxHours) * 100));
-                    const dateLabel = localYmdFromAttendanceValue(r.date) || "—";
+                  analytics!.monthAnalytics.dailyHours.map((point) => {
+                    const pct = Math.max(
+                      4,
+                      Math.round(
+                        (point.hours / (analytics!.monthAnalytics.maxDailyHours || 1)) * 100,
+                      ),
+                    );
                     return (
-                      <div key={String(r.attendance_id)} className="space-y-1">
+                      <div key={point.day} className="space-y-1">
                         <div className="flex items-center justify-between text-xs">
-                          <span className="font-medium text-slate-700">{dateLabel}</span>
-                          <span className="tabular-nums text-slate-500">{hours.toFixed(2)}h</span>
+                          <span className="font-medium text-slate-700">Day {point.day}</span>
+                          <span className="tabular-nums text-slate-500">{point.hours.toFixed(2)}h</span>
                         </div>
                         <div className="h-2 rounded-full bg-slate-100">
                           <div
@@ -760,43 +697,9 @@ export default function MyAttendanceHistoryPage() {
 
             <article className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
               <h2 className="text-sm font-semibold text-slate-800">Month map</h2>
-              <p className="mt-1 text-xs text-slate-500">Each cell is a calendar day in the selected month.</p>
-              <div className="mt-4 grid grid-cols-7 gap-2 text-center text-[11px] font-medium text-slate-500">
-                {["S", "M", "T", "W", "T", "F", "S"].map((d, idx) => (
-                  <span key={`${d}-${idx}`}>{d}</span>
-                ))}
-              </div>
-              <div className="mt-2 grid grid-cols-7 gap-2">
-                {monthCalendar.map((cell, idx) => (
-                  <div
-                    key={idx}
-                    className={`flex h-9 items-center justify-center rounded-lg text-xs font-semibold ${
-                      cell.dateNum == null
-                        ? "bg-transparent text-transparent"
-                        : statusColorClass(cell.row?.status)
-                    }`}
-                    title={cell.row?.status ? String(cell.row.status) : "No record"}
-                  >
-                    {cell.dateNum ?? ""}
-                  </div>
-                ))}
-              </div>
-              <div className="mt-5 grid grid-cols-2 gap-2 border-t border-slate-100 pt-4 text-xs text-slate-600">
-                <p>
-                  <span className="mr-1 inline-block h-2 w-2 rounded bg-orange-500" /> Late
-                </p>
-                <p>
-                  <span className="mr-1 inline-block h-2 w-2 rounded bg-red-600" /> Absent
-                </p>
-                <p>
-                  <span className="mr-1 inline-block h-2 w-2 rounded bg-sky-400" /> Half day
-                </p>
-                <p>
-                  <span className="mr-1 inline-block h-2 w-2 rounded bg-yellow-400" /> Short leave
-                </p>
-                <p>
-                  <span className="mr-1 inline-block h-2 w-2 rounded bg-emerald-600" /> Full day
-                </p>
+              <p className="mt-1 text-xs text-slate-500">Server-calculated status per calendar day.</p>
+              <div className="mt-4">
+                <MonthCalendarHeatmap year={year} month={month} cells={monthCalendar} />
               </div>
             </article>
           </section>
@@ -838,9 +741,9 @@ export default function MyAttendanceHistoryPage() {
                         </td>
                         <td className="px-4 py-3">
                           <span
-                            className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusColorClass(r.status)}`}
+                            className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${mobileStatusBadgeCls(getCalculatedStatus(r))}`}
                           >
-                            {String(r.status || "—").replace(/_/g, " ")}
+                            {formatStatusLabel(getCalculatedStatus(r))}
                           </span>
                         </td>
                       </tr>

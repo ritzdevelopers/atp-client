@@ -324,6 +324,68 @@ export async function fetchAttendanceExportData(
   };
 }
 
+/** Server-calculated month attendance (rules, leaves, regularization, comp off). */
+export async function fetchAttendanceSheetCalculation(
+  token: string,
+  orgId: string,
+  employeeId: number | string | null | undefined,
+  query: { month: number; year: number },
+): Promise<AttendanceExportResponse> {
+  assertExportableMonth(query.year, query.month);
+
+  const params = new URLSearchParams({
+    org_id: orgId,
+    mode: "monthly",
+    month: String(query.month),
+    year: String(query.year),
+  });
+  if (employeeId != null && String(employeeId).trim() !== "") {
+    params.set("employee_id", String(employeeId));
+  }
+
+  const res = await fetch(
+    `${API_URL}/api/attendance-history/calculate-attendance-sheet-export?${params.toString()}`,
+    {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+    },
+  );
+  const data = (await res.json()) as AttendanceExportResponse & {
+    message?: string;
+  };
+  if (!res.ok || data.success === false) {
+    throw new Error(data.message || "Could not load attendance sheet calculation.");
+  }
+
+  const period = data.period as AttendanceExportResponse["period"] & {
+    fromDate?: string;
+    toDate?: string;
+  };
+
+  return {
+    ...data,
+    employee: data.employee,
+    summary: data.summary ?? {
+      total_days: 0,
+      present_days: 0,
+      late_days: 0,
+      absent_days: 0,
+      half_day_days: 0,
+      short_leave_days: 0,
+      on_leave_days: 0,
+      total_working_minutes: 0,
+      total_working_hours: 0,
+    },
+    rows: Array.isArray(data.rows) ? data.rows : [],
+    period: {
+      mode: period?.mode ?? "monthly",
+      from_date: period?.from_date ?? period?.fromDate ?? "",
+      to_date: period?.to_date ?? period?.toDate ?? "",
+      label: period?.label ?? "Attendance",
+    },
+  };
+}
+
 function buildAllUsersAttendanceUrl(
   orgId: string,
   query: AllUsersAttendanceQuery,

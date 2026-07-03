@@ -14,14 +14,15 @@ import {
   writeOwnAttendanceHistoryCache,
 } from "@/lib/employeeManagementCache";
 import AttendanceRulesNotice from "@/components/portal-dashboard/attendance/AttendanceRulesNotice";
+import AttendanceSheetOverview from "@/components/portal-dashboard/attendance/AttendanceSheetOverview";
 import {
   calculatedStatusBadgeClass,
-  computeMonthAnalytics,
   formatCalculatedStatusLabel,
   mapOwnRowsToHistoryRows,
   matchesCalculatedStatusFilter,
   mobileCalculatedStatusBadgeCls,
 } from "@/lib/attendanceMonthAnalytics";
+import { useAttendanceSheetCalculation } from "@/hooks/useAttendanceSheetCalculation";
 import {
   AttendanceDonutChart,
   EnhancedStatusBars,
@@ -281,24 +282,38 @@ export default function AttendanceHistoryPage() {
   const yearNum = Number(year);
   const monthNum = Number(month);
 
-  const analytics = useMemo(
-    () => computeMonthAnalytics(yearNum, monthNum, historyRows),
-    [yearNum, monthNum, historyRows],
-  );
+  const {
+    analytics,
+    statusByDate,
+    sheetReport,
+    loading: sheetLoading,
+    error: sheetError,
+    reload: reloadSheet,
+  } = useAttendanceSheetCalculation({
+    orgId,
+    month: monthNum,
+    year: yearNum,
+    enabled: Boolean(orgId) && !Number.isNaN(orgId),
+  });
 
-  const { monthlyKpi, monthAnalytics, kpiSegments, statusDistribution, monthlyTrend } =
-    analytics;
+  const monthlyKpi = analytics?.monthlyKpi;
+  const monthAnalytics = analytics?.monthAnalytics;
+  const kpiSegments = analytics?.kpiSegments ?? [];
+  const statusDistribution = analytics?.statusDistribution ?? [];
+  const monthlyTrend = analytics?.monthlyTrend ?? [];
 
   const sharePct = (count: number) =>
-    monthAnalytics.kpiTotal > 0 ? Math.round((count / monthAnalytics.kpiTotal) * 100) : 0;
+    (monthAnalytics?.kpiTotal ?? 0) > 0
+      ? Math.round((count / (monthAnalytics?.kpiTotal ?? 1)) * 100)
+      : 0;
 
   const getCalculatedStatus = useCallback(
     (row: AttendanceRow) => {
       const ymd = localYmdFromAttendanceValue(row.date);
       if (!ymd) return row.status ?? "";
-      return analytics.monthAttendance.statusByDate.get(ymd) ?? row.status ?? "";
+      return statusByDate.get(ymd) ?? row.status ?? "";
     },
-    [analytics.monthAttendance.statusByDate],
+    [statusByDate],
   );
 
   const filteredRows = useMemo(
@@ -334,12 +349,15 @@ export default function AttendanceHistoryPage() {
               <p className="truncate text-[13px] text-[#6B7280]">
                 {loading
                   ? "Loading…"
-                  : `${filteredRows.length} record${filteredRows.length === 1 ? "" : "s"} · ${formatMonthYearLabel(month, year)} · ${monthAnalytics.attendanceRate}% attendance`}
+                  : `${filteredRows.length} record${filteredRows.length === 1 ? "" : "s"} · ${formatMonthYearLabel(month, year)}${monthAnalytics ? ` · ${monthAnalytics.attendanceRate}% attendance` : ""}`}
               </p>
             </div>
             <button
               type="button"
-              onClick={() => void loadHistory(true)}
+              onClick={() => {
+                void loadHistory(true);
+                void reloadSheet();
+              }}
               disabled={loading || refreshing}
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#008CD3] active:bg-[#F5F7FA] disabled:opacity-50"
               aria-label="Refresh attendance"
@@ -428,102 +446,53 @@ export default function AttendanceHistoryPage() {
 
         {!loading && !error && mobileMainTab === "overview" ? (
           <div className="space-y-3 p-4">
-            <div className="overflow-hidden rounded-xl border border-[#E4E7EC] bg-gradient-to-br from-[#008CD3] to-[#0070AA] p-4 text-white shadow-sm">
-              <div className="grid grid-cols-3 gap-2 border-b border-white/20 pb-4">
-                <div className="text-center">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-white/70">Attendance</p>
-                  <p className="mt-0.5 text-xl font-bold tabular-nums">{monthAnalytics.attendanceRate}%</p>
+            {sheetError ? (
+              <div className="flex items-start gap-2 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-4 py-3 text-[14px] text-[#D93025]">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{sheetError}</span>
+              </div>
+            ) : null}
+            {sheetLoading && !sheetReport ? (
+              <div className="flex flex-col items-center justify-center gap-3 py-12 text-[#6B7280]">
+                <Loader2 className="h-8 w-8 animate-spin text-[#008CD3]" />
+                <p className="text-[14px]">Calculating attendance summary…</p>
+              </div>
+            ) : null}
+            {sheetReport && monthAnalytics ? (
+              <>
+                <AttendanceSheetOverview
+                  sheetReport={sheetReport}
+                  kpiSegments={kpiSegments}
+                  kpiTotal={monthAnalytics.kpiTotal}
+                  compact
+                />
+                <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
+                  <p className="text-[13px] font-semibold text-[#1F2937]">Status distribution</p>
+                  <div className="mt-4">
+                    <AttendanceDonutChart
+                      segments={kpiSegments}
+                      total={monthAnalytics.kpiTotal}
+                      centerLabel="Work days"
+                      centerValue={String(monthAnalytics.kpiTotal)}
+                      size={120}
+                    />
+                  </div>
                 </div>
-                <div className="text-center">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-white/70">On time</p>
-                  <p className="mt-0.5 text-xl font-bold tabular-nums">{monthAnalytics.onTimeRate}%</p>
+                <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
+                  <div className="mb-3 flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4 text-[#008CD3]" />
+                    <p className="text-[13px] font-semibold text-[#1F2937]">Daily working hours</p>
+                  </div>
+                  <DailyHoursRechartsChart
+                    year={yearNum}
+                    month={monthNum}
+                    daysInMonth={monthAnalytics.daysInMonth}
+                    points={monthAnalytics.dailyHours}
+                  />
                 </div>
-                <div className="text-center">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-white/70">Hours</p>
-                  <p className="mt-0.5 text-xl font-bold tabular-nums">{monthAnalytics.totalHours.toFixed(1)}h</p>
-                </div>
-              </div>
-              <p className="mt-3 text-center text-[12px] text-white/80">
-                {monthAnalytics.daysWithRecord}/{monthAnalytics.daysInMonth} days logged · calculated from check-in/out rules
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
-              <p className="text-[13px] font-semibold text-[#1F2937]">Month breakdown</p>
-              <div className="mt-3">
-                <StackedMonthBar segments={kpiSegments} total={monthAnalytics.kpiTotal} />
-              </div>
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <KpiStatCard
-                  label="Present"
-                  value={monthlyKpi.daysPresent}
-                  color="text-[#0F9D58]"
-                  bg="bg-white"
-                  accent="#0F9D58"
-                  share={sharePct(monthlyKpi.daysPresent)}
-                />
-                <KpiStatCard
-                  label="Full day"
-                  value={monthlyKpi.presentFullDay}
-                  color="text-[#047857]"
-                  bg="bg-white"
-                  accent="#047857"
-                  share={sharePct(monthlyKpi.presentFullDay)}
-                />
-                <KpiStatCard
-                  label="Late"
-                  value={monthlyKpi.late}
-                  color="text-[#E8710A]"
-                  bg="bg-white"
-                  accent="#E8710A"
-                  share={sharePct(monthlyKpi.late)}
-                />
-                <KpiStatCard
-                  label="Leave (from lates)"
-                  value={monthlyKpi.lateDerivedLeaves}
-                  color="text-[#BE185D]"
-                  bg="bg-white"
-                  accent="#BE185D"
-                  share={sharePct(monthlyKpi.lateDerivedLeaves)}
-                />
-                <KpiStatCard
-                  label="Absent (incl. leave from lates)"
-                  value={monthlyKpi.totalAbsentWithLateLeaves}
-                  color="text-[#DC2626]"
-                  bg="bg-white"
-                  accent="#DC2626"
-                  share={sharePct(monthlyKpi.totalAbsentWithLateLeaves)}
-                />
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
-              <p className="text-[13px] font-semibold text-[#1F2937]">Status distribution</p>
-              <div className="mt-4">
-                <AttendanceDonutChart
-                  segments={kpiSegments}
-                  total={monthAnalytics.kpiTotal}
-                  centerLabel="Work days"
-                  centerValue={String(monthAnalytics.kpiTotal)}
-                  size={120}
-                />
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
-              <div className="mb-3 flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-[#008CD3]" />
-                <p className="text-[13px] font-semibold text-[#1F2937]">Daily working hours</p>
-              </div>
-              <DailyHoursRechartsChart
-                year={yearNum}
-                month={monthNum}
-                daysInMonth={monthAnalytics.daysInMonth}
-                points={monthAnalytics.dailyHours}
-              />
-            </div>
-
-            <AttendanceRulesNotice lateCount={monthlyKpi.late} />
+                <AttendanceRulesNotice lateCount={monthlyKpi?.late ?? 0} />
+              </>
+            ) : null}
           </div>
         ) : null}
 
@@ -570,7 +539,7 @@ export default function AttendanceHistoryPage() {
                 <MonthCalendarHeatmap
                   year={yearNum}
                   month={monthNum}
-                  cells={monthAnalytics.calendarCells}
+                  cells={monthAnalytics?.calendarCells ?? []}
                 />
               </div>
               <div className="grid grid-cols-2 gap-2 border-t border-[#E4E7EC] px-4 py-3 text-[12px] text-[#6B7280]">
@@ -651,26 +620,26 @@ export default function AttendanceHistoryPage() {
           <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-white/70">My attendance</p>
           <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">Attendance History Analytics</h1>
           <p className="mt-2 max-w-2xl text-sm text-white/85">
-            Status is calculated from your check-in and check-out times using company rules — same as admin manage-attendance.
+            Summary is calculated on the server using company rules, approved leaves, regularization, and comp off balance.
           </p>
-          {!loading ? (
+          {!loading && sheetReport ? (
             <div className="mt-6 grid gap-3 sm:grid-cols-4">
               <div className="rounded-xl bg-white/10 px-4 py-3 backdrop-blur-sm">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-white/70">Attendance rate</p>
-                <p className="mt-1 text-2xl font-bold tabular-nums">{monthAnalytics.attendanceRate}%</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-white/70">Payable days</p>
+                <p className="mt-1 text-2xl font-bold tabular-nums">{sheetReport.payable_days}</p>
               </div>
               <div className="rounded-xl bg-white/10 px-4 py-3 backdrop-blur-sm">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-white/70">On-time rate</p>
-                <p className="mt-1 text-2xl font-bold tabular-nums">{monthAnalytics.onTimeRate}%</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-white/70">Working days</p>
+                <p className="mt-1 text-2xl font-bold tabular-nums">{sheetReport.working_days}</p>
               </div>
               <div className="rounded-xl bg-white/10 px-4 py-3 backdrop-blur-sm">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-white/70">Total hours</p>
-                <p className="mt-1 text-2xl font-bold tabular-nums">{monthAnalytics.totalHours.toFixed(1)}h</p>
+                <p className="mt-1 text-2xl font-bold tabular-nums">{sheetReport.total_working_hours.toFixed(1)}h</p>
               </div>
               <div className="rounded-xl bg-white/10 px-4 py-3 backdrop-blur-sm">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-white/70">Days logged</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-white/70">Weekly offs</p>
                 <p className="mt-1 text-2xl font-bold tabular-nums">
-                  {monthAnalytics.daysWithRecord}/{monthAnalytics.daysInMonth}
+                  {sheetReport.weekly_offs ?? sheetReport.weekly_off_days ?? 0}
                 </p>
               </div>
             </div>
@@ -721,7 +690,10 @@ export default function AttendanceHistoryPage() {
             </select>
             <button
               type="button"
-              onClick={() => void loadHistory(true)}
+              onClick={() => {
+                void loadHistory(true);
+                void reloadSheet();
+              }}
               disabled={loading || refreshing}
               className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#008CD3] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
             >
@@ -741,19 +713,15 @@ export default function AttendanceHistoryPage() {
           <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
         ) : null}
 
-        {!loading && !error ? (
+        {!loading && !error && sheetReport && monthAnalytics ? (
           <>
-            <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-              <KpiStatCard label="Present" value={monthlyKpi.daysPresent} color="text-emerald-600" bg="bg-white" accent="#0F9D58" share={sharePct(monthlyKpi.daysPresent)} />
-              <KpiStatCard label="Full day" value={monthlyKpi.presentFullDay} color="text-emerald-700" bg="bg-white" accent="#047857" share={sharePct(monthlyKpi.presentFullDay)} />
-              <KpiStatCard label="Late" value={monthlyKpi.late} color="text-orange-500" bg="bg-white" accent="#E8710A" share={sharePct(monthlyKpi.late)} />
-              <KpiStatCard label="Leave (from lates)" value={monthlyKpi.lateDerivedLeaves} color="text-rose-600" bg="bg-white" accent="#BE185D" share={sharePct(monthlyKpi.lateDerivedLeaves)} />
-              <KpiStatCard label="Absent (incl. leave from lates)" value={monthlyKpi.totalAbsentWithLateLeaves} color="text-red-600" bg="bg-white" accent="#DC2626" share={sharePct(monthlyKpi.totalAbsentWithLateLeaves)} />
-              <KpiStatCard label="Half day" value={monthlyKpi.halfDay} color="text-sky-500" bg="bg-white" accent="#008CD3" share={sharePct(monthlyKpi.halfDay)} />
-              <KpiStatCard label="Short leave" value={monthlyKpi.shortLeave} color="text-yellow-600" bg="bg-white" accent="#F9A825" share={sharePct(monthlyKpi.shortLeave)} />
-            </section>
+            <AttendanceSheetOverview
+              sheetReport={sheetReport}
+              kpiSegments={kpiSegments}
+              kpiTotal={monthAnalytics.kpiTotal}
+            />
 
-            <AttendanceRulesNotice lateCount={monthlyKpi.late} />
+            <AttendanceRulesNotice lateCount={monthlyKpi?.late ?? 0} />
 
             <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <p className="text-sm font-semibold text-slate-700">Month status mix</p>
@@ -803,7 +771,7 @@ export default function AttendanceHistoryPage() {
                   <MonthCalendarHeatmap
                     year={yearNum}
                     month={monthNum}
-                    cells={monthAnalytics.calendarCells}
+                    cells={monthAnalytics?.calendarCells ?? []}
                   />
                 </div>
               </article>

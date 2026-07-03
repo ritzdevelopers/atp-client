@@ -26,6 +26,8 @@ import {
   formatCalculatedStatusLabel,
   type CalculatedAttendanceStatus,
 } from "@/lib/attendanceRules";
+import { useAttendanceSheetCalculation } from "@/hooks/useAttendanceSheetCalculation";
+import AttendanceSheetOverview from "@/components/portal-dashboard/attendance/AttendanceSheetOverview";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
@@ -698,6 +700,7 @@ function ManageAttendanceDetail({
     setSelectedMonth(`${current.year}-${String(current.month).padStart(2, "0")}`);
     setSelectedYear(String(current.year));
     void loadSingleEmployeeHistory(true, current);
+    void reloadSheet();
   };
 
   const profile = rows[0];
@@ -707,17 +710,36 @@ function ManageAttendanceDetail({
     [rows],
   );
 
-  const monthAttendance = useMemo(
-    () =>
-      buildMonthAttendanceView(
-        appliedQuery.year,
-        appliedQuery.month,
-        attendanceRows,
-      ),
-    [appliedQuery.month, appliedQuery.year, attendanceRows],
-  );
+  const {
+    analytics: sheetAnalytics,
+    sheetReport,
+    loading: sheetLoading,
+    error: sheetError,
+    reload: reloadSheet,
+  } = useAttendanceSheetCalculation({
+    orgId,
+    employeeId,
+    month: appliedQuery.month,
+    year: appliedQuery.year,
+    enabled: Boolean(orgId && employeeId) && filterScope === "month",
+  });
 
-  const monthlyKpi = monthAttendance.summary;
+  const monthAttendance = sheetAnalytics?.monthAttendance;
+  const kpi = monthAttendance?.summary ?? {
+    present: 0,
+    presentFullDay: 0,
+    daysPresent: 0,
+    late: 0,
+    absent: 0,
+    halfDay: 0,
+    shortLeave: 0,
+    weeklyOff: 0,
+    future: 0,
+    totalWorkingMinutes: 0,
+    kpiTotal: 0,
+    lateDerivedLeaves: 0,
+    totalAbsentWithLateLeaves: 0,
+  };
 
   const sortedRows = useMemo(() => {
     return [...attendanceRows].sort((a, b) => {
@@ -727,28 +749,7 @@ function ManageAttendanceDetail({
     });
   }, [attendanceRows]);
 
-  const statusDistribution = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const day of monthAttendance.days) {
-      if (
-        day.is_future ||
-        day.attendance_status === "weekly_off" ||
-        (day.is_weekend && !day.check_in)
-      ) {
-        continue;
-      }
-      const status = String(day.attendance_status || "absent");
-      counts.set(status, (counts.get(status) || 0) + 1);
-    }
-    const total = monthAttendance.summary.kpiTotal || 1;
-    return Array.from(counts.entries())
-      .map(([status, count]) => ({
-        status,
-        count,
-        percentage: Math.round((count / total) * 100),
-      }))
-      .sort((a, b) => b.count - a.count);
-  }, [monthAttendance]);
+  const statusDistribution = sheetAnalytics?.statusDistribution ?? [];
 
   const monthlyTrend = useMemo(() => {
     const bucket = new Map<string, number>();
@@ -762,98 +763,20 @@ function ManageAttendanceDetail({
       .sort((a, b) => a.month.localeCompare(b.month));
   }, [attendanceRows]);
 
-  const monthAnalytics = useMemo(() => {
-    const appliedMonthKey = `${appliedQuery.year}-${String(appliedQuery.month).padStart(2, "0")}`;
-    const dayMap = new Map<string, { minutes: number; status?: string }>();
-    let totalMinutes = monthAttendance.summary.totalWorkingMinutes;
+  const monthAnalytics = sheetAnalytics?.monthAnalytics ?? {
+    totalMinutes: 0,
+    totalHours: 0,
+    daysWithRecord: 0,
+    daysInMonth: new Date(appliedQuery.year, appliedQuery.month, 0).getDate(),
+    kpiTotal: 0,
+    attendanceRate: 0,
+    onTimeRate: 0,
+    dailyHours: [],
+    maxDailyHours: 0,
+    calendarCells: [],
+  };
 
-    for (const row of attendanceRows) {
-      const dateVal = row.attendance_date || row.attendance_history;
-      const rowMonth = toMonthKey(dateVal);
-      if (!rowMonth || rowMonth !== appliedMonthKey || !dateVal) continue;
-      const d = new Date(dateVal);
-      if (Number.isNaN(d.getTime())) continue;
-      const dayKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-      const mins = workingMinutes(row.working_time);
-      const calculatedStatus = monthAttendance.statusByDate.get(dayKey);
-      dayMap.set(dayKey, {
-        minutes: mins,
-        status: calculatedStatus ?? row.attendance_status,
-      });
-    }
-
-    const daysInMonth = new Date(appliedQuery.year, appliedQuery.month, 0).getDate();
-    const kpiTotal = monthAttendance.summary.kpiTotal;
-    const attendanceRate =
-      kpiTotal > 0
-        ? Math.round((monthlyKpi.daysPresent / kpiTotal) * 100)
-        : 0;
-    const onTimeRate =
-      kpiTotal > 0
-        ? Math.round(
-            ((monthlyKpi.present + monthlyKpi.presentFullDay) / kpiTotal) * 100,
-          )
-        : 0;
-
-    const dailyHours = Array.from(dayMap.entries())
-      .map(([key, entry]) => {
-        const day = Number(key.split("-")[2]);
-        return {
-          day,
-          hours: entry.minutes / 60,
-          status: entry.status,
-        };
-      })
-      .sort((a, b) => a.day - b.day);
-
-    const maxDailyHours = dailyHours.reduce((max, p) => Math.max(max, p.hours), 0);
-
-    return {
-      totalMinutes,
-      totalHours: totalMinutes / 60,
-      daysWithRecord: dayMap.size,
-      daysInMonth,
-      kpiTotal,
-      attendanceRate,
-      onTimeRate,
-      dailyHours,
-      maxDailyHours,
-      calendarCells: monthAttendance.calendarCells,
-      dayMap,
-    };
-  }, [appliedQuery.month, appliedQuery.year, attendanceRows, monthAttendance, monthlyKpi]);
-
-  const kpiSegments = useMemo<KpiSegment[]>(
-    () => {
-      const onTimeDays = monthlyKpi.present + monthlyKpi.presentFullDay;
-      return [
-        ...(onTimeDays > 0
-          ? [{ key: "onTime", label: "On-time", count: onTimeDays, color: "#0F9D58" }]
-          : []),
-        { key: "late", label: "Late", count: monthlyKpi.late, color: "#E8710A" },
-        {
-          key: "lateDerivedLeaves",
-          label: "Leave (from lates)",
-          count: monthlyKpi.lateDerivedLeaves,
-          color: "#BE185D",
-        },
-        {
-          key: "absent",
-          label: "Absent (incl. leave from lates)",
-          count: monthlyKpi.totalAbsentWithLateLeaves,
-          color: "#DC2626",
-        },
-        { key: "halfDay", label: "Half day", count: monthlyKpi.halfDay, color: "#008CD3" },
-        {
-          key: "shortLeave",
-          label: "Short leave",
-          count: monthlyKpi.shortLeave,
-          color: "#F9A825",
-        },
-      ].filter((s) => s.count > 0);
-    },
-    [monthlyKpi],
-  );
+  const kpiSegments = sheetAnalytics?.kpiSegments ?? [];
 
   const sharePct = (count: number) =>
     monthAnalytics.kpiTotal > 0 ? Math.round((count / monthAnalytics.kpiTotal) * 100) : 0;
@@ -1157,65 +1080,85 @@ function ManageAttendanceDetail({
                   {monthAnalytics.daysWithRecord}/{monthAnalytics.daysInMonth} days
                 </span>
               </div>
-              <StackedMonthBar segments={kpiSegments} total={monthAnalytics.kpiTotal} />
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <KpiStatCard
-                  label="Present"
-                  value={monthlyKpi.daysPresent}
-                  color="text-[#0F9D58]"
-                  bg="bg-[#E6F4EA]/40"
-                  accent="#0F9D58"
-                  share={sharePct(monthlyKpi.daysPresent)}
+              {sheetError ? (
+                <p className="mb-3 text-[13px] text-[#D93025]">{sheetError}</p>
+              ) : null}
+              {sheetLoading && !sheetReport && filterScope === "month" ? (
+                <div className="flex items-center justify-center gap-2 py-8 text-[#6B7280]">
+                  <Loader2 className="h-5 w-5 animate-spin text-[#008CD3]" />
+                  <span className="text-[13px]">Calculating summary…</span>
+                </div>
+              ) : null}
+              {sheetReport && filterScope === "month" ? (
+                <AttendanceSheetOverview
+                  sheetReport={sheetReport}
+                  kpiSegments={kpiSegments}
+                  kpiTotal={monthAnalytics.kpiTotal}
+                  compact
                 />
-                <KpiStatCard
-                  label="Full day"
-                  value={monthlyKpi.presentFullDay}
-                  color="text-[#047857]"
-                  bg="bg-[#D1FAE5]/40"
-                  accent="#047857"
-                  share={sharePct(monthlyKpi.presentFullDay)}
-                />
-                <KpiStatCard
-                  label="Late"
-                  value={monthlyKpi.late}
-                  color="text-[#E8710A]"
-                  bg="bg-[#FEF3E6]/50"
-                  accent="#E8710A"
-                  share={sharePct(monthlyKpi.late)}
-                />
-                <KpiStatCard
-                  label="Leave (from lates)"
-                  value={monthlyKpi.lateDerivedLeaves}
-                  color="text-[#BE185D]"
-                  bg="bg-[#FCE7F3]/50"
-                  accent="#BE185D"
-                  share={sharePct(monthlyKpi.lateDerivedLeaves)}
-                />
-                <KpiStatCard
-                  label="Absent (incl. leave from lates)"
-                  value={monthlyKpi.totalAbsentWithLateLeaves}
-                  color="text-[#DC2626]"
-                  bg="bg-[#FEE2E2]/40"
-                  accent="#DC2626"
-                  share={sharePct(monthlyKpi.totalAbsentWithLateLeaves)}
-                />
-                <KpiStatCard
-                  label="Half days"
-                  value={monthlyKpi.halfDay}
-                  color="text-[#008CD3]"
-                  bg="bg-[#E8F4FB]/50"
-                  accent="#008CD3"
-                  share={sharePct(monthlyKpi.halfDay)}
-                />
-                <KpiStatCard
-                  label="Short leave"
-                  value={monthlyKpi.shortLeave}
-                  color="text-[#F9A825]"
-                  bg="bg-[#FFF8E1]/50"
-                  accent="#F9A825"
-                  share={sharePct(monthlyKpi.shortLeave)}
-                />
-              </div>
+              ) : (
+                <>
+                  <StackedMonthBar segments={kpiSegments} total={monthAnalytics.kpiTotal} />
+                  <div className="mt-4 grid grid-cols-2 gap-3">
+                    <KpiStatCard
+                      label="Present"
+                      value={kpi.daysPresent}
+                      color="text-[#0F9D58]"
+                      bg="bg-[#E6F4EA]/40"
+                      accent="#0F9D58"
+                      share={sharePct(kpi.daysPresent)}
+                    />
+                    <KpiStatCard
+                      label="Full day"
+                      value={kpi.presentFullDay}
+                      color="text-[#047857]"
+                      bg="bg-[#D1FAE5]/40"
+                      accent="#047857"
+                      share={sharePct(kpi.presentFullDay)}
+                    />
+                    <KpiStatCard
+                      label="Late"
+                      value={kpi.late}
+                      color="text-[#E8710A]"
+                      bg="bg-[#FEF3E6]/50"
+                      accent="#E8710A"
+                      share={sharePct(kpi.late)}
+                    />
+                    <KpiStatCard
+                      label="Leave (from lates)"
+                      value={kpi.lateDerivedLeaves}
+                      color="text-[#BE185D]"
+                      bg="bg-[#FCE7F3]/50"
+                      accent="#BE185D"
+                      share={sharePct(kpi.lateDerivedLeaves)}
+                    />
+                    <KpiStatCard
+                      label="Absent (incl. leave from lates)"
+                      value={kpi.totalAbsentWithLateLeaves}
+                      color="text-[#DC2626]"
+                      bg="bg-[#FEE2E2]/40"
+                      accent="#DC2626"
+                      share={sharePct(kpi.totalAbsentWithLateLeaves)}
+                    />
+                    <KpiStatCard
+                      label="Half days"
+                      value={kpi.halfDay}
+                      color="text-[#008CD3]"
+                      bg="bg-[#E8F4FB]/50"
+                      accent="#008CD3"
+                      share={sharePct(kpi.halfDay)}
+                    />
+                    <KpiStatCard
+                      label="Short leave"
+                      value={kpi.shortLeave}
+                      color="text-[#F9A825]"
+                      bg="bg-[#FFF8E1]/50"
+                      accent="#F9A825"
+                      share={sharePct(kpi.shortLeave)}
+                    />
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm">
@@ -1262,7 +1205,7 @@ function ManageAttendanceDetail({
               </div>
             </div>
 
-            <AttendanceRulesNotice lateCount={monthlyKpi.late} className="border-[#E4E7EC] bg-[#E8F4FB]" />
+            <AttendanceRulesNotice lateCount={kpi.late} className="border-[#E4E7EC] bg-[#E8F4FB]" />
           </div>
         ) : null}
 
@@ -1325,7 +1268,7 @@ function ManageAttendanceDetail({
               <MobileAttendanceLogRow
                 key={`${String(row.attendance_date || row.attendance_history)}-${index}`}
                 row={row}
-                calculatedStatus={monthAttendance.statusByDate.get(
+                calculatedStatus={monthAttendance?.statusByDate.get(
                   String(row.attendance_date || row.attendance_history || "").slice(0, 10),
                 )}
               />
@@ -1540,70 +1483,91 @@ function ManageAttendanceDetail({
                 </button>
               </div>
             </div>
-            <div className="mb-4">
-              <StackedMonthBar segments={kpiSegments} total={monthAnalytics.kpiTotal} />
-            </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-              <KpiStatCard
-                label="Present"
-                value={monthlyKpi.daysPresent}
-                color="text-emerald-700"
-                bg="bg-emerald-50/80"
-                accent="#0F9D58"
-                share={sharePct(monthlyKpi.daysPresent)}
-              />
-              <KpiStatCard
-                label="Full day"
-                value={monthlyKpi.presentFullDay}
-                color="text-emerald-800"
-                bg="bg-emerald-100/80"
-                accent="#047857"
-                share={sharePct(monthlyKpi.presentFullDay)}
-              />
-              <KpiStatCard
-                label="Late"
-                value={monthlyKpi.late}
-                color="text-amber-700"
-                bg="bg-amber-50/80"
-                accent="#E8710A"
-                share={sharePct(monthlyKpi.late)}
-              />
-              <KpiStatCard
-                label="Leave (from lates)"
-                value={monthlyKpi.lateDerivedLeaves}
-                color="text-rose-700"
-                bg="bg-rose-50/80"
-                accent="#BE185D"
-                share={sharePct(monthlyKpi.lateDerivedLeaves)}
-              />
-              <KpiStatCard
-                label="Absent (incl. leave from lates)"
-                value={monthlyKpi.totalAbsentWithLateLeaves}
-                color="text-red-700"
-                bg="bg-red-50/80"
-                accent="#DC2626"
-                share={sharePct(monthlyKpi.totalAbsentWithLateLeaves)}
-              />
-              <KpiStatCard
-                label="Half days"
-                value={monthlyKpi.halfDay}
-                color="text-sky-700"
-                bg="bg-sky-50/80"
-                accent="#008CD3"
-                share={sharePct(monthlyKpi.halfDay)}
-              />
-              <KpiStatCard
-                label="Short leave"
-                value={monthlyKpi.shortLeave}
-                color="text-yellow-700"
-                bg="bg-yellow-50/80"
-                accent="#F9A825"
-                share={sharePct(monthlyKpi.shortLeave)}
-              />
-            </div>
+            {sheetError && filterScope === "month" ? (
+              <p className="mb-3 text-sm text-red-600">{sheetError}</p>
+            ) : null}
+            {sheetLoading && !sheetReport && filterScope === "month" ? (
+              <div className="mb-4 flex items-center justify-center gap-2 py-6 text-slate-500">
+                <Loader2 className="h-5 w-5 animate-spin text-[#008CD3]" />
+                <span className="text-sm">Calculating attendance summary…</span>
+              </div>
+            ) : null}
+            {sheetReport && filterScope === "month" ? (
+              <div className="mb-4">
+                <AttendanceSheetOverview
+                  sheetReport={sheetReport}
+                  kpiSegments={kpiSegments}
+                  kpiTotal={monthAnalytics.kpiTotal}
+                />
+              </div>
+            ) : (
+              <>
+                <div className="mb-4">
+                  <StackedMonthBar segments={kpiSegments} total={monthAnalytics.kpiTotal} />
+                </div>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                  <KpiStatCard
+                    label="Present"
+                    value={kpi.daysPresent}
+                    color="text-emerald-700"
+                    bg="bg-emerald-50/80"
+                    accent="#0F9D58"
+                    share={sharePct(kpi.daysPresent)}
+                  />
+                  <KpiStatCard
+                    label="Full day"
+                    value={kpi.presentFullDay}
+                    color="text-emerald-800"
+                    bg="bg-emerald-100/80"
+                    accent="#047857"
+                    share={sharePct(kpi.presentFullDay)}
+                  />
+                  <KpiStatCard
+                    label="Late"
+                    value={kpi.late}
+                    color="text-amber-700"
+                    bg="bg-amber-50/80"
+                    accent="#E8710A"
+                    share={sharePct(kpi.late)}
+                  />
+                  <KpiStatCard
+                    label="Leave (from lates)"
+                    value={kpi.lateDerivedLeaves}
+                    color="text-rose-700"
+                    bg="bg-rose-50/80"
+                    accent="#BE185D"
+                    share={sharePct(kpi.lateDerivedLeaves)}
+                  />
+                  <KpiStatCard
+                    label="Absent (incl. leave from lates)"
+                    value={kpi.totalAbsentWithLateLeaves}
+                    color="text-red-700"
+                    bg="bg-red-50/80"
+                    accent="#DC2626"
+                    share={sharePct(kpi.totalAbsentWithLateLeaves)}
+                  />
+                  <KpiStatCard
+                    label="Half days"
+                    value={kpi.halfDay}
+                    color="text-sky-700"
+                    bg="bg-sky-50/80"
+                    accent="#008CD3"
+                    share={sharePct(kpi.halfDay)}
+                  />
+                  <KpiStatCard
+                    label="Short leave"
+                    value={kpi.shortLeave}
+                    color="text-yellow-700"
+                    bg="bg-yellow-50/80"
+                    accent="#F9A825"
+                    share={sharePct(kpi.shortLeave)}
+                  />
+                </div>
+              </>
+            )}
           </article>
 
-          <AttendanceRulesNotice lateCount={monthlyKpi.late} />
+          <AttendanceRulesNotice lateCount={kpi.late} />
 
           <article className="grid gap-4 xl:grid-cols-3">
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm xl:col-span-1">
@@ -1720,7 +1684,7 @@ function ManageAttendanceDetail({
                 <tbody className="divide-y divide-slate-100 bg-white">
                   {sortedRows.map((row, index) => {
                     const dateKey = String(row.attendance_date || row.attendance_history || "").slice(0, 10);
-                    const calculatedStatus = monthAttendance.statusByDate.get(dateKey);
+                    const calculatedStatus = monthAttendance?.statusByDate.get(dateKey);
                     return (
                     <tr
                       key={`${String(row.attendance_date || row.attendance_history)}-${index}`}

@@ -85,6 +85,8 @@ import {
   formatCalculatedStatusLabel,
   type CalculatedAttendanceStatus,
 } from "@/lib/attendanceRules";
+import { useAttendanceSheetCalculation } from "@/hooks/useAttendanceSheetCalculation";
+import AttendanceSheetOverview from "@/components/portal-dashboard/attendance/AttendanceSheetOverview";
 import AttendanceRulesNotice from "@/components/portal-dashboard/attendance/AttendanceRulesNotice";
 import {
   createEmployeeBankInfo,
@@ -615,6 +617,7 @@ function AttendanceMiniCalendar({
   onSelectDay,
   onPrevMonth,
   onNextMonth,
+  calendarCells,
 }: {
   month: number;
   year: number;
@@ -623,10 +626,14 @@ function AttendanceMiniCalendar({
   onSelectDay: (day: number) => void;
   onPrevMonth: () => void;
   onNextMonth: () => void;
+  calendarCells?: ReturnType<typeof buildMonthAttendanceView>["calendarCells"];
 }) {
   const monthView = useMemo(
-    () => buildMonthAttendanceView(year, month, rows),
-    [year, month, rows],
+    () =>
+      calendarCells
+        ? { calendarCells }
+        : buildMonthAttendanceView(year, month, rows),
+    [calendarCells, year, month, rows],
   );
 
   const monthLabel = new Date(year, month - 1, 1).toLocaleDateString(undefined, {
@@ -1152,6 +1159,7 @@ function AttendanceHistoryTable({
   refreshing,
   fullAttendanceHref,
   statusByDate,
+  sheetSummary,
   onExport,
   exportDisabled,
 }: {
@@ -1166,6 +1174,7 @@ function AttendanceHistoryTable({
   refreshing: boolean;
   fullAttendanceHref?: string;
   statusByDate: Map<string, CalculatedAttendanceStatus>;
+  sheetSummary?: import("@/services/attendanceHistory").AttendanceSheetReport | null;
   onExport?: () => void;
   exportDisabled?: boolean;
 }) {
@@ -1179,7 +1188,27 @@ function AttendanceHistoryTable({
     [year, month, rows],
   );
 
-  const summary = monthView.summary;
+  const summary = sheetSummary
+    ? {
+        daysPresent: sheetSummary.present_days,
+        presentFullDay: sheetSummary.full_days,
+        late: sheetSummary.late_marks,
+        lateDerivedLeaves: sheetSummary.late_leave_deduction,
+        totalAbsentWithLateLeaves:
+          sheetSummary.absent_days + sheetSummary.late_leave_deduction,
+        halfDay: sheetSummary.half_days,
+        shortLeave: sheetSummary.short_leaves,
+        totalWorkingMinutes: sheetSummary.total_working_minutes,
+        kpiTotal:
+          sheetSummary.present_days +
+          sheetSummary.absent_days +
+          sheetSummary.half_days,
+      }
+    : monthView.summary;
+
+  const fullDayWorkCount = sheetSummary
+    ? summary.presentFullDay
+    : summary.daysPresent;
 
   const monthOptions = Array.from({ length: 12 }, (_, i) => i + 1);
   const yearOptions = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
@@ -1256,8 +1285,8 @@ function AttendanceHistoryTable({
 
       <div className="grid shrink-0 grid-cols-2 gap-3 px-5 pt-4 sm:grid-cols-5">
         <AttendanceSummaryPill
-          label="Present"
-          value={summary.daysPresent}
+          label="Full day work"
+          value={fullDayWorkCount}
           accent="success"
         />
         <AttendanceSummaryPill label="Late" value={summary.late} accent="warning" />
@@ -3385,10 +3414,19 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
   const employeeName = asText(info?.user_name, "Employee");
   const employeeEmpCode = String(info?.emp_code ?? "").trim() || "—";
 
-  const monthAttendance = useMemo(
-    () => buildMonthAttendanceView(attendanceYear, attendanceMonth, attendanceRows),
-    [attendanceYear, attendanceMonth, attendanceRows],
-  );
+  const {
+    analytics: sheetAnalytics,
+    sheetReport,
+    reload: reloadAttendanceSheet,
+  } = useAttendanceSheetCalculation({
+    orgId,
+    employeeId: userId,
+    month: attendanceMonth,
+    year: attendanceYear,
+    enabled: Boolean(orgId && userId),
+  });
+
+  const monthAttendance = sheetAnalytics?.monthAttendance;
 
   const hasOpenExit = exitRow != null && isOpenExitStatus(exitRow.application_status);
   const exitPending = exitRow != null && isPendingExitStatus(exitRow.application_status);
@@ -4726,11 +4764,17 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
   }, [userId, orgId, info, employeeName, employeeIsActive, profileImageUrl]);
 
   const attendanceRate = useMemo(() => {
-    const kpiTotal = monthAttendance.summary.kpiTotal;
+    if (sheetReport) {
+      const kpiTotal =
+        sheetReport.present_days + sheetReport.absent_days + sheetReport.half_days;
+      if (kpiTotal <= 0) return null;
+      return Math.round((sheetReport.present_days / kpiTotal) * 100);
+    }
+    const kpiTotal = monthAttendance?.summary.kpiTotal ?? 0;
     if (kpiTotal <= 0) return null;
-    const credited = monthAttendance.summary.daysPresent;
+    const credited = monthAttendance?.summary.daysPresent ?? 0;
     return Math.round((credited / kpiTotal) * 100);
-  }, [monthAttendance]);
+  }, [monthAttendance, sheetReport]);
 
   const leaveRemaining = useMemo(() => {
     if (!data) return 0;
@@ -4774,6 +4818,16 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
 
   const calendarCard = (
     <div className={`${GLASS_CARD} p-5 lg:p-6`}>
+      {sheetReport && sheetAnalytics ? (
+        <div className="mb-5">
+          <AttendanceSheetOverview
+            sheetReport={sheetReport}
+            kpiSegments={sheetAnalytics.kpiSegments}
+            kpiTotal={sheetAnalytics.monthAnalytics.kpiTotal}
+            compact
+          />
+        </div>
+      ) : null}
       <AttendanceMiniCalendar
         month={attendanceMonth}
         year={attendanceYear}
@@ -4784,10 +4838,11 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
         }}
         onPrevMonth={() => shiftAttendanceMonth(-1)}
         onNextMonth={() => shiftAttendanceMonth(1)}
+        calendarCells={monthAttendance?.calendarCells}
       />
       <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-[#F1F5F9] pt-4">
         {[
-          { label: "Present", cls: "bg-[#10B981]" },
+          { label: "Full day work", cls: "bg-[#10B981]" },
           { label: "Late", cls: "bg-[#F59E0B]" },
           { label: "Absent", cls: "bg-[#DC2626]" },
           { label: "Half day", cls: "bg-[#008CD3]" },
@@ -4811,10 +4866,14 @@ export default function GetEmployeeClient({ userId }: GetEmployeeClientProps) {
       year={attendanceYear}
       onMonthChange={setAttendanceMonth}
       onYearChange={setAttendanceYear}
-      onRefresh={() => void loadAttendance(true)}
+      onRefresh={() => {
+        void loadAttendance(true);
+        void reloadAttendanceSheet();
+      }}
       refreshing={attendanceRefreshing}
       fullAttendanceHref={fullAttendanceHref || undefined}
-      statusByDate={monthAttendance.statusByDate}
+      statusByDate={monthAttendance?.statusByDate ?? new Map()}
+      sheetSummary={sheetReport}
       onExport={() => setExportOpen(true)}
       exportDisabled={!exportEmployee}
     />

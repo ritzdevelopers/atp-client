@@ -39,14 +39,35 @@ type KpiStatCardProps = {
   bg: string;
   accent: string;
   share?: number;
+  dense?: boolean;
 };
 
-export function KpiStatCard({ label, value, color, bg, accent, share }: KpiStatCardProps) {
+export function KpiStatCard({
+  label,
+  value,
+  color,
+  bg,
+  accent,
+  share,
+  dense = false,
+}: KpiStatCardProps) {
   return (
-    <div className={`rounded-xl border border-[#E4E7EC] p-4 shadow-sm ${bg}`}>
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">{label}</p>
-      <p className={`mt-1 text-2xl font-bold tabular-nums sm:text-3xl ${color}`}>{value}</p>
-      {share != null && share > 0 ? (
+    <div
+      className={`border border-[#E4E7EC] shadow-sm ${dense ? "rounded-lg p-2" : "rounded-xl p-4"} ${bg}`}
+    >
+      <p
+        className={`truncate font-semibold uppercase tracking-wide text-[#6B7280] ${
+          dense ? "text-[9px] leading-tight" : "text-[11px]"
+        }`}
+      >
+        {label}
+      </p>
+      <p
+        className={`font-bold tabular-nums ${dense ? "mt-0.5 text-base" : "mt-1 text-2xl sm:text-3xl"} ${color}`}
+      >
+        {value}
+      </p>
+      {!dense && share != null && share > 0 ? (
         <div className="mt-2.5">
           <div className="h-1.5 overflow-hidden rounded-full bg-white/70">
             <div
