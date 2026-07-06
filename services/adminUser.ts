@@ -212,8 +212,7 @@ export async function updateEmployeeDocument(
       Authorization: `Bearer ${token}`,
     },
     body: fd,
-  });
-
+  }); 
   const result = (await res.json()) as {
     success?: boolean;
     message?: string;

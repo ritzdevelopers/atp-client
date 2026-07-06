@@ -62,6 +62,21 @@ export type RegularizationReportingManagersResponse = {
   data: RegularizationReportingManager[];
 };
 
+export type AssignRegularizationTokenEntry = {
+  user_id: number;
+  balance: number;
+  valid_from?: string;
+  valid_to?: string;
+};
+
+export type AssignRegularizationTokensResult = {
+  message?: string;
+  assigned_count: number;
+  skipped_count: number;
+  assigned: AssignRegularizationTokenEntry[];
+  skipped: { user_id: number; reason: string }[];
+};
+
 async function parseJson(res: Response): Promise<Record<string, unknown>> {
   try {
     return (await res.json()) as Record<string, unknown>;
@@ -323,5 +338,40 @@ export async function applyForRegularization(
     message: json.message as string | undefined,
     regularization_id: json.regularization_id as number | undefined,
     balance_remaining: json.balance_remaining as number | undefined,
+  };
+}
+
+export async function assignRegularizationTokens(
+  token: string,
+  orgId: number,
+  regData: AssignRegularizationTokenEntry[],
+): Promise<AssignRegularizationTokensResult> {
+  const res = await fetch(`${API_URL}/api/regularization/assign-regularization-token`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      org_id: orgId,
+      reg_data: regData,
+    }),
+  });
+  const json = await parseJson(res);
+  if (!res.ok) {
+    throw new Error(
+      (json.message as string) || "Could not assign regularization tokens",
+    );
+  }
+  return {
+    message: json.message as string | undefined,
+    assigned_count: Number(json.assigned_count ?? 0),
+    skipped_count: Number(json.skipped_count ?? 0),
+    assigned: Array.isArray(json.assigned)
+      ? (json.assigned as AssignRegularizationTokenEntry[])
+      : [],
+    skipped: Array.isArray(json.skipped)
+      ? (json.skipped as { user_id: number; reason: string }[])
+      : [],
   };
 }
