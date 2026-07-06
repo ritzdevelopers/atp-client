@@ -367,10 +367,10 @@ export default function HeaderFeatureSearch() {
                 <button
                   type="button"
                   onClick={closeAll}
-                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#6B7280]"
+                  className="inline-flex cursor-pointer h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#6B7280]"
                   aria-label="Close search"
                 >
-                  <X className="h-5 w-5" />
+                  <X className="h-5 w-5 cursor-pointer" />
                 </button>
               </div>
               <p className="mt-2 text-[11px] text-[#9CA3AF]">

@@ -77,6 +77,26 @@ export type AssignRegularizationTokensResult = {
   skipped: { user_id: number; reason: string }[];
 };
 
+export type UpdateRegularizationTokenPayload = {
+  user_id: number;
+  balance?: number;
+  valid_from?: string;
+  valid_to?: string;
+};
+
+export type UpdateRegularizationTokenResult = {
+  message?: string;
+  data?: {
+    user_id: number;
+    balance: number;
+    used: number;
+    remaining: number;
+    valid_from: string;
+    valid_to: string;
+    assigned_by: number;
+  };
+};
+
 async function parseJson(res: Response): Promise<Record<string, unknown>> {
   try {
     return (await res.json()) as Record<string, unknown>;
@@ -373,5 +393,68 @@ export async function assignRegularizationTokens(
     skipped: Array.isArray(json.skipped)
       ? (json.skipped as { user_id: number; reason: string }[])
       : [],
+  };
+}
+
+export async function fetchEmployeeRegularizationBalance(
+  token: string,
+  orgId: number,
+  employeeId: number,
+): Promise<RegularizationBalance & { user_id: number }> {
+  const res = await fetch(
+    `${API_URL}/api/regularization/get-employee-regularization-balance?org_id=${encodeURIComponent(String(orgId))}&employee_id=${encodeURIComponent(String(employeeId))}`,
+    {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+  const json = await parseJson(res);
+  if (!res.ok) {
+    throw new Error(
+      (json.message as string) || "Could not load employee regularization balance",
+    );
+  }
+  const data = json.data as (RegularizationBalance & { user_id: number }) | undefined;
+  return (
+    data ?? {
+      user_id: employeeId,
+      is_available: false,
+      balance: 0,
+      used: 0,
+      remaining: 0,
+      valid_from: null,
+      valid_to: null,
+    }
+  );
+}
+
+export async function updateRegularizationTokens(
+  token: string,
+  orgId: number,
+  regData: UpdateRegularizationTokenPayload,
+): Promise<UpdateRegularizationTokenResult> {
+  const res = await fetch(`${API_URL}/api/regularization/update-regularization-token`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      org_id: orgId,
+      reg_data: regData,
+    }),
+  });
+  const json = await parseJson(res);
+  if (!res.ok) {
+    throw new Error(
+      (json.message as string) || "Could not update regularization tokens",
+    );
+  }
+  return {
+    message: json.message as string | undefined,
+    data: json.data as UpdateRegularizationTokenResult["data"],
   };
 }
