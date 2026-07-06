@@ -26,6 +26,8 @@ import {
 } from "lucide-react";
 import { useManagementDashboardContext } from "@/components/portal-dashboard/Layout/ManagementDashboardContext";
 import AssignEmployeeAssetsModal from "@/components/portal-dashboard/employees/AssignEmployeeAssetsModal";
+import AssignRegularizationTokensModal from "@/components/portal-dashboard/employees/AssignRegularizationTokensModal";
+import UpdateRegularizationTokensModal from "@/components/portal-dashboard/employees/UpdateRegularizationTokensModal";
 import ScheduleEmployeeLeaveModal from "@/components/portal-dashboard/employees/ScheduleEmployeeLeaveModal";
 import {
   dedupeOrgUserRows,
@@ -706,7 +708,27 @@ export default function ManageEmployeesPage() {
   const [scheduleLeaveRow, setScheduleLeaveRow] = useState<OrgUserRow | null>(null);
   const [scheduleLeaveSuccess, setScheduleLeaveSuccess] = useState<string | null>(null);
 
+  const [assignRegTokensOpen, setAssignRegTokensOpen] = useState(false);
+  const [assignRegTokensSuccess, setAssignRegTokensSuccess] = useState<string | null>(null);
+
+  const [updateRegTokensOpen, setUpdateRegTokensOpen] = useState(false);
+  const [updateRegTokensSuccess, setUpdateRegTokensSuccess] = useState<string | null>(null);
+
   const allCards = useMemo(() => userRows.map(mapApiUserToCard), [userRows]);
+
+  const activeEmployeesForRegTokens = useMemo(
+    () =>
+      allCards
+        .filter((e) => e.isActive && !e.hasExitProcess)
+        .map((e) => ({
+          userId: e.id,
+          name: e.name,
+          empCode: e.empCode,
+          email: e.email,
+          roleLabel: e.roleLabel,
+        })),
+    [allCards],
+  );
 
   const loadUsers = useCallback(async (options?: { force?: boolean }) => {
     const force = options?.force ?? false;
@@ -1106,6 +1128,36 @@ export default function ManageEmployeesPage() {
           </div>
         ) : null}
 
+        {assignRegTokensSuccess ? (
+          <div className="mb-3 flex items-start gap-2 rounded-lg border border-[#A8DAB5] bg-[#E6F4EA] px-3 py-2 text-[12px] text-[#0F9D58] max-lg:mx-3 max-lg:mt-2 lg:mb-4 lg:px-4 lg:py-2.5 lg:text-[13px]">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+            <span className="flex-1">{assignRegTokensSuccess}</span>
+            <button
+              type="button"
+              onClick={() => setAssignRegTokensSuccess(null)}
+              className="shrink-0 rounded-lg p-1 text-[#0F9D58] hover:bg-[#E6F4EA]/80"
+              aria-label="Dismiss"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        ) : null}
+
+        {updateRegTokensSuccess ? (
+          <div className="mb-3 flex items-start gap-2 rounded-lg border border-[#A8DAB5] bg-[#E6F4EA] px-3 py-2 text-[12px] text-[#0F9D58] max-lg:mx-3 max-lg:mt-2 lg:mb-4 lg:px-4 lg:py-2.5 lg:text-[13px]">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+            <span className="flex-1">{updateRegTokensSuccess}</span>
+            <button
+              type="button"
+              onClick={() => setUpdateRegTokensSuccess(null)}
+              className="shrink-0 rounded-lg p-1 text-[#0F9D58] hover:bg-[#E6F4EA]/80"
+              aria-label="Dismiss"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        ) : null}
+
         {listError && (
           <div className="mb-3 flex items-start gap-2 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2 text-[12px] text-[#1F2937] max-lg:mx-3 max-lg:mt-2 lg:mb-4 lg:px-4 lg:py-2.5 lg:text-[13px]">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#D93025]" aria-hidden />
@@ -1124,8 +1176,32 @@ export default function ManageEmployeesPage() {
         
         {/* Mobile & tablet: Zoho-style sticky header */}
         <div className="sticky top-0 z-20 border-b border-[#E4E7EC] bg-white px-3 pb-2.5 pt-2.5 shadow-sm lg:hidden">
-          <h1 className="text-[15px] font-semibold text-[#1F2937]">Team members</h1>
-          <p className={`mt-0.5 ${mobileCaptionCls}`}>{tabSubtitle}</p>
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <h1 className="text-[15px] font-semibold text-[#1F2937]">Team members</h1>
+              <p className={`mt-0.5 ${mobileCaptionCls}`}>{tabSubtitle}</p>
+            </div>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setUpdateRegTokensOpen(true)}
+                disabled={listLoading || !!listError || activeEmployeesForRegTokens.length === 0}
+                className="inline-flex items-center gap-1 rounded-lg border border-[#E4E7EC] bg-white px-2.5 py-1.5 text-[11px] font-medium text-[#374151] transition hover:bg-[#F9FAFB] disabled:opacity-50"
+              >
+                <Pencil className="h-3.5 w-3.5" aria-hidden />
+                Update
+              </button>
+              <button
+                type="button"
+                onClick={() => setAssignRegTokensOpen(true)}
+                disabled={listLoading || !!listError || activeEmployeesForRegTokens.length === 0}
+                className="inline-flex items-center gap-1 rounded-lg bg-[#008CD3] px-2.5 py-1.5 text-[11px] font-medium text-white transition hover:bg-[#0070AA] disabled:opacity-50"
+              >
+                <CalendarClock className="h-3.5 w-3.5" aria-hidden />
+                Assign
+              </button>
+            </div>
+          </div>
           <div className="mt-2 flex gap-0.5 overflow-x-auto rounded-md bg-[#F5F7FA] p-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {tabOptions.map((t) => (
               <button
@@ -1204,7 +1280,25 @@ export default function ManageEmployeesPage() {
                 </div>
               </div>
               {!listLoading && !listError ? (
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAssignRegTokensOpen(true)}
+                    disabled={activeEmployeesForRegTokens.length === 0}
+                    className="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-[13px] font-medium text-[#008CD3] shadow-sm transition hover:bg-white/90 disabled:opacity-50"
+                  >
+                    <CalendarClock className="h-4 w-4" aria-hidden />
+                    Assign regularization tokens
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setUpdateRegTokensOpen(true)}
+                    disabled={activeEmployeesForRegTokens.length === 0}
+                    className="inline-flex items-center gap-2 rounded-lg border border-white/30 bg-white/10 px-3 py-2 text-[13px] font-medium text-white backdrop-blur-sm transition hover:bg-white/20 disabled:opacity-50"
+                  >
+                    <Pencil className="h-4 w-4" aria-hidden />
+                    Update regularization
+                  </button>
                   <div className="rounded-lg bg-white/10 px-3 py-2 text-center backdrop-blur-sm">
                     <p className="text-lg font-semibold leading-none text-[#A8E6CF]">
                       {rosterStats.activeCount}
@@ -1904,6 +1998,22 @@ export default function ManageEmployeesPage() {
         }
         onClose={() => setAssetsRow(null)}
         onSuccess={(message) => setAssetsSuccess(message)}
+      />
+
+      <AssignRegularizationTokensModal
+        open={assignRegTokensOpen}
+        orgId={organizationIdNum}
+        employees={activeEmployeesForRegTokens}
+        onClose={() => setAssignRegTokensOpen(false)}
+        onSuccess={(message) => setAssignRegTokensSuccess(message)}
+      />
+
+      <UpdateRegularizationTokensModal
+        open={updateRegTokensOpen}
+        orgId={organizationIdNum}
+        employees={activeEmployeesForRegTokens}
+        onClose={() => setUpdateRegTokensOpen(false)}
+        onSuccess={(message) => setUpdateRegTokensSuccess(message)}
       />
     </div>
   );

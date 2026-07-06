@@ -27,7 +27,6 @@ import { useAttendanceSheetCalculation } from "@/hooks/useAttendanceSheetCalcula
 import {
   AttendanceDonutChart,
   EnhancedStatusBars,
-  KpiStatCard,
   MonthCalendarHeatmap,
   StackedMonthBar,
 } from "@/components/portal-dashboard/attendance/AttendanceAnalyticsCharts";
