@@ -1,7 +1,7 @@
 /** Shared presentation tokens — clean, light dashboard aesthetic. */
 
 export const dashPageCls =
-  "mx-auto flex w-full max-w-[1360px] flex-col gap-6 px-1 py-1 sm:px-0";
+  "mx-auto flex w-full max-w-[1360px] flex-col gap-6 px-1 py-1 sm:px-0 lg:gap-7";
 
 export const dashCardCls =
   "card-fade-in overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)]";

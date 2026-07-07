@@ -1,24 +1,101 @@
 "use client";
 
+import { useCallback, useState } from "react";
+import { useRouter } from "next/navigation";
+import { LayoutGrid, LogOut } from "lucide-react";
 import HeaderFeatureSearch from "@/components/portal-dashboard/Layout/HeaderFeatureSearch";
+import { useManagementShell } from "@/components/portal-dashboard/Layout/ManagementShellContext";
 
 function Header() {
+  const router = useRouter();
+  const { appsPanelOpen, toggleAppsPanel } = useManagementShell();
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
+  const confirmLogout = useCallback(() => {
+    try {
+      localStorage.removeItem("token");
+    } catch {
+      /* ignore */
+    }
+    setShowLogoutConfirm(false);
+    router.push("/");
+  }, [router]);
+
   return (
-    <header className="sticky top-0 z-[9999] w-full border-b border-gray-200/80 bg-white/90 shadow-sm backdrop-blur-md supports-[backdrop-filter]:bg-white/75">
-      <div className="flex h-12 min-h-12 w-full min-w-0 items-center gap-2 px-3 sm:h-14 sm:min-h-14 sm:gap-3 sm:px-4 md:h-16 md:min-h-16 md:px-6 lg:px-8">
-        <div className="flex min-h-0 min-w-0 shrink-0 items-center md:max-w-[220px] lg:max-w-[280px]">
-          <img
-            src="/portal/layout/logo.png"
-            alt="Company"
-            className="h-7 w-auto max-w-[min(140px,34vw)] shrink-0 object-contain object-left sm:h-8 sm:max-w-[min(180px,30vw)] md:h-9 md:max-w-[min(220px,28vw)] lg:max-w-[280px]"
-          />
+    <>
+      <header className="sticky top-0 z-[10010] w-full border-b border-[#E4E7EC]/90 bg-white/95 shadow-[0_1px_3px_rgba(16,24,40,0.06)] backdrop-blur-md">
+        <div className="flex h-14 min-h-14 w-full min-w-0 items-center gap-2 px-3 sm:gap-3 sm:px-4 md:px-5 lg:px-6">
+          <button
+            type="button"
+            onClick={toggleAppsPanel}
+            className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition-all duration-200 active:scale-95 ${
+              appsPanelOpen
+                ? "border-[#008CD3]/30 bg-[#E8F4FB] text-[#008CD3]"
+                : "border-[#E4E7EC] bg-[#F9FAFB] text-[#6B7280] hover:border-[#008CD3]/25 hover:text-[#008CD3]"
+            }`}
+            aria-label={appsPanelOpen ? "Close apps menu" : "Open apps menu"}
+            aria-expanded={appsPanelOpen}
+          >
+            <LayoutGrid className="h-[18px] w-[18px]" aria-hidden />
+          </button>
+
+          <div className="flex min-h-0 min-w-0 shrink-0 items-center md:max-w-[220px] lg:max-w-[260px]">
+            <img
+              src="/portal/layout/logo.png"
+              alt="Company"
+              className="h-8 w-auto max-w-[min(160px,32vw)] shrink-0 object-contain object-left sm:h-9"
+            />
+          </div>
+
+          <HeaderFeatureSearch />
+
+          <div className="flex shrink-0 items-center">
+            <button
+              type="button"
+              onClick={() => setShowLogoutConfirm(true)}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#E4E7EC] bg-[#F9FAFB] text-[#6B7280] transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
+              aria-label="Sign out"
+            >
+              <LogOut className="h-[18px] w-[18px]" aria-hidden />
+            </button>
+          </div>
         </div>
+      </header>
 
-        <HeaderFeatureSearch />
-
-        <div className="hidden w-[72px] shrink-0 md:block lg:w-[88px]" aria-hidden />
-      </div>
-    </header>
+      {showLogoutConfirm ? (
+        <div
+          className="fixed inset-0 z-[100000] flex items-center justify-center bg-black/45 p-4 backdrop-blur-[2px]"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="header-logout-title"
+        >
+          <div className="w-full max-w-sm rounded-2xl border border-[#E4E7EC] bg-white p-5 shadow-2xl">
+            <h2 id="header-logout-title" className="text-base font-semibold text-[#1F2937]">
+              Sign out?
+            </h2>
+            <p className="mt-2 text-sm text-[#6B7280]">
+              You will need to sign in again to access the portal.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowLogoutConfirm(false)}
+                className="rounded-lg border border-[#E4E7EC] bg-white px-3 py-2 text-sm font-medium text-[#374151] hover:bg-[#F9FAFB]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmLogout}
+                className="rounded-lg bg-rose-600 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-700"
+              >
+                Sign out
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 }
 

@@ -124,6 +124,88 @@
   animation: drawer-panel-enter 0.25s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
+@keyframes apps-panel-enter {
+  from {
+    opacity: 0;
+    transform: translateX(-16px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+.apps-panel-enter {
+  animation: apps-panel-enter 0.28s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes hero-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hero-rise {
+  animation: hero-rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes fav-card-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fav-card-enter {
+  animation: fav-card-enter 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  opacity: 0;
+}
+
+.feature-expand-grid {
+  display: grid;
+  transition:
+    grid-template-rows 0.38s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.28s ease,
+    margin-top 0.28s ease;
+}
+
+.feature-expand-grid[data-open="false"] {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  margin-top: 0;
+}
+
+.feature-expand-grid[data-open="true"] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  margin-top: 0.75rem;
+}
+
+.feature-group-card {
+  transition:
+    box-shadow 0.3s ease,
+    border-color 0.3s ease,
+    transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.feature-group-card[data-expanded="true"] {
+  box-shadow: 0 10px 32px rgba(15, 23, 42, 0.1);
+}
+
+.feature-child-card {
+  animation: fav-card-enter 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  opacity: 0;
+}
+
 .timer-pulse {
   animation: timer-pulse 2s ease-in-out infinite;
 }
@@ -146,10 +228,22 @@
   .drawer-panel-enter,
   .skeleton-shimmer,
   .badge-pulse-dot,
-  .timer-pulse {
+  .timer-pulse,
+  .apps-panel-enter,
+  .hero-rise,
+  .fav-card-enter,
+  .feature-child-card {
     animation: none !important;
     opacity: 1;
     transform: none;
+  }
+
+  .feature-expand-grid {
+    transition: none !important;
+  }
+
+  .feature-expand-grid[data-open="false"] {
+    display: none;
   }
 }
 

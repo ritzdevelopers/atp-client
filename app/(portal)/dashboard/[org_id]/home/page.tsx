@@ -45,7 +45,8 @@ import {
 import OrgLiveUsersPanel from "@/components/portal-dashboard/home/OrgLiveUsersPanel";
 import BiometricLiveAttendanceFeed from "@/components/portal-dashboard/home/BiometricLiveAttendanceFeed";
 import HomeDashboardHeader from "@/components/portal-dashboard/home/HomeDashboardHeader";
-import ManagementQuickNavRail from "@/components/portal-dashboard/home/ManagementQuickNavRail";
+import HomeFeaturesSlider from "@/components/portal-dashboard/home/HomeFeaturesSlider";
+import HomeAllToolsPanel from "@/components/portal-dashboard/home/HomeAllToolsPanel";
 import HomeAttendanceCard from "@/components/portal-dashboard/home/HomeAttendanceCard";
 import AssetHandoverCard from "@/components/portal-dashboard/home/AssetHandoverCard";
 import HomeLeaveQuickActions from "@/components/portal-dashboard/home/HomeLeaveQuickActions";
@@ -961,9 +962,24 @@ function HomeOverview({
       : "bg-slate-100 text-slate-700";
   const dayVisual = getAttendanceDayVisual(effectiveTodayRecord?.attendance_status);
   const overviewDataLoading = showAttendance && attendanceLoading;
+  const checkInDisplay = effectiveTodayRecord?.check_in
+    ? formatAttendanceLogLocal(effectiveTodayRecord.check_in)
+    : "—";
+  const checkOutDisplay = effectiveTodayRecord?.check_out
+    ? formatAttendanceTimeLocal(effectiveTodayRecord.check_out)
+    : "—";
+  const attendanceHistoryHref =
+    orgId && !Number.isNaN(orgId)
+      ? `/dashboard/${orgId}/my-attendance-history`
+      : undefined;
 
   return (
-    <div className={dashPageCls}>
+    <div className={`${dashPageCls} relative`}>
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[420px] bg-gradient-to-b from-[#FDE8F3]/35 via-[#F4F6F9] to-transparent"
+        aria-hidden
+      />
+
       <HomeDashboardHeader
         greeting={greetingForHour()}
         displayName={displayName}
@@ -972,17 +988,24 @@ function HomeOverview({
         roleKey={roleKey}
         refreshing={attendanceLoading}
         onRefresh={() => void loadHomeOverviewData(true)}
+        showAttendanceStrip={showAttendance && !attendanceLoading}
+        checkInLabel={checkInDisplay}
+        checkOutLabel={checkOutDisplay}
+        workingHoursDisplay={String(workingHoursDisplay)}
+        showLiveTimer={showLiveTimer}
+        statusLabel={statusLabel}
+        attendanceHistoryHref={attendanceHistoryHref}
       />
 
-      <ManagementQuickNavRail
+      <HomeFeaturesSlider
         tiles={navTiles}
         pathname={pathname}
         handoverPendingCount={handoverPendingCount}
         loading={navTilesLoading}
       />
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12 lg:gap-6">
-        <div className="flex flex-col gap-5 lg:col-span-8">
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-12 xl:gap-6">
+        <div className="flex flex-col gap-5 xl:col-span-8">
           <HomeLeaveQuickActions
             orgId={orgId}
             pendingCount={leavePendingCount}
@@ -1042,7 +1065,15 @@ function HomeOverview({
           ) : null}
         </div>
 
-        <div className="flex flex-col gap-5 lg:col-span-4 lg:min-w-0">
+        <div className="flex flex-col gap-5 xl:col-span-4 xl:min-w-0">
+          <HomeAllToolsPanel
+            tiles={navTiles}
+            pathname={pathname}
+            handoverPendingCount={handoverPendingCount}
+            loading={navTilesLoading}
+            className="xl:sticky xl:top-[calc(3.5rem+1rem)]"
+          />
+
           <ProfileSummaryCard
             organization={organization}
             user={user}
@@ -1061,7 +1092,7 @@ function HomeOverview({
           />
         </div>
 
-        <div className="lg:col-span-12">
+        <div className="xl:col-span-12">
           <OrganizationAddressesSection
             addresses={organizationAddresses}
             orgId={orgId}

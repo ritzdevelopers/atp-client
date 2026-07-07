@@ -26,12 +26,49 @@ export function HomeHeaderSkeleton() {
 }
 
 export function QuickNavRailSkeleton() {
+  return <FeaturesSliderSkeleton />;
+}
+
+export function FeaturesSliderSkeleton() {
   return (
-    <div>
-      <Shimmer className="mb-2.5 h-4 w-20" />
-      <div className="flex gap-2 overflow-hidden">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <Shimmer key={i} className="h-9 w-28 shrink-0 rounded-full" />
+    <div className="overflow-hidden rounded-2xl border border-[#E4E7EC] bg-white shadow-sm">
+      <div className="border-b border-[#EEF2F6] px-4 py-4 sm:px-5">
+        <div className="flex items-center gap-3">
+          <Shimmer className="h-10 w-10 rounded-xl" />
+          <div className="space-y-2">
+            <Shimmer className="h-4 w-36" />
+            <Shimmer className="h-3 w-52" />
+          </div>
+        </div>
+        <div className="mt-4 flex gap-2 overflow-hidden">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Shimmer key={i} className="h-14 w-[130px] shrink-0 rounded-xl" />
+          ))}
+        </div>
+      </div>
+      <div className="p-4">
+        <Shimmer className="mb-4 h-16 w-full rounded-xl" />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Shimmer key={i} className="h-[108px] rounded-xl" />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function AllToolsPanelSkeleton({ className = "" }: { className?: string }) {
+  return (
+    <div className={`${dashCardCls} overflow-hidden ${className}`}>
+      <div className="border-b border-[#EEF2F6] px-4 py-4">
+        <Shimmer className="h-4 w-24" />
+        <Shimmer className="mt-2 h-3 w-40" />
+        <Shimmer className="mt-3 h-10 w-full rounded-xl" />
+      </div>
+      <div className="space-y-2 p-3">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <Shimmer key={i} className="h-16 w-full rounded-xl" />
         ))}
       </div>
     </div>
@@ -185,8 +222,8 @@ export function HomePageLoadingSkeleton({
     <div className="mx-auto flex w-full max-w-[1360px] flex-col gap-6">
       <HomeHeaderSkeleton />
       <QuickNavRailSkeleton />
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12 lg:gap-6">
-        <div className="flex flex-col gap-5 lg:col-span-8">
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-12 xl:gap-6">
+        <div className="flex flex-col gap-5 xl:col-span-8">
           {showAttendance ? <AttendanceCardSkeleton /> : null}
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
             <LivePanelShellSkeleton title="Team presence" />
@@ -194,11 +231,12 @@ export function HomePageLoadingSkeleton({
           </div>
           {showAttendance ? <MyTeamsSkeleton /> : null}
         </div>
-        <div className="flex flex-col gap-5 lg:col-span-4">
+        <div className="flex flex-col gap-5 xl:col-span-4">
+          <AllToolsPanelSkeleton />
           <ProfileSummarySkeleton />
           <AssetHandoverCardSkeleton />
         </div>
-        <div className="lg:col-span-12">
+        <div className="xl:col-span-12">
           <AddressesSkeleton />
         </div>
       </div>

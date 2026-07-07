@@ -350,3 +350,115 @@ export function managementRouteActive(
   if (pathname === href) return true;
   return pathname.startsWith(`${href}/`);
 }
+
+export type HomeFeatureGroup = {
+  id: string;
+  label: string;
+  description: string;
+  icon: ManagementNavIcon;
+  items: ManagementNavTile[];
+};
+
+const PARENT_GROUP_META: Record<
+  string,
+  { label: string; description: string; icon: ManagementNavIcon }
+> = {
+  "employee-management": {
+    label: "Employee",
+    description: "Hiring, roster, teams & leave",
+    icon: BiSolidUserPlus,
+  },
+  "employees-features-management": {
+    label: "Features access",
+    description: "Organization feature control",
+    icon: MdVpnKey,
+  },
+  "dashboard-management": {
+    label: "Dashboards",
+    description: "Assign dashboards to staff",
+    icon: MdSpaceDashboard,
+  },
+  "company-ip-addresses-management": {
+    label: "IP addresses",
+    description: "Office network allowlist",
+    icon: MdWifi,
+  },
+  "company-shift-management": {
+    label: "Shifts",
+    description: "Shift templates & schedules",
+    icon: MdSchedule,
+  },
+  "company-holiday-management": {
+    label: "Holidays",
+    description: "Company holiday calendar",
+    icon: MdEvent,
+  },
+  "company-attendance-management": {
+    label: "Attendance",
+    description: "Organization attendance",
+    icon: MdFactCheck,
+  },
+  "company-leave-management": {
+    label: "Leave",
+    description: "Leave types & policies",
+    icon: MdOutlineEventNote,
+  },
+  "payroll-management": {
+    label: "Payroll",
+    description: "Salary & compensation",
+    icon: MdPayments,
+  },
+  "task-management": {
+    label: "Tasks",
+    description: "Assign and track work",
+    icon: BiTask,
+  },
+};
+
+function humanizeFeatureKey(key: string): string {
+  return key
+    .split("-")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+/** Group flat nav tiles into parent modules with sub-features for home UI. */
+export function groupManagementNavTiles(
+  tiles: ManagementNavTile[],
+): HomeFeatureGroup[] {
+  const parentBuckets = new Map<string, ManagementNavTile[]>();
+  const standalone: ManagementNavTile[] = [];
+
+  for (const tile of tiles) {
+    if (tile.parentFeatureKey) {
+      const list = parentBuckets.get(tile.parentFeatureKey) ?? [];
+      list.push(tile);
+      parentBuckets.set(tile.parentFeatureKey, list);
+    } else {
+      standalone.push(tile);
+    }
+  }
+
+  const groups: HomeFeatureGroup[] = standalone.map((tile) => ({
+    id: tile.id,
+    label: tile.label,
+    description: tile.description,
+    icon: tile.icon,
+    items: [tile],
+  }));
+
+  for (const [parentKey, items] of parentBuckets) {
+    const meta = PARENT_GROUP_META[parentKey];
+    const sorted = [...items].sort((a, b) => a.label.localeCompare(b.label));
+    groups.push({
+      id: parentKey,
+      label: meta?.label ?? humanizeFeatureKey(parentKey),
+      description: meta?.description ?? sorted[0]?.description ?? "",
+      icon: meta?.icon ?? sorted[0]?.icon ?? MdHome,
+      items: sorted,
+    });
+  }
+
+  return groups.sort((a, b) => a.label.localeCompare(b.label));
+}

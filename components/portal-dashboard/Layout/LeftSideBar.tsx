@@ -9,6 +9,7 @@ import {
 } from "@/lib/orgFeatureAccess";
 import { isCurrentUserOrgAdmin, readRoleNameFromToken } from "@/lib/orgAdminAccess";
 import { useManagementDashboardContext } from "@/components/portal-dashboard/Layout/ManagementDashboardContext";
+import { useManagementShellOptional } from "@/components/portal-dashboard/Layout/ManagementShellContext";
 import { useRouter, useParams, usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
@@ -69,25 +70,6 @@ function desktopNavIcon(
       return fallback;
   }
 }
-
-const LG_SIDEBAR_STYLES = `
-@media (min-width: 1024px) {
-  @keyframes lgSidebarSubIn {
-    from { opacity: 0; transform: translateX(-8px); }
-    to { opacity: 1; transform: translateX(0); }
-  }
-  @keyframes lgSidebarRailIn {
-    from { opacity: 0; transform: translateX(-4px); }
-    to { opacity: 1; transform: translateX(0); }
-  }
-  .lg-sidebar-sub-in {
-    animation: lgSidebarSubIn 0.22s cubic-bezier(0.4, 0, 0.2, 1) both;
-  }
-  .lg-sidebar-rail-in {
-    animation: lgSidebarRailIn 0.18s ease-out both;
-  }
-}
-`;
 
 /** Admin mobile bottom bar: quick-access tabs (fourth slot is Menu). */
 const ADMIN_BOTTOM_TAB_IDS: string[] = [
@@ -155,6 +137,9 @@ function LeftSideBar({
   const orgId = String(params?.org_id ?? "1");
   const base = `/dashboard/${orgId}`;
   const dashboardCtx = useManagementDashboardContext();
+  const managementShell = useManagementShellOptional();
+  const appsPanelOpen = managementShell?.appsPanelOpen ?? false;
+  const closeAppsPanel = managementShell?.closeAppsPanel;
   const [roleHydrated, setRoleHydrated] = useState(false);
   useEffect(() => {
     setRoleHydrated(true);
@@ -605,10 +590,30 @@ function LeftSideBar({
       if (e.key !== "Escape") return;
       setMobileFullMenuOpen(false);
       setMobileSubParent(null);
+      closeAppsPanel?.();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [closeAppsPanel]);
+
+  useEffect(() => {
+    if (!managementShell) return;
+    if (typeof window === "undefined") return;
+    const isDesktop = window.matchMedia("(min-width: 1024px)").matches;
+    if (!isDesktop) {
+      setMobileSubParent(null);
+      setMobileFullMenuOpen(appsPanelOpen);
+    }
+  }, [appsPanelOpen, managementShell]);
+
+  useEffect(() => {
+    if (!managementShell) return;
+    if (typeof window === "undefined") return;
+    const isDesktop = window.matchMedia("(min-width: 1024px)").matches;
+    if (!isDesktop && !mobileFullMenuOpen && appsPanelOpen) {
+      closeAppsPanel?.();
+    }
+  }, [mobileFullMenuOpen, appsPanelOpen, managementShell, closeAppsPanel]);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -653,6 +658,7 @@ function LeftSideBar({
     }
     if (item.path) {
       router.push(item.path);
+      closeAppsPanel?.();
     }
   };
 
@@ -660,6 +666,7 @@ function LeftSideBar({
     setActiveSub(sub.id);
     if (sub.path) {
       router.push(sub.path);
+      closeAppsPanel?.();
     }
   };
 
@@ -678,14 +685,16 @@ function LeftSideBar({
         setMobileSubParent(null);
       }
       setMobileFullMenuOpen(false);
+      closeAppsPanel?.();
     },
-    [router],
+    [router, closeAppsPanel],
   );
 
   const closeMobileDrawers = useCallback(() => {
     setMobileFullMenuOpen(false);
     setMobileSubParent(null);
-  }, []);
+    closeAppsPanel?.();
+  }, [closeAppsPanel]);
 
   const isMobileBottomSlotActive = useCallback(
     (slot: BottomSlot) => {
@@ -749,207 +758,133 @@ function LeftSideBar({
 
   return (
     <>
-      {/* Desktop (lg+): Zoho-style light icon rail + animated sub panel */}
-      <div className="relative hidden h-screen shrink-0 lg:flex lg:sticky lg:top-0">
-        <style dangerouslySetInnerHTML={{ __html: LG_SIDEBAR_STYLES }} />
-        {/* ── LEFT RAIL ── */}
-        <div className="lg-sidebar-rail-in flex w-[58px] flex-shrink-0 flex-col items-center overflow-y-auto overflow-x-hidden border-r border-[#E4E7EC] bg-white py-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-          <div className="flex w-full flex-1 flex-col items-center">
-            {visibleNavItems.map((item) => {
-              const isActive = activeMain === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => handleMainClick(item)}
-                  title={item.name}
-                  className={`
-                  relative flex w-full cursor-pointer flex-col items-center justify-center gap-0.5 border-0 bg-transparent px-0.5 py-1.5 outline-none transition-colors duration-150
-                  ${
-                    isActive
-                      ? "text-[#008CD3] bg-[#E8F4FB]"
-                      : "text-[#6B7280] hover:bg-[#F9FAFB] hover:text-[#374151]"
-                  }
-                `}
-                >
-                  {isActive && (
-                    <span className="absolute left-0 top-1/2 h-[50%] w-[3px] -translate-y-1/2 rounded-r-sm bg-[#008CD3]" />
-                  )}
-
-                  <span className="flex h-[26px] w-[26px] items-center justify-center">
-                    {desktopNavIcon(item.id, item.icon)}
-                  </span>
-
-                  <span className="line-clamp-2 w-full px-0.5 text-center text-[8.5px] font-medium leading-[1.15] tracking-tight">
-                    {item.name}
-                  </span>
-                </button>
-              );
-            })}
+      {/* Desktop (lg+): floating "Your Apps" panel — toggled from header menu */}
+      <div className="pointer-events-none hidden lg:block" aria-hidden={!appsPanelOpen}>
+        <div
+          className={`fixed inset-0 z-[10015] bg-[#1F2937]/20 backdrop-blur-[2px] transition-opacity duration-300 ${
+            appsPanelOpen
+              ? "pointer-events-auto opacity-100"
+              : "pointer-events-none opacity-0"
+          }`}
+          onClick={() => closeAppsPanel?.()}
+          aria-hidden={!appsPanelOpen}
+        />
+        <aside
+          className={`fixed left-4 top-[calc(3.75rem+0.75rem)] z-[10020] flex max-h-[min(78vh,720px)] w-[min(19rem,88vw)] flex-col overflow-hidden rounded-2xl border border-[#E4E7EC] bg-white shadow-[0_20px_60px_rgba(15,23,42,0.18)] transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] ${
+            appsPanelOpen
+              ? "pointer-events-auto translate-x-0 opacity-100"
+              : "pointer-events-none -translate-x-4 opacity-0"
+          } ${appsPanelOpen ? "apps-panel-enter" : ""}`}
+          role="dialog"
+          aria-modal={appsPanelOpen}
+          aria-label="Your apps"
+          aria-hidden={!appsPanelOpen}
+        >
+          <div className="border-b border-[#E4E7EC] px-4 py-3.5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#9CA3AF]">
+              Your Apps
+            </p>
           </div>
-
-          <div className="mt-1 flex w-full flex-col items-center border-t border-[#E4E7EC] pt-1">
-            {isAdmin ? (
-              <>
-                {/* <button
-                type="button"
-                onClick={handleMoreClick}
-                className={`
-              relative flex flex-col items-center justify-center w-full px-1 py-[10px] gap-[5px]
-              cursor-pointer transition-all duration-150 border-0 bg-transparent outline-none
-              ${
-                activeMain === "more"
-                  ? "text-white bg-white/[0.06]"
-                  : "text-[#8A9BAD] hover:text-[#CBD5DF] hover:bg-white/[0.04]"
-              }
-            `}
-              >
-                {activeMain === "more" && (
-                  <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[55%] bg-[#C99237] rounded-r-[2px]" />
-                )}
-                <span className="text-[20px] leading-none flex items-center justify-center">
-                  <MdMoreHoriz />
-                </span>
-                <span
-                  className="text-[10px] font-medium text-center leading-[1.25] w-full px-1"
-                  style={{
-                    letterSpacing: "0.01em",
-                    wordBreak: "break-word",
-                    hyphens: "auto",
-                  }}
-                >
-                  More
-                </span>
-              </button>
-
-              <button
-                type="button"
-                className="flex flex-col items-center justify-center w-full px-1 py-[10px] gap-[5px]
-              cursor-pointer transition-all duration-150 border-0 bg-transparent outline-none
-              text-[#8A9BAD] hover:text-[#CBD5DF] hover:bg-white/[0.04]"
-              >
-                <span className="text-[20px] leading-none flex items-center justify-center">
-                  <MdSettings />
-                </span>
-                <span
-                  className="text-[10px] font-medium text-center leading-[1.25]"
-                  style={{ letterSpacing: "0.01em" }}
-                >
-                  Settings
-                </span>
-              </button>
-
-              <button
-                type="button"
-                className="flex items-center justify-center w-full px-1 py-[12px]
-              cursor-pointer transition-all duration-150 border-0 bg-transparent outline-none
-              text-[#8A9BAD] hover:text-[#CBD5DF] hover:bg-white/[0.04]"
-                aria-label="Menu"
-              >
-                <span className="text-[20px] leading-none flex items-center justify-center">
-                  <MdMenu />
-                </span>
-              </button> */}
-              </>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-1 [scrollbar-width:thin]">
+            {visibleNavItems.length === 0 ? (
+              <p className="px-4 py-6 text-sm text-[#6B7280]">
+                No features available for your role.
+              </p>
             ) : (
+              visibleNavItems.map((item) => {
+                const itemActive =
+                  activeMain === item.id ||
+                  Boolean(item.path && pathname?.startsWith(item.path)) ||
+                  item.children.some(
+                    (c) => c.path && pathname?.startsWith(c.path),
+                  );
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => handleMainClick(item)}
+                    className={`mx-2 flex w-[calc(100%-1rem)] items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[14px] font-medium transition-colors duration-150 ${
+                      itemActive
+                        ? "bg-[#E8F4FB] text-[#008CD3]"
+                        : "text-[#374151] hover:bg-[#F9FAFB] hover:text-[#008CD3]"
+                    }`}
+                  >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#F9FAFB] text-[18px] text-[#6B7280]">
+                      {desktopNavIcon(item.id, item.icon)}
+                    </span>
+                    <span className="min-w-0 flex-1 leading-snug">{item.name}</span>
+                    {item.children.length > 0 ? (
+                      <MdChevronRight className="shrink-0 text-lg text-[#9CA3AF]" aria-hidden />
+                    ) : null}
+                  </button>
+                );
+              })
+            )}
+
+            {!isAdmin ? (
               <button
                 type="button"
-                onClick={() => router.push(`${base}/my-attendance-history`)}
-                className={`
-              relative flex w-full cursor-pointer flex-col items-center justify-center gap-0.5 border-0 bg-transparent px-0.5 py-1.5 outline-none transition-colors duration-150
-              ${
-                myHistoryActive
-                  ? "bg-[#E8F4FB] text-[#008CD3]"
-                  : "text-[#6B7280] hover:bg-[#F9FAFB] hover:text-[#374151]"
-              }
-            `}
-                title="View your own attendance history (read-only)"
+                onClick={() => {
+                  router.push(`${base}/my-attendance-history`);
+                  closeAppsPanel?.();
+                }}
+                className={`mx-2 mt-1 flex w-[calc(100%-1rem)] items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[14px] font-medium transition-colors ${
+                  myHistoryActive
+                    ? "bg-[#E8F4FB] text-[#008CD3]"
+                    : "text-[#374151] hover:bg-[#F9FAFB]"
+                }`}
               >
-                {myHistoryActive && (
-                  <span className="absolute left-0 top-1/2 h-[50%] w-[3px] -translate-y-1/2 rounded-r-sm bg-[#008CD3]" />
-                )}
-                <span className="flex h-[26px] w-[26px] items-center justify-center">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#F9FAFB] text-[18px]">
                   <MdHistory className={LG_ICON} aria-hidden />
                 </span>
-                <span className="line-clamp-2 w-full px-0.5 text-center text-[8.5px] font-medium leading-[1.15]">
-                  My attendance
-                </span>
+                My attendance
               </button>
-            )}
+            ) : null}
 
             <button
               type="button"
-              onClick={() => router.push(`${base}/sync-connection`)}
-              className={`
-              relative flex w-full cursor-pointer flex-col items-center justify-center gap-0.5 border-0 bg-transparent px-0.5 py-1.5 outline-none transition-colors duration-150
-              ${
+              onClick={() => {
+                router.push(`${base}/sync-connection`);
+                closeAppsPanel?.();
+              }}
+              className={`mx-2 flex w-[calc(100%-1rem)] items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[14px] font-medium transition-colors ${
                 chatActive
                   ? "bg-[#E8F4FB] text-[#008CD3]"
-                  : "text-[#6B7280] hover:bg-[#F9FAFB] hover:text-[#374151]"
-              }
-            `}
-              title="Team chat"
+                  : "text-[#374151] hover:bg-[#F9FAFB]"
+              }`}
             >
-              {chatActive && (
-                <span className="absolute left-0 top-1/2 h-[50%] w-[3px] -translate-y-1/2 rounded-r-sm bg-[#008CD3]" />
-              )}
-              <span className="flex h-[26px] w-[26px] items-center justify-center">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#F9FAFB] text-[18px]">
                 <MdOutlineChat className={LG_ICON} aria-hidden />
               </span>
-              <span className="line-clamp-2 w-full px-0.5 text-center text-[8.5px] font-medium leading-[1.15]">
-                Chat
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setShowLogoutConfirm(true)}
-              className="flex w-full cursor-pointer flex-col items-center justify-center gap-0.5 border-0 bg-transparent px-0.5 py-1.5 text-[#6B7280] outline-none transition-colors duration-150 hover:bg-[#FCE8E6] hover:text-[#D93025]"
-              title="Sign out"
-            >
-              <span className="flex h-[26px] w-[26px] items-center justify-center">
-                <MdLogout className={LG_ICON} aria-hidden />
-              </span>
-              <span className="line-clamp-2 w-full px-0.5 text-center text-[8.5px] font-medium leading-[1.15]">
-                Log out
-              </span>
+              Team chat
             </button>
           </div>
-        </div>
 
-        {subItems.length > 0 && (
-          <aside
-            key={activeMain}
-            className="lg-sidebar-sub-in flex w-[11rem] flex-shrink-0 flex-col overflow-y-auto border-r border-[#E4E7EC] bg-[#F9FAFB] py-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
-            aria-label={activeItem ? `${activeItem.name} submenu` : "Submenu"}
-          >
-            {activeItem && (
-              <p className="mb-1 truncate px-3 text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
+          {subItems.length > 0 && activeItem ? (
+            <div className="border-t border-[#E4E7EC] bg-[#F9FAFB] px-2 py-2">
+              <p className="truncate px-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
                 {activeItem.name}
               </p>
-            )}
-            {subItems.map((sub) => {
-              const isSubActive = activeSub === sub.id;
-              return (
-                <button
-                  key={sub.id}
-                  type="button"
-                  onClick={() => handleSubClick(sub)}
-                  className={`
-                  mx-1.5 w-[calc(100%-0.75rem)] cursor-pointer rounded-md border-0 px-2.5 py-1.5 text-left text-[12px] font-medium outline-none transition-colors duration-150
-                  ${
-                    isSubActive
-                      ? "bg-[#E8F4FB] text-[#008CD3]"
-                      : "bg-transparent text-[#374151] hover:bg-white hover:text-[#008CD3]"
-                  }
-                `}
-                >
-                  <span className="line-clamp-2 leading-snug">{sub.name}</span>
-                </button>
-              );
-            })}
-          </aside>
-        )}
+              {subItems.map((sub) => {
+                const isSubActive = activeSub === sub.id;
+                return (
+                  <button
+                    key={sub.id}
+                    type="button"
+                    onClick={() => handleSubClick(sub)}
+                    className={`w-full rounded-lg px-2.5 py-2 text-left text-[12px] font-medium transition-colors ${
+                      isSubActive
+                        ? "bg-white text-[#008CD3] shadow-sm"
+                        : "text-[#374151] hover:bg-white hover:text-[#008CD3]"
+                    }`}
+                  >
+                    {sub.name}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+        </aside>
       </div>
 
       {/* Bottom tab bar (< lg): quick tabs + Menu */}
@@ -1042,7 +977,7 @@ function LeftSideBar({
               ? "pointer-events-auto opacity-100"
               : "pointer-events-none opacity-0"
           }`}
-          onClick={() => setMobileFullMenuOpen(false)}
+          onClick={() => closeMobileDrawers()}
           aria-hidden={!mobileFullMenuOpen}
         />
         <div
@@ -1058,11 +993,11 @@ function LeftSideBar({
         >
           <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
             <span className="text-sm font-semibold text-slate-900">
-              All features
+              Your Apps
             </span>
             <button
               type="button"
-              onClick={() => setMobileFullMenuOpen(false)}
+              onClick={() => closeMobileDrawers()}
               className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition active:scale-95"
               aria-label="Close menu"
             >

@@ -6,6 +6,7 @@ import Header from "@/components/portal-dashboard/Layout/Header";
 import LeftSideBar from "@/components/portal-dashboard/Layout/LeftSideBar";
 import RightMainSide from "@/components/portal-dashboard/Layout/RightMainSide";
 import { ManagementDashboardProvider } from "@/components/portal-dashboard/Layout/ManagementDashboardContext";
+import { ManagementShellProvider } from "@/components/portal-dashboard/Layout/ManagementShellContext";
 import UserDashboard from "@/components/portal-dashboard/user-layout/Dashboard";
 import { useManagementDashboardData } from "@/components/portal-dashboard/Layout/useManagementDashboardData";
 import OrgFeatureRouteGuard from "@/components/portal-dashboard/Layout/OrgFeatureRouteGuard";
@@ -35,27 +36,29 @@ function ManagementDashboardLayout({
 
   return (
     <ManagementDashboardProvider value={{ organization, user, organizationAddresses, loading }}>
-      <main
-        className={`relative w-full ${containScroll ? "flex h-dvh max-h-dvh overflow-hidden" : ""}`}
-      >
-        <div
-          className={`relative z-5 flex w-full ${containScroll ? "min-h-0 flex-1 overflow-hidden" : ""}`}
+      <ManagementShellProvider>
+        <main
+          className={`relative w-full ${containScroll ? "flex h-dvh max-h-dvh overflow-hidden" : ""}`}
         >
-          <LeftSideBar accessableFeatures={accessableFeatures} />
-          <section
-            className={
-              containScroll
-                ? "flex min-h-0 w-full flex-1 flex-col overflow-hidden pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] lg:pb-0"
-                : "w-full pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-0"
-            }
+          <div
+            className={`relative z-5 flex w-full ${containScroll ? "min-h-0 flex-1 overflow-hidden" : ""}`}
           >
-            <Header />
-            <div className={containScroll ? "min-h-0 flex-1 overflow-hidden" : "flex-1"}>
-              <RightMainSide containScroll={containScroll}>{children}</RightMainSide>
-            </div>
-          </section>
-        </div>
-      </main>
+            <LeftSideBar accessableFeatures={accessableFeatures} />
+            <section
+              className={
+                containScroll
+                  ? "flex min-h-0 w-full flex-1 flex-col overflow-hidden pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] lg:pb-0"
+                  : "w-full pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-0"
+              }
+            >
+              <Header />
+              <div className={containScroll ? "min-h-0 flex-1 overflow-hidden" : "flex-1"}>
+                <RightMainSide containScroll={containScroll}>{children}</RightMainSide>
+              </div>
+            </section>
+          </div>
+        </main>
+      </ManagementShellProvider>
     </ManagementDashboardProvider>
   );
 }
