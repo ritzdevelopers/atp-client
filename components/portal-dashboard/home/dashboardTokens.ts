@@ -1,7 +1,7 @@
 /** Shared presentation tokens — clean, light dashboard aesthetic. */
 
 export const dashPageCls =
-  "mx-auto flex w-full max-w-[1360px] flex-col gap-6 px-1 py-1 sm:px-0 lg:gap-7";
+  "mx-auto flex w-full max-w-[min(100%,1880px)] flex-col gap-6 px-3 py-1 sm:px-5 lg:gap-7 xl:px-6";
 
 export const dashCardCls =
   "card-fade-in overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)]";
@@ -72,6 +72,14 @@ export const mobilePrimaryBtnCls = btnBrandCls;
 export const mobileDangerBtnCls = btnDangerCls;
 export const mobileSecondaryBtnCls = btnGhostCls;
 export const mobileGoldBtnCls = btnPrimaryCls;
+
+export function homePageTabCls(active: boolean) {
+  return `relative flex min-w-0 flex-1 items-center justify-center gap-2 px-3 py-3.5 text-[13px] font-semibold transition sm:px-4 sm:text-[14px] ${
+    active
+      ? "text-[#0088DD] after:absolute after:inset-x-3 after:bottom-0 after:h-[2px] after:rounded-full after:bg-[#0088DD] sm:after:inset-x-4"
+      : "text-[#5C6978] hover:text-[#2B2B2B]"
+  }`;
+}
 
 export function roleBadgeClass(roleKey: string): string {
   const base =

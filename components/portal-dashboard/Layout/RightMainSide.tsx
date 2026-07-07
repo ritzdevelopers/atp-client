@@ -33,7 +33,7 @@ function RightMainSide({ children, containScroll = false }: RightMainSideProps) 
 
   const inner = containScroll
     ? "flex h-full min-h-0 w-full min-w-0 max-w-full flex-col overflow-hidden"
-    : "mx-auto w-full min-w-0 max-w-8xl";
+    : "mx-auto w-full min-w-0 max-w-[min(100%,1880px)]";
 
   return (
     <div className={shell}>

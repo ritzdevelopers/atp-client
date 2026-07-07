@@ -12,8 +12,10 @@ import Link from "next/link";
 import {
   Building2,
   ChevronRight,
+  LayoutDashboard,
   MapPin,
   Plus,
+  Sparkles,
   UsersRound,
 } from "lucide-react";
 import {
@@ -45,6 +47,7 @@ import {
 import OrgLiveUsersPanel from "@/components/portal-dashboard/home/OrgLiveUsersPanel";
 import BiometricLiveAttendanceFeed from "@/components/portal-dashboard/home/BiometricLiveAttendanceFeed";
 import HomeDashboardHeader from "@/components/portal-dashboard/home/HomeDashboardHeader";
+import HomeDashboardTab from "@/components/portal-dashboard/home/HomeDashboardTab";
 import HomeFeaturesSlider from "@/components/portal-dashboard/home/HomeFeaturesSlider";
 import HomeAllToolsPanel from "@/components/portal-dashboard/home/HomeAllToolsPanel";
 import HomeAttendanceCard from "@/components/portal-dashboard/home/HomeAttendanceCard";
@@ -60,6 +63,7 @@ import {
   dashSectionHeadCls,
   dashSectionMetaCls,
   dashSectionTitleCls,
+  homePageTabCls,
   iconBadgeCls,
   mobileCaptionCls,
 } from "@/components/portal-dashboard/home/dashboardTokens";
@@ -157,6 +161,57 @@ function activeTeamAssignments(
 ): EmployeeTeamAssignment[] {
   return (teams ?? []).filter(
     (team) => team.leave_date == null || team.leave_date === "",
+  );
+}
+
+type HomePageTab = "welcome" | "dashboard";
+
+function homeTabStorageKey(orgId: number) {
+  return `portal-home-tab-${orgId}`;
+}
+
+function HomePageTabBar({
+  activeTab,
+  onTabChange,
+  leavePendingCount,
+}: {
+  activeTab: HomePageTab;
+  onTabChange: (tab: HomePageTab) => void;
+  leavePendingCount: number;
+}) {
+  return (
+    <nav
+      className="card-fade-in sticky top-[3.25rem] z-20 overflow-hidden rounded-2xl border border-[#E4E7EC] bg-white/95 shadow-[0_4px_20px_rgba(15,23,42,0.06)] backdrop-blur-md"
+      aria-label="Home sections"
+    >
+      <div className="flex border-b border-[#EEF2F6]" role="tablist">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "welcome"}
+          onClick={() => onTabChange("welcome")}
+          className={homePageTabCls(activeTab === "welcome")}
+        >
+          <Sparkles className="h-4 w-4 shrink-0" aria-hidden />
+          Welcome
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "dashboard"}
+          onClick={() => onTabChange("dashboard")}
+          className={homePageTabCls(activeTab === "dashboard")}
+        >
+          <LayoutDashboard className="h-4 w-4 shrink-0" aria-hidden />
+          Dashboard
+          {leavePendingCount > 0 ? (
+            <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#FFF4E5] px-1.5 text-[10px] font-bold text-[#E8710A]">
+              {leavePendingCount > 99 ? "99+" : leavePendingCount}
+            </span>
+          ) : null}
+        </button>
+      </div>
+    </nav>
   );
 }
 
@@ -557,6 +612,7 @@ function HomeOverview({
   const [navTiles, setNavTiles] = useState<ManagementNavTile[]>([]);
   const [navTilesLoading, setNavTilesLoading] = useState(true);
   const [leavePendingCount, setLeavePendingCount] = useState(0);
+  const [activeHomeTab, setActiveHomeTab] = useState<HomePageTab>("welcome");
   const pathname = usePathname();
 
   const handoverHref =
@@ -650,6 +706,31 @@ function HomeOverview({
   useEffect(() => {
     void loadHomeOverviewData();
   }, [loadHomeOverviewData]);
+
+  useEffect(() => {
+    if (!orgId || Number.isNaN(orgId)) return;
+    try {
+      const stored = sessionStorage.getItem(homeTabStorageKey(orgId));
+      if (stored === "welcome" || stored === "dashboard") {
+        setActiveHomeTab(stored);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [orgId]);
+
+  const handleHomeTabChange = useCallback(
+    (tab: HomePageTab) => {
+      setActiveHomeTab(tab);
+      if (!orgId || Number.isNaN(orgId)) return;
+      try {
+        sessionStorage.setItem(homeTabStorageKey(orgId), tab);
+      } catch {
+        /* ignore */
+      }
+    },
+    [orgId],
+  );
 
   useEffect(() => {
     if (!orgId || Number.isNaN(orgId)) return;
@@ -972,6 +1053,7 @@ function HomeOverview({
     orgId && !Number.isNaN(orgId)
       ? `/dashboard/${orgId}/my-attendance-history`
       : undefined;
+  const activeTeamCount = activeTeamAssignments(attendanceData?.teams ?? []).length;
 
   return (
     <div className={`${dashPageCls} relative`}>
@@ -980,108 +1062,36 @@ function HomeOverview({
         aria-hidden
       />
 
-      <HomeDashboardHeader
-        greeting={greetingForHour()}
-        displayName={displayName}
-        orgTitle={orgTitle}
-        roleBadgeLabel={roleBadgeLabel}
-        roleKey={roleKey}
-        refreshing={attendanceLoading}
-        onRefresh={() => void loadHomeOverviewData(true)}
-        showAttendanceStrip={showAttendance && !attendanceLoading}
-        checkInLabel={checkInDisplay}
-        checkOutLabel={checkOutDisplay}
-        workingHoursDisplay={String(workingHoursDisplay)}
-        showLiveTimer={showLiveTimer}
-        statusLabel={statusLabel}
-        attendanceHistoryHref={attendanceHistoryHref}
+      <HomePageTabBar
+        activeTab={activeHomeTab}
+        onTabChange={handleHomeTabChange}
+        leavePendingCount={leavePendingCount}
       />
 
-      <HomeFeaturesSlider
-        tiles={navTiles}
-        pathname={pathname}
-        handoverPendingCount={handoverPendingCount}
-        loading={navTilesLoading}
-      />
-
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-12 xl:gap-6">
-        <div className="flex flex-col gap-5 xl:col-span-8">
-          <HomeLeaveQuickActions
-            orgId={orgId}
-            pendingCount={leavePendingCount}
-            delayMs={40}
+      {activeHomeTab === "welcome" ? (
+        <div role="tabpanel" aria-label="Welcome" className="space-y-6">
+          <HomeDashboardHeader
+            greeting={greetingForHour()}
+            displayName={displayName}
+            orgTitle={orgTitle}
+            roleBadgeLabel={roleBadgeLabel}
+            roleKey={roleKey}
+            refreshing={attendanceLoading}
+            onRefresh={() => void loadHomeOverviewData(true)}
+            showAttendanceStrip={showAttendance && !attendanceLoading}
+            checkInLabel={checkInDisplay}
+            checkOutLabel={checkOutDisplay}
+            workingHoursDisplay={String(workingHoursDisplay)}
+            showLiveTimer={showLiveTimer}
+            statusLabel={statusLabel}
+            attendanceHistoryHref={attendanceHistoryHref}
           />
 
-          {showAttendance ? (
-            <HomeAttendanceCard
-              loading={attendanceLoading}
-              workingHoursDisplay={String(workingHoursDisplay)}
-              showLiveTimer={showLiveTimer}
-              statusLabel={statusLabel}
-              statusTone={statusTone}
-              attendanceError={attendanceError}
-              hasCheckedInToday={hasCheckedInToday}
-              hasCheckedOutToday={hasCheckedOutToday}
-              effectiveCheckIn={effectiveTodayRecord?.check_in}
-              effectiveCheckOut={effectiveTodayRecord?.check_out}
-              showLatestMachinePunch={showLatestMachinePunch}
-              latestMachinePunch={latestMachinePunch}
-              formatCheckIn={formatAttendanceLogLocal}
-              formatCheckOut={formatAttendanceTimeLocal}
-              lateAfter={lateAfter}
-              dayVisual={dayVisual}
-              checkInSubmitting={checkInSubmitting}
-              checkOutSubmitting={checkOutSubmitting}
-              logSubmitting={logSubmitting}
-              canLog={
-                hasCheckedInToday &&
-                !hasCheckedOutToday &&
-                todayRecord?.id != null &&
-                todayRecord?.id !== ""
-              }
-              logSuccessMessage={logSuccessMessage}
-              attendanceActionError={attendanceActionError}
-              onCheckIn={() => void markCheckIn()}
-              onCheckOut={() => void markCheckOut()}
-              onLog={() => void markAttendanceLog()}
-              onDismissSuccess={() => setLogSuccessMessage(null)}
-              delayMs={50}
-            />
-          ) : null}
-
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-            <OrgLiveUsersPanel orgId={String(orgId)} className="w-full" />
-            <BiometricLiveAttendanceFeed orgId={String(orgId)} className="w-full" />
-          </div>
-
-          {roleKey !== "admin" ? (
-            <MyTeamsSection
-              teams={attendanceData?.teams ?? []}
-              orgId={orgId}
-              currentUserName={user.user_name?.trim() || displayName}
-              delayMs={100}
-              loading={overviewDataLoading}
-            />
-          ) : null}
-        </div>
-
-        <div className="flex flex-col gap-5 xl:col-span-4 xl:min-w-0">
-          <HomeAllToolsPanel
+          <HomeFeaturesSlider
             tiles={navTiles}
             pathname={pathname}
             handoverPendingCount={handoverPendingCount}
             loading={navTilesLoading}
-            className="xl:sticky xl:top-[calc(3.5rem+1rem)]"
-          />
-
-          <ProfileSummaryCard
-            organization={organization}
-            user={user}
-            ownerName={ownerName}
-            ownerEmail={ownerEmail}
-            ownerPhone={ownerPhone}
-            ownerMatchesUser={ownerMatchesUser}
-            delayMs={75}
           />
 
           <AssetHandoverCard
@@ -1091,15 +1101,121 @@ function HomeOverview({
             delayMs={100}
           />
         </div>
-
-        <div className="xl:col-span-12">
-          <OrganizationAddressesSection
-            addresses={organizationAddresses}
-            orgId={orgId}
-            delayMs={125}
-          />
-        </div>
-      </div>
+      ) : (
+        <HomeDashboardTab
+          orgTitle={orgTitle}
+          displayName={displayName}
+          roleBadgeLabel={roleBadgeLabel}
+          roleKey={roleKey}
+          refreshing={attendanceLoading}
+          onRefresh={() => void loadHomeOverviewData(true)}
+          showAttendance={showAttendance}
+          workingHoursDisplay={String(workingHoursDisplay)}
+          statusLabel={statusLabel}
+          showLiveTimer={showLiveTimer}
+          leavePendingCount={leavePendingCount}
+          activeTeamCount={activeTeamCount}
+          addressCount={organizationAddresses.length}
+          todayPanel={
+            showAttendance ? (
+              <HomeAttendanceCard
+                loading={attendanceLoading}
+                workingHoursDisplay={String(workingHoursDisplay)}
+                showLiveTimer={showLiveTimer}
+                statusLabel={statusLabel}
+                statusTone={statusTone}
+                attendanceError={attendanceError}
+                hasCheckedInToday={hasCheckedInToday}
+                hasCheckedOutToday={hasCheckedOutToday}
+                effectiveCheckIn={effectiveTodayRecord?.check_in}
+                effectiveCheckOut={effectiveTodayRecord?.check_out}
+                showLatestMachinePunch={showLatestMachinePunch}
+                latestMachinePunch={latestMachinePunch}
+                formatCheckIn={formatAttendanceLogLocal}
+                formatCheckOut={formatAttendanceTimeLocal}
+                lateAfter={lateAfter}
+                dayVisual={dayVisual}
+                checkInSubmitting={checkInSubmitting}
+                checkOutSubmitting={checkOutSubmitting}
+                logSubmitting={logSubmitting}
+                canLog={
+                  hasCheckedInToday &&
+                  !hasCheckedOutToday &&
+                  todayRecord?.id != null &&
+                  todayRecord?.id !== ""
+                }
+                logSuccessMessage={logSuccessMessage}
+                attendanceActionError={attendanceActionError}
+                onCheckIn={() => void markCheckIn()}
+                onCheckOut={() => void markCheckOut()}
+                onLog={() => void markAttendanceLog()}
+                onDismissSuccess={() => setLogSuccessMessage(null)}
+                delayMs={30}
+              />
+            ) : null
+          }
+          leavePanel={
+            <HomeLeaveQuickActions
+              orgId={orgId}
+              pendingCount={leavePendingCount}
+              delayMs={20}
+              variant="dashboard"
+            />
+          }
+          livePresencePanel={
+            <OrgLiveUsersPanel
+              orgId={String(orgId)}
+              className="h-full"
+              embedded
+            />
+          }
+          biometricPanel={
+            <BiometricLiveAttendanceFeed
+              orgId={String(orgId)}
+              className="h-full"
+              embedded
+            />
+          }
+          profilePanel={
+            <ProfileSummaryCard
+              organization={organization}
+              user={user}
+              ownerName={ownerName}
+              ownerEmail={ownerEmail}
+              ownerPhone={ownerPhone}
+              ownerMatchesUser={ownerMatchesUser}
+              delayMs={40}
+            />
+          }
+          teamsPanel={
+            roleKey !== "admin" ? (
+              <MyTeamsSection
+                teams={attendanceData?.teams ?? []}
+                orgId={orgId}
+                currentUserName={user.user_name?.trim() || displayName}
+                delayMs={50}
+                loading={overviewDataLoading}
+              />
+            ) : undefined
+          }
+          locationsPanel={
+            <OrganizationAddressesSection
+              addresses={organizationAddresses}
+              orgId={orgId}
+              delayMs={60}
+            />
+          }
+          allToolsPanel={
+            <HomeAllToolsPanel
+              tiles={navTiles}
+              pathname={pathname}
+              handoverPendingCount={handoverPendingCount}
+              loading={navTilesLoading}
+              variant="dashboard"
+            />
+          }
+        />
+      )}
     </div>
   );
 }

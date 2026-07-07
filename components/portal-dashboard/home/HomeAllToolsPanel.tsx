@@ -17,6 +17,7 @@ type HomeAllToolsPanelProps = {
   handoverPendingCount?: number;
   loading?: boolean;
   className?: string;
+  variant?: "default" | "dashboard";
 };
 
 export default function HomeAllToolsPanel({
@@ -25,6 +26,7 @@ export default function HomeAllToolsPanel({
   handoverPendingCount = 0,
   loading = false,
   className = "",
+  variant = "default",
 }: HomeAllToolsPanelProps) {
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -60,16 +62,21 @@ export default function HomeAllToolsPanel({
     return <AllToolsPanelSkeleton className={className} />;
   }
 
+  const maxHeight =
+    variant === "dashboard"
+      ? "max-h-[min(72vh,720px)]"
+      : "max-h-[min(65vh,600px)]";
+
   return (
     <aside
-      className={`${dashCardCls} flex max-h-[min(72vh,680px)] flex-col overflow-hidden ${className}`}
+      className={`${dashCardCls} h-fit ${maxHeight} overflow-hidden ${className}`}
       aria-label="All tools"
     >
       <div className="border-b border-[#EEF2F6] bg-gradient-to-r from-[#F5F0FF] via-white to-white px-4 py-4">
         <div className="flex items-start justify-between gap-2">
           <div>
-            <h2 className="text-[15px] font-semibold text-[#1F2937]">All tools</h2>
-            <p className="mt-0.5 text-[12px] text-[#6B7280]">
+            <h2 className="text-[16px] font-semibold text-[#1F2937] sm:text-[17px]">All tools</h2>
+            <p className="mt-0.5 text-[13px] text-[#6B7280] sm:text-[14px]">
               {tiles.length} shortcuts across {groups.length} modules
             </p>
           </div>
@@ -99,7 +106,13 @@ export default function HomeAllToolsPanel({
         </label>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-3 [scrollbar-width:thin]">
+      <div
+        className={`overflow-y-auto p-3 [scrollbar-width:thin] ${
+          variant === "dashboard"
+            ? "max-h-[min(60vh,640px)]"
+            : "max-h-[min(52vh,520px)]"
+        }`}
+      >
         {filteredGroups.length === 0 ? (
           <p className="px-2 py-10 text-center text-[13px] text-[#6B7280]">
             No tools match your search.
