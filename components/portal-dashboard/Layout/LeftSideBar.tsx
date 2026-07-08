@@ -760,15 +760,6 @@ function LeftSideBar({
   }, [appsPanelOpen, managementShell]);
 
   useEffect(() => {
-    if (!managementShell) return;
-    if (typeof window === "undefined") return;
-    const isDesktop = window.matchMedia("(min-width: 1024px)").matches;
-    if (!isDesktop && !mobileFullMenuOpen && appsPanelOpen) {
-      closeAppsPanel?.();
-    }
-  }, [mobileFullMenuOpen, appsPanelOpen, managementShell, closeAppsPanel]);
-
-  useEffect(() => {
     if (typeof document === "undefined") return;
     const lock = mobileFullMenuOpen || mobileSubParent != null;
     document.body.style.overflow = lock ? "hidden" : "";
@@ -779,8 +770,12 @@ function LeftSideBar({
 
   const toggleMobileMenu = useCallback(() => {
     setMobileSubParent(null);
-    setMobileFullMenuOpen((open) => !open);
-  }, []);
+    setMobileFullMenuOpen((open) => {
+      const next = !open;
+      managementShell?.setAppsPanelOpen(next);
+      return next;
+    });
+  }, [managementShell]);
 
   useEffect(() => {
     if (visibleNavItems.length === 0) return;

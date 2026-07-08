@@ -89,7 +89,7 @@ export default function HomeDashboardHeader({
                 />
               </h1>
               <p className="mt-2 max-w-2xl text-[14px] leading-relaxed text-[#4B5563] sm:text-[15px]">
-                Let&apos;s do great things together. 🚀 ✨
+                Let&apos;s do great things together.
               </p>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <p className="truncate text-[13px] text-[#6B7280]">{orgTitle}</p>
