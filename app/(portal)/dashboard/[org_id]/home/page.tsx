@@ -45,7 +45,7 @@ import {
   writeEmployeeDashboardHomeCache,
 } from "@/lib/employeeDashboardHomeCache";
 import OrgLiveUsersPanel from "@/components/portal-dashboard/home/OrgLiveUsersPanel";
-import BiometricLiveAttendanceFeed from "@/components/portal-dashboard/home/BiometricLiveAttendanceFeed";
+import HomeCompanyHolidayCalendar from "@/components/portal-dashboard/home/HomeCompanyHolidayCalendar";
 import HomeDashboardHeader from "@/components/portal-dashboard/home/HomeDashboardHeader";
 import HomeDashboardTab from "@/components/portal-dashboard/home/HomeDashboardTab";
 import HomeTodayAttendanceMonitor from "@/components/portal-dashboard/home/HomeTodayAttendanceMonitor";
@@ -1173,8 +1173,8 @@ function HomeOverview({
               embedded
             />
           }
-          biometricPanel={
-            <BiometricLiveAttendanceFeed
+          holidayCalendarPanel={
+            <HomeCompanyHolidayCalendar
               orgId={String(orgId)}
               className="h-full"
               embedded
