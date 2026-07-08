@@ -65,15 +65,6 @@ function LeftSideBar() {
     if (!managementShell) return;
     if (typeof window === "undefined") return;
     const isDesktop = window.matchMedia("(min-width: 1024px)").matches;
-    if (!isDesktop && !mobileMenuOpen && appsPanelOpen) {
-      closeAppsPanel?.();
-    }
-  }, [mobileMenuOpen, appsPanelOpen, managementShell, closeAppsPanel]);
-
-  useEffect(() => {
-    if (!managementShell) return;
-    if (typeof window === "undefined") return;
-    const isDesktop = window.matchMedia("(min-width: 1024px)").matches;
     if (!isDesktop) {
       setMobileMenuOpen(appsPanelOpen);
     }
