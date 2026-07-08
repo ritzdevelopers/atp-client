@@ -47,6 +47,18 @@ import {
   writeManageOrgUsersCache,
 } from "@/lib/employeeManagementCache";
 import { getSyncConnectionBase } from "@/lib/syncConnectionPaths";
+import {
+  btnBrandCls,
+  btnGhostCls,
+  dashCardCls,
+  dashLabelCls,
+  dashPageCls,
+  dashSectionMetaCls,
+  dashSectionTitleCls,
+  iconBadgeCls,
+  statBoxCls,
+} from "@/components/portal-dashboard/home/dashboardTokens";
+import { ManageEmployeesGridSkeleton } from "@/components/portal-dashboard/employees/ManageEmployeesSkeleton";
 
 type EmployeeTier = "employees" | "management" | "inactive" | "exit_process";
 type RosterTier = "employees" | "management";
@@ -296,22 +308,22 @@ function MobileEmployeeMenuSheet({
     >
       <button
         type="button"
-        className="absolute inset-0 bg-[#111B21]/50"
+        className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
         onClick={onClose}
         aria-label="Close menu"
       />
-      <div className="relative flex max-h-[min(88vh,560px)] flex-col overflow-hidden rounded-t-2xl bg-white shadow-[0_-8px_32px_rgba(15,23,42,0.18)]">
-        <div className="flex shrink-0 items-center justify-between border-b border-[#E4E7EC] px-4 py-3">
+      <div className="relative flex max-h-[min(88vh,560px)] flex-col overflow-hidden rounded-t-2xl bg-white shadow-[0_-8px_32px_rgba(15,23,42,0.18)] apps-panel-enter">
+        <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-4 py-3">
           <div className="min-w-0 pr-3">
-            <p id="employee-actions-sheet-title" className="truncate text-[15px] font-semibold text-[#1F2937]">
+            <p id="employee-actions-sheet-title" className="truncate text-[15px] font-semibold text-slate-900">
               {emp.name}
             </p>
-            <p className="text-[11px] text-[#6B7280]">{emp.empCode} · {emp.roleLabel}</p>
+            <p className="text-[11px] text-slate-500">{emp.empCode} · {emp.roleLabel}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#E4E7EC] text-[#6B7280] active:bg-[#F5F7FA]"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition active:bg-slate-50 hover:bg-slate-50"
             aria-label="Close"
           >
             <X className="h-5 w-5" aria-hidden />
@@ -527,23 +539,43 @@ function findRow(rows: OrgUserRow[], userId: string) {
 }
 
 function labelCls() {
-  return "mb-1 block text-[12px] font-medium text-[#374151]";
+  return `mb-1.5 block ${dashLabelCls}`;
 }
 
 function inputCls() {
-  return "w-full rounded-lg border border-[#E4E7EC] bg-white px-3 py-2 text-[14px] text-[#1F2937] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15";
+  return "w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-[14px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15";
 }
 
-function zohoPrimaryBtnCls() {
-  return "inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg bg-[#008CD3] px-4 py-2 text-[14px] font-medium text-white transition hover:bg-[#0070AA] disabled:pointer-events-none disabled:opacity-50";
+function listCardCls() {
+  return "card-fade-in overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)] transition hover:border-[#008CD3]/20 hover:shadow-[0_4px_20px_rgba(15,23,42,0.08)]";
 }
 
-function zohoSecondaryBtnCls() {
-  return "inline-flex min-h-[40px] items-center justify-center rounded-lg border border-[#E4E7EC] bg-white px-4 py-2 text-[14px] font-medium text-[#374151] transition hover:bg-[#F9FAFB] disabled:pointer-events-none disabled:opacity-50";
+function mainTabCls(active: boolean) {
+  return `relative pb-2.5 pt-1 text-[13px] font-semibold transition-colors ${
+    active
+      ? "text-[#008CD3] after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:rounded-full after:bg-[#008CD3]"
+      : "text-slate-500 hover:text-slate-800"
+  }`;
+}
+
+function mobileTabCls(active: boolean) {
+  return `min-w-[4.75rem] shrink-0 rounded-xl px-2.5 py-2 text-[12px] font-semibold transition-all duration-200 ${
+    active
+      ? "bg-white text-[#008CD3] shadow-sm ring-1 ring-[#008CD3]/15"
+      : "text-slate-500 hover:text-slate-700"
+  }`;
 }
 
 function zohoModalShellCls(wide = false) {
-  return `relative z-10 max-h-[90vh] w-full overflow-y-auto rounded-lg border border-[#E4E7EC] bg-white p-4 shadow-xl ${wide ? "max-w-3xl" : "max-w-md"}`;
+  return `relative z-10 max-h-[90vh] w-full overflow-y-auto rounded-2xl border border-slate-200/90 bg-white p-5 shadow-2xl ${wide ? "max-w-3xl" : "max-w-md"}`;
+}
+
+function successBannerCls() {
+  return "mb-3 flex items-start gap-2 rounded-2xl border border-emerald-200/80 bg-emerald-50 px-4 py-3 text-[13px] text-emerald-800 lg:mb-4";
+}
+
+function errorBannerCls() {
+  return "mb-3 flex items-start gap-2 rounded-2xl border border-rose-200/80 bg-rose-50 px-4 py-3 text-[13px] text-rose-900 lg:mb-4";
 }
 
 /** Same field names as employee onboarding / `uploadEmployeeDocuments` API. */
@@ -862,7 +894,13 @@ export default function ManageEmployeesPage() {
   const rosterStats = useMemo(() => {
     const activeCount = allCards.filter((e) => e.isActive).length;
     const inactiveCount = allCards.filter((e) => !e.isActive).length;
-    return { activeCount, inactiveCount };
+    const employeeCount = allCards.filter(
+      (e) => e.isActive && !e.hasExitProcess && e.rosterTier === "employees",
+    ).length;
+    const managementCount = allCards.filter(
+      (e) => e.isActive && !e.hasExitProcess && e.rosterTier === "management",
+    ).length;
+    return { activeCount, inactiveCount, employeeCount, managementCount };
   }, [allCards]);
 
   const navigateToSyncConnection = useCallback(
@@ -1096,10 +1134,14 @@ export default function ManageEmployeesPage() {
   }, []);
 
   return (
-    <div className="min-h-full bg-[#F5F7FA] pb-3 [font-family:var(--font-inter),system-ui,sans-serif] max-lg:-mx-1 sm:max-lg:-mx-2 lg:pb-8">
-      <div className="mx-auto max-w-6xl max-lg:max-w-none lg:px-4 lg:pt-6 md:max-w-7xl md:px-6">
+    <div className={`${dashPageCls} relative min-h-full pb-6`}>
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[360px] bg-gradient-to-b from-[#FDE8F3]/30 via-[#F4F6F9] to-transparent"
+        aria-hidden
+      />
+      <div className="flex flex-col gap-4 lg:gap-6">
         {scheduleLeaveSuccess ? (
-          <div className="mb-3 flex items-start gap-2 rounded-lg border border-[#A8DAB5] bg-[#E6F4EA] px-3 py-2 text-[12px] text-[#0F9D58] max-lg:mx-3 max-lg:mt-2 lg:mb-4 lg:px-4 lg:py-2.5 lg:text-[13px]">
+          <div className={successBannerCls()}>
             <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
             <span className="flex-1">{scheduleLeaveSuccess}</span>
             <button
@@ -1114,7 +1156,7 @@ export default function ManageEmployeesPage() {
         ) : null}
 
         {assetsSuccess ? (
-          <div className="mb-3 flex items-start gap-2 rounded-lg border border-[#A8DAB5] bg-[#E6F4EA] px-3 py-2 text-[12px] text-[#0F9D58] max-lg:mx-3 max-lg:mt-2 lg:mb-4 lg:px-4 lg:py-2.5 lg:text-[13px]">
+          <div className={successBannerCls()}>
             <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
             <span className="flex-1">{assetsSuccess}</span>
             <button
@@ -1129,7 +1171,7 @@ export default function ManageEmployeesPage() {
         ) : null}
 
         {assignRegTokensSuccess ? (
-          <div className="mb-3 flex items-start gap-2 rounded-lg border border-[#A8DAB5] bg-[#E6F4EA] px-3 py-2 text-[12px] text-[#0F9D58] max-lg:mx-3 max-lg:mt-2 lg:mb-4 lg:px-4 lg:py-2.5 lg:text-[13px]">
+          <div className={successBannerCls()}>
             <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
             <span className="flex-1">{assignRegTokensSuccess}</span>
             <button
@@ -1144,7 +1186,7 @@ export default function ManageEmployeesPage() {
         ) : null}
 
         {updateRegTokensSuccess ? (
-          <div className="mb-3 flex items-start gap-2 rounded-lg border border-[#A8DAB5] bg-[#E6F4EA] px-3 py-2 text-[12px] text-[#0F9D58] max-lg:mx-3 max-lg:mt-2 lg:mb-4 lg:px-4 lg:py-2.5 lg:text-[13px]">
+          <div className={successBannerCls()}>
             <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
             <span className="flex-1">{updateRegTokensSuccess}</span>
             <button
@@ -1159,7 +1201,7 @@ export default function ManageEmployeesPage() {
         ) : null}
 
         {listError && (
-          <div className="mb-3 flex items-start gap-2 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2 text-[12px] text-[#1F2937] max-lg:mx-3 max-lg:mt-2 lg:mb-4 lg:px-4 lg:py-2.5 lg:text-[13px]">
+          <div className={errorBannerCls()}>
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#D93025]" aria-hidden />
             <div className="flex flex-1 flex-wrap items-center justify-between gap-2">
               <span>{listError}</span>
@@ -1174,19 +1216,26 @@ export default function ManageEmployeesPage() {
           </div>
         )}
         
-        {/* Mobile & tablet: Zoho-style sticky header */}
-        <div className="sticky top-0 z-20 border-b border-[#E4E7EC] bg-white px-3 pb-2.5 pt-2.5 shadow-sm lg:hidden">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <h1 className="text-[15px] font-semibold text-[#1F2937]">Team members</h1>
-              <p className={`mt-0.5 ${mobileCaptionCls}`}>{tabSubtitle}</p>
+        {/* Mobile & tablet: sticky header */}
+        <div className="sticky top-0 z-20 -mx-3 border-b border-slate-200/80 bg-white/95 px-3 pb-3 pt-3 shadow-[0_1px_3px_rgba(15,23,42,0.06)] backdrop-blur-md sm:-mx-5 sm:px-4 lg:hidden">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-start gap-3">
+              <span className={iconBadgeCls("violet")}>
+                <Users className="h-4 w-4" aria-hidden />
+              </span>
+              <div className="min-w-0">
+                <h1 className="text-[17px] font-semibold tracking-tight text-slate-900">
+                  Team members
+                </h1>
+                <p className={`mt-0.5 ${dashSectionMetaCls}`}>{tabSubtitle}</p>
+              </div>
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
               <button
                 type="button"
                 onClick={() => setUpdateRegTokensOpen(true)}
                 disabled={listLoading || !!listError || activeEmployeesForRegTokens.length === 0}
-                className="inline-flex items-center gap-1 rounded-lg border border-[#E4E7EC] bg-white px-2.5 py-1.5 text-[11px] font-medium text-[#374151] transition hover:bg-[#F9FAFB] disabled:opacity-50"
+                className={`${btnGhostCls()} !min-h-[36px] !px-2.5 !text-[11px]`}
               >
                 <Pencil className="h-3.5 w-3.5" aria-hidden />
                 Update
@@ -1195,14 +1244,14 @@ export default function ManageEmployeesPage() {
                 type="button"
                 onClick={() => setAssignRegTokensOpen(true)}
                 disabled={listLoading || !!listError || activeEmployeesForRegTokens.length === 0}
-                className="inline-flex items-center gap-1 rounded-lg bg-[#008CD3] px-2.5 py-1.5 text-[11px] font-medium text-white transition hover:bg-[#0070AA] disabled:opacity-50"
+                className={`${btnBrandCls()} !min-h-[36px] !px-2.5 !text-[11px]`}
               >
                 <CalendarClock className="h-3.5 w-3.5" aria-hidden />
                 Assign
               </button>
             </div>
           </div>
-          <div className="mt-2 flex gap-0.5 overflow-x-auto rounded-md bg-[#F5F7FA] p-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="mt-3 flex gap-1 overflow-x-auto rounded-2xl bg-slate-100/80 p-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {tabOptions.map((t) => (
               <button
                 key={t.id}
@@ -1211,41 +1260,36 @@ export default function ManageEmployeesPage() {
                   setTab(t.id);
                   setSearch("");
                 }}
-                className={`min-w-[4.75rem] shrink-0 rounded-[5px] px-2.5 py-1.5 text-[12px] font-medium transition active:scale-[0.98] ${
-                  tab === t.id
-                    ? "bg-white text-[#008CD3] shadow-sm"
-                    : "text-[#6B7280]"
-                }`}
+                className={mobileTabCls(tab === t.id)}
               >
                 {t.label}
               </button>
             ))}
           </div>
-          <div className="relative mt-2">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#9CA3AF]" />
+          <div className="relative mt-3">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search name, email, role…"
               disabled={listLoading || !!listError}
-              className="w-full rounded-md border border-[#E4E7EC] bg-[#F9FAFB] py-2 pl-9 pr-3 text-[13px] text-[#1F2937] outline-none placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:bg-white focus:ring-2 focus:ring-[#008CD3]/15 disabled:opacity-60"
+              className="w-full rounded-xl border border-slate-200/90 bg-white py-2.5 pl-10 pr-3 text-[13px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15 disabled:opacity-60"
             />
           </div>
-          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-            <p className={mobileCaptionCls}>
-              <span className="font-semibold text-[#1F2937]">
+          <div className="mt-2.5 flex flex-wrap items-center gap-2">
+            <p className={dashSectionMetaCls}>
+              <span className="font-semibold text-slate-900">
                 {listLoading ? "…" : filtered.length}
               </span>{" "}
               member{filtered.length === 1 ? "" : "s"}
-              {filtered.some((e) => e.profileImageUrl) ? " · tap photo to enlarge" : ""}
             </p>
             {!listLoading && allCards.length > 0 ? (
               <>
-                <span className="inline-flex rounded-full bg-[#E6F4EA] px-2 py-0.5 text-[10px] font-semibold text-[#0F9D58]">
+                <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-200/60">
                   {rosterStats.activeCount} active
                 </span>
-                <span className="inline-flex rounded-full bg-[#FCE8E6] px-2 py-0.5 text-[10px] font-semibold text-[#D93025]">
+                <span className="inline-flex rounded-full bg-rose-50 px-2.5 py-0.5 text-[10px] font-semibold text-rose-700 ring-1 ring-rose-200/60">
                   {rosterStats.inactiveCount} inactive
                 </span>
               </>
@@ -1266,87 +1310,101 @@ export default function ManageEmployeesPage() {
           </div>
         </div>
 
-        {/* Desktop: page intro + tabs */}
+        {/* Desktop: page header */}
         <div className="hidden lg:block">
-          <header className="mb-4 overflow-hidden rounded-2xl border border-[#E4E7EC] bg-gradient-to-br from-[#0C123A] via-[#151e59] to-[#008CD3] p-6 text-white shadow-sm">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div className="flex items-start gap-3">
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 backdrop-blur-sm">
-                  <Users className="h-5 w-5" aria-hidden />
-                </span>
-                <div>
-                  <h1 className="text-xl font-semibold tracking-tight">Team members</h1>
-                  <p className="mt-1 text-sm text-white/80">{tabSubtitle}</p>
+          <header className={`${dashCardCls} overflow-hidden`}>
+            <div className="border-b border-slate-100 bg-gradient-to-r from-[#F8FAFC] via-white to-[#F0F9FF]/40 px-6 py-5">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="flex items-start gap-4">
+                  <span className={iconBadgeCls("violet")}>
+                    <Users className="h-5 w-5" aria-hidden />
+                  </span>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+                      Organization · Employees
+                    </p>
+                    <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">
+                      Team members
+                    </h1>
+                    <p className={`mt-1 ${dashSectionMetaCls}`}>{tabSubtitle}</p>
+                  </div>
                 </div>
+                {!listLoading && !listError ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setAssignRegTokensOpen(true)}
+                      disabled={activeEmployeesForRegTokens.length === 0}
+                      className={btnBrandCls()}
+                    >
+                      <CalendarClock className="h-4 w-4" aria-hidden />
+                      Assign regularization tokens
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setUpdateRegTokensOpen(true)}
+                      disabled={activeEmployeesForRegTokens.length === 0}
+                      className={btnGhostCls()}
+                    >
+                      <Pencil className="h-4 w-4" aria-hidden />
+                      Update regularization
+                    </button>
+                    <div className={`${statBoxCls("emerald")} min-w-[88px] text-center`}>
+                      <p className="text-lg font-semibold tabular-nums text-emerald-700">
+                        {rosterStats.activeCount}
+                      </p>
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-600/80">
+                        Active
+                      </p>
+                    </div>
+                    <div className={`${statBoxCls("default")} min-w-[88px] text-center`}>
+                      <p className="text-lg font-semibold tabular-nums text-rose-700">
+                        {rosterStats.inactiveCount}
+                      </p>
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                        Inactive
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
               </div>
-              {!listLoading && !listError ? (
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setAssignRegTokensOpen(true)}
-                    disabled={activeEmployeesForRegTokens.length === 0}
-                    className="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-[13px] font-medium text-[#008CD3] shadow-sm transition hover:bg-white/90 disabled:opacity-50"
-                  >
-                    <CalendarClock className="h-4 w-4" aria-hidden />
-                    Assign regularization tokens
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setUpdateRegTokensOpen(true)}
-                    disabled={activeEmployeesForRegTokens.length === 0}
-                    className="inline-flex items-center gap-2 rounded-lg border border-white/30 bg-white/10 px-3 py-2 text-[13px] font-medium text-white backdrop-blur-sm transition hover:bg-white/20 disabled:opacity-50"
-                  >
-                    <Pencil className="h-4 w-4" aria-hidden />
-                    Update regularization
-                  </button>
-                  <div className="rounded-lg bg-white/10 px-3 py-2 text-center backdrop-blur-sm">
-                    <p className="text-lg font-semibold leading-none text-[#A8E6CF]">
-                      {rosterStats.activeCount}
-                    </p>
-                    <p className="mt-1 text-[10px] uppercase tracking-wide text-white/70">Active</p>
-                  </div>
-                  <div className="rounded-lg bg-white/10 px-3 py-2 text-center backdrop-blur-sm">
-                    <p className="text-lg font-semibold leading-none text-[#FECACA]">
-                      {rosterStats.inactiveCount}
-                    </p>
-                    <p className="mt-1 text-[10px] uppercase tracking-wide text-white/70">
-                      Inactive
-                    </p>
-                  </div>
-                </div>
-              ) : null}
+            </div>
+            <div className="flex gap-6 border-b border-slate-100 px-6">
+              {tabOptions.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => {
+                    setTab(t.id);
+                    setSearch("");
+                  }}
+                  className={mainTabCls(tab === t.id)}
+                >
+                  {t.label}
+                  <span className="ml-1 text-[11px] opacity-70">
+                    (
+                    {t.id === "employees"
+                      ? rosterStats.employeeCount
+                      : t.id === "management"
+                        ? rosterStats.managementCount
+                        : rosterStats.inactiveCount}
+                    )
+                  </span>
+                </button>
+              ))}
             </div>
           </header>
-          <div className="flex gap-6 border-b border-[#E4E7EC]">
-            {tabOptions.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => {
-                  setTab(t.id);
-                  setSearch("");
-                }}
-                className={`relative pb-2.5 pt-1 text-[13px] font-medium transition-colors ${
-                  tab === t.id ? "text-[#008CD3]" : "text-[#6B7280] hover:text-[#374151]"
-                }`}
-              >
-                {t.label}
-                {tab === t.id ? (
-                  <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-[#008CD3]" />
-                ) : null}
-              </button>
-            ))}
-          </div>
         </div>
 
-        <div className="mt-4 hidden flex-col gap-3 sm:flex-row sm:items-center sm:justify-between lg:flex">
+        <div className={`${dashCardCls} hidden flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between lg:flex`}>
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-[13px] text-[#6B7280]">
+            <p className={dashSectionMetaCls}>
               Found{" "}
-              <span className="font-semibold text-[#1F2937]">
+              <span className="font-semibold text-slate-900">
                 {listLoading ? "…" : filtered.length}
               </span>{" "}
               matching member{filtered.length === 1 ? "" : "s"}
+              {filtered.some((e) => e.profileImageUrl) ? " · tap photo to enlarge" : ""}
             </p>
             {activeFilterLabel ? (
               <span className="inline-flex items-center gap-1 rounded-lg bg-[#E8F4FB] px-2 py-0.5 text-[12px] font-medium text-[#008CD3]">
@@ -1363,28 +1421,25 @@ export default function ManageEmployeesPage() {
             ) : null}
           </div>
 
-          <div className="relative w-full sm:max-w-xs">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF]" aria-hidden />
+          <div className="relative w-full sm:max-w-sm">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
             <input
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search name, email, role…"
               disabled={listLoading || !!listError}
-              className="w-full rounded-lg border border-[#E4E7EC] bg-white py-2 pl-9 pr-3 text-[14px] text-[#1F2937] outline-none placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15 disabled:opacity-60"
+              className="w-full rounded-xl border border-slate-200/90 bg-white py-2.5 pl-10 pr-3 text-[14px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15 disabled:opacity-60"
             />
           </div>
         </div>
 
         {listLoading ? (
-          <div className="mt-12 flex flex-col items-center justify-center gap-2 px-4 text-[#6B7280] max-lg:mt-8 lg:mt-10 lg:gap-3">
-            <Loader2 className="h-7 w-7 animate-spin text-[#008CD3]" aria-hidden />
-            <p className="text-[13px] lg:text-sm">Loading team members…</p>
-          </div>
+          <ManageEmployeesGridSkeleton />
         ) : (
           <>
-            <div className="mt-2 flex flex-col gap-2 px-3 max-lg:pb-3 lg:mt-6 lg:grid lg:grid-cols-2 lg:gap-5 lg:px-0 xl:grid-cols-3">
-              {filtered.map((emp) => {
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 lg:gap-5 xl:grid-cols-3">
+              {filtered.map((emp, index) => {
                 const fav = favorites.has(emp.id);
                 const row = findRow(userRows, emp.id);
                 const menuOpen = menuUserId === emp.id;
@@ -1394,7 +1449,7 @@ export default function ManageEmployeesPage() {
                 const menuPanel = menuOpen && row && (
                   <div
                     role="menu"
-                    className="absolute right-0 top-full z-[10001] mt-1 hidden min-w-[12.5rem] rounded-lg border border-[#E4E7EC] bg-white py-1 shadow-xl lg:block"
+                    className="absolute right-0 top-full z-[10001] mt-1 hidden min-w-[12.5rem] rounded-xl border border-slate-200/90 bg-white py-1 shadow-xl lg:block"
                   >
                     <EmployeeActionsMenuList
                       orgIdParam={orgIdParam}
@@ -1425,7 +1480,8 @@ export default function ManageEmployeesPage() {
                 return (
                   <article
                     key={listKey}
-                    className={`rounded-lg border border-[#E4E7EC] bg-white shadow-sm transition-shadow active:scale-[0.995] lg:overflow-visible lg:hover:border-[#008CD3]/20 lg:hover:shadow-md${menuOpen ? " lg:relative lg:z-[100]" : ""}`}
+                    className={`${listCardCls()}${menuOpen ? " lg:relative lg:z-[100]" : ""}`}
+                    style={{ animationDelay: `${Math.min(index, 8) * 40}ms` }}
                   >
                     {/* Mobile & tablet: Zoho-style list card */}
                     <div className="relative flex gap-2.5 p-2.5 lg:hidden">
@@ -1614,13 +1670,19 @@ export default function ManageEmployeesPage() {
             </div>
 
             {!listError && filtered.length === 0 && (
-              <p className={`mt-10 px-4 text-center max-lg:mt-6 ${mobileCaptionCls} lg:mt-10 lg:text-[13px] lg:text-[#6B7280]`}>
-                {tab === "inactive"
-                  ? `No inactive members${search.trim() ? " match your search" : ""}.`
-                  : tab === "exit_process"
-                    ? `No members in exit process${search.trim() ? " match your search" : ""}.`
-                    : `No members in this tab${search.trim() ? " match your search" : ""}.`}
-              </p>
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-6 py-14 text-center">
+                <Users className="mx-auto mb-3 h-10 w-10 text-slate-300" aria-hidden />
+                <p className="text-[15px] font-semibold text-slate-800">
+                  {tab === "inactive"
+                    ? `No inactive members${search.trim() ? " match your search" : ""}.`
+                    : tab === "exit_process"
+                      ? `No members in exit process${search.trim() ? " match your search" : ""}.`
+                      : `No members in this tab${search.trim() ? " match your search" : ""}.`}
+                </p>
+                <p className={`mt-1 ${dashSectionMetaCls}`}>
+                  Try another tab or clear your search filters.
+                </p>
+              </div>
             )}
           </>
         )}
@@ -1636,7 +1698,7 @@ export default function ManageEmployeesPage() {
         >
           <button
             type="button"
-            className="absolute inset-0 bg-black/50"
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
             aria-label="Close"
             onClick={() => !editSaving && setEditRow(null)}
           />
@@ -1721,14 +1783,14 @@ export default function ManageEmployeesPage() {
                   type="button"
                   disabled={editSaving}
                   onClick={() => setEditRow(null)}
-                  className={zohoSecondaryBtnCls()}
+                  className={btnGhostCls()}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={editSaving}
-                  className={zohoPrimaryBtnCls()}
+                  className={btnBrandCls()}
                 >
                   {editSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                   Save
@@ -1749,7 +1811,7 @@ export default function ManageEmployeesPage() {
         >
           <button
             type="button"
-            className="absolute inset-0 bg-black/50"
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
             aria-label="Close"
             onClick={() => !roleSaving && setRoleRow(null)}
           />
@@ -1809,14 +1871,14 @@ export default function ManageEmployeesPage() {
                   type="button"
                   disabled={roleSaving}
                   onClick={() => setRoleRow(null)}
-                  className={zohoSecondaryBtnCls()}
+                  className={btnGhostCls()}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={roleSaving || roleLoading || roleOptions.length === 0}
-                  className={zohoPrimaryBtnCls()}
+                  className={btnBrandCls()}
                 >
                   {roleSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                   Update role
@@ -1837,7 +1899,7 @@ export default function ManageEmployeesPage() {
         >
           <button
             type="button"
-            className="absolute inset-0 bg-black/50"
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
             aria-label="Close"
             onClick={() => !documentsSaving && setDocumentsRow(null)}
           />
@@ -1914,7 +1976,7 @@ export default function ManageEmployeesPage() {
                     setDocFiles({});
                     setDocumentsError(null);
                   }}
-                  className={`${zohoSecondaryBtnCls()} disabled:opacity-60`}
+                  className={`${btnGhostCls()} disabled:opacity-60`}
                 >
                   Clear files
                 </button>
@@ -1922,14 +1984,14 @@ export default function ManageEmployeesPage() {
                   type="button"
                   disabled={documentsSaving}
                   onClick={() => setDocumentsRow(null)}
-                  className={`${zohoSecondaryBtnCls()} disabled:opacity-60`}
+                  className={`${btnGhostCls()} disabled:opacity-60`}
                 >
                   Close
                 </button>
                 <button
                   type="submit"
                   disabled={documentsSaving}
-                  className={zohoPrimaryBtnCls()}
+                  className={btnBrandCls()}
                 >
                   {documentsSaving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
                   <Upload className="h-4 w-4" aria-hidden />

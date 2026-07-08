@@ -1,15 +1,19 @@
-export const cardBase =
-  "rounded-2xl border border-slate-200/80 bg-white/95 shadow-sm shadow-slate-200/60 backdrop-blur-sm transition duration-200 hover:border-indigo-200/60 hover:shadow-md";
+import {
+  dashCardCls,
+  dashLabelCls,
+  dashSectionMetaCls,
+  dashSectionTitleCls,
+} from "@/components/portal-dashboard/home/dashboardTokens";
+
+export const cardBase = `${dashCardCls} transition duration-200 hover:border-[#008CD3]/15 hover:shadow-[0_4px_20px_rgba(15,23,42,0.08)]`;
 
 export const cardPadding = "p-5 sm:p-6";
 
-export const cardTitle =
-  "text-sm font-semibold tracking-tight text-slate-900 sm:text-base";
+export const cardTitle = dashSectionTitleCls;
 
-export const cardSubtitle = "text-xs text-slate-500 sm:text-sm";
+export const cardSubtitle = dashSectionMetaCls;
 
-export const sectionLabel =
-  "text-[11px] font-semibold uppercase tracking-wider text-slate-400";
+export const sectionLabel = `${dashLabelCls} font-semibold uppercase tracking-[0.08em]`;
 
 export const badgeBase =
   "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold";

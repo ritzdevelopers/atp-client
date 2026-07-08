@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AlertCircle } from "lucide-react";
-import PortalPageLoader from "@/components/portal-dashboard/ui/PortalPageLoader";
+import EmployeeDashboardSkeleton from "./components/EmployeeDashboardSkeleton";
 import { fetchMyRegularizationBalance } from "@/services/regularization";
 import {
   formatAttendanceTimeLocal,
@@ -156,12 +156,14 @@ export default function EmployeeDashboardV2() {
 
   const pendingTaskCount = tasks.filter((t) => t.task_status !== "completed").length;
 
+  const statusLabel = todayRecord?.attendance_status
+    ? String(todayRecord.attendance_status).replace(/_/g, " ")
+    : hasCheckedInToday
+      ? "Checked in"
+      : "Not checked in";
+
   if ((orgResolving || loading) && !data) {
-    return (
-      <div className="flex h-full min-h-0 items-center justify-center">
-        <PortalPageLoader message="Loading your dashboard…" size="lg" />
-      </div>
-    );
+    return <EmployeeDashboardSkeleton />;
   }
 
   if (error && !data) {
@@ -189,26 +191,40 @@ export default function EmployeeDashboardV2() {
   }
 
   return (
-    <div className="dashboard-enter flex h-full min-h-0 flex-col overflow-hidden bg-slate-50">
-      <DashboardCompactHeader
-        employeeName={employeeName}
-        roleName={emp?.user_role_name}
-        shiftName={emp?.user_shift_name}
-        monthProgress={attendanceStats.monthProgress}
-        presentDays={attendanceStats.presentDays}
-        leaveBalance={leaveSummary.remaining_leaves}
-        refreshing={refreshing}
-        onRefresh={() => void refresh()}
+    <div className="dashboard-enter relative flex h-full min-h-0 flex-col overflow-hidden">
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[280px] bg-gradient-to-b from-[#FDE8F3]/25 via-[#F4F6F9] to-transparent"
+        aria-hidden
       />
 
-      <DashboardTabNav
-        active={activeTab}
-        onChange={setActiveTab}
-        taskCount={pendingTaskCount}
-        handoverCount={handoverPendingCount}
-      />
+      <div className="relative flex min-h-0 flex-1 flex-col gap-2 overflow-hidden px-2 py-2 sm:gap-3 sm:px-3 sm:py-3">
+        <DashboardCompactHeader
+          employeeName={employeeName}
+          roleName={emp?.user_role_name}
+          shiftName={emp?.user_shift_name}
+          orgName={org?.org_name ?? undefined}
+          profileImageUrl={profileImage}
+          monthProgress={attendanceStats.monthProgress}
+          presentDays={attendanceStats.presentDays}
+          leaveBalance={leaveSummary.remaining_leaves}
+          checkInLabel={formatAttendanceTimeLocal(todayRecord?.check_in)}
+          checkOutLabel={formatAttendanceTimeLocal(todayRecord?.check_out)}
+          workingHoursDisplay={workingHoursDisplay}
+          showLiveTimer={showLiveTimer}
+          statusLabel={statusLabel}
+          orgId={orgIdParam}
+          refreshing={refreshing}
+          onRefresh={() => void refresh()}
+        />
 
-      <div className="min-h-0 flex-1 overflow-hidden px-2 py-2 sm:px-3 sm:py-3">
+        <DashboardTabNav
+          active={activeTab}
+          onChange={setActiveTab}
+          taskCount={pendingTaskCount}
+          handoverCount={handoverPendingCount}
+        />
+
+        <div className="min-h-0 flex-1 overflow-hidden">
         {activeTab === "home" ? (
           <DashboardPanel scrollable={false}>
             <DashboardOverviewPanel
@@ -323,6 +339,7 @@ export default function EmployeeDashboardV2() {
             </div>
           </DashboardPanel>
         ) : null}
+        </div>
       </div>
     </div>
   );

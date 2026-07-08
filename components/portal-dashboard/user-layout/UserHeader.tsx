@@ -4,9 +4,7 @@ import { useCallback, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { LayoutGrid, LogOut } from "lucide-react";
-import HeaderFeatureSearch from "@/components/portal-dashboard/Layout/HeaderFeatureSearch";
-import HeaderNotificationsPanel from "@/components/portal-dashboard/Layout/HeaderNotificationsPanel";
-import HeaderTeamsPanel from "@/components/portal-dashboard/Layout/HeaderTeamsPanel";
+import UserHeaderFeatureSearch from "@/components/portal-dashboard/user-layout/UserHeaderFeatureSearch";
 import { useManagementShell } from "@/components/portal-dashboard/Layout/ManagementShellContext";
 import { btnGhostCls } from "@/components/portal-dashboard/home/dashboardTokens";
 
@@ -18,11 +16,11 @@ function headerIconBtnCls(active = false) {
   }`;
 }
 
-function Header() {
+export default function UserHeader() {
   const router = useRouter();
   const params = useParams();
   const orgId = String(params?.org_id ?? "");
-  const homeHref = orgId ? `/dashboard/${orgId}/home` : "/";
+  const homeHref = orgId ? `/user-dashboard/${orgId}/home` : "/";
   const { appsPanelOpen, toggleAppsPanel } = useManagementShell();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
@@ -65,13 +63,10 @@ function Header() {
           </div>
 
           <div className="min-w-0 flex-1">
-            <HeaderFeatureSearch />
+            <UserHeaderFeatureSearch />
           </div>
 
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-            <HeaderTeamsPanel />
-            <HeaderNotificationsPanel />
-
             <button
               type="button"
               onClick={() => setShowLogoutConfirm(true)}
@@ -89,11 +84,11 @@ function Header() {
           className="fixed inset-0 z-[100000] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-[2px]"
           role="dialog"
           aria-modal="true"
-          aria-labelledby="header-logout-title"
+          aria-labelledby="user-header-logout-title"
         >
           <div className="w-full max-w-sm rounded-2xl border border-slate-200/90 bg-white p-5 shadow-2xl">
             <h2
-              id="header-logout-title"
+              id="user-header-logout-title"
               className="text-base font-semibold text-slate-900"
             >
               Sign out?
@@ -123,5 +118,3 @@ function Header() {
     </>
   );
 }
-
-export default Header;
