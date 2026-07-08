@@ -4,6 +4,7 @@ import { type ReactNode } from "react";
 import {
   Building2,
   CalendarDays,
+  ClipboardList,
   Clock,
   LayoutDashboard,
   MapPin,
@@ -119,6 +120,7 @@ export type HomeDashboardTabProps = {
   addressCount: number;
   todayPanel: ReactNode | null;
   leavePanel: ReactNode;
+  attendanceMonitorPanel?: ReactNode;
   livePresencePanel: ReactNode;
   biometricPanel: ReactNode;
   profilePanel: ReactNode;
@@ -143,6 +145,7 @@ export default function HomeDashboardTab({
   addressCount,
   todayPanel,
   leavePanel,
+  attendanceMonitorPanel,
   livePresencePanel,
   biometricPanel,
   profilePanel,
@@ -255,6 +258,16 @@ export default function HomeDashboardTab({
           </div>
         </div>
       </DashboardSection>
+
+      {attendanceMonitorPanel ? (
+        <DashboardSection
+          title="Today's attendance monitor"
+          description="Present, absent, late punch-ins, and today's check-in / check-out across your organization"
+          icon={<ClipboardList className="h-5 w-5" aria-hidden />}
+        >
+          {attendanceMonitorPanel}
+        </DashboardSection>
+      ) : null}
 
       {/* Live monitoring */}
       <DashboardSection
