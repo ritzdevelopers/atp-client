@@ -6,6 +6,8 @@ import {
   Check,
   ChevronDown,
   KeyRound,
+  LayoutGrid,
+  Loader2,
   Puzzle,
   RefreshCw,
   Search,
@@ -15,7 +17,21 @@ import {
   Users,
   X,
 } from "lucide-react";
-import PortalPageLoader from "@/components/portal-dashboard/ui/PortalPageLoader";
+import AssignFeaturesPageSkeleton from "@/components/portal-dashboard/organization-features/AssignFeaturesSkeleton";
+import {
+  btnBrandCls,
+  btnGhostCls,
+  dashCardCls,
+  dashLabelCls,
+  dashPageCls,
+  dashSectionBodyCls,
+  dashSectionHeadCls,
+  dashSectionMetaCls,
+  dashSectionTitleCls,
+  iconBadgeCls,
+  statBoxCls,
+  userInitials as dashUserInitials,
+} from "@/components/portal-dashboard/home/dashboardTokens";
 import PortalResponseModal, {
   type PortalResponseVariant,
 } from "@/components/portal-dashboard/ui/PortalResponseModal";
@@ -76,28 +92,56 @@ function authHeaders(): Record<string, string> {
 }
 
 function userInitials(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  return dashUserInitials(name);
 }
 
-function moduleColorClass(name: string) {
-  const colors = [
-    "bg-[#E8F4FB] text-[#008CD3]",
-    "bg-[#E6F4EA] text-[#0F9D58]",
-    "bg-[#FEF3E6] text-[#E8710A]",
-    "bg-[#F3E8FD] text-[#7B1FA2]",
-  ];
+const MODULE_ICON_THEMES: Record<
+  string,
+  { variant: "blue" | "amber" | "emerald" | "violet" | "slate"; label: string }
+> = {
+  "employee-management": { variant: "violet", label: "EM" },
+  "employees-roles-management": { variant: "amber", label: "RO" },
+  "employees-features-management": { variant: "emerald", label: "AC" },
+  "payroll-management": { variant: "blue", label: "PR" },
+  "task-management": { variant: "violet", label: "TK" },
+  "company-attendance-management": { variant: "emerald", label: "AT" },
+  "company-leave-management": { variant: "amber", label: "LV" },
+};
+
+function moduleMeta(featureVal: string, featureName: string) {
+  const key = featureVal.trim().toLowerCase();
+  const themed = MODULE_ICON_THEMES[key];
+  if (themed) return themed;
+  const label = (featureName || featureVal).slice(0, 2).toUpperCase();
+  const variants = ["blue", "emerald", "amber", "violet"] as const;
   let hash = 0;
-  for (let i = 0; i < name.length; i += 1) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return colors[Math.abs(hash) % colors.length];
+  for (let i = 0; i < key.length; i += 1) hash = key.charCodeAt(i) + ((hash << 5) - hash);
+  return { variant: variants[Math.abs(hash) % variants.length], label };
 }
 
-function zohoInputCls() {
-  return "w-full rounded-lg border border-[#E4E7EC] bg-white py-2.5 pl-9 pr-3 text-[13px] text-[#1F2937] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15";
+function inputCls() {
+  return "w-full rounded-xl border border-slate-200/90 bg-white py-2.5 pl-10 pr-3 text-[14px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15";
+}
+
+function listCardCls(selected = false, partial = false) {
+  const ring = selected
+    ? "border-[#008CD3] ring-2 ring-[#008CD3]/15"
+    : partial
+      ? "border-emerald-200 ring-1 ring-emerald-100"
+      : "border-slate-200/90";
+  return `card-fade-in overflow-hidden rounded-2xl border bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)] transition hover:border-[#008CD3]/20 hover:shadow-[0_4px_20px_rgba(15,23,42,0.08)] ${ring}`;
+}
+
+function errorBannerCls() {
+  return "rounded-2xl border border-rose-200/80 bg-rose-50 px-4 py-3 text-[13px] text-rose-800";
+}
+
+function infoBannerCls() {
+  return "flex items-start gap-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-3.5";
+}
+
+function modalShellCls() {
+  return "relative z-10 w-full max-w-lg overflow-hidden rounded-t-2xl border border-slate-200/90 bg-white shadow-2xl sm:rounded-2xl";
 }
 
 export default function AssignFeaturesToEmployeePage() {
@@ -570,7 +614,7 @@ export default function AssignFeaturesToEmployeePage() {
         className={`group rounded-xl border p-3.5 transition-all duration-200 ${
           checked
             ? "border-[#008CD3] bg-gradient-to-br from-[#E8F4FB] to-white shadow-sm ring-1 ring-[#008CD3]/15"
-            : "border-[#E4E7EC] bg-white hover:border-[#008CD3]/40 hover:shadow-sm"
+            : "border-slate-200/90 bg-white hover:border-[#008CD3]/30 hover:shadow-sm"
         }`}
       >
         <button
@@ -588,15 +632,15 @@ export default function AssignFeaturesToEmployeePage() {
             {checked ? <Check className="h-3 w-3" strokeWidth={3} /> : null}
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-[13px] font-semibold text-[#1F2937]">
+            <p className="text-[13px] font-semibold text-slate-900">
               {sub.sub_feature_name}
             </p>
-            <p className="mt-0.5 text-[11px] text-[#6B7280]">{sub.sub_feature_path}</p>
+            <p className="mt-0.5 text-[11px] text-slate-500">{sub.sub_feature_path}</p>
           </div>
         </button>
         {checked ? (
-          <div className="mt-3 border-t border-[#E4E7EC]/80 pt-3 pl-[30px]">
-            <p className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#9CA3AF]">
+          <div className="mt-3 border-t border-slate-100 pt-3 pl-[30px]">
+            <p className={`mb-2 flex items-center gap-1.5 ${dashLabelCls} font-semibold uppercase tracking-wider`}>
               <KeyRound className="h-3 w-3" />
               CRUD permissions
             </p>
@@ -611,7 +655,7 @@ export default function AssignFeaturesToEmployeePage() {
                     className={`rounded-md px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ring-1 transition ${
                       on
                         ? PERMISSION_COLORS[perm]
-                        : "bg-[#F9FAFB] text-[#9CA3AF] ring-[#E4E7EC] hover:text-[#6B7280]"
+                        : "bg-slate-50 text-slate-400 ring-slate-200 hover:text-slate-600"
                     }`}
                   >
                     {perm}
@@ -629,32 +673,51 @@ export default function AssignFeaturesToEmployeePage() {
     return (
       <div
         key={String(sub.id)}
-        className="rounded-lg border border-[#E4E7EC] bg-white px-3 py-2.5"
+        className="rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 transition hover:border-[#008CD3]/20 hover:bg-sky-50/30"
       >
-        <p className="text-[13px] font-medium text-[#1F2937]">{sub.sub_feature_name}</p>
-        <p className="text-[11px] text-[#6B7280]">{sub.sub_feature_path}</p>
+        <p className="text-[13px] font-medium text-slate-900">{sub.sub_feature_name}</p>
+        <p className="text-[11px] text-slate-500">{sub.sub_feature_path}</p>
       </div>
     );
   }
 
+  if (loadingFeatures && orgFeatures.length === 0) {
+    return (
+      <section className={`${dashPageCls} relative min-h-full pb-8`}>
+        <div
+          className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[320px] bg-gradient-to-b from-[#FDE8F3]/25 via-[#F4F6F9] to-transparent"
+          aria-hidden
+        />
+        <AssignFeaturesPageSkeleton />
+      </section>
+    );
+  }
+
   return (
-    <section className="min-h-full bg-[#F5F7FA] p-4 lg:p-6">
-      <div className="mx-auto max-w-6xl space-y-4">
-        {/* Hero header */}
-        <div className="overflow-hidden rounded-2xl border border-[#E4E7EC] bg-white shadow-sm">
-          <div className="border-b border-[#E4E7EC] bg-gradient-to-r from-[#E8F4FB] via-white to-[#E6F4EA] px-5 py-5 lg:px-6">
+    <section className={`${dashPageCls} relative min-h-full pb-8`}>
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[320px] bg-gradient-to-b from-[#FDE8F3]/25 via-[#F4F6F9] to-transparent"
+        aria-hidden
+      />
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 lg:gap-5">
+        {/* Page header */}
+        <header className={`${dashCardCls} overflow-hidden`}>
+          <div className="border-b border-slate-100 bg-gradient-to-r from-[#F8FAFC] via-white to-[#F0F9FF]/40 px-5 py-5 lg:px-6">
             <div className="flex flex-wrap items-start justify-between gap-4">
-              <div className="flex items-start gap-3">
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#008CD3] text-white shadow-md shadow-[#008CD3]/25">
-                  <ShieldCheck className="h-5 w-5" />
+              <div className="flex items-start gap-3 sm:gap-4">
+                <span className={iconBadgeCls("emerald")}>
+                  <ShieldCheck className="h-5 w-5" aria-hidden />
                 </span>
                 <div>
-                  <h1 className="text-[20px] font-semibold tracking-tight text-[#1F2937]">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+                    Organization · Features
+                  </p>
+                  <h1 className={`mt-0.5 ${dashSectionTitleCls} text-[20px] sm:text-[22px]`}>
                     Assign access to employee
                   </h1>
-                  <p className="mt-1 max-w-xl text-[13px] leading-relaxed text-[#6B7280]">
-                    Select an employee, choose modules and sub-modules in one flow, and
-                    assign parent features with CRUD permissions in a single save.
+                  <p className={`mt-1.5 max-w-2xl ${dashSectionMetaCls}`}>
+                    Select an employee, choose modules and sub-modules, then assign parent
+                    features with CRUD permissions in one save.
                   </p>
                 </div>
               </div>
@@ -663,10 +726,11 @@ export default function AssignFeaturesToEmployeePage() {
                   type="button"
                   onClick={() => void loadOrgFeatures(true)}
                   disabled={loadingFeatures || refreshingFeatures}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-[#E4E7EC] bg-white px-3 py-2 text-[13px] font-medium text-[#374151] shadow-sm transition hover:bg-[#F9FAFB] disabled:opacity-50"
+                  className={btnGhostCls()}
                 >
                   <RefreshCw
                     className={`h-4 w-4 ${loadingFeatures || refreshingFeatures ? "animate-spin" : ""}`}
+                    aria-hidden
                   />
                   Refresh
                 </button>
@@ -674,19 +738,19 @@ export default function AssignFeaturesToEmployeePage() {
                   <button
                     type="button"
                     onClick={() => void openAssignmentFlow()}
-                    className="inline-flex items-center gap-2 rounded-lg bg-[#008CD3] px-4 py-2 text-[13px] font-semibold text-white shadow-md shadow-[#008CD3]/25 transition hover:bg-[#0070AA]"
+                    className={btnBrandCls()}
                   >
-                    <UserPlus className="h-4 w-4" />
+                    <UserPlus className="h-4 w-4" aria-hidden />
                     Start assignment
                   </button>
                 ) : (
                   <button
                     type="button"
                     onClick={exitAssignmentMode}
-                    className="inline-flex items-center gap-2 rounded-lg border border-[#E4E7EC] bg-white px-4 py-2 text-[13px] font-semibold text-[#374151] shadow-sm transition hover:bg-[#F9FAFB]"
+                    className={btnGhostCls()}
                   >
-                    <X className="h-4 w-4" />
-                    Cancel assignment
+                    <X className="h-4 w-4" aria-hidden />
+                    Cancel
                   </button>
                 )}
               </div>
@@ -694,7 +758,7 @@ export default function AssignFeaturesToEmployeePage() {
           </div>
 
           {isAssignmentActive && selectedEmployee ? (
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#E4E7EC] bg-white px-5 py-4 lg:px-6">
+            <div className={`${dashSectionHeadCls} flex-wrap justify-between gap-3 bg-white`}>
               <div className="flex items-center gap-3">
                 {selectedEmployee.employee_profile_image ? (
                   <img
@@ -703,7 +767,7 @@ export default function AssignFeaturesToEmployeePage() {
                     className="h-11 w-11 rounded-full object-cover ring-2 ring-[#008CD3]/20"
                   />
                 ) : (
-                  <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#E8F4FB] text-[13px] font-bold text-[#008CD3] ring-2 ring-[#008CD3]/20">
+                  <span className="flex h-11 w-11 items-center justify-center rounded-full bg-sky-50 text-[13px] font-bold text-[#008CD3] ring-2 ring-[#008CD3]/20">
                     {userInitials(selectedEmployee.employee_name)}
                   </span>
                 )}
@@ -711,10 +775,10 @@ export default function AssignFeaturesToEmployeePage() {
                   <p className="text-[10px] font-semibold uppercase tracking-wider text-[#008CD3]">
                     Assigning to
                   </p>
-                  <p className="text-[15px] font-semibold text-[#1F2937]">
+                  <p className="text-[15px] font-semibold text-slate-900">
                     {selectedEmployee.employee_name}
                   </p>
-                  <p className="text-[12px] text-[#6B7280]">
+                  <p className={dashSectionMetaCls}>
                     Employee ID · {String(selectedEmployee.employee_id)}
                   </p>
                 </div>
@@ -722,37 +786,36 @@ export default function AssignFeaturesToEmployeePage() {
               <button
                 type="button"
                 onClick={() => void openAssignmentFlow()}
-                className="rounded-lg border border-[#008CD3]/25 bg-[#E8F4FB] px-3 py-1.5 text-[12px] font-semibold text-[#008CD3] transition hover:bg-[#D6EDF9]"
+                className={btnGhostCls()}
               >
                 Change employee
               </button>
             </div>
           ) : (
-            <div className="px-5 py-4 lg:px-6">
-              <div className="flex items-start gap-3 rounded-xl border border-dashed border-[#E4E7EC] bg-[#F9FAFB] px-4 py-3.5">
-                <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-[#008CD3]" />
-                <p className="text-[13px] leading-relaxed text-[#6B7280]">
+            <div className={dashSectionBodyCls}>
+              <div className={infoBannerCls()}>
+                <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-[#008CD3]" aria-hidden />
+                <p className={dashSectionMetaCls}>
                   Browse modules below. Click{" "}
-                  <span className="font-semibold text-[#374151]">Start assignment</span> to
-                  pick an employee and turn feature cards into selectable modules with
-                  sub-feature permissions.
+                  <span className="font-semibold text-slate-800">Start assignment</span> to
+                  pick an employee and configure module access with sub-feature permissions.
                 </p>
               </div>
             </div>
           )}
-        </div>
+        </header>
 
         {featureError ? (
-          <div className="rounded-xl border border-[#F5C6C2] bg-[#FCE8E6] px-4 py-3 text-[13px] text-[#D93025]">
+          <div className={errorBannerCls()} role="alert">
             {featureError}
           </div>
         ) : null}
 
         {!loadingFeatures && orgFeatures.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-[#E4E7EC] bg-white px-6 py-16 text-center shadow-sm">
-            <Puzzle className="mx-auto h-10 w-10 text-[#9CA3AF]" />
-            <p className="mt-3 text-[16px] font-semibold text-[#1F2937]">No features found</p>
-            <p className="mt-1 text-[13px] text-[#6B7280]">
+          <div className={`${dashCardCls} px-6 py-16 text-center`}>
+            <Puzzle className="mx-auto h-10 w-10 text-slate-300" aria-hidden />
+            <p className="mt-3 text-[16px] font-semibold text-slate-900">No features found</p>
+            <p className={`mt-1 ${dashSectionMetaCls}`}>
               This organization has no assignable modules yet.
             </p>
           </div>
@@ -760,15 +823,15 @@ export default function AssignFeaturesToEmployeePage() {
 
         {!loadingFeatures && orgFeatures.length > 0 ? (
           <>
-            <div className="flex flex-col gap-3 rounded-xl border border-[#E4E7EC] bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+            <div className={`${dashCardCls} flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between`}>
               <div className="relative min-w-0 flex-1 sm:max-w-md">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF]" />
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
                 <input
                   type="search"
                   value={featureSearch}
                   onChange={(e) => setFeatureSearch(e.target.value)}
                   placeholder="Search modules or sub-modules…"
-                  className={zohoInputCls()}
+                  className={inputCls()}
                 />
               </div>
 
@@ -777,17 +840,17 @@ export default function AssignFeaturesToEmployeePage() {
                   <button
                     type="button"
                     onClick={selectAllFeatures}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-[#008CD3]/25 bg-[#E8F4FB] px-3 py-1.5 text-[12px] font-semibold text-[#008CD3] transition hover:bg-[#D6EDF9]"
+                    className={`${btnGhostCls()} !min-h-[36px] !px-3 !text-[12px]`}
                   >
-                    <Check className="h-3.5 w-3.5" />
+                    <Check className="h-3.5 w-3.5" aria-hidden />
                     {allFeaturesSelected ? "Deselect modules" : "Select all modules"}
                   </button>
                   <button
                     type="button"
                     onClick={selectAllSubFeatures}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-[#0F9D58]/25 bg-[#E6F4EA] px-3 py-1.5 text-[12px] font-semibold text-[#0F9D58] transition hover:bg-[#D4EDDA]"
+                    className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border border-emerald-200/80 bg-emerald-50 px-3 py-1.5 text-[12px] font-semibold text-emerald-700 transition hover:bg-emerald-100"
                   >
-                    <Check className="h-3.5 w-3.5" />
+                    <Check className="h-3.5 w-3.5" aria-hidden />
                     {allSubFeaturesSelected
                       ? "Deselect sub-modules"
                       : "Select all sub-modules"}
@@ -796,9 +859,9 @@ export default function AssignFeaturesToEmployeePage() {
                     type="button"
                     onClick={markAllPermissionsForSelected}
                     disabled={selectedSubCount === 0}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] px-3 py-1.5 text-[12px] font-semibold text-[#374151] transition hover:bg-[#F3F4F6] disabled:cursor-not-allowed disabled:opacity-50"
+                    className={`${btnGhostCls()} !min-h-[36px] !px-3 !text-[12px] disabled:opacity-50`}
                   >
-                    <KeyRound className="h-3.5 w-3.5" />
+                    <KeyRound className="h-3.5 w-3.5" aria-hidden />
                     {allSelectedSubsHaveFullPermissions ? "Full CRUD set" : "Grant full CRUD"}
                   </button>
                 </div>
@@ -806,36 +869,30 @@ export default function AssignFeaturesToEmployeePage() {
             </div>
 
             {isAssignmentActive && selectedEmployee ? (
-              <div className="grid gap-2 rounded-xl border border-[#008CD3]/15 bg-[#E8F4FB]/50 px-4 py-3 sm:grid-cols-3">
-                <div className="text-center sm:text-left">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
-                    Modules
-                  </p>
-                  <p className="text-[18px] font-bold text-[#008CD3]">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className={statBoxCls("sky")}>
+                  <p className={dashLabelCls}>Modules</p>
+                  <p className="mt-1 text-xl font-bold tabular-nums text-[#008CD3]">
                     {selectedFeatureCount}
-                    <span className="text-[13px] font-medium text-[#6B7280]">
+                    <span className="text-[13px] font-medium text-slate-500">
                       {" "}
                       / {orgFeatures.length}
                     </span>
                   </p>
                 </div>
-                <div className="text-center sm:text-left">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
-                    Sub-modules
-                  </p>
-                  <p className="text-[18px] font-bold text-[#0F9D58]">
+                <div className={statBoxCls("emerald")}>
+                  <p className={dashLabelCls}>Sub-modules</p>
+                  <p className="mt-1 text-xl font-bold tabular-nums text-emerald-700">
                     {selectedSubCount}
-                    <span className="text-[13px] font-medium text-[#6B7280]">
+                    <span className="text-[13px] font-medium text-slate-500">
                       {" "}
                       / {totalSubFeatureCount}
                     </span>
                   </p>
                 </div>
-                <div className="text-center sm:text-left">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
-                    Ready to save
-                  </p>
-                  <p className="text-[18px] font-bold text-[#1F2937]">
+                <div className={statBoxCls("default")}>
+                  <p className={dashLabelCls}>Ready to save</p>
+                  <p className="mt-1 text-xl font-bold text-slate-900">
                     {hasAnySelection ? "Yes" : "No"}
                   </p>
                 </div>
@@ -844,17 +901,17 @@ export default function AssignFeaturesToEmployeePage() {
 
             <div className="space-y-3">
               {filteredFeatures.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-[#E4E7EC] bg-white px-6 py-10 text-center">
-                  <p className="text-[14px] font-medium text-[#1F2937]">No matching modules</p>
-                  <p className="mt-1 text-[13px] text-[#6B7280]">
-                    Try a different search term.
-                  </p>
+                <div className={`${dashCardCls} px-6 py-10 text-center`}>
+                  <LayoutGrid className="mx-auto h-8 w-8 text-slate-300" aria-hidden />
+                  <p className="mt-2 text-[14px] font-medium text-slate-900">No matching modules</p>
+                  <p className={`mt-1 ${dashSectionMetaCls}`}>Try a different search term.</p>
                 </div>
               ) : null}
 
-              {filteredFeatures.map((feature) => {
+              {filteredFeatures.map((feature, index) => {
                 const parentId = String(feature.parent_feature_id);
                 const title = feature.feature_name || feature.feature_val;
+                const meta = moduleMeta(feature.feature_val, title);
                 const isExpanded = expandedFeatureIds.has(parentId);
                 const isFeatureSelected = selectedFeatureIds.has(parentId);
                 const subs = feature.sub_features ?? [];
@@ -864,13 +921,11 @@ export default function AssignFeaturesToEmployeePage() {
                 return (
                   <article
                     key={parentId}
-                    className={`overflow-hidden rounded-2xl border bg-white shadow-sm transition-all duration-200 ${
-                      inAssignment && isFeatureSelected
-                        ? "border-[#008CD3] ring-2 ring-[#008CD3]/15"
-                        : inAssignment && selectedSubsInFeature > 0
-                          ? "border-[#0F9D58]/40 ring-1 ring-[#0F9D58]/10"
-                          : "border-[#E4E7EC] hover:shadow-md"
-                    }`}
+                    className={listCardCls(
+                      Boolean(inAssignment && isFeatureSelected),
+                      Boolean(inAssignment && !isFeatureSelected && selectedSubsInFeature > 0),
+                    )}
+                    style={{ animationDelay: `${Math.min(index, 8) * 35}ms` }}
                   >
                     <div className="flex items-stretch">
                       {inAssignment ? (
@@ -881,7 +936,7 @@ export default function AssignFeaturesToEmployeePage() {
                           className={`flex w-12 shrink-0 items-center justify-center border-r transition ${
                             isFeatureSelected
                               ? "border-[#008CD3]/20 bg-[#E8F4FB]"
-                              : "border-[#E4E7EC] bg-[#F9FAFB] hover:bg-[#E8F4FB]/60"
+                              : "border-slate-100 bg-slate-50 hover:bg-sky-50/50"
                           }`}
                         >
                           <span
@@ -903,37 +958,35 @@ export default function AssignFeaturesToEmployeePage() {
                         onClick={() => toggleFeatureExpand(parentId)}
                         className="flex min-w-0 flex-1 items-center gap-3 px-4 py-4 text-left"
                       >
-                        <span
-                          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-[12px] font-bold shadow-sm ${moduleColorClass(title)}`}
-                        >
-                          {title.slice(0, 2).toUpperCase()}
+                        <span className={`${iconBadgeCls(meta.variant)} !h-11 !w-11 text-[11px] font-bold`}>
+                          {meta.label}
                         </span>
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
-                            <p className="text-[15px] font-semibold text-[#1F2937]">{title}</p>
+                            <p className="text-[15px] font-semibold text-slate-900">{title}</p>
                             {inAssignment && selectedSubsInFeature > 0 ? (
-                              <span className="rounded-full bg-[#E6F4EA] px-2 py-0.5 text-[10px] font-semibold text-[#0F9D58]">
+                              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-100">
                                 {selectedSubsInFeature} sub-module
                                 {selectedSubsInFeature === 1 ? "" : "s"}
                               </span>
                             ) : null}
                           </div>
-                          <p className="text-[12px] text-[#6B7280]">{feature.feature_val}</p>
-                          <p className="mt-0.5 text-[11px] text-[#9CA3AF]">
+                          <p className={dashSectionMetaCls}>{feature.feature_val}</p>
+                          <p className="mt-0.5 text-[11px] text-slate-400">
                             {subs.length} sub-module{subs.length === 1 ? "" : "s"}
                           </p>
                         </div>
                         {subs.length > 0 ? (
                           <ChevronDown
-                            className={`h-5 w-5 shrink-0 text-[#9CA3AF] transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
+                            className={`h-5 w-5 shrink-0 text-slate-400 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
                           />
                         ) : null}
                       </button>
                     </div>
 
                     {isExpanded && subs.length > 0 ? (
-                      <div className="border-t border-[#E4E7EC] bg-gradient-to-b from-[#F9FAFB] to-white px-4 py-4">
-                        <p className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#9CA3AF]">
+                      <div className="border-t border-slate-100 bg-gradient-to-b from-slate-50/80 to-white px-4 py-4">
+                        <p className={`mb-3 flex items-center gap-1.5 ${dashLabelCls} font-semibold uppercase tracking-wider`}>
                           {inAssignment ? (
                             <>
                               <KeyRound className="h-3.5 w-3.5" />
@@ -960,30 +1013,32 @@ export default function AssignFeaturesToEmployeePage() {
         ) : null}
 
         {isAssignmentActive && selectedEmployee && hasAnySelection ? (
-          <div className="sticky bottom-4 z-20 overflow-hidden rounded-2xl border border-[#E4E7EC] bg-white shadow-xl shadow-black/10">
-            <div className="border-t-[3px] border-t-[#008CD3] bg-gradient-to-r from-[#E8F4FB]/80 via-white to-[#E6F4EA]/50 px-5 py-4">
+          <div className={`${dashCardCls} sticky bottom-4 z-20 overflow-hidden shadow-[0_12px_40px_rgba(15,23,42,0.12)]`}>
+            <div className="border-t-[3px] border-t-[#008CD3] bg-gradient-to-r from-[#E8F4FB]/80 via-white to-emerald-50/40 px-5 py-4">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
                   <p className="text-[10px] font-semibold uppercase tracking-wider text-[#008CD3]">
                     Review &amp; assign
                   </p>
-                  <p className="mt-0.5 text-[14px] text-[#374151]">
-                    <span className="font-bold text-[#1F2937]">{selectedFeatureCount}</span>{" "}
+                  <p className="mt-0.5 text-[14px] text-slate-600">
+                    <span className="font-bold text-slate-900">{selectedFeatureCount}</span>{" "}
                     module{selectedFeatureCount === 1 ? "" : "s"},{" "}
-                    <span className="font-bold text-[#0F9D58]">{selectedSubCount}</span>{" "}
+                    <span className="font-bold text-emerald-700">{selectedSubCount}</span>{" "}
                     sub-module{selectedSubCount === 1 ? "" : "s"}
                   </p>
-                  <p className="text-[12px] text-[#6B7280]">
-                    for {selectedEmployee.employee_name}
-                  </p>
+                  <p className={dashSectionMetaCls}>for {selectedEmployee.employee_name}</p>
                 </div>
                 <button
                   type="button"
                   disabled={assigning}
                   onClick={() => void assignAccess()}
-                  className="inline-flex min-h-[44px] min-w-[180px] items-center justify-center gap-2 rounded-xl bg-[#008CD3] px-6 py-2.5 text-[14px] font-semibold text-white shadow-lg shadow-[#008CD3]/25 transition hover:bg-[#0070AA] disabled:opacity-60"
+                  className={`${btnBrandCls()} min-h-[44px] min-w-[180px] !rounded-xl !text-[14px] shadow-lg shadow-[#008CD3]/20`}
                 >
-                  <ShieldCheck className="h-4 w-4" />
+                  {assigning ? (
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  ) : (
+                    <ShieldCheck className="h-4 w-4" aria-hidden />
+                  )}
                   Assign access
                 </button>
               </div>
@@ -997,28 +1052,33 @@ export default function AssignFeaturesToEmployeePage() {
           <button
             type="button"
             aria-label="Close"
-            className="absolute inset-0 bg-black/50 backdrop-blur-[2px]"
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]"
             onClick={() => setShowEmployeeModal(false)}
           />
-          <div className="relative z-10 w-full max-w-lg overflow-hidden rounded-t-2xl border border-[#E4E7EC] bg-white shadow-2xl sm:rounded-2xl">
-            <div className="border-b border-[#E4E7EC] border-t-[3px] border-t-[#008CD3] bg-gradient-to-r from-[#E8F4FB] to-white px-5 py-5">
+          <div className={modalShellCls()}>
+            <div className="border-b border-slate-100 border-t-[3px] border-t-[#008CD3] bg-gradient-to-r from-[#F8FAFC] via-white to-[#F0F9FF]/40 px-5 py-5">
               <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[#008CD3]">
-                    Step 1 · Select employee
-                  </p>
-                  <h3 className="mt-0.5 text-[18px] font-semibold text-[#1F2937]">
-                    Who receives this access?
-                  </h3>
-                  <p className="mt-1 text-[13px] text-[#6B7280]">
-                    Choose one employee, then select modules and sub-modules on the next
-                    screen.
-                  </p>
+                <div className="flex items-start gap-3">
+                  <span className={iconBadgeCls("blue")}>
+                    <Users className="h-4 w-4" aria-hidden />
+                  </span>
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-[#008CD3]">
+                      Step 1 · Select employee
+                    </p>
+                    <h3 className={`mt-0.5 ${dashSectionTitleCls} text-lg`}>
+                      Who receives this access?
+                    </h3>
+                    <p className={`mt-1 ${dashSectionMetaCls}`}>
+                      Choose one employee, then select modules and permissions.
+                    </p>
+                  </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowEmployeeModal(false)}
-                  className="rounded-lg border border-[#E4E7EC] p-2 text-[#6B7280] transition hover:bg-[#F9FAFB]"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-50"
+                  aria-label="Close"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -1027,21 +1087,20 @@ export default function AssignFeaturesToEmployeePage() {
 
             <div className="max-h-[55vh] overflow-y-auto p-5">
               {employeeLoading ? (
-                <div className="flex justify-center py-10">
-                  <PortalPageLoader size="sm" message="Loading employees…" />
+                <div className="flex flex-col items-center justify-center gap-2 py-10 text-slate-500">
+                  <Loader2 className="h-6 w-6 animate-spin text-[#008CD3]" aria-hidden />
+                  <p className="text-[13px]">Loading employees…</p>
                 </div>
               ) : null}
 
               {employeeError ? (
-                <p className="mb-3 rounded-xl border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2.5 text-[12px] text-[#D93025]">
-                  {employeeError}
-                </p>
+                <p className={`mb-3 ${errorBannerCls()}`}>{employeeError}</p>
               ) : null}
 
               {!employeeLoading && employees.length === 0 ? (
                 <div className="py-12 text-center">
-                  <Users className="mx-auto h-9 w-9 text-[#9CA3AF]" />
-                  <p className="mt-2 text-[14px] font-medium text-[#1F2937]">
+                  <Users className="mx-auto h-9 w-9 text-slate-300" aria-hidden />
+                  <p className="mt-2 text-[14px] font-medium text-slate-900">
                     No employees found
                   </p>
                 </div>
@@ -1050,19 +1109,19 @@ export default function AssignFeaturesToEmployeePage() {
               {!employeeLoading && employees.length > 0 ? (
                 <div className="space-y-3">
                   <div className="relative">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF]" />
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
                     <input
                       type="search"
                       value={employeeSearch}
                       onChange={(e) => setEmployeeSearch(e.target.value)}
                       placeholder="Search by name or ID…"
-                      className={zohoInputCls()}
+                      className={inputCls()}
                     />
                   </div>
 
                   <div className="max-h-[280px] space-y-2 overflow-y-auto pr-1">
                     {filteredEmployees.length === 0 ? (
-                      <p className="py-6 text-center text-[13px] text-[#6B7280]">
+                      <p className={`py-6 text-center ${dashSectionMetaCls}`}>
                         No employees match your search.
                       </p>
                     ) : null}
@@ -1077,7 +1136,7 @@ export default function AssignFeaturesToEmployeePage() {
                           className={`flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left transition ${
                             selected
                               ? "border-[#008CD3] bg-[#E8F4FB] ring-2 ring-[#008CD3]/15"
-                              : "border-[#E4E7EC] bg-white hover:border-[#008CD3]/40 hover:bg-[#F9FAFB]"
+                              : "border-slate-200/90 bg-white hover:border-[#008CD3]/30 hover:bg-slate-50"
                           }`}
                         >
                           {emp.employee_profile_image ? (
@@ -1087,21 +1146,21 @@ export default function AssignFeaturesToEmployeePage() {
                               className="h-10 w-10 rounded-full object-cover"
                             />
                           ) : (
-                            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F3F4F6] text-[12px] font-bold text-[#374151]">
+                            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-[12px] font-bold text-slate-700">
                               {userInitials(emp.employee_name)}
                             </span>
                           )}
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-[14px] font-semibold text-[#1F2937]">
+                            <p className="truncate text-[14px] font-semibold text-slate-900">
                               {emp.employee_name}
                             </p>
-                            <p className="text-[12px] text-[#6B7280]">ID · {emp.employee_id}</p>
+                            <p className={dashSectionMetaCls}>ID · {emp.employee_id}</p>
                           </div>
                           <span
                             className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
                               selected
                                 ? "border-[#008CD3] bg-[#008CD3] text-white"
-                                : "border-[#CBD5E1] bg-white"
+                                : "border-slate-300 bg-white"
                             }`}
                           >
                             {selected ? <Check className="h-3 w-3" strokeWidth={3} /> : null}
@@ -1114,12 +1173,12 @@ export default function AssignFeaturesToEmployeePage() {
               ) : null}
             </div>
 
-            <div className="border-t border-[#E4E7EC] bg-[#F9FAFB] p-5">
+            <div className="border-t border-slate-100 bg-slate-50/80 p-5">
               <button
                 type="button"
                 onClick={confirmEmployeeSelection}
                 disabled={!modalEmployeeId || employeeLoading}
-                className="inline-flex w-full min-h-[44px] items-center justify-center gap-2 rounded-xl bg-[#008CD3] text-[14px] font-semibold text-white shadow-md shadow-[#008CD3]/20 transition hover:bg-[#0070AA] disabled:opacity-50"
+                className={`${btnBrandCls(true)} !min-h-[44px] !rounded-xl !text-[14px]`}
               >
                 Continue to module selection
               </button>
@@ -1128,12 +1187,13 @@ export default function AssignFeaturesToEmployeePage() {
         </div>
       ) : null}
 
-      {loadingFeatures ? (
-        <PortalPageLoader overlay message="Loading organization features…" />
-      ) : null}
-
       {assigning ? (
-        <PortalPageLoader overlay message="Assigning feature access…" />
+        <div className="fixed inset-0 z-[10070] flex items-center justify-center bg-slate-900/30 backdrop-blur-[2px]">
+          <div className={`${dashCardCls} flex items-center gap-3 px-6 py-4`}>
+            <Loader2 className="h-5 w-5 animate-spin text-[#008CD3]" aria-hidden />
+            <p className="text-[14px] font-medium text-slate-800">Assigning feature access…</p>
+          </div>
+        </div>
       ) : null}
 
       <PortalResponseModal

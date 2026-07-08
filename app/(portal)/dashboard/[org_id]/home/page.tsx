@@ -48,6 +48,7 @@ import OrgLiveUsersPanel from "@/components/portal-dashboard/home/OrgLiveUsersPa
 import BiometricLiveAttendanceFeed from "@/components/portal-dashboard/home/BiometricLiveAttendanceFeed";
 import HomeDashboardHeader from "@/components/portal-dashboard/home/HomeDashboardHeader";
 import HomeDashboardTab from "@/components/portal-dashboard/home/HomeDashboardTab";
+import HomeTodayAttendanceMonitor from "@/components/portal-dashboard/home/HomeTodayAttendanceMonitor";
 import HomeFeaturesSlider from "@/components/portal-dashboard/home/HomeFeaturesSlider";
 import HomeAllToolsPanel from "@/components/portal-dashboard/home/HomeAllToolsPanel";
 import HomeAttendanceCard from "@/components/portal-dashboard/home/HomeAttendanceCard";
@@ -1161,6 +1162,9 @@ function HomeOverview({
               delayMs={20}
               variant="dashboard"
             />
+          }
+          attendanceMonitorPanel={
+            <HomeTodayAttendanceMonitor orgId={String(orgId)} />
           }
           livePresencePanel={
             <OrgLiveUsersPanel
