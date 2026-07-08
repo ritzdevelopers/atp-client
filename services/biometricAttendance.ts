@@ -1,5 +1,8 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
+/** Poll interval for live biometric REST endpoints (live-punches, my-live-attendance). */
+export const BIOMETRIC_LIVE_POLL_MS = 60_000;
+
 export type BiometricLiveEvent = {
   org_id: number;
   event_type: "check_in" | "check_out" | "duplicate_check_in" | "duplicate_check_out";

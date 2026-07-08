@@ -2,11 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  BIOMETRIC_LIVE_POLL_MS,
   fetchLivePunches,
   type DevicePunch,
 } from "@/services/biometricAttendance";
-
-const POLL_MS = 5000;
 const MAX_EVENTS = 50;
 
 export function useLivePunchFeed(orgId: string | null | undefined) {
@@ -61,7 +60,7 @@ export function useLivePunchFeed(orgId: string | null | undefined) {
     sinceIdRef.current = 0;
     setEvents([]);
     void poll();
-    const timer = setInterval(poll, POLL_MS);
+    const timer = setInterval(poll, BIOMETRIC_LIVE_POLL_MS);
     return () => clearInterval(timer);
   }, [orgId, poll]);
 
