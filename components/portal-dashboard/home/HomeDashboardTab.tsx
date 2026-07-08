@@ -122,7 +122,7 @@ export type HomeDashboardTabProps = {
   leavePanel: ReactNode;
   attendanceMonitorPanel?: ReactNode;
   livePresencePanel: ReactNode;
-  biometricPanel: ReactNode;
+  holidayCalendarPanel: ReactNode;
   profilePanel: ReactNode;
   teamsPanel?: ReactNode;
   locationsPanel: ReactNode;
@@ -147,7 +147,7 @@ export default function HomeDashboardTab({
   leavePanel,
   attendanceMonitorPanel,
   livePresencePanel,
-  biometricPanel,
+  holidayCalendarPanel,
   profilePanel,
   teamsPanel,
   locationsPanel,
@@ -272,7 +272,7 @@ export default function HomeDashboardTab({
       {/* Live monitoring */}
       <DashboardSection
         title="Live monitoring"
-        description="Real-time team presence and biometric machine punches"
+        description="Real-time team presence and company holiday calendar"
         icon={<UsersRound className="h-5 w-5" aria-hidden />}
         action={
           <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-[12px] font-semibold text-emerald-700">
@@ -286,7 +286,7 @@ export default function HomeDashboardTab({
             {livePresencePanel}
           </div>
           <div className="h-[min(420px,55vh)] min-h-[320px] overflow-hidden rounded-xl border border-[#E4E7EC]">
-            {biometricPanel}
+            {holidayCalendarPanel}
           </div>
         </div>
       </DashboardSection>
