@@ -42,6 +42,15 @@ import {
   shouldRefreshBgvEmployeeDetailCache,
   writeBgvEmployeeDetailCache,
 } from "@/lib/employeeManagementCache";
+import {
+  btnBrandCls,
+  btnGhostCls,
+  dashCardCls,
+  dashPageCls,
+  dashSectionMetaCls,
+  iconBadgeCls,
+  userInitials as tokenUserInitials,
+} from "@/components/portal-dashboard/home/dashboardTokens";
 
 const STATUS_OPTIONS: { value: BackgroundVerificationStatus; label: string }[] = [
   { value: "pending", label: "Pending" },
@@ -88,11 +97,11 @@ function statusLabel(status: string): string {
 
 function statusBadgeClass(status: string): string {
   const s = String(status).toLowerCase();
-  if (s === "verified") return "bg-[#E6F4EA] text-[#0F9D58]";
-  if (s === "failed") return "bg-[#FCE8E6] text-[#D93025]";
-  if (s === "in_progress") return "bg-[#E8F4FB] text-[#008CD3]";
-  if (s === "unable_to_contact") return "bg-[#F3F4F6] text-[#6B7280]";
-  return "bg-[#FEF3E6] text-[#E8710A]";
+  if (s === "verified") return "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200/70";
+  if (s === "failed") return "bg-rose-50 text-rose-700 ring-1 ring-rose-200/70";
+  if (s === "in_progress") return "bg-[#E8F4FB] text-[#008CD3] ring-1 ring-[#008CD3]/20";
+  if (s === "unable_to_contact") return "bg-slate-100 text-slate-600 ring-1 ring-slate-200/80";
+  return "bg-amber-50 text-amber-700 ring-1 ring-amber-200/70";
 }
 
 function canShowVerifyButton(status: string): boolean {
@@ -112,38 +121,102 @@ function mailHref(email: string | null | undefined): string | null {
 }
 
 function userInitials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  return tokenUserInitials(name);
+}
+
+function Shimmer({ className = "" }: { className?: string }) {
+  return <div className={`skeleton-shimmer rounded-xl ${className}`} />;
+}
+
+function BgvEmployeeDetailSkeleton() {
+  return (
+    <div className="space-y-4" aria-busy="true" aria-label="Loading employee verification">
+      <div className={`${dashCardCls} overflow-hidden lg:hidden`}>
+        <div className="flex items-center gap-3 p-4">
+          <Shimmer className="h-9 w-9 rounded-xl" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <Shimmer className="h-3 w-28" />
+            <Shimmer className="h-4 w-40" />
+          </div>
+          <Shimmer className="h-9 w-9 rounded-xl" />
+        </div>
+      </div>
+
+      <div className={`${dashCardCls} hidden overflow-hidden lg:block`}>
+        <div className="border-b border-slate-100 bg-gradient-to-r from-[#F8FAFC] via-white to-[#F0F9FF]/40 px-6 py-5">
+          <div className="flex items-center gap-4">
+            <Shimmer className="h-10 w-10 rounded-xl" />
+            <div className="space-y-2">
+              <Shimmer className="h-3 w-48" />
+              <Shimmer className="h-6 w-64" />
+              <Shimmer className="h-4 w-80 max-w-full" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className={`${dashCardCls} p-5`}>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+          <Shimmer className="h-16 w-16 shrink-0 rounded-2xl" />
+          <div className="min-w-0 flex-1 space-y-3">
+            <Shimmer className="h-5 w-48" />
+            <Shimmer className="h-4 w-64 max-w-full" />
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Shimmer className="h-12" />
+              <Shimmer className="h-12" />
+              <Shimmer className="h-12" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {Array.from({ length: 2 }).map((_, i) => (
+        <div key={i} className={`${dashCardCls} space-y-4 p-5`}>
+          <div className="flex items-center justify-between gap-3">
+            <Shimmer className="h-5 w-40" />
+            <Shimmer className="h-8 w-24" />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {Array.from({ length: 6 }).map((_, j) => (
+              <div key={j} className="space-y-2">
+                <Shimmer className="h-3 w-20" />
+                <Shimmer className="h-4 w-32" />
+              </div>
+            ))}
+          </div>
+          <Shimmer className="h-24 w-full" />
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function zohoPanelCls() {
-  return "overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-sm";
+  return `${dashCardCls}`;
 }
 
 function zohoPrimaryBtnCls() {
-  return "inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg bg-[#008CD3] px-4 py-2 text-[14px] font-medium text-white transition hover:bg-[#0070AA] disabled:pointer-events-none disabled:opacity-50";
+  return btnBrandCls();
 }
 
 function zohoSecondaryBtnCls() {
-  return "inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg border border-[#E4E7EC] bg-white px-4 py-2 text-[14px] font-medium text-[#374151] transition hover:bg-[#F9FAFB] disabled:pointer-events-none disabled:opacity-50";
+  return btnGhostCls();
 }
 
 function labelCls() {
-  return "text-[11px] font-semibold uppercase tracking-wide text-[#9CA3AF]";
+  return "text-[11px] font-semibold uppercase tracking-wide text-slate-400";
 }
 
 function valueCls() {
-  return "mt-0.5 text-[14px] font-medium text-[#1F2937]";
+  return "mt-0.5 text-[14px] font-medium text-slate-900";
 }
 
 function filterFieldCls() {
-  return "w-full rounded-lg border border-[#E4E7EC] bg-white px-3 py-2 text-[14px] text-[#1F2937] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15";
+  return "w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-[13px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15";
 }
 
 function editLabelCls() {
-  return "mb-1 block text-[12px] font-medium text-[#374151]";
+  return "mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-slate-500";
 }
 
 type ReferenceEditForm = {
@@ -489,29 +562,43 @@ function BackgroundVerificationEmployeeClientContent() {
 
   if (!employeeId) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center p-6 text-center text-[14px] text-[#6B7280]">
-        Employee not specified. Open this page from Background verification.
+      <div className={`${dashPageCls} flex min-h-[40vh] items-center justify-center text-center`}>
+        <div className={`${dashCardCls} max-w-md px-6 py-10`}>
+          <span className={`${iconBadgeCls("blue")} mx-auto`}>
+            <ShieldCheck className="h-4 w-4" aria-hidden />
+          </span>
+          <p className="mt-4 text-[15px] font-semibold text-slate-900">
+            Employee not specified
+          </p>
+          <p className={`mt-1 ${dashSectionMetaCls}`}>
+            Open this page from Background verification.
+          </p>
+          <Link href={listHref} className={`${btnGhostCls()} mt-5`}>
+            <ArrowLeft className="h-4 w-4" aria-hidden />
+            Back to list
+          </Link>
+        </div>
       </div>
     );
   }
 
   return (
-    <section className="min-h-full space-y-3 bg-[#F5F7FA] p-0 max-lg:-mx-1 sm:max-lg:-mx-2 lg:mx-auto lg:max-w-5xl lg:space-y-4 lg:p-6">
+    <div className={`${dashPageCls} pb-8`}>
       {/* Mobile header */}
-      <div className="sticky top-0 z-20 border-b border-[#E4E7EC] bg-white px-3 pb-2.5 pt-2.5 shadow-sm sm:px-4 lg:hidden">
-        <div className="flex items-center gap-2">
+      <div className="sticky top-0 z-20 -mx-3 border-b border-slate-200/80 bg-white/95 px-3 pb-3 pt-3 shadow-[0_1px_3px_rgba(15,23,42,0.06)] backdrop-blur-md sm:-mx-5 sm:px-4 lg:hidden">
+        <div className="flex items-center gap-3">
           <Link
             href={listHref}
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#374151]"
+            className={`${btnGhostCls()} !min-h-[36px] !w-9 !px-0`}
             aria-label="Back to list"
           >
             <ArrowLeft className="h-4 w-4" aria-hidden />
           </Link>
           <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-[#6B7280]">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
               Background verification
             </p>
-            <h1 className="truncate text-[16px] font-semibold text-[#1F2937]">
+            <h1 className="truncate text-[17px] font-semibold tracking-tight text-slate-900">
               {employee?.employee_name ?? "Employee detail"}
             </h1>
           </div>
@@ -519,7 +606,7 @@ function BackgroundVerificationEmployeeClientContent() {
             type="button"
             onClick={() => void loadDetails(true)}
             disabled={isBusy}
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#008CD3] disabled:opacity-50"
+            className={`${btnGhostCls()} !min-h-[36px] !w-9 !px-0`}
             aria-label="Refresh"
           >
             <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} aria-hidden />
@@ -528,47 +615,52 @@ function BackgroundVerificationEmployeeClientContent() {
       </div>
 
       {/* Desktop header */}
-      <header className={`${zohoPanelCls()} hidden p-4 lg:block`}>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex min-w-0 items-start gap-3">
-            <Link
-              href={listHref}
-              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#374151] transition hover:bg-[#F9FAFB]"
-              aria-label="Back to background verification list"
-            >
-              <ArrowLeft className="h-5 w-5" aria-hidden />
-            </Link>
-            <div className="min-w-0">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
-                Organization · Employees · Background verification
-              </p>
-              <h1 className="text-[18px] font-semibold text-[#1F2937]">
-                Employee verification detail
-              </h1>
-              <p className="mt-0.5 text-[13px] text-[#6B7280]">
-                Full employee profile and previous company reference contacts.
-              </p>
+      <header className={`${dashCardCls} hidden overflow-hidden lg:block`}>
+        <div className="border-b border-slate-100 bg-gradient-to-r from-[#F8FAFC] via-white to-[#F0F9FF]/40 px-6 py-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="flex min-w-0 items-start gap-4">
+              <Link
+                href={listHref}
+                className={`${btnGhostCls()} !min-h-[40px] !w-10 !px-0`}
+                aria-label="Back to background verification list"
+              >
+                <ArrowLeft className="h-5 w-5" aria-hidden />
+              </Link>
+              <span className={iconBadgeCls("blue")}>
+                <ShieldCheck className="h-5 w-5" aria-hidden />
+              </span>
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+                  Organization · Background verification
+                </p>
+                <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">
+                  Employee verification detail
+                </h1>
+                <p className={`mt-1 ${dashSectionMetaCls}`}>
+                  Full employee profile and previous company reference contacts.
+                </p>
+              </div>
             </div>
+            <button
+              type="button"
+              onClick={() => void loadDetails(true)}
+              disabled={isBusy}
+              className={btnGhostCls()}
+            >
+              <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} aria-hidden />
+              {refreshing ? "Refreshing…" : "Refresh"}
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={() => void loadDetails(true)}
-            disabled={isBusy}
-            className={zohoSecondaryBtnCls()}
-          >
-            <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} aria-hidden />
-            {refreshing ? "Refreshing…" : "Refresh"}
-          </button>
         </div>
       </header>
 
       {notice ? (
         <div
           role="status"
-          className={`mx-3 sm:mx-4 lg:mx-0 ${
+          className={`rounded-xl border px-4 py-3 text-sm ${
             notice.type === "ok"
-              ? "rounded-lg border border-[#A8DAB5] bg-[#E6F4EA] px-3 py-2.5 text-[13px] text-[#1F2937]"
-              : "rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2.5 text-[13px] text-[#1F2937]"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+              : "border-rose-200 bg-rose-50 text-rose-900"
           }`}
         >
           {notice.text}
@@ -576,37 +668,37 @@ function BackgroundVerificationEmployeeClientContent() {
       ) : null}
 
       {loading ? (
-        <div className={`${zohoPanelCls()} mx-3 p-10 text-center text-[14px] text-[#6B7280] sm:mx-4 lg:mx-0`}>
-          Loading employee verification details…
-        </div>
+        <BgvEmployeeDetailSkeleton />
       ) : error ? (
-        <div className={`${zohoPanelCls()} mx-3 p-8 text-center sm:mx-4 lg:mx-0`}>
-          <p className="text-[14px] text-[#D93025]">{error}</p>
+        <div className={`${dashCardCls} px-6 py-14 text-center`}>
+          <p className="text-[14px] font-medium text-rose-700">{error}</p>
           <button
             type="button"
             onClick={() => void loadDetails(true)}
-            className={`${zohoPrimaryBtnCls()} mt-4`}
+            className={`${btnBrandCls()} mt-5`}
           >
             Try again
           </button>
         </div>
       ) : !employee ? (
-        <div className={`${zohoPanelCls()} mx-3 p-10 text-center sm:mx-4 lg:mx-0`}>
-          <ShieldCheck className="mx-auto h-10 w-10 text-[#D1D5DB]" aria-hidden />
-          <p className="mt-3 text-[15px] font-medium text-[#1F2937]">No references found</p>
-          <p className="mt-1 text-[13px] text-[#6B7280]">
+        <div className={`${dashCardCls} px-6 py-14 text-center`}>
+          <span className={`${iconBadgeCls("blue")} mx-auto h-12 w-12`}>
+            <ShieldCheck className="h-5 w-5" aria-hidden />
+          </span>
+          <p className="mt-4 text-[15px] font-semibold text-slate-900">No references found</p>
+          <p className={`mt-1 ${dashSectionMetaCls}`}>
             This employee has not submitted any previous company references yet.
           </p>
-          <Link href={listHref} className={`${zohoSecondaryBtnCls()} mt-4 inline-flex`}>
+          <Link href={listHref} className={`${btnGhostCls()} mt-5`}>
             Back to list
           </Link>
         </div>
       ) : (
         <>
           {/* Employee profile */}
-          <div className={`${zohoPanelCls()} mx-3 p-4 sm:mx-4 sm:p-5 lg:mx-0`}>
+          <div className={`${dashCardCls} p-4 sm:p-5`}>
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-              <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[#E8F4FB] text-[18px] font-semibold text-[#008CD3]">
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-sky-400 to-[#008CD3] text-[18px] font-semibold text-white shadow-sm">
                 {employee.employee_image ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -621,22 +713,22 @@ function BackgroundVerificationEmployeeClientContent() {
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
-                    <h2 className="text-[18px] font-semibold text-[#1F2937]">
+                    <h2 className="text-[18px] font-semibold tracking-tight text-slate-900">
                       {employee.employee_name ?? `Employee #${employee.employee_id}`}
                     </h2>
-                    <p className="mt-0.5 text-[13px] text-[#6B7280]">
+                    <p className={`mt-0.5 ${dashSectionMetaCls}`}>
                       Member since {formatDate(employee.member_since ?? employee.employee_joining_date)}
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <span className="inline-flex rounded-lg bg-[#F5F7FA] px-2.5 py-1 text-[12px] font-medium text-[#6B7280]">
+                    <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[12px] font-semibold text-slate-600">
                       {statusSummary.total} reference{statusSummary.total === 1 ? "" : "s"}
                     </span>
-                    <span className="inline-flex rounded-lg bg-[#E6F4EA] px-2.5 py-1 text-[12px] font-medium text-[#0F9D58]">
+                    <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-[12px] font-semibold text-emerald-700 ring-1 ring-emerald-200/70">
                       {statusSummary.verified} verified
                     </span>
                     {statusSummary.pending > 0 ? (
-                      <span className="inline-flex rounded-lg bg-[#FEF3E6] px-2.5 py-1 text-[12px] font-medium text-[#E8710A]">
+                      <span className="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-[12px] font-semibold text-amber-700 ring-1 ring-amber-200/70">
                         {statusSummary.pending} pending / in progress
                       </span>
                     ) : null}
@@ -671,20 +763,22 @@ function BackgroundVerificationEmployeeClientContent() {
           </div>
 
           {/* Previous company references */}
-          <div className="mx-3 space-y-3 sm:mx-4 lg:mx-0">
+          <div className="space-y-3">
             <div className="flex items-center gap-2 px-0.5">
-              <Building2 className="h-4 w-4 text-[#008CD3]" aria-hidden />
-              <h2 className="text-[15px] font-semibold text-[#1F2937]">
+              <span className={iconBadgeCls("blue")}>
+                <Building2 className="h-4 w-4" aria-hidden />
+              </span>
+              <h2 className="text-[15px] font-semibold tracking-tight text-slate-900">
                 Previous company references
               </h2>
             </div>
 
             {references.map((ref) => (
               <article key={ref.id} className={`${zohoPanelCls()} p-4 sm:p-5`}>
-                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#E4E7EC] pb-4">
+                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-4">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-[16px] font-semibold text-[#1F2937]">
+                      <h3 className="text-[16px] font-semibold text-slate-900">
                         {ref.previous_company_name}
                       </h3>
                       <span
@@ -694,7 +788,7 @@ function BackgroundVerificationEmployeeClientContent() {
                       </span>
                     </div>
                     {ref.designation ? (
-                      <p className="mt-0.5 flex items-center gap-1 text-[13px] text-[#6B7280]">
+                      <p className="mt-0.5 flex items-center gap-1 text-[13px] text-slate-500">
                         <Briefcase className="h-3.5 w-3.5" aria-hidden />
                         {ref.designation}
                         {ref.employee_code ? ` · Code ${ref.employee_code}` : ""}
@@ -726,14 +820,14 @@ function BackgroundVerificationEmployeeClientContent() {
                 <div className="mt-4 grid gap-5 lg:grid-cols-2">
                   {/* Employment & company */}
                   <div className="space-y-4">
-                    <p className="flex items-center gap-1.5 text-[13px] font-semibold text-[#374151]">
+                    <p className="flex items-center gap-1.5 text-[13px] font-semibold text-slate-700">
                       <Building2 className="h-4 w-4 text-[#008CD3]" aria-hidden />
                       Company details
                     </p>
                     <div className="grid gap-3 sm:grid-cols-2">
                       <InfoField label="Employment period">
                         <span className="inline-flex items-center gap-1">
-                          <CalendarDays className="h-3.5 w-3.5 text-[#9CA3AF]" aria-hidden />
+                          <CalendarDays className="h-3.5 w-3.5 text-slate-400" aria-hidden />
                           {formatDate(ref.employment_start_date)} –{" "}
                           {formatDate(ref.employment_end_date)}
                         </span>
@@ -758,7 +852,7 @@ function BackgroundVerificationEmployeeClientContent() {
 
                   {/* Reference contact */}
                   <div className="space-y-4">
-                    <p className="flex items-center gap-1.5 text-[13px] font-semibold text-[#374151]">
+                    <p className="flex items-center gap-1.5 text-[13px] font-semibold text-slate-700">
                       <User className="h-4 w-4 text-[#008CD3]" aria-hidden />
                       Reference contact
                     </p>
@@ -808,8 +902,8 @@ function BackgroundVerificationEmployeeClientContent() {
                 </div>
 
                 {/* Verification block */}
-                <div className="mt-5 rounded-lg border border-[#E4E7EC] bg-[#FAFBFC] p-4">
-                  <p className="flex items-center gap-1.5 text-[13px] font-semibold text-[#374151]">
+                <div className="mt-5 rounded-xl border border-slate-100 bg-slate-50/80 p-4">
+                  <p className="flex items-center gap-1.5 text-[13px] font-semibold text-slate-700">
                     <ShieldCheck className="h-4 w-4 text-[#008CD3]" aria-hidden />
                     Verification record
                   </p>
@@ -844,9 +938,9 @@ function BackgroundVerificationEmployeeClientContent() {
                     ) : null}
                   </div>
                   {ref.verification_notes ? (
-                    <div className="mt-3 border-t border-[#E4E7EC] pt-3">
+                    <div className="mt-3 border-t border-slate-200 pt-3">
                       <p className={labelCls()}>Notes</p>
-                      <p className="mt-1 whitespace-pre-wrap text-[14px] text-[#374151]">
+                      <p className="mt-1 whitespace-pre-wrap text-[14px] text-slate-700">
                         {ref.verification_notes}
                       </p>
                     </div>
@@ -856,10 +950,10 @@ function BackgroundVerificationEmployeeClientContent() {
             ))}
           </div>
 
-          <div className="mx-3 pb-4 sm:mx-4 lg:mx-0">
+          <div className="pb-2">
             <Link
               href={listHref}
-              className={`${zohoSecondaryBtnCls()} inline-flex`}
+              className={`${btnGhostCls()} inline-flex`}
             >
               <ChevronRight className="h-4 w-4 rotate-180" aria-hidden />
               Back to all verifications
@@ -871,7 +965,7 @@ function BackgroundVerificationEmployeeClientContent() {
       {/* Verification modal */}
       {verifyModal ? (
         <div
-          className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"
+          className="fixed inset-0 z-[99999] flex items-end justify-center bg-slate-900/40 backdrop-blur-[2px] p-0 sm:items-center sm:p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="verify-detail-modal-title"
@@ -881,18 +975,18 @@ function BackgroundVerificationEmployeeClientContent() {
               <div>
                 <h2
                   id="verify-detail-modal-title"
-                  className="text-[16px] font-semibold text-[#1F2937]"
+                  className="text-[16px] font-semibold text-slate-900"
                 >
                   Update verification
                 </h2>
-                <p className="mt-0.5 text-[13px] text-[#6B7280]">
+                <p className="mt-0.5 text-[13px] text-slate-500">
                   {verifyModal.previous_company_name}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setVerifyModal(null)}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[#6B7280] hover:bg-[#F3F4F6]"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"
                 aria-label="Close"
               >
                 <X className="h-4 w-4" aria-hidden />
@@ -901,7 +995,7 @@ function BackgroundVerificationEmployeeClientContent() {
 
             <div className="space-y-4">
               <label className="block">
-                <span className="mb-1 block text-[12px] font-medium text-[#374151]">
+                <span className="mb-1 block text-[12px] font-medium text-slate-700">
                   Verification status
                 </span>
                 <select
@@ -909,7 +1003,7 @@ function BackgroundVerificationEmployeeClientContent() {
                   onChange={(e) =>
                     setVerifyStatus(e.target.value as BackgroundVerificationStatus)
                   }
-                  className="w-full rounded-lg border border-[#E4E7EC] bg-white px-3 py-2 text-[14px] outline-none focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-[14px] outline-none focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15"
                 >
                   {STATUS_OPTIONS.map((o) => (
                     <option key={o.value} value={o.value}>
@@ -920,7 +1014,7 @@ function BackgroundVerificationEmployeeClientContent() {
               </label>
 
               <label className="block">
-                <span className="mb-1 block text-[12px] font-medium text-[#374151]">
+                <span className="mb-1 block text-[12px] font-medium text-slate-700">
                   Verification notes
                 </span>
                 <textarea
@@ -928,7 +1022,7 @@ function BackgroundVerificationEmployeeClientContent() {
                   onChange={(e) => setVerifyNotes(e.target.value)}
                   rows={4}
                   placeholder="Record outcome after contacting the reference…"
-                  className="w-full rounded-lg border border-[#E4E7EC] bg-white px-3 py-2 text-[14px] outline-none focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-[14px] outline-none focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15"
                 />
               </label>
             </div>
@@ -958,7 +1052,7 @@ function BackgroundVerificationEmployeeClientContent() {
       {/* Edit reference modal */}
       {editModal && editForm ? (
         <div
-          className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"
+          className="fixed inset-0 z-[99999] flex items-end justify-center bg-slate-900/40 backdrop-blur-[2px] p-0 sm:items-center sm:p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="edit-reference-modal-title"
@@ -968,11 +1062,11 @@ function BackgroundVerificationEmployeeClientContent() {
               <div>
                 <h2
                   id="edit-reference-modal-title"
-                  className="text-[16px] font-semibold text-[#1F2937]"
+                  className="text-[16px] font-semibold text-slate-900"
                 >
                   Edit reference
                 </h2>
-                <p className="mt-0.5 text-[13px] text-[#6B7280]">
+                <p className="mt-0.5 text-[13px] text-slate-500">
                   Correct company or contact details for this previous employer record.
                 </p>
               </div>
@@ -983,7 +1077,7 @@ function BackgroundVerificationEmployeeClientContent() {
                   setEditForm(null);
                   setEditError(null);
                 }}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[#6B7280] hover:bg-[#F3F4F6]"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"
                 aria-label="Close"
               >
                 <X className="h-4 w-4" aria-hidden />
@@ -991,13 +1085,13 @@ function BackgroundVerificationEmployeeClientContent() {
             </div>
 
             {editError ? (
-              <p className="mb-4 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2 text-[13px] text-[#1F2937]">
+              <p className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[13px] text-slate-900">
                 {editError}
               </p>
             ) : null}
 
             <div className="space-y-4">
-              <p className="text-[13px] font-semibold text-[#374151]">Company</p>
+              <p className="text-[13px] font-semibold text-slate-700">Company</p>
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="sm:col-span-2 block">
                   <span className={editLabelCls()}>Previous company name *</span>
@@ -1073,7 +1167,7 @@ function BackgroundVerificationEmployeeClientContent() {
                 </label>
               </div>
 
-              <p className="pt-1 text-[13px] font-semibold text-[#374151]">Reference contact</p>
+              <p className="pt-1 text-[13px] font-semibold text-slate-700">Reference contact</p>
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="block">
                   <span className={editLabelCls()}>Contact name *</span>
@@ -1173,7 +1267,7 @@ function BackgroundVerificationEmployeeClientContent() {
           </div>
         </div>
       ) : null}
-    </section>
+    </div>
   );
 }
 
@@ -1181,8 +1275,8 @@ export function BackgroundVerificationEmployeeClientWithSuspense() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-[40vh] items-center justify-center p-6 text-[14px] text-[#6B7280]">
-          Loading employee verification details…
+        <div className={`${dashPageCls} pb-8`}>
+          <BgvEmployeeDetailSkeleton />
         </div>
       }
     >

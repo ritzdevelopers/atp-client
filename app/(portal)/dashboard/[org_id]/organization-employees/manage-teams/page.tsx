@@ -8,7 +8,6 @@ import {
   Crown,
   ExternalLink,
   Info,
-  Loader2,
   PlusCircle,
   RefreshCw,
   Search,
@@ -36,6 +35,18 @@ import {
   writeManageOrgTeamsCache,
   writeManageOrgUsersCache,
 } from "@/lib/employeeManagementCache";
+import {
+  avatarCls,
+  btnBrandCls,
+  btnDangerCls,
+  btnGhostCls,
+  dashCardCls,
+  dashPageCls,
+  dashSectionMetaCls,
+  iconBadgeCls,
+  statBoxCls,
+  userInitials,
+} from "@/components/portal-dashboard/home/dashboardTokens";
 
 type ModalKind = null | "add" | "remove" | "admin" | "update";
 
@@ -47,34 +58,89 @@ function displayTeamTitle(raw: string) {
     .join(" ");
 }
 
-function teamInitials(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
-
-const WA_AVATAR_COLORS = [
-  "bg-[#DFE5E7] text-[#54656F]",
-  "bg-[#FFD279] text-[#7A4F01]",
-  "bg-[#FEAA57] text-[#7A3E00]",
-  "bg-[#A5B337] text-[#3D4A0A]",
-  "bg-[#35CD96] text-[#0B5E44]",
-  "bg-[#53BDEB] text-[#0B4F6E]",
-  "bg-[#E67EAB] text-[#6B2348]",
-  "bg-[#7F66FF] text-[#2E1F7A]",
-];
-
-function avatarColorClass(name: string) {
-  let hash = 0;
-  for (let i = 0; i < name.length; i += 1) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return WA_AVATAR_COLORS[Math.abs(hash) % WA_AVATAR_COLORS.length];
-}
-
 function searchFieldCls() {
-  return "w-full rounded-lg border-0 bg-[#F0F2F5] py-2.5 pl-10 pr-4 text-[15px] text-[#111B21] outline-none transition placeholder:text-[#8696A0] focus:bg-white focus:ring-1 focus:ring-[#25D366]/40 lg:rounded-xl lg:border lg:border-slate-200 lg:py-2 lg:pl-10 lg:pr-3 lg:text-sm lg:focus:border-teal-500 lg:focus:ring-2 lg:focus:ring-teal-500/20";
+  return "w-full rounded-xl border border-slate-200/90 bg-white py-2.5 pl-10 pr-3 text-[13px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15 disabled:opacity-60";
+}
+
+function Shimmer({ className = "" }: { className?: string }) {
+  return <div className={`skeleton-shimmer rounded-xl ${className}`} />;
+}
+
+function ManageTeamsSkeleton() {
+  return (
+    <div className="space-y-4" aria-busy="true" aria-label="Loading teams">
+      <div className={`${dashCardCls} overflow-hidden lg:hidden`}>
+        <div className="space-y-3 p-4">
+          <div className="flex items-center gap-3">
+            <Shimmer className="h-10 w-10 rounded-xl" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <Shimmer className="h-4 w-28" />
+              <Shimmer className="h-3 w-40" />
+            </div>
+            <Shimmer className="h-9 w-9 rounded-xl" />
+          </div>
+          <Shimmer className="h-10 w-full" />
+        </div>
+      </div>
+
+      <div className={`${dashCardCls} hidden overflow-hidden lg:block`}>
+        <div className="border-b border-slate-100 bg-gradient-to-r from-[#F8FAFC] via-white to-[#F0F9FF]/40 px-6 py-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <Shimmer className="h-11 w-11 rounded-xl" />
+              <div className="space-y-2">
+                <Shimmer className="h-3 w-32" />
+                <Shimmer className="h-6 w-48" />
+                <Shimmer className="h-4 w-72 max-w-full" />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Shimmer className="h-10 w-24" />
+              <Shimmer className="h-10 w-28" />
+              <Shimmer className="h-16 w-20" />
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center justify-between gap-3 px-6 py-4">
+          <Shimmer className="h-4 w-36" />
+          <Shimmer className="h-10 w-72 max-w-full" />
+        </div>
+      </div>
+
+      <div className="space-y-3 lg:hidden">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className={`${dashCardCls} flex items-center gap-3 p-4`}>
+            <Shimmer className="h-12 w-12 shrink-0 rounded-full" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <Shimmer className="h-4 w-2/5" />
+              <Shimmer className="h-3 w-3/5" />
+            </div>
+            <Shimmer className="h-5 w-5 rounded" />
+          </div>
+        ))}
+      </div>
+
+      <div className="hidden gap-5 md:grid-cols-2 lg:grid">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className={`${dashCardCls} p-5`}>
+            <div className="flex items-start gap-3">
+              <Shimmer className="h-11 w-11 shrink-0 rounded-full" />
+              <div className="min-w-0 flex-1 space-y-2">
+                <Shimmer className="h-5 w-40" />
+                <Shimmer className="h-3 w-56" />
+              </div>
+            </div>
+            <Shimmer className="mt-4 h-12 w-full" />
+            <div className="mt-5 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
+              <Shimmer className="h-9 w-28" />
+              <Shimmer className="h-9 w-32" />
+              <Shimmer className="h-9 w-28" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function modalShell(
@@ -85,7 +151,7 @@ function modalShell(
 ) {
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-end justify-center bg-[#111B21]/40 p-0 backdrop-blur-[1px] sm:items-center sm:bg-slate-900/45 sm:p-4 sm:backdrop-blur-[2px]"
+      className="fixed inset-0 z-[9999] flex items-end justify-center bg-slate-900/40 p-0 backdrop-blur-[2px] sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="team-modal-title"
@@ -96,28 +162,28 @@ function modalShell(
         aria-label="Close dialog backdrop"
         onClick={onClose}
       />
-      <div className="relative flex max-h-[92dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:max-h-[90vh] sm:rounded-2xl sm:border sm:border-slate-200/90 sm:shadow-slate-400/30">
-        <div className="flex shrink-0 items-start justify-between bg-[#128C7E] px-4 py-3.5 sm:border-b sm:border-slate-100 sm:bg-white sm:px-5 sm:py-4 sm:[border-top:3px_solid_#0d9488]">
+      <div className="relative flex max-h-[92dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl border border-slate-200/90 bg-white shadow-2xl sm:max-h-[90vh] sm:rounded-2xl">
+        <div className="flex shrink-0 items-start justify-between border-b border-slate-100 bg-gradient-to-r from-[#F8FAFC] via-white to-[#F0F9FF]/40 px-4 py-4 sm:px-5">
           <h2
             id="team-modal-title"
-            className="pr-8 text-[17px] font-medium leading-snug text-white sm:text-lg sm:font-bold sm:tracking-tight sm:text-slate-900"
+            className="pr-10 text-[16px] font-semibold tracking-tight text-slate-900 sm:text-lg"
           >
             {title}
           </h2>
           <button
             type="button"
             onClick={onClose}
-            className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full text-white/90 active:bg-white/10 sm:hidden"
+            className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200/90 text-slate-500 transition hover:bg-slate-50 hover:text-slate-800"
             aria-label="Close"
           >
-            <X className="h-5 w-5" />
+            <X className="h-4 w-4" />
           </button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:max-h-[min(60vh,480px)] sm:px-5">
           {children}
         </div>
         {footer ? (
-          <div className="shrink-0 border-t border-[#E9EDEF] bg-white px-4 py-3 sm:border-slate-100 sm:bg-slate-50/80 sm:px-5">
+          <div className="shrink-0 border-t border-slate-100 bg-slate-50/80 px-4 py-3 sm:px-5">
             {footer}
           </div>
         ) : null}
@@ -291,6 +357,11 @@ export default function ManageTeamsPage() {
     });
   }, [teams, teamSearch]);
 
+  const totalMembers = useMemo(
+    () => teams.reduce((sum, team) => sum + Number(team.total_number_of_members || 0), 0),
+    [teams],
+  );
+
   function openMobileAction(team: OrgTeamRow, kind: ModalKind) {
     setMobileActionsTeam(null);
     setFocusTeam(team);
@@ -319,140 +390,232 @@ export default function ManageTeamsPage() {
     }
   }
 
+  const createTeamHref = `/dashboard/${orgId}/organization-employees/create-team`;
+  const showSkeleton = loading && teams.length === 0;
+
   return (
-    <div className="min-h-full bg-[#F0F2F5] lg:bg-gradient-to-b lg:from-slate-50 lg:via-white lg:to-slate-50/90">
-      {/* Mobile & tablet: WhatsApp-style header */}
-      <div className="sticky top-0 z-20 bg-[#128C7E] text-white shadow-sm lg:hidden">
-        <div className="flex items-center gap-1 px-1 py-2">
-          <div className="min-w-0 flex-1 px-2 py-1">
-            <h1 className="truncate text-[17px] font-medium leading-tight">
-              Teams
-            </h1>
-            <p className="truncate text-[13px] text-white/75">
-              {loading
-                ? "Loading…"
-                : `${teams.length} team${teams.length === 1 ? "" : "s"} in your org`}
+    <div className={`${dashPageCls} pb-8`}>
+      {/* Mobile / tablet sticky header */}
+      <div className="sticky top-0 z-20 -mx-3 border-b border-slate-200/80 bg-white/95 px-3 pb-3 pt-3 shadow-[0_1px_3px_rgba(15,23,42,0.06)] backdrop-blur-md sm:-mx-5 sm:px-4 lg:hidden">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className={iconBadgeCls("blue")}>
+              <Users className="h-4 w-4" aria-hidden />
+            </span>
+            <div className="min-w-0">
+              <h1 className="text-[17px] font-semibold tracking-tight text-slate-900">
+                Teams
+              </h1>
+              <p className={`mt-0.5 ${dashSectionMetaCls}`}>
+                {loading
+                  ? "Loading workspace…"
+                  : `${teams.length} team${teams.length === 1 ? "" : "s"} · organize people & admins`}
+              </p>
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => void loadAll({ force: true })}
+              className={`${btnGhostCls()} !min-h-[36px] !w-9 !px-0`}
+              aria-label="Refresh teams"
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            </button>
+            <Link
+              href={createTeamHref}
+              className={`${btnBrandCls()} !min-h-[36px] !px-2.5 !text-[11px]`}
+            >
+              <PlusCircle className="h-3.5 w-3.5" />
+              New
+            </Link>
+          </div>
+        </div>
+        <div className="relative mt-3">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            type="search"
+            className={searchFieldCls()}
+            placeholder="Search teams, admin, description…"
+            value={teamSearch}
+            onChange={(e) => setTeamSearch(e.target.value)}
+            disabled={showSkeleton}
+          />
+        </div>
+        {!showSkeleton && teams.length > 0 ? (
+          <div className="mt-2.5 flex flex-wrap items-center gap-2">
+            <p className={dashSectionMetaCls}>
+              <span className="font-semibold text-slate-900">
+                {filteredTeams.length}
+              </span>{" "}
+              shown
             </p>
+            <span className="inline-flex rounded-full bg-sky-50 px-2.5 py-0.5 text-[10px] font-semibold text-[#008CD3] ring-1 ring-[#008CD3]/20">
+              {totalMembers} members
+            </span>
+            {teamSearch.trim() ? (
+              <button
+                type="button"
+                onClick={() => setTeamSearch("")}
+                className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600"
+              >
+                Clear
+                <X className="h-3 w-3" />
+              </button>
+            ) : null}
           </div>
-          <button
-            type="button"
-            onClick={() => void loadAll({ force: true })}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white transition active:bg-white/10"
-            aria-label="Refresh teams"
-          >
-            <RefreshCw className={`h-5 w-5 ${loading ? "animate-spin" : ""}`} />
-          </button>
-          <Link
-            href={`/dashboard/${orgId}/organization-employees/create-team`}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white transition active:bg-white/10"
-            aria-label="Create new team"
-          >
-            <PlusCircle className="h-5 w-5" />
-          </Link>
-        </div>
-        <div className="bg-white px-3 py-2">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8696A0]" />
-            <input
-              type="search"
-              className={searchFieldCls()}
-              placeholder="Search teams"
-              value={teamSearch}
-              onChange={(e) => setTeamSearch(e.target.value)}
-            />
-          </div>
-        </div>
+        ) : null}
       </div>
 
       {/* Desktop header */}
-      <div className="hidden border-b border-slate-200/80 bg-white/80 backdrop-blur-md lg:block">
-        <div className="mx-auto max-w-6xl px-6 py-8">
+      <header className={`${dashCardCls} hidden overflow-hidden lg:block`}>
+        <div className="border-b border-slate-100 bg-gradient-to-r from-[#F8FAFC] via-white to-[#F0F9FF]/40 px-6 py-5">
           <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <div className="inline-flex items-center gap-2 rounded-full bg-teal-500/10 px-3 py-1 text-xs font-semibold text-teal-800 ring-1 ring-teal-500/20">
-                <Users className="h-3.5 w-3.5" />
-                Organization teams
+            <div className="flex items-start gap-4">
+              <span className={iconBadgeCls("blue")}>
+                <Users className="h-5 w-5" aria-hidden />
+              </span>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+                  Organization · Teams
+                </p>
+                <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">
+                  Team management
+                </h1>
+                <p className={`mt-1 max-w-2xl ${dashSectionMetaCls}`}>
+                  Structure teams, assign admins, and move members without leaving
+                  this workspace.
+                </p>
               </div>
-              <h1 className="mt-3 text-3xl font-bold tracking-tight text-slate-900">
-                Team management
-              </h1>
-              <p className="mt-2 max-w-2xl text-sm text-slate-600">
-                Create clarity with structured teams, delegated admins, and fast
-                member moves — without leaving this workspace.
-              </p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={() => void loadAll({ force: true })}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+                className={btnGhostCls()}
               >
-                <RefreshCw
-                  className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
-                />
+                <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
                 Refresh
               </button>
-              <Link
-                href={`/dashboard/${orgId}/organization-employees/create-team`}
-                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-teal-600 to-teal-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-teal-600/25 transition hover:from-teal-700 hover:to-teal-600"
-              >
+              <Link href={createTeamHref} className={btnBrandCls()}>
                 <PlusCircle className="h-4 w-4" />
                 New team
               </Link>
+              {!showSkeleton ? (
+                <>
+                  <div className={`${statBoxCls("sky")} min-w-[88px] text-center`}>
+                    <p className="text-lg font-semibold tabular-nums text-[#008CD3]">
+                      {teams.length}
+                    </p>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                      Teams
+                    </p>
+                  </div>
+                  <div className={`${statBoxCls("emerald")} min-w-[88px] text-center`}>
+                    <p className="text-lg font-semibold tabular-nums text-emerald-700">
+                      {totalMembers}
+                    </p>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-600/80">
+                      Members
+                    </p>
+                  </div>
+                </>
+              ) : null}
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Mobile content */}
-      <div className="lg:hidden">
-        {banner ? (
-          <div
-            className={`mx-3 mt-3 rounded-lg px-4 py-3 text-[14px] ${
-              banner.type === "ok"
-                ? "bg-[#E7FCE3] text-[#0B5E44]"
-                : "bg-[#FFECEC] text-[#8B1A1A]"
-            }`}
-            role="status"
-          >
-            {banner.text}
+        <div className="flex flex-col gap-3 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className={dashSectionMetaCls}>
+            {showSkeleton
+              ? "Loading teams…"
+              : `${filteredTeams.length} of ${teams.length} team${teams.length === 1 ? "" : "s"}`}
+          </p>
+          <div className="relative w-full max-w-sm">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              type="search"
+              className={searchFieldCls()}
+              placeholder="Search teams, admin, description…"
+              value={teamSearch}
+              onChange={(e) => setTeamSearch(e.target.value)}
+              disabled={showSkeleton}
+            />
           </div>
-        ) : null}
+        </div>
+      </header>
 
-        {loading && teams.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-3 py-24 text-[#667781]">
-            <Loader2 className="h-9 w-9 animate-spin text-[#128C7E]" />
-            <p className="text-[15px]">Loading teams…</p>
-          </div>
-        ) : teams.length === 0 ? (
-          banner?.type === "err" ? (
-            <div className="mx-3 mt-4 rounded-lg bg-white px-6 py-12 text-center text-[15px] text-[#667781]">
-              Teams could not be loaded. Tap refresh or check your connection.
-            </div>
-          ) : (
-            <div className="mx-3 mt-4 rounded-lg bg-white px-6 py-16 text-center">
-              <Info className="mx-auto h-10 w-10 text-[#8696A0]" />
-              <p className="mt-4 text-[17px] font-medium text-[#111B21]">
-                No teams yet
-              </p>
-              <p className="mt-2 text-[14px] text-[#667781]">
-                Create your first team and assign an admin.
-              </p>
-              <Link
-                href={`/dashboard/${orgId}/organization-employees/create-team`}
-                className="mt-6 inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-[#25D366] px-5 py-2.5 text-[15px] font-medium text-white active:scale-[0.98]"
-              >
-                <PlusCircle className="h-4 w-4" />
-                Create team
-              </Link>
-            </div>
-          )
-        ) : filteredTeams.length === 0 ? (
-          <div className="px-4 py-16 text-center text-[15px] text-[#667781]">
-            No teams match your search.
+      {banner ? (
+        <div
+          className={`rounded-xl border px-4 py-3 text-sm ${
+            banner.type === "ok"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+              : "border-rose-200 bg-rose-50 text-rose-900"
+          }`}
+          role="status"
+        >
+          {banner.text}
+        </div>
+      ) : null}
+
+      {showSkeleton ? (
+        <ManageTeamsSkeleton />
+      ) : teams.length === 0 ? (
+        banner?.type === "err" ? (
+          <div className={`${dashCardCls} px-6 py-14 text-center`}>
+            <Info className="mx-auto h-10 w-10 text-slate-400" />
+            <p className="mt-4 text-[15px] font-semibold text-slate-800">
+              Teams could not be loaded
+            </p>
+            <p className={`mt-2 ${dashSectionMetaCls}`}>
+              Check your connection, then try again.
+            </p>
+            <button
+              type="button"
+              onClick={() => void loadAll({ force: true })}
+              className={`${btnGhostCls()} mt-6`}
+            >
+              <RefreshCw className="h-4 w-4" />
+              Retry
+            </button>
           </div>
         ) : (
-          <ul className="mt-1 divide-y divide-[#E9EDEF] bg-white">
+          <div className={`${dashCardCls} px-6 py-16 text-center`}>
+            <span className={`${iconBadgeCls("blue")} mx-auto h-12 w-12`}>
+              <Users className="h-5 w-5" />
+            </span>
+            <p className="mt-4 text-[16px] font-semibold text-slate-900">
+              No teams yet
+            </p>
+            <p className={`mx-auto mt-2 max-w-md ${dashSectionMetaCls}`}>
+              Create your first team and assign an admin to start organizing people.
+            </p>
+            <Link href={createTeamHref} className={`${btnBrandCls()} mt-6`}>
+              <PlusCircle className="h-4 w-4" />
+              Create team
+            </Link>
+          </div>
+        )
+      ) : filteredTeams.length === 0 ? (
+        <div className={`${dashCardCls} px-6 py-14 text-center`}>
+          <Search className="mx-auto h-9 w-9 text-slate-300" />
+          <p className="mt-3 text-[15px] font-semibold text-slate-800">
+            No teams match your search
+          </p>
+          <p className={`mt-1 ${dashSectionMetaCls}`}>
+            Try a different name, admin, or description.
+          </p>
+          <button
+            type="button"
+            onClick={() => setTeamSearch("")}
+            className={`${btnGhostCls()} mt-5`}
+          >
+            Clear search
+          </button>
+        </div>
+      ) : (
+        <>
+          {/* Mobile list */}
+          <ul className={`${dashCardCls} divide-y divide-slate-100 overflow-hidden lg:hidden`}>
             {filteredTeams.map((team) => {
               const title = displayTeamTitle(team.team_name);
               return (
@@ -460,211 +623,171 @@ export default function ManageTeamsPage() {
                   <button
                     type="button"
                     onClick={() => setMobileActionsTeam(team)}
-                    className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition active:bg-[#F0F2F5]"
+                    className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition active:bg-slate-50 hover:bg-slate-50/80"
                   >
-                    <span
-                      className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-medium ${avatarColorClass(title)}`}
-                      aria-hidden
-                    >
-                      {teamInitials(title)}
+                    <span className={avatarCls()} aria-hidden>
+                      {userInitials(title)}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-[17px] text-[#111B21]">
+                      <p className="truncate text-[15px] font-semibold text-slate-900">
                         {title}
                       </p>
-                      <p className="truncate text-[14px] text-[#667781]">
+                      <p className={`mt-0.5 truncate ${dashSectionMetaCls}`}>
                         {team.total_number_of_members} members ·{" "}
                         {team.admin_name ?? `User #${team.admin_id}`}
                       </p>
                       {team.team_info ? (
-                        <p className="mt-0.5 truncate text-[13px] text-[#8696A0]">
+                        <p className="mt-0.5 truncate text-[12px] text-slate-400">
                           {team.team_info}
                         </p>
                       ) : null}
                     </div>
-                    <ChevronRight className="h-5 w-5 shrink-0 text-[#8696A0]" />
+                    <ChevronRight className="h-5 w-5 shrink-0 text-slate-300" />
                   </button>
                 </li>
               );
             })}
           </ul>
-        )}
-      </div>
 
-      {/* Desktop content */}
-      <div className="mx-auto hidden max-w-6xl px-6 py-8 lg:block">
-        {banner ? (
-          <div
-            className={`mb-6 rounded-xl border px-4 py-3 text-sm ${
-              banner.type === "ok"
-                ? "border-teal-200 bg-teal-50 text-teal-900"
-                : "border-rose-200 bg-rose-50 text-rose-900"
-            }`}
-            role="status"
-          >
-            {banner.text}
-          </div>
-        ) : null}
-
-        {loading && teams.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-3 py-24 text-slate-500">
-            <Loader2 className="h-10 w-10 animate-spin text-teal-600" />
-            Loading teams…
-          </div>
-        ) : teams.length === 0 ? (
-          banner?.type === "err" ? (
-            <div className="rounded-2xl border border-slate-200 bg-white px-8 py-12 text-center text-sm text-slate-600 shadow-sm">
-              Teams could not be loaded. Use Refresh or check your connection.
-            </div>
-          ) : (
-          <div className="rounded-2xl border border-dashed border-slate-200 bg-white/60 px-8 py-16 text-center shadow-inner">
-            <Info className="mx-auto h-10 w-10 text-slate-400" />
-            <p className="mt-4 text-base font-semibold text-slate-800">
-              No teams yet
-            </p>
-            <p className="mt-2 text-sm text-slate-600">
-              Start by creating your first team and assigning an admin.
-            </p>
-            <Link
-              href={`/dashboard/${orgId}/organization-employees/create-team`}
-              className="mt-6 inline-flex items-center gap-2 rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-teal-700"
-            >
-              Create team
-            </Link>
-          </div>
-          )
-        ) : (
-          <div className="grid gap-6 md:grid-cols-2">
-            {teams.map((team) => (
-              <article
-                key={team.team_id}
-                className="group flex flex-col rounded-2xl border border-slate-200/90 bg-white p-6 shadow-lg shadow-slate-200/40 ring-1 ring-slate-100 transition hover:shadow-xl hover:shadow-slate-200/50"
-                style={{ borderTop: "3px solid #0d9488" }}
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <h2 className="text-lg font-bold text-slate-900">
-                      {displayTeamTitle(team.team_name)}
-                    </h2>
-                    <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                      <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 font-medium text-slate-700">
-                        <Users className="h-3.5 w-3.5" />
-                        {team.total_number_of_members} members
-                      </span>
-                      <span className="inline-flex items-center gap-1">
-                        <Crown className="h-3.5 w-3.5 text-amber-500" />
-                        {team.admin_name ?? `User #${team.admin_id}`}
-                      </span>
-                    </p>
+          {/* Desktop cards */}
+          <div className="hidden gap-5 md:grid-cols-2 lg:grid">
+            {filteredTeams.map((team) => {
+              const title = displayTeamTitle(team.team_name);
+              const teamHref = `/dashboard/${orgId}/organization-employees/teams/0?team_id=${encodeURIComponent(String(team.team_id))}`;
+              return (
+                <article
+                  key={team.team_id}
+                  className={`${dashCardCls} flex flex-col p-5 transition hover:border-[#008CD3]/25 hover:shadow-[0_8px_24px_rgba(15,23,42,0.06)]`}
+                >
+                  <div className="flex items-start gap-3">
+                    <span className={avatarCls()} aria-hidden>
+                      {userInitials(title)}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <h2 className="truncate text-[16px] font-semibold tracking-tight text-slate-900">
+                        {title}
+                      </h2>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">
+                          <Users className="h-3.5 w-3.5" />
+                          {team.total_number_of_members} members
+                        </span>
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800 ring-1 ring-amber-200/70">
+                          <Crown className="h-3.5 w-3.5 text-amber-500" />
+                          {team.admin_name ?? `User #${team.admin_id}`}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                </div>
-                {team.team_info ? (
-                  <p className="mt-3 line-clamp-2 text-sm text-slate-600">
-                    {team.team_info}
-                  </p>
-                ) : (
-                  <p className="mt-3 text-sm italic text-slate-400">
-                    No description
-                  </p>
-                )}
 
-                <div className="mt-5 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFocusTeam(team);
-                      setModal("add");
-                    }}
-                    className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-800 min-[400px]:flex-none"
-                  >
-                    <UserPlus className="h-3.5 w-3.5" />
-                    Add member
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFocusTeam(team);
-                      setModal("admin");
-                    }}
-                    className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-slate-800 ring-1 ring-slate-200 transition hover:bg-slate-50 min-[400px]:flex-none"
-                  >
-                    <Crown className="h-3.5 w-3.5 text-amber-500" />
-                    Change admin
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFocusTeam(team);
-                      setUpdateName(team.team_name);
-                      setUpdateInfo(team.team_info ?? "");
-                      setModal("update");
-                    }}
-                    className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-slate-800 ring-1 ring-slate-200 transition hover:bg-slate-50 min-[400px]:flex-none"
-                  >
-                    <Settings2 className="h-3.5 w-3.5" />
-                    Update info
-                  </button>
-                  <Link
-                    href={`/dashboard/${orgId}/organization-employees/teams/0?team_id=${encodeURIComponent(String(team.team_id))}`}
-                    className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-slate-800 ring-1 ring-slate-200 transition hover:bg-slate-50 min-[400px]:flex-none"
-                  >
-                    <ExternalLink className="h-3.5 w-3.5" />
-                    View full
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFocusTeam(team);
-                      setModal("remove");
-                    }}
-                    className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 ring-1 ring-rose-200 transition hover:bg-rose-100 min-[400px]:flex-none"
-                  >
-                    <UserMinus className="h-3.5 w-3.5" />
-                    Remove member
-                  </button>
-                </div>
-              </article>
-            ))}
+                  {team.team_info ? (
+                    <p className="mt-4 line-clamp-2 text-[13px] leading-relaxed text-slate-600">
+                      {team.team_info}
+                    </p>
+                  ) : (
+                    <p className="mt-4 text-[13px] italic text-slate-400">
+                      No description
+                    </p>
+                  )}
+
+                  <div className="mt-auto flex flex-wrap gap-2 border-t border-slate-100 pt-4">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFocusTeam(team);
+                        setModal("add");
+                      }}
+                      className={`${btnBrandCls()} !min-h-[36px] !px-3 !text-[12px]`}
+                    >
+                      <UserPlus className="h-3.5 w-3.5" />
+                      Add member
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFocusTeam(team);
+                        setModal("admin");
+                      }}
+                      className={`${btnGhostCls()} !min-h-[36px] !px-3 !text-[12px]`}
+                    >
+                      <Crown className="h-3.5 w-3.5 text-amber-500" />
+                      Change admin
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFocusTeam(team);
+                        setUpdateName(team.team_name);
+                        setUpdateInfo(team.team_info ?? "");
+                        setModal("update");
+                      }}
+                      className={`${btnGhostCls()} !min-h-[36px] !px-3 !text-[12px]`}
+                    >
+                      <Settings2 className="h-3.5 w-3.5" />
+                      Update
+                    </button>
+                    <Link
+                      href={teamHref}
+                      className={`${btnGhostCls()} !min-h-[36px] !px-3 !text-[12px]`}
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      View
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFocusTeam(team);
+                        setModal("remove");
+                      }}
+                      className={`${btnDangerCls()} !min-h-[36px] !bg-rose-50 !px-3 !text-[12px] !text-rose-700 hover:!bg-rose-100`}
+                    >
+                      <UserMinus className="h-3.5 w-3.5" />
+                      Remove
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
           </div>
-        )}
-      </div>
+        </>
+      )}
 
-      {/* Mobile: team action sheet */}
+      {/* Mobile action sheet */}
       {mobileActionsTeam ? (
         <div className="fixed inset-0 z-[999] lg:hidden">
           <button
             type="button"
-            className="absolute inset-0 bg-[#111B21]/40"
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-[1px]"
             aria-label="Close menu"
             onClick={() => setMobileActionsTeam(null)}
           />
-          <div className="absolute inset-x-0 bottom-0 max-h-[85dvh] overflow-hidden rounded-t-2xl bg-white pb-[calc(4.5rem+env(safe-area-inset-bottom))] shadow-2xl">
-            <div className="bg-[#128C7E] px-4 py-4">
+          <div className="absolute inset-x-0 bottom-0 max-h-[85dvh] overflow-hidden rounded-t-2xl border border-slate-200/90 bg-white pb-[calc(4.5rem+env(safe-area-inset-bottom))] shadow-2xl">
+            <div className="border-b border-slate-100 bg-gradient-to-r from-[#F8FAFC] via-white to-[#F0F9FF]/40 px-4 py-4">
               <div className="flex items-center gap-3">
-                <span
-                  className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-medium ${avatarColorClass(displayTeamTitle(mobileActionsTeam.team_name))}`}
-                >
-                  {teamInitials(displayTeamTitle(mobileActionsTeam.team_name))}
+                <span className={avatarCls()}>
+                  {userInitials(displayTeamTitle(mobileActionsTeam.team_name))}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[17px] font-medium text-white">
+                  <p className="truncate text-[16px] font-semibold text-slate-900">
                     {displayTeamTitle(mobileActionsTeam.team_name)}
                   </p>
-                  <p className="truncate text-[13px] text-white/75">
-                    {mobileActionsTeam.total_number_of_members} members
+                  <p className={dashSectionMetaCls}>
+                    {mobileActionsTeam.total_number_of_members} members ·{" "}
+                    {mobileActionsTeam.admin_name ??
+                      `User #${mobileActionsTeam.admin_id}`}
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setMobileActionsTeam(null)}
-                  className="flex h-9 w-9 items-center justify-center rounded-full text-white/90 active:bg-white/10"
+                  className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200/90 text-slate-500 hover:bg-slate-50"
                   aria-label="Close"
                 >
-                  <X className="h-5 w-5" />
+                  <X className="h-4 w-4" />
                 </button>
               </div>
             </div>
-            <ul className="divide-y divide-[#E9EDEF]">
+            <ul className="divide-y divide-slate-100">
               {(
                 [
                   {
@@ -697,22 +820,22 @@ export default function ManageTeamsPage() {
               ).map((item) => {
                 const Icon = item.icon;
                 const rowCls =
-                  "flex w-full items-center gap-4 px-4 py-4 text-left transition active:bg-[#F0F2F5]";
+                  "flex w-full items-center gap-3 px-4 py-3.5 text-left transition active:bg-slate-50";
                 const isDanger = "danger" in item && item.danger;
                 const content = (
                   <>
                     <span
-                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
+                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
                         isDanger
-                          ? "bg-[#FFECEC] text-[#C62828]"
-                          : "bg-[#F0F2F5] text-[#54656F]"
+                          ? "bg-rose-50 text-rose-600"
+                          : "bg-sky-50 text-[#008CD3]"
                       }`}
                     >
                       <Icon className="h-5 w-5" />
                     </span>
                     <span
-                      className={`text-[16px] ${
-                        isDanger ? "text-[#C62828]" : "text-[#111B21]"
+                      className={`text-[15px] font-medium ${
+                        isDanger ? "text-rose-700" : "text-slate-900"
                       }`}
                     >
                       {item.label}
@@ -761,11 +884,11 @@ export default function ManageTeamsPage() {
                 "Add member — " + displayTeamTitle(team.team_name),
                 closeModal,
                 <>
-                  <p className="text-[14px] text-[#667781] lg:text-sm lg:text-slate-600">
+                  <p className={dashSectionMetaCls}>
                     Only employees who are not already on this team are listed.
                   </p>
                   <div className="relative mt-3">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8696A0]" />
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                     <input
                       type="search"
                       className={searchFieldCls()}
@@ -774,9 +897,9 @@ export default function ManageTeamsPage() {
                       onChange={(e) => setAddSearch(e.target.value)}
                     />
                   </div>
-                  <ul className="mt-3 max-h-[min(50dvh,320px)] divide-y divide-[#E9EDEF] overflow-y-auto lg:max-h-64 lg:space-y-2 lg:divide-y-0">
+                  <ul className="mt-3 max-h-[min(50dvh,320px)] space-y-2 overflow-y-auto">
                     {addCandidates.length === 0 ? (
-                      <li className="py-10 text-center text-[15px] text-[#667781] lg:py-8 lg:text-sm lg:text-slate-500">
+                      <li className="py-10 text-center text-sm text-slate-500">
                         No matches.
                       </li>
                     ) : (
@@ -785,18 +908,16 @@ export default function ManageTeamsPage() {
                         return (
                           <li
                             key={String(u.id)}
-                            className="flex items-center gap-3 py-3 lg:justify-between lg:gap-2 lg:rounded-xl lg:border lg:border-slate-100 lg:bg-slate-50/80 lg:px-3 lg:py-2"
+                            className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/70 px-3 py-2.5"
                           >
-                            <span
-                              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-medium ${avatarColorClass(name)}`}
-                            >
-                              {teamInitials(name)}
+                            <span className={`${avatarCls("sm")}`}>
+                              {userInitials(name)}
                             </span>
                             <div className="min-w-0 flex-1">
-                              <div className="truncate text-[16px] text-[#111B21] lg:text-sm lg:font-medium lg:text-slate-900">
+                              <div className="truncate text-sm font-medium text-slate-900">
                                 {u.user_name}
                               </div>
-                              <div className="truncate text-[14px] text-[#667781] lg:text-xs lg:text-slate-500">
+                              <div className="truncate text-xs text-slate-500">
                                 {u.user_email}
                               </div>
                             </div>
@@ -814,7 +935,7 @@ export default function ManageTeamsPage() {
                                   );
                                 })
                               }
-                              className="shrink-0 rounded-lg bg-[#25D366] px-4 py-2 text-[13px] font-medium text-white active:scale-[0.98] disabled:opacity-50 lg:bg-teal-600 lg:px-3 lg:py-1.5 lg:text-xs lg:font-semibold lg:hover:bg-teal-700"
+                              className={`${btnBrandCls()} !min-h-[34px] !px-3 !text-[12px]`}
                             >
                               Add
                             </button>
@@ -833,12 +954,12 @@ export default function ManageTeamsPage() {
                 "Remove member — " + displayTeamTitle(team.team_name),
                 closeModal,
                 <>
-                  <p className="text-[14px] text-[#C62828] lg:text-sm lg:text-rose-700/90">
+                  <p className="text-sm text-rose-700/90">
                     Removes the member from this team (historical rows stay on
                     the server).
                   </p>
                   <div className="relative mt-3">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8696A0]" />
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                     <input
                       type="search"
                       className={searchFieldCls()}
@@ -847,23 +968,25 @@ export default function ManageTeamsPage() {
                       onChange={(e) => setRemoveSearch(e.target.value)}
                     />
                   </div>
-                  <ul className="mt-3 max-h-[min(50dvh,320px)] divide-y divide-[#E9EDEF] overflow-y-auto lg:max-h-64 lg:space-y-2 lg:divide-y-0">
+                  <ul className="mt-3 max-h-[min(50dvh,320px)] space-y-2 overflow-y-auto">
                     {removeCandidates.map((m) => (
                       <li
                         key={m.team_member_id}
-                        className="flex items-center gap-3 py-3 lg:justify-between lg:gap-2 lg:rounded-xl lg:border lg:border-slate-100 lg:bg-slate-50/80 lg:px-3 lg:py-2"
+                        className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/70 px-3 py-2.5"
                       >
                         <div className="min-w-0 flex-1">
-                          <div className="truncate text-[16px] text-[#111B21] lg:text-sm lg:font-medium lg:text-slate-900">
+                          <div className="truncate text-sm font-medium text-slate-900">
                             {m.user_name}
                           </div>
-                          <div className="truncate text-[14px] text-[#667781] lg:text-xs lg:text-slate-500">
+                          <div className="truncate text-xs text-slate-500">
                             {m.user_email}
                           </div>
                         </div>
                         <button
                           type="button"
-                          disabled={Number(m.user_id) === Number(team.admin_id)}
+                          disabled={
+                            busy || Number(m.user_id) === Number(team.admin_id)
+                          }
                           title={
                             Number(m.user_id) === Number(team.admin_id)
                               ? "Assign another admin before removing."
@@ -880,7 +1003,7 @@ export default function ManageTeamsPage() {
                               );
                             })
                           }
-                          className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-[#C62828] px-3 py-2 text-[13px] font-medium text-white active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 lg:bg-rose-600 lg:py-1.5 lg:text-xs lg:font-semibold lg:hover:bg-rose-700"
+                          className={`${btnDangerCls()} !min-h-[34px] !px-3 !text-[12px]`}
                         >
                           <Trash2 className="h-3 w-3" />
                           Remove
@@ -898,11 +1021,11 @@ export default function ManageTeamsPage() {
                 "Change admin — " + displayTeamTitle(team.team_name),
                 closeModal,
                 <>
-                  <p className="text-[14px] text-[#667781] lg:text-sm lg:text-slate-600">
+                  <p className={dashSectionMetaCls}>
                     New admin must currently be an active member of the team.
                   </p>
                   <div className="relative mt-3">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8696A0]" />
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                     <input
                       type="search"
                       className={searchFieldCls()}
@@ -911,46 +1034,45 @@ export default function ManageTeamsPage() {
                       onChange={(e) => setAdminSearch(e.target.value)}
                     />
                   </div>
-                  <ul className="mt-3 max-h-[min(50dvh,320px)] divide-y divide-[#E9EDEF] overflow-y-auto lg:max-h-64 lg:space-y-2 lg:divide-y-0">
+                  <ul className="mt-3 max-h-[min(50dvh,320px)] space-y-2 overflow-y-auto">
                     {adminCandidates.filter(
                       (m) => Number(m.user_id) !== Number(team.admin_id),
                     ).length === 0 ? (
-                      <li className="py-10 text-center text-[15px] text-[#667781] lg:py-8 lg:text-sm lg:text-slate-500">
+                      <li className="py-10 text-center text-sm text-slate-500">
                         No other active members to promote. Add a member first.
                       </li>
                     ) : (
                       adminCandidates
                         .filter(
-                          (m) =>
-                            Number(m.user_id) !== Number(team.admin_id),
+                          (m) => Number(m.user_id) !== Number(team.admin_id),
                         )
                         .map((m) => (
-                        <li
-                          key={m.team_member_id}
-                          className="flex items-center gap-3 py-3 lg:justify-between lg:gap-2 lg:rounded-xl lg:border lg:border-slate-100 lg:bg-slate-50/80 lg:px-3 lg:py-2"
-                        >
-                          <span className="truncate text-[16px] text-[#111B21] lg:text-sm lg:font-medium lg:text-slate-900">
-                            {m.user_name}
-                          </span>
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() =>
-                              run(async () => {
-                                const t = token();
-                                if (!t) throw new Error("Sign in required.");
-                                await updateOrgTeam(t, {
-                                  team_id: team.team_id,
-                                  new_admin_id: m.user_id,
-                                });
-                              })
-                            }
-                            className="shrink-0 rounded-lg bg-[#FFB74D] px-3 py-2 text-[13px] font-medium text-[#111B21] active:scale-[0.98] disabled:opacity-50 lg:bg-amber-500 lg:py-1.5 lg:text-xs lg:font-semibold lg:hover:bg-amber-400"
+                          <li
+                            key={m.team_member_id}
+                            className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/70 px-3 py-2.5"
                           >
-                            Make admin
-                          </button>
-                        </li>
-                      ))
+                            <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-900">
+                              {m.user_name}
+                            </span>
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() =>
+                                run(async () => {
+                                  const t = token();
+                                  if (!t) throw new Error("Sign in required.");
+                                  await updateOrgTeam(t, {
+                                    team_id: team.team_id,
+                                    new_admin_id: m.user_id,
+                                  });
+                                })
+                              }
+                              className="inline-flex min-h-[34px] items-center justify-center rounded-lg bg-amber-500 px-3 py-1.5 text-[12px] font-semibold text-white transition hover:bg-amber-600 disabled:opacity-40"
+                            >
+                              Make admin
+                            </button>
+                          </li>
+                        ))
                     )}
                   </ul>
                 </>,
@@ -963,19 +1085,19 @@ export default function ManageTeamsPage() {
                 "Update team — " + displayTeamTitle(team.team_name),
                 closeModal,
                 <>
-                  <label className="mb-1 block text-[13px] font-medium uppercase tracking-wide text-[#667781] lg:text-xs lg:font-semibold lg:text-slate-500">
+                  <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                     Name
                   </label>
                   <input
-                    className="mb-4 w-full rounded-lg border-0 bg-[#F0F2F5] px-3 py-3 text-[15px] text-[#111B21] outline-none focus:bg-white focus:ring-1 focus:ring-[#25D366]/40 lg:rounded-xl lg:border lg:border-slate-200 lg:bg-white lg:py-2 lg:text-sm lg:focus:border-teal-500 lg:focus:ring-2 lg:focus:ring-teal-500/20"
+                    className="mb-4 w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15"
                     value={updateName}
                     onChange={(e) => setUpdateName(e.target.value)}
                   />
-                  <label className="mb-1 block text-[13px] font-medium uppercase tracking-wide text-[#667781] lg:text-xs lg:font-semibold lg:text-slate-500">
+                  <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                     Description
                   </label>
                   <textarea
-                    className="min-h-[100px] w-full rounded-lg border-0 bg-[#F0F2F5] px-3 py-3 text-[15px] text-[#111B21] outline-none focus:bg-white focus:ring-1 focus:ring-[#25D366]/40 lg:rounded-xl lg:border lg:border-slate-200 lg:bg-white lg:py-2 lg:text-sm lg:focus:border-teal-500 lg:focus:ring-2 lg:focus:ring-teal-500/20"
+                    className="min-h-[100px] w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15"
                     value={updateInfo}
                     onChange={(e) => setUpdateInfo(e.target.value)}
                   />
@@ -994,7 +1116,7 @@ export default function ManageTeamsPage() {
                       });
                     })
                   }
-                  className="w-full rounded-lg bg-[#25D366] py-3 text-[15px] font-medium text-white active:scale-[0.98] disabled:opacity-50 lg:rounded-xl lg:bg-teal-600 lg:py-2.5 lg:text-sm lg:font-semibold lg:hover:bg-teal-700"
+                  className={`${btnBrandCls(true)}`}
                 >
                   Save changes
                 </button>,

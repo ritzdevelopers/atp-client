@@ -28,6 +28,17 @@ import {
   stableFilterKey,
   writeBgvListCache,
 } from "@/lib/employeeManagementCache";
+import {
+  avatarCls,
+  btnBrandCls,
+  btnGhostCls,
+  dashCardCls,
+  dashPageCls,
+  dashSectionMetaCls,
+  iconBadgeCls,
+  statBoxCls,
+  userInitials,
+} from "@/components/portal-dashboard/home/dashboardTokens";
 
 type VerifyTarget = BackgroundVerificationReferenceItem & {
   employee_id: number;
@@ -71,19 +82,6 @@ function formatDate(value: string | null | undefined): string {
   });
 }
 
-function formatDateTime(value: string | null | undefined): string {
-  if (!value) return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return String(value);
-  return d.toLocaleString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
 function personRoleLabel(role: string): string {
   if (role === "hr") return "HR";
   if (role === "reporting_manager") return "Reporting manager";
@@ -97,11 +95,11 @@ function statusLabel(status: string): string {
 
 function statusBadgeClass(status: string): string {
   const s = String(status).toLowerCase();
-  if (s === "verified") return "bg-[#E6F4EA] text-[#0F9D58]";
-  if (s === "failed") return "bg-[#FCE8E6] text-[#D93025]";
-  if (s === "in_progress") return "bg-[#E8F4FB] text-[#008CD3]";
-  if (s === "unable_to_contact") return "bg-[#F3F4F6] text-[#6B7280]";
-  return "bg-[#FEF3E6] text-[#E8710A]";
+  if (s === "verified") return "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200/70";
+  if (s === "failed") return "bg-rose-50 text-rose-700 ring-1 ring-rose-200/70";
+  if (s === "in_progress") return "bg-[#E8F4FB] text-[#008CD3] ring-1 ring-[#008CD3]/20";
+  if (s === "unable_to_contact") return "bg-slate-100 text-slate-600 ring-1 ring-slate-200/80";
+  return "bg-amber-50 text-amber-700 ring-1 ring-amber-200/70";
 }
 
 function canShowVerifyButton(status: string): boolean {
@@ -110,38 +108,88 @@ function canShowVerifyButton(status: string): boolean {
 }
 
 function labelCls() {
-  return "mb-1 block text-[12px] font-medium text-[#374151]";
+  return "mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-slate-500";
 }
 
 function filterFieldCls() {
-  return "w-full rounded-lg border border-[#E4E7EC] bg-white px-3 py-2 text-[14px] text-[#1F2937] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15";
+  return "w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-[13px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15";
 }
 
-function zohoPanelCls() {
-  return "overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-sm";
+function Shimmer({ className = "" }: { className?: string }) {
+  return <div className={`skeleton-shimmer rounded-xl ${className}`} />;
 }
 
-function zohoPrimaryBtnCls(full = false) {
-  return `inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg bg-[#008CD3] px-4 py-2 text-[14px] font-medium text-white transition active:scale-[0.98] hover:bg-[#0070AA] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full lg:w-auto" : ""}`;
-}
+function BgvPageSkeleton() {
+  return (
+    <div className="space-y-4" aria-busy="true" aria-label="Loading background verifications">
+      <div className={`${dashCardCls} overflow-hidden lg:hidden`}>
+        <div className="space-y-3 p-4">
+          <div className="flex items-center gap-3">
+            <Shimmer className="h-10 w-10 rounded-xl" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <Shimmer className="h-4 w-40" />
+              <Shimmer className="h-3 w-28" />
+            </div>
+            <Shimmer className="h-9 w-9 rounded-xl" />
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <Shimmer className="h-14" />
+            <Shimmer className="h-14" />
+            <Shimmer className="h-14" />
+          </div>
+        </div>
+      </div>
 
-function zohoSecondaryBtnCls(full = false) {
-  return `inline-flex min-h-[40px] items-center justify-center rounded-lg border border-[#E4E7EC] bg-white px-4 py-2 text-[14px] font-medium text-[#374151] transition hover:bg-[#F9FAFB] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full lg:w-auto" : ""}`;
-}
+      <div className={`${dashCardCls} hidden overflow-hidden lg:block`}>
+        <div className="border-b border-slate-100 bg-gradient-to-r from-[#F8FAFC] via-white to-[#F0F9FF]/40 px-6 py-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <Shimmer className="h-11 w-11 rounded-xl" />
+              <div className="space-y-2">
+                <Shimmer className="h-3 w-32" />
+                <Shimmer className="h-6 w-56" />
+                <Shimmer className="h-4 w-80 max-w-full" />
+              </div>
+            </div>
+            <Shimmer className="h-10 w-28" />
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2 px-6 py-4">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Shimmer key={i} className="h-8 w-24 rounded-full" />
+          ))}
+        </div>
+      </div>
 
-function compactPrimaryBtnCls() {
-  return "inline-flex h-7 shrink-0 items-center gap-1 rounded-md bg-[#008CD3] px-2.5 text-[11px] font-medium text-white transition hover:bg-[#0070AA]";
-}
+      <div className={`${dashCardCls} space-y-4 p-4 sm:p-5`}>
+        <Shimmer className="h-5 w-24" />
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Shimmer key={i} className="h-10 w-full" />
+          ))}
+        </div>
+      </div>
 
-function compactGhostBtnCls() {
-  return "inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-[#E4E7EC] bg-white px-2.5 text-[11px] font-medium text-[#374151] transition hover:bg-[#F9FAFB]";
-}
-
-function employeeInitials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+      <div className={`${dashCardCls} divide-y divide-slate-100 overflow-hidden`}>
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="p-4">
+            <div className="flex items-center gap-3">
+              <Shimmer className="h-10 w-10 shrink-0 rounded-full" />
+              <div className="min-w-0 flex-1 space-y-2">
+                <Shimmer className="h-4 w-40" />
+                <Shimmer className="h-3 w-28" />
+              </div>
+              <Shimmer className="h-8 w-20" />
+            </div>
+            <div className="mt-3 space-y-2 rounded-xl bg-slate-50/80 p-3">
+              <Shimmer className="h-8 w-full" />
+              <Shimmer className="h-8 w-full" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function StatPill({
@@ -155,20 +203,20 @@ function StatPill({
 }) {
   const toneCls =
     tone === "emerald"
-      ? "bg-[#E6F4EA] text-[#0F9D58]"
+      ? "bg-emerald-50 text-emerald-700 ring-emerald-200/70"
       : tone === "rose"
-        ? "bg-[#FCE8E6] text-[#D93025]"
+        ? "bg-rose-50 text-rose-700 ring-rose-200/70"
         : tone === "blue"
-          ? "bg-[#E8F4FB] text-[#008CD3]"
+          ? "bg-[#E8F4FB] text-[#008CD3] ring-[#008CD3]/20"
           : tone === "gray"
-            ? "bg-[#F3F4F6] text-[#6B7280]"
-            : "bg-[#FEF3E6] text-[#E8710A]";
+            ? "bg-slate-100 text-slate-600 ring-slate-200/80"
+            : "bg-amber-50 text-amber-700 ring-amber-200/70";
   return (
     <span
-      className={`inline-flex min-h-[32px] items-center gap-1.5 rounded-lg px-2.5 text-[12px] font-medium ${toneCls}`}
+      className={`inline-flex min-h-[32px] items-center gap-1.5 rounded-full px-2.5 text-[12px] font-semibold ring-1 ${toneCls}`}
     >
       {label}
-      <span className="font-semibold">{value}</span>
+      <span className="tabular-nums">{value}</span>
     </span>
   );
 }
@@ -184,18 +232,18 @@ function MobileStatTile({
 }) {
   const toneCls =
     tone === "emerald"
-      ? "text-[#0F9D58]"
+      ? "text-emerald-600"
       : tone === "rose"
-        ? "text-[#D93025]"
+        ? "text-rose-600"
         : tone === "blue"
           ? "text-[#008CD3]"
           : tone === "gray"
-            ? "text-[#6B7280]"
-            : "text-[#E8710A]";
+            ? "text-slate-500"
+            : "text-amber-600";
   return (
-    <div className="rounded-lg border border-[#E4E7EC] bg-[#FAFBFC] px-2 py-2 text-center">
-      <p className={`text-[16px] font-semibold ${toneCls}`}>{value}</p>
-      <p className="text-[10px] font-medium text-[#6B7280]">{label}</p>
+    <div className="rounded-xl border border-slate-100 bg-slate-50/80 px-2 py-2 text-center">
+      <p className={`text-[16px] font-semibold tabular-nums ${toneCls}`}>{value}</p>
+      <p className="text-[10px] font-medium text-slate-500">{label}</p>
     </div>
   );
 }
@@ -348,7 +396,9 @@ function BackgroundVerificationPage() {
       employee_id: group.employee_id,
       employee_name: group.employee_name,
     });
-    const current = String(reference.verification_status).toLowerCase() as BackgroundVerificationStatus;
+    const current = String(
+      reference.verification_status,
+    ).toLowerCase() as BackgroundVerificationStatus;
     setVerifyStatus(
       STATUS_OPTIONS.some((o) => o.value === current) ? current : "in_progress",
     );
@@ -395,30 +445,33 @@ function BackgroundVerificationPage() {
   };
 
   const isBusy = loading || refreshing;
+  const showSkeleton = loading && employeeGroups.length === 0;
 
   return (
-    <section className="min-h-full space-y-3 bg-[#F5F7FA] p-0 max-lg:-mx-1 sm:max-lg:-mx-2 lg:mx-auto lg:max-w-7xl lg:space-y-4 lg:p-6">
-      {/* Mobile header */}
-      <div className="sticky top-0 z-20 border-b border-[#E4E7EC] bg-white px-3 pb-2.5 pt-2.5 shadow-sm sm:px-4 lg:hidden">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex min-w-0 flex-1 items-start gap-2">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#E8F4FB] text-[#008CD3]">
+    <div className={`${dashPageCls} pb-8`}>
+      {/* Mobile sticky header */}
+      <div className="sticky top-0 z-20 -mx-3 border-b border-slate-200/80 bg-white/95 px-3 pb-3 pt-3 shadow-[0_1px_3px_rgba(15,23,42,0.06)] backdrop-blur-md sm:-mx-5 sm:px-4 lg:hidden">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className={iconBadgeCls("blue")}>
               <ShieldCheck className="h-4 w-4" aria-hidden />
             </span>
             <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-[#6B7280]">
-                Organization · Employees
-              </p>
-              <h1 className="truncate text-[16px] font-semibold text-[#1F2937]">
+              <h1 className="truncate text-[17px] font-semibold tracking-tight text-slate-900">
                 Background verification
               </h1>
+              <p className={`mt-0.5 truncate ${dashSectionMetaCls}`}>
+                {showSkeleton
+                  ? "Loading workspace…"
+                  : `${counts.employees} employee${counts.employees === 1 ? "" : "s"} · ${counts.total} reference${counts.total === 1 ? "" : "s"}`}
+              </p>
             </div>
           </div>
           <button
             type="button"
             onClick={refresh}
             disabled={isBusy}
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#008CD3] active:bg-[#F5F7FA] disabled:opacity-50"
+            className={`${btnGhostCls()} !min-h-[36px] !w-9 !px-0`}
             aria-label="Refresh list"
           >
             <RefreshCw
@@ -428,388 +481,462 @@ function BackgroundVerificationPage() {
           </button>
         </div>
 
-        <div className="mt-2.5 grid grid-cols-3 gap-1.5">
-          <MobileStatTile label="Pending" value={counts.pending} tone="amber" />
-          <MobileStatTile label="In progress" value={counts.inProgress} tone="blue" />
-          <MobileStatTile label="Verified" value={counts.verified} tone="emerald" />
-        </div>
-        <div className="mt-1.5 grid grid-cols-2 gap-1.5">
-          <MobileStatTile label="Failed" value={counts.failed} tone="rose" />
-          <MobileStatTile label="No contact" value={counts.unable} tone="gray" />
-        </div>
-        <p className="mt-1.5 text-center text-[11px] text-[#6B7280]">
-          {counts.employees} employee{counts.employees === 1 ? "" : "s"} · {counts.total}{" "}
-          reference{counts.total === 1 ? "" : "s"}
-        </p>
+        {!showSkeleton ? (
+          <>
+            <div className="mt-3 grid grid-cols-3 gap-1.5">
+              <MobileStatTile label="Pending" value={counts.pending} tone="amber" />
+              <MobileStatTile label="In progress" value={counts.inProgress} tone="blue" />
+              <MobileStatTile label="Verified" value={counts.verified} tone="emerald" />
+            </div>
+            <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+              <MobileStatTile label="Failed" value={counts.failed} tone="rose" />
+              <MobileStatTile label="No contact" value={counts.unable} tone="gray" />
+            </div>
+          </>
+        ) : (
+          <div className="mt-3 grid grid-cols-3 gap-1.5">
+            <Shimmer className="h-14" />
+            <Shimmer className="h-14" />
+            <Shimmer className="h-14" />
+          </div>
+        )}
       </div>
 
       {/* Desktop header */}
-      <header className={`${zohoPanelCls()} hidden p-4 lg:block`}>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex min-w-0 items-start gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#E8F4FB] text-[#008CD3]">
-              <ShieldCheck className="h-5 w-5" aria-hidden />
-            </span>
-            <div className="min-w-0">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
-                Organization · Employees
-              </p>
-              <h1 className="text-[18px] font-semibold text-[#1F2937]">
-                Background verification
-              </h1>
-              <p className="mt-0.5 max-w-2xl text-[13px] text-[#6B7280]">
-                Review previous company references submitted by employees and update
-                verification status after contacting HR or reporting managers.
-              </p>
+      <header className={`${dashCardCls} hidden overflow-hidden lg:block`}>
+        <div className="border-b border-slate-100 bg-gradient-to-r from-[#F8FAFC] via-white to-[#F0F9FF]/40 px-6 py-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="flex items-start gap-4">
+              <span className={iconBadgeCls("blue")}>
+                <ShieldCheck className="h-5 w-5" aria-hidden />
+              </span>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+                  Organization · Employees
+                </p>
+                <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">
+                  Background verification
+                </h1>
+                <p className={`mt-1 max-w-2xl ${dashSectionMetaCls}`}>
+                  Review previous company references and update verification status after
+                  contacting HR or reporting managers.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={refresh}
+                disabled={isBusy}
+                className={btnGhostCls()}
+              >
+                <RefreshCw
+                  className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
+                  aria-hidden
+                />
+                {refreshing ? "Refreshing…" : "Refresh"}
+              </button>
+              {!showSkeleton ? (
+                <>
+                  <div className={`${statBoxCls("amber")} min-w-[80px] text-center`}>
+                    <p className="text-lg font-semibold tabular-nums text-amber-700">
+                      {counts.pending}
+                    </p>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-600/80">
+                      Pending
+                    </p>
+                  </div>
+                  <div className={`${statBoxCls("sky")} min-w-[80px] text-center`}>
+                    <p className="text-lg font-semibold tabular-nums text-[#008CD3]">
+                      {counts.inProgress}
+                    </p>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                      Active
+                    </p>
+                  </div>
+                  <div className={`${statBoxCls("emerald")} min-w-[80px] text-center`}>
+                    <p className="text-lg font-semibold tabular-nums text-emerald-700">
+                      {counts.verified}
+                    </p>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-600/80">
+                      Verified
+                    </p>
+                  </div>
+                </>
+              ) : null}
             </div>
           </div>
-          <button
-            type="button"
-            onClick={refresh}
-            disabled={isBusy}
-            className={zohoSecondaryBtnCls()}
-          >
-            <RefreshCw
-              className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
-              aria-hidden
-            />
-            {refreshing ? "Refreshing…" : "Refresh"}
-          </button>
         </div>
-
-        <div className="mt-3 flex flex-wrap gap-2 border-t border-[#E4E7EC] pt-4">
-          <StatPill label="Pending" value={counts.pending} tone="amber" />
-          <StatPill label="In progress" value={counts.inProgress} tone="blue" />
-          <StatPill label="Verified" value={counts.verified} tone="emerald" />
-          <StatPill label="Failed" value={counts.failed} tone="rose" />
-          <StatPill label="Unable to contact" value={counts.unable} tone="gray" />
-          <span className="inline-flex min-h-[32px] items-center rounded-lg bg-[#F5F7FA] px-2.5 text-[12px] font-medium text-[#6B7280]">
-            {counts.employees} employee{counts.employees === 1 ? "" : "s"} · {counts.total}{" "}
-            reference{counts.total === 1 ? "" : "s"}
-          </span>
-        </div>
+        {!showSkeleton ? (
+          <div className="flex flex-wrap gap-2 px-6 py-4">
+            <StatPill label="Pending" value={counts.pending} tone="amber" />
+            <StatPill label="In progress" value={counts.inProgress} tone="blue" />
+            <StatPill label="Verified" value={counts.verified} tone="emerald" />
+            <StatPill label="Failed" value={counts.failed} tone="rose" />
+            <StatPill label="Unable to contact" value={counts.unable} tone="gray" />
+            <span className="inline-flex min-h-[32px] items-center rounded-full bg-slate-100 px-2.5 text-[12px] font-semibold text-slate-600 ring-1 ring-slate-200/80">
+              {counts.employees} employee{counts.employees === 1 ? "" : "s"} · {counts.total}{" "}
+              reference{counts.total === 1 ? "" : "s"}
+            </span>
+          </div>
+        ) : null}
       </header>
 
       {notice ? (
         <div
           role="status"
-          className={`mx-3 sm:mx-4 lg:mx-0 ${
+          className={`rounded-xl border px-4 py-3 text-sm ${
             notice.type === "ok"
-              ? "rounded-lg border border-[#A8DAB5] bg-[#E6F4EA] px-3 py-2.5 text-[13px] text-[#1F2937]"
-              : "rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2.5 text-[13px] text-[#1F2937]"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+              : "border-rose-200 bg-rose-50 text-rose-900"
           }`}
         >
           {notice.text}
         </div>
       ) : null}
 
-      {/* Filters */}
-      <div className={`${zohoPanelCls()} mx-3 p-3 sm:mx-4 sm:p-4 lg:mx-0 lg:p-5`}>
-        <button
-          type="button"
-          onClick={() => setMobileFiltersOpen((v) => !v)}
-          className="flex w-full items-center justify-between gap-2 text-left lg:hidden"
-          aria-expanded={mobileFiltersOpen}
-        >
-          <div className="flex items-center gap-2 text-[#1F2937]">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#008CD3] text-white">
-              <Filter className="h-3.5 w-3.5" aria-hidden />
-            </span>
-            <div>
-              <h2 className="text-[14px] font-semibold text-[#1F2937]">Filters</h2>
-              <p className="text-[11px] text-[#6B7280]">
-                Tap to {mobileFiltersOpen ? "hide" : "show"}
-              </p>
+      {showSkeleton ? (
+        <BgvPageSkeleton />
+      ) : (
+        <>
+          {/* Filters */}
+          <div className={`${dashCardCls} overflow-hidden`}>
+            <button
+              type="button"
+              onClick={() => setMobileFiltersOpen((v) => !v)}
+              className="flex w-full items-center justify-between gap-2 px-4 py-3.5 text-left lg:hidden"
+              aria-expanded={mobileFiltersOpen}
+            >
+              <div className="flex items-center gap-3">
+                <span className={iconBadgeCls("blue")}>
+                  <Filter className="h-4 w-4" aria-hidden />
+                </span>
+                <div>
+                  <h2 className="text-[14px] font-semibold text-slate-900">Filters</h2>
+                  <p className={dashSectionMetaCls}>
+                    Tap to {mobileFiltersOpen ? "hide" : "show"}
+                  </p>
+                </div>
+              </div>
+              <ChevronDown
+                className={`h-4 w-4 shrink-0 text-slate-400 transition ${mobileFiltersOpen ? "rotate-180" : ""}`}
+                aria-hidden
+              />
+            </button>
+
+            <div className="hidden items-center gap-3 border-b border-slate-100 px-5 py-4 lg:flex">
+              <span className={iconBadgeCls("blue")}>
+                <Filter className="h-4 w-4" aria-hidden />
+              </span>
+              <div>
+                <h2 className="text-[15px] font-semibold tracking-tight text-slate-900">
+                  Filters
+                </h2>
+                <p className={dashSectionMetaCls}>
+                  Narrow the list, then apply to reload from the server.
+                </p>
+              </div>
+            </div>
+
+            <div
+              className={`${mobileFiltersOpen ? "block border-t border-slate-100" : "hidden"} px-4 py-4 sm:px-5 lg:block`}
+            >
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-12 lg:items-end">
+                <label className="block lg:col-span-2">
+                  <span className={labelCls()}>Status</span>
+                  <select
+                    value={filters.status}
+                    onChange={(e) =>
+                      setFilters((p) => ({
+                        ...p,
+                        status: e.target.value as Filters["status"],
+                      }))
+                    }
+                    className={filterFieldCls()}
+                  >
+                    <option value="">All statuses</option>
+                    {STATUS_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="block lg:col-span-2">
+                  <span className={labelCls()}>Contact role</span>
+                  <select
+                    value={filters.person_role}
+                    onChange={(e) =>
+                      setFilters((p) => ({
+                        ...p,
+                        person_role: e.target.value as Filters["person_role"],
+                      }))
+                    }
+                    className={filterFieldCls()}
+                  >
+                    <option value="">All roles</option>
+                    <option value="hr">HR</option>
+                    <option value="reporting_manager">Reporting manager</option>
+                  </select>
+                </label>
+
+                <label className="block lg:col-span-2">
+                  <span className={`${labelCls()} flex items-center gap-1`}>
+                    <Search className="h-3 w-3" aria-hidden />
+                    Employee name
+                  </span>
+                  <input
+                    type="text"
+                    value={filters.employee_name}
+                    onChange={(e) =>
+                      setFilters((p) => ({ ...p, employee_name: e.target.value }))
+                    }
+                    placeholder="Search by employee"
+                    className={filterFieldCls()}
+                  />
+                </label>
+
+                <label className="block lg:col-span-2">
+                  <span className={`${labelCls()} flex items-center gap-1`}>
+                    <Building2 className="h-3 w-3" aria-hidden />
+                    Previous company
+                  </span>
+                  <input
+                    type="text"
+                    value={filters.previous_company_name}
+                    onChange={(e) =>
+                      setFilters((p) => ({
+                        ...p,
+                        previous_company_name: e.target.value,
+                      }))
+                    }
+                    placeholder="Search company name"
+                    className={filterFieldCls()}
+                  />
+                </label>
+
+                <label className="block lg:col-span-2">
+                  <span className={labelCls()}>Joined on</span>
+                  <input
+                    type="date"
+                    value={filters.joining_date}
+                    onChange={(e) =>
+                      setFilters((p) => ({ ...p, joining_date: e.target.value }))
+                    }
+                    className={filterFieldCls()}
+                  />
+                </label>
+
+                <label className="block lg:col-span-2">
+                  <span className={labelCls()}>Sort by submitted</span>
+                  <select
+                    value={filters.is_ascending}
+                    onChange={(e) =>
+                      setFilters((p) => ({
+                        ...p,
+                        is_ascending: e.target.value as Filters["is_ascending"],
+                      }))
+                    }
+                    className={filterFieldCls()}
+                  >
+                    <option value="DESC">Newest first</option>
+                    <option value="ASC">Oldest first</option>
+                  </select>
+                </label>
+              </div>
+
+              <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className={`${btnGhostCls(true)} sm:w-auto`}
+                >
+                  Clear
+                </button>
+                <button
+                  type="button"
+                  onClick={applyFilters}
+                  className={`${btnBrandCls(true)} sm:w-auto`}
+                >
+                  Apply filters
+                </button>
+              </div>
             </div>
           </div>
-          <ChevronDown
-            className={`h-4 w-4 shrink-0 text-[#9CA3AF] transition ${mobileFiltersOpen ? "rotate-180" : ""}`}
-            aria-hidden
-          />
-        </button>
 
-        <div className="hidden items-center gap-2 text-[#1F2937] lg:flex">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#008CD3] text-white">
-            <Filter className="h-3.5 w-3.5" aria-hidden />
-          </span>
-          <div>
-            <h2 className="text-[15px] font-semibold text-[#1F2937]">Filters</h2>
-            <p className="text-[12px] text-[#6B7280]">
-              Narrow the list, then apply to reload from the server.
-            </p>
-          </div>
-        </div>
-
-        <div className={`${mobileFiltersOpen ? "mt-4 block" : "hidden"} lg:mt-5 lg:block`}>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-12 lg:items-end">
-            <label className="lg:col-span-2 block">
-              <span className={labelCls()}>Status</span>
-              <select
-                value={filters.status}
-                onChange={(e) =>
-                  setFilters((p) => ({
-                    ...p,
-                    status: e.target.value as Filters["status"],
-                  }))
-                }
-                className={filterFieldCls()}
-              >
-                <option value="">All statuses</option>
-                {STATUS_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="lg:col-span-2 block">
-              <span className={labelCls()}>Contact role</span>
-              <select
-                value={filters.person_role}
-                onChange={(e) =>
-                  setFilters((p) => ({
-                    ...p,
-                    person_role: e.target.value as Filters["person_role"],
-                  }))
-                }
-                className={filterFieldCls()}
-              >
-                <option value="">All roles</option>
-                <option value="hr">HR</option>
-                <option value="reporting_manager">Reporting manager</option>
-              </select>
-            </label>
-
-            <label className="lg:col-span-2 block">
-              <span className={`${labelCls()} flex items-center gap-1`}>
-                <Search className="h-3 w-3" aria-hidden />
-                Employee name
-              </span>
-              <input
-                type="text"
-                value={filters.employee_name}
-                onChange={(e) =>
-                  setFilters((p) => ({ ...p, employee_name: e.target.value }))
-                }
-                placeholder="Search by employee"
-                className={filterFieldCls()}
-              />
-            </label>
-
-            <label className="lg:col-span-2 block">
-              <span className={`${labelCls()} flex items-center gap-1`}>
-                <Building2 className="h-3 w-3" aria-hidden />
-                Previous company
-              </span>
-              <input
-                type="text"
-                value={filters.previous_company_name}
-                onChange={(e) =>
-                  setFilters((p) => ({
-                    ...p,
-                    previous_company_name: e.target.value,
-                  }))
-                }
-                placeholder="Search company name"
-                className={filterFieldCls()}
-              />
-            </label>
-
-            <label className="lg:col-span-2 block">
-              <span className={labelCls()}>Joined on</span>
-              <input
-                type="date"
-                value={filters.joining_date}
-                onChange={(e) =>
-                  setFilters((p) => ({ ...p, joining_date: e.target.value }))
-                }
-                className={filterFieldCls()}
-              />
-            </label>
-
-            <label className="lg:col-span-2 block">
-              <span className={labelCls()}>Sort by submitted</span>
-              <select
-                value={filters.is_ascending}
-                onChange={(e) =>
-                  setFilters((p) => ({
-                    ...p,
-                    is_ascending: e.target.value as Filters["is_ascending"],
-                  }))
-                }
-                className={filterFieldCls()}
-              >
-                <option value="DESC">Newest first</option>
-                <option value="ASC">Oldest first</option>
-              </select>
-            </label>
-          </div>
-
-          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
-            <button type="button" onClick={clearFilters} className={zohoSecondaryBtnCls(true)}>
-              Clear
-            </button>
-            <button type="button" onClick={applyFilters} className={zohoPrimaryBtnCls(true)}>
-              Apply filters
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Results */}
-      <div className={`${zohoPanelCls()} mx-3 sm:mx-4 lg:mx-0`}>
-        {loading ? (
-          <div className="flex min-h-[200px] items-center justify-center p-8 text-[14px] text-[#6B7280]">
-            Loading background verifications…
-          </div>
-        ) : error ? (
-          <div className="p-6 text-center">
-            <p className="text-[14px] text-[#D93025]">{error}</p>
-            <button type="button" onClick={refresh} className={`${zohoPrimaryBtnCls()} mt-4`}>
-              Try again
-            </button>
-          </div>
-        ) : employeeGroups.length === 0 ? (
-          <div className="flex min-h-[200px] flex-col items-center justify-center gap-2 p-8 text-center">
-            <ShieldCheck className="h-10 w-10 text-[#D1D5DB]" aria-hidden />
-            <p className="text-[15px] font-medium text-[#1F2937]">No references found</p>
-            <p className="max-w-md text-[13px] text-[#6B7280]">
-              Adjust filters or wait for employees to submit previous company references
-              during onboarding.
-            </p>
-          </div>
-        ) : (
-          <div className="divide-y divide-[#E4E7EC]">
-            {employeeGroups.map((group) => (
-              <article key={group.employee_id} className="bg-white">
-                {/* Employee header — single compact row */}
-                <div className="flex items-center gap-2.5 px-3 py-2.5 sm:px-4">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#E8F4FB] text-[11px] font-semibold text-[#008CD3]">
-                    {employeeInitials(group.employee_name ?? "E")}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                      <h3 className="truncate text-[13px] font-semibold text-[#1F2937]">
-                        {group.employee_name ?? `Employee #${group.employee_id}`}
-                      </h3>
-                      <span className="rounded bg-[#F5F7FA] px-1.5 py-0.5 text-[10px] font-medium text-[#6B7280]">
-                        {group.total_references_count} ref
-                        {group.total_references_count === 1 ? "" : "s"}
-                      </span>
-                    </div>
-                    <p className="truncate text-[11px] text-[#9CA3AF]">
-                      Joined {formatDate(group.member_since)}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => goToEmployee(group.employee_id)}
-                    className={compactGhostBtnCls()}
-                  >
-                    Detail
-                    <ChevronRight className="h-3 w-3" aria-hidden />
-                  </button>
-                </div>
-
-                {/* Reference rows */}
-                <div className="border-t border-[#F0F2F5] bg-[#FAFBFC]">
-                  {group.references.map((ref) => (
-                    <div
-                      key={ref.id}
-                      className="flex flex-col gap-2 border-b border-[#F0F2F5] px-3 py-2 last:border-b-0 sm:flex-row sm:items-center sm:gap-3 sm:px-4 sm:py-2"
-                    >
-                      <div className="min-w-0 flex-1 sm:max-w-[28%]">
-                        <div className="flex items-center gap-2">
-                          <Building2
-                            className="h-3.5 w-3.5 shrink-0 text-[#9CA3AF]"
-                            aria-hidden
-                          />
-                          <p className="truncate text-[12px] font-medium text-[#1F2937]">
-                            {ref.previous_company_name}
+          {/* Results */}
+          <div className={`${dashCardCls} overflow-hidden`}>
+            {error ? (
+              <div className="px-6 py-14 text-center">
+                <p className="text-[14px] font-medium text-rose-700">{error}</p>
+                <button
+                  type="button"
+                  onClick={refresh}
+                  className={`${btnBrandCls()} mt-5`}
+                >
+                  Try again
+                </button>
+              </div>
+            ) : employeeGroups.length === 0 ? (
+              <div className="flex min-h-[220px] flex-col items-center justify-center gap-2 px-6 py-14 text-center">
+                <span className={`${iconBadgeCls("blue")} h-12 w-12`}>
+                  <ShieldCheck className="h-5 w-5" aria-hidden />
+                </span>
+                <p className="mt-2 text-[15px] font-semibold text-slate-900">
+                  No references found
+                </p>
+                <p className={`max-w-md ${dashSectionMetaCls}`}>
+                  Adjust filters or wait for employees to submit previous company
+                  references during onboarding.
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {employeeGroups.map((group) => {
+                  const name = group.employee_name ?? `Employee #${group.employee_id}`;
+                  return (
+                    <article key={group.employee_id}>
+                      <div className="flex items-center gap-3 px-4 py-3.5 sm:px-5">
+                        <span className={avatarCls("sm")} aria-hidden>
+                          {userInitials(name)}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="truncate text-[14px] font-semibold text-slate-900">
+                              {name}
+                            </h3>
+                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+                              {group.total_references_count} ref
+                              {group.total_references_count === 1 ? "" : "s"}
+                            </span>
+                          </div>
+                          <p className={`truncate ${dashSectionMetaCls}`}>
+                            Joined {formatDate(group.member_since)}
                           </p>
                         </div>
-                        {ref.designation ? (
-                          <p className="ml-5 truncate text-[10px] text-[#9CA3AF]">
-                            {ref.designation}
-                          </p>
-                        ) : null}
-                      </div>
-
-                      <div className="min-w-0 flex-1 sm:max-w-[32%]">
-                        <p className="truncate text-[11px] text-[#374151]">{ref.person_name}</p>
-                        <p className="truncate text-[10px] text-[#9CA3AF]">
-                          {personRoleLabel(ref.person_role)} · {ref.person_contact_email}
-                        </p>
-                      </div>
-
-                      <div className="hidden min-w-0 shrink-0 text-[10px] text-[#6B7280] md:block md:max-w-[18%]">
-                        {formatDate(ref.employment_start_date)} –{" "}
-                        {formatDate(ref.employment_end_date)}
-                      </div>
-
-                      <div className="flex items-center justify-between gap-2 sm:shrink-0 sm:justify-end">
-                        <span
-                          className={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ${statusBadgeClass(ref.verification_status)}`}
+                        <button
+                          type="button"
+                          onClick={() => goToEmployee(group.employee_id)}
+                          className={`${btnGhostCls()} !min-h-[32px] !px-2.5 !text-[11px]`}
                         >
-                          {statusLabel(ref.verification_status)}
-                        </span>
-                        {canShowVerifyButton(ref.verification_status) ? (
-                          <button
-                            type="button"
-                            onClick={() => openVerifyModal(group, ref)}
-                            className={compactPrimaryBtnCls()}
-                          >
-                            <UserCheck className="h-3 w-3" aria-hidden />
-                            Verify
-                          </button>
-                        ) : null}
+                          Detail
+                          <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+                        </button>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              </article>
-            ))}
+
+                      <div className="border-t border-slate-50 bg-slate-50/50">
+                        {group.references.map((ref) => (
+                          <div
+                            key={ref.id}
+                            className="flex flex-col gap-2.5 border-b border-slate-100/80 px-4 py-3 last:border-b-0 sm:flex-row sm:items-center sm:gap-3 sm:px-5"
+                          >
+                            <div className="min-w-0 flex-1 sm:max-w-[28%]">
+                              <div className="flex items-center gap-2">
+                                <Building2
+                                  className="h-3.5 w-3.5 shrink-0 text-slate-400"
+                                  aria-hidden
+                                />
+                                <p className="truncate text-[13px] font-medium text-slate-900">
+                                  {ref.previous_company_name}
+                                </p>
+                              </div>
+                              {ref.designation ? (
+                                <p className="ml-5 truncate text-[11px] text-slate-400">
+                                  {ref.designation}
+                                </p>
+                              ) : null}
+                            </div>
+
+                            <div className="min-w-0 flex-1 sm:max-w-[32%]">
+                              <p className="truncate text-[12px] font-medium text-slate-700">
+                                {ref.person_name}
+                              </p>
+                              <p className="truncate text-[11px] text-slate-400">
+                                {personRoleLabel(ref.person_role)} · {ref.person_contact_email}
+                              </p>
+                            </div>
+
+                            <div className="hidden min-w-0 shrink-0 text-[11px] text-slate-500 md:block md:max-w-[18%]">
+                              {formatDate(ref.employment_start_date)} –{" "}
+                              {formatDate(ref.employment_end_date)}
+                            </div>
+
+                            <div className="flex items-center justify-between gap-2 sm:shrink-0 sm:justify-end">
+                              <span
+                                className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${statusBadgeClass(ref.verification_status)}`}
+                              >
+                                {statusLabel(ref.verification_status)}
+                              </span>
+                              {canShowVerifyButton(ref.verification_status) ? (
+                                <button
+                                  type="button"
+                                  onClick={() => openVerifyModal(group, ref)}
+                                  className={`${btnBrandCls()} !min-h-[30px] !px-2.5 !text-[11px]`}
+                                >
+                                  <UserCheck className="h-3 w-3" aria-hidden />
+                                  Verify
+                                </button>
+                              ) : null}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </>
+      )}
 
       {/* Verification modal */}
       {verifyModal ? (
         <div
-          className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"
+          className="fixed inset-0 z-[99999] flex items-end justify-center bg-slate-900/40 p-0 backdrop-blur-[2px] sm:items-center sm:p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="verify-modal-title"
         >
-          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white p-4 shadow-xl sm:rounded-2xl sm:p-5">
-            <div className="mb-4 flex items-start justify-between gap-3">
-              <div>
-                <h2 id="verify-modal-title" className="text-[16px] font-semibold text-[#1F2937]">
+          <button
+            type="button"
+            className="absolute inset-0 cursor-default"
+            aria-label="Close dialog backdrop"
+            onClick={() => !verifySubmitting && setVerifyModal(null)}
+          />
+          <div className="relative max-h-[92dvh] w-full max-w-lg overflow-hidden rounded-t-2xl border border-slate-200/90 bg-white shadow-2xl sm:max-h-[90vh] sm:rounded-2xl">
+            <div className="flex items-start justify-between gap-3 border-b border-slate-100 bg-gradient-to-r from-[#F8FAFC] via-white to-[#F0F9FF]/40 px-4 py-4 sm:px-5">
+              <div className="min-w-0">
+                <h2
+                  id="verify-modal-title"
+                  className="text-[16px] font-semibold tracking-tight text-slate-900"
+                >
                   Update verification
                 </h2>
-                <p className="mt-0.5 text-[13px] text-[#6B7280]">
+                <p className={`mt-0.5 truncate ${dashSectionMetaCls}`}>
                   {verifyModal.employee_name} · {verifyModal.previous_company_name}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setVerifyModal(null)}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[#6B7280] hover:bg-[#F3F4F6]"
+                disabled={verifySubmitting}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200/90 text-slate-500 transition hover:bg-slate-50"
                 aria-label="Close"
               >
                 <X className="h-4 w-4" aria-hidden />
               </button>
             </div>
 
-            <div className="space-y-4">
-              <div className="rounded-lg border border-[#E4E7EC] bg-[#FAFBFC] p-3 text-[13px]">
-                <p className="font-medium text-[#1F2937]">{verifyModal.person_name}</p>
-                <p className="text-[#6B7280]">
+            <div className="max-h-[min(60vh,480px)] space-y-4 overflow-y-auto px-4 py-4 sm:px-5">
+              <div className="rounded-xl border border-slate-100 bg-slate-50/80 p-3.5 text-[13px]">
+                <p className="font-semibold text-slate-900">{verifyModal.person_name}</p>
+                <p className="text-slate-500">
                   {personRoleLabel(verifyModal.person_role)} ·{" "}
                   {verifyModal.person_contact_email}
                 </p>
-                <p className="mt-1 text-[#6B7280]">
+                <p className="mt-1 text-slate-500">
                   {verifyModal.person_contact_number1}
                   {verifyModal.person_contact_number2
                     ? ` · ${verifyModal.person_contact_number2}`
@@ -846,12 +973,12 @@ function BackgroundVerificationPage() {
               </label>
             </div>
 
-            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <div className="flex flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50/80 px-4 py-3 sm:flex-row sm:justify-end sm:px-5">
               <button
                 type="button"
                 onClick={() => setVerifyModal(null)}
                 disabled={verifySubmitting}
-                className={zohoSecondaryBtnCls(true)}
+                className={`${btnGhostCls(true)} sm:w-auto`}
               >
                 Cancel
               </button>
@@ -859,7 +986,7 @@ function BackgroundVerificationPage() {
                 type="button"
                 onClick={() => void submitVerification()}
                 disabled={verifySubmitting}
-                className={zohoPrimaryBtnCls(true)}
+                className={`${btnBrandCls(true)} sm:w-auto`}
               >
                 {verifySubmitting ? "Saving…" : "Save verification"}
               </button>
@@ -867,7 +994,7 @@ function BackgroundVerificationPage() {
           </div>
         </div>
       ) : null}
-    </section>
+    </div>
   );
 }
 

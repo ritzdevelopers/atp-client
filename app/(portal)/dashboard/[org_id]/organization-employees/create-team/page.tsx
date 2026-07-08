@@ -17,74 +17,130 @@ import {
 } from "lucide-react";
 import { getAllOrgUsers, orgUserListKey, type OrgUserRow } from "@/services/adminUser";
 import { createOrgTeam } from "@/services/orgTeams";
+import {
+  avatarCls,
+  btnBrandCls,
+  btnGhostCls,
+  dashCardCls,
+  dashPageCls,
+  dashSectionMetaCls,
+  iconBadgeCls,
+  statBoxCls,
+  userInitials,
+} from "@/components/portal-dashboard/home/dashboardTokens";
 
 function formatPickerName(row: OrgUserRow) {
   return String(row.user_name ?? "Unknown");
 }
 
-function initialsFromName(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
-
 function fieldCls() {
-  return "w-full rounded-lg border border-[#E4E7EC] bg-white px-3 py-2 text-[14px] text-[#1F2937] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15";
+  return "w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-[13px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15";
 }
 
 function searchFieldCls() {
-  return "w-full rounded-lg border border-[#E4E7EC] bg-white py-2 pl-9 pr-3 text-[14px] text-[#1F2937] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15";
+  return "w-full rounded-xl border border-slate-200/90 bg-white py-2.5 pl-10 pr-3 text-[13px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15 disabled:opacity-60";
 }
 
-function panelCls() {
-  return "overflow-hidden bg-white lg:rounded-lg lg:border lg:border-[#E4E7EC] lg:shadow-sm";
+function Shimmer({ className = "" }: { className?: string }) {
+  return <div className={`skeleton-shimmer rounded-xl ${className}`} />;
 }
 
-function btnPrimaryCls(full = true) {
-  return `inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg bg-[#008CD3] px-4 py-2 text-[14px] font-medium text-white transition hover:bg-[#0070AA] active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full" : ""}`;
+function PersonListSkeleton({ count = 6 }: { count?: number }) {
+  return (
+    <ul className="space-y-2" aria-busy="true" aria-label="Loading people">
+      {Array.from({ length: count }).map((_, i) => (
+        <li
+          key={i}
+          className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2.5"
+        >
+          <Shimmer className="h-9 w-9 shrink-0 rounded-full" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <Shimmer className="h-3.5 w-2/5" />
+            <Shimmer className="h-3 w-3/5" />
+          </div>
+          <Shimmer className="h-5 w-5 rounded-full" />
+        </li>
+      ))}
+    </ul>
+  );
 }
 
-function btnSecondaryCls() {
-  return "inline-flex min-h-[40px] items-center justify-center rounded-lg border border-[#E4E7EC] bg-white px-4 py-2 text-[14px] font-medium text-[#374151] transition hover:bg-[#F9FAFB] disabled:opacity-50";
-}
+function CreateTeamPageSkeleton() {
+  return (
+    <div className="space-y-4" aria-busy="true" aria-label="Loading create team form">
+      <div className={`${dashCardCls} overflow-hidden lg:hidden`}>
+        <div className="space-y-3 p-4">
+          <div className="flex items-center gap-3">
+            <Shimmer className="h-9 w-9 rounded-xl" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <Shimmer className="h-4 w-28" />
+              <Shimmer className="h-3 w-40" />
+            </div>
+            <Shimmer className="h-9 w-16 rounded-xl" />
+          </div>
+          <div className="flex gap-2">
+            <Shimmer className="h-9 flex-1" />
+            <Shimmer className="h-9 flex-1" />
+            <Shimmer className="h-9 flex-1" />
+          </div>
+          <Shimmer className="h-10 w-full" />
+          <Shimmer className="h-20 w-full" />
+        </div>
+      </div>
 
-const AVATAR_COLORS = [
-  "bg-[#E8F4FB] text-[#008CD3]",
-  "bg-[#E6F4EA] text-[#0F9D58]",
-  "bg-[#FEF3E6] text-[#E8710A]",
-  "bg-[#F3E8FD] text-[#7B1FA2]",
-  "bg-[#FCE8E6] text-[#D93025]",
-  "bg-[#E8EAF6] text-[#3F51B5]",
-];
-
-function avatarColorClass(name: string) {
-  let hash = 0;
-  for (let i = 0; i < name.length; i += 1) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+      <div className={`${dashCardCls} hidden overflow-hidden lg:block`}>
+        <div className="border-b border-slate-100 bg-gradient-to-r from-[#F8FAFC] via-white to-[#F0F9FF]/40 px-6 py-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <Shimmer className="h-11 w-11 rounded-xl" />
+              <div className="space-y-2">
+                <Shimmer className="h-3 w-28" />
+                <Shimmer className="h-6 w-44" />
+                <Shimmer className="h-4 w-64 max-w-full" />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Shimmer className="h-16 w-20" />
+              <Shimmer className="h-16 w-20" />
+            </div>
+          </div>
+        </div>
+        <div className="grid gap-0 xl:grid-cols-12">
+          <div className="space-y-4 border-b border-slate-100 p-6 xl:col-span-5 xl:border-b-0 xl:border-r">
+            <Shimmer className="h-4 w-32" />
+            <Shimmer className="h-10 w-full" />
+            <Shimmer className="h-24 w-full" />
+            <Shimmer className="h-32 w-full" />
+          </div>
+          <div className="space-y-4 p-6 xl:col-span-7">
+            <Shimmer className="h-10 w-full" />
+            <PersonListSkeleton count={4} />
+            <Shimmer className="h-10 w-full" />
+            <PersonListSkeleton count={4} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function UserAvatar({
   name,
   selected,
-  mobile = false,
 }: {
   name: string;
   selected?: boolean;
-  mobile?: boolean;
 }) {
-  const ini = initialsFromName(name);
-  const size = mobile ? "h-9 w-9 text-[12px] rounded-full" : "h-9 w-9 text-[11px] rounded-lg";
   return (
     <span
-      className={`flex shrink-0 items-center justify-center font-semibold ${size} ${
-        selected ? "bg-[#008CD3] text-white" : avatarColorClass(name)
+      className={`${avatarCls("sm")} ${
+        selected
+          ? "!bg-[#008CD3] !from-[#008CD3] !to-[#0070AA] text-white"
+          : ""
       }`}
       aria-hidden
     >
-      {ini}
+      {userInitials(name)}
     </span>
   );
 }
@@ -112,6 +168,7 @@ export default function CreateTeamPage() {
     const t = window.setTimeout(() => setToast(null), 6500);
     return () => window.clearTimeout(t);
   }, [toast]);
+
   const [teamName, setTeamName] = useState("");
   const [teamInfo, setTeamInfo] = useState("");
   const [adminId, setAdminId] = useState<string>("");
@@ -188,6 +245,15 @@ export default function CreateTeamPage() {
     });
   }
 
+  function selectAdmin(id: string) {
+    setAdminId(id);
+    setSelectedMemberIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!teamName.trim()) {
@@ -237,46 +303,64 @@ export default function CreateTeamPage() {
   const canSubmit =
     Boolean(teamName.trim()) && Boolean(adminId) && !submitting && !loadingUsers;
 
+  const mobileTabCls = (active: boolean) =>
+    `relative flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[12px] font-semibold transition ${
+      active
+        ? "bg-white text-[#008CD3] shadow-sm"
+        : "text-slate-500 hover:text-slate-700"
+    }`;
+
+  const personRowCls = (active: boolean) =>
+    `flex w-full min-w-0 items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition ${
+      active
+        ? "border-[#008CD3]/35 bg-[#E8F4FB]"
+        : "border-slate-100 bg-white hover:bg-slate-50"
+    }`;
+
   return (
-    <div className="min-h-full bg-[#F5F7FA] pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-10">
-      {/* Mobile & tablet header */}
-      <div className="sticky top-0 z-20 border-b border-[#E4E7EC] bg-white shadow-sm lg:hidden">
-        <div className="flex items-center gap-2 px-3 py-2.5">
-          <button
-            type="button"
-            onClick={() => router.push(backHref)}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#374151] active:bg-[#F5F7FA]"
-            aria-label="Back to team management"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </button>
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-[16px] font-semibold text-[#1F2937]">New team</h1>
-            <p className="truncate text-[12px] text-[#6B7280]">
-              {adminId
-                ? `${rosterTotal} participant${rosterTotal === 1 ? "" : "s"}`
-                : "Details, admin & members"}
-            </p>
+    <div className={`${dashPageCls} pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:pb-8`}>
+      {/* Mobile sticky header */}
+      <div className="sticky top-0 z-20 -mx-3 border-b border-slate-200/80 bg-white/95 px-3 pb-3 pt-3 shadow-[0_1px_3px_rgba(15,23,42,0.06)] backdrop-blur-md sm:-mx-5 sm:px-4 lg:hidden">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-start gap-3">
+            <button
+              type="button"
+              onClick={() => router.push(backHref)}
+              className={`${btnGhostCls()} !min-h-[36px] !w-9 !px-0`}
+              aria-label="Back to team management"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+            <div className="min-w-0">
+              <h1 className="text-[17px] font-semibold tracking-tight text-slate-900">
+                New team
+              </h1>
+              <p className={`mt-0.5 ${dashSectionMetaCls}`}>
+                {adminId
+                  ? `${rosterTotal} participant${rosterTotal === 1 ? "" : "s"} ready`
+                  : "Details, admin & members"}
+              </p>
+            </div>
           </div>
           <button
             type="submit"
             form="create-team-form"
             disabled={!canSubmit}
-            className="flex h-9 shrink-0 items-center justify-center rounded-lg bg-[#008CD3] px-3 text-[13px] font-medium text-white disabled:opacity-40"
+            className={`${btnBrandCls()} !min-h-[36px] !px-3 !text-[12px]`}
             aria-label="Create team"
           >
             {submitting ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <>
-                <Check className="h-4 w-4" strokeWidth={2.5} />
-                <span className="ml-1 hidden min-[380px]:inline">Save</span>
+                <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
+                Save
               </>
             )}
           </button>
         </div>
 
-        <div className="flex border-t border-[#E4E7EC] bg-[#F9FAFB] px-1">
+        <div className="mt-3 flex gap-1 rounded-xl bg-slate-100/80 p-1">
           {(
             [
               { id: "details" as const, label: "Details" },
@@ -288,16 +372,17 @@ export default function CreateTeamPage() {
               key={tab.id}
               type="button"
               onClick={() => setMobileTab(tab.id)}
-              className={`flex flex-1 items-center justify-center gap-1 py-2 text-[12px] font-medium transition ${
-                mobileTab === tab.id
-                  ? "border-b-2 border-[#008CD3] text-[#008CD3] bg-white"
-                  : "border-b-2 border-transparent text-[#6B7280]"
-              }`}
+              className={mobileTabCls(mobileTab === tab.id)}
             >
               {tab.label}
               {tab.id === "members" && selectedMemberIds.size > 0 ? (
-                <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[#E8F4FB] px-1 text-[10px] font-semibold text-[#008CD3]">
+                <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[#E8F4FB] px-1 text-[10px] font-bold text-[#008CD3]">
                   {selectedMemberIds.size}
+                </span>
+              ) : null}
+              {tab.id === "admin" && adminId ? (
+                <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+                  <Check className="h-2.5 w-2.5" strokeWidth={3} />
                 </span>
               ) : null}
             </button>
@@ -306,50 +391,73 @@ export default function CreateTeamPage() {
       </div>
 
       {/* Desktop header */}
-      <header className="hidden border-b border-[#E4E7EC] bg-white lg:block">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-8 py-4">
-          <div className="flex min-w-0 items-center gap-3">
-            <button
-              type="button"
-              onClick={() => router.push(backHref)}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#374151] hover:bg-[#F9FAFB]"
-              aria-label="Back"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </button>
-            <div className="min-w-0">
-              <h1 className="text-[18px] font-semibold text-[#1F2937]">Create team</h1>
-              <p className="text-[13px] text-[#6B7280]">
-                Name the team, assign an admin, and add members
-              </p>
+      <header className={`${dashCardCls} hidden overflow-hidden lg:block`}>
+        <div className="border-b border-slate-100 bg-gradient-to-r from-[#F8FAFC] via-white to-[#F0F9FF]/40 px-6 py-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="flex items-start gap-4">
+              <button
+                type="button"
+                onClick={() => router.push(backHref)}
+                className={`${btnGhostCls()} !min-h-[40px] !w-10 !px-0`}
+                aria-label="Back"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </button>
+              <span className={iconBadgeCls("blue")}>
+                <Users className="h-5 w-5" aria-hidden />
+              </span>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+                  Organization · Teams
+                </p>
+                <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">
+                  Create team
+                </h1>
+                <p className={`mt-1 max-w-xl ${dashSectionMetaCls}`}>
+                  Name the team, assign an admin, and add day-one members.
+                </p>
+              </div>
             </div>
-          </div>
-          <div className="flex shrink-0 items-center gap-4 text-[13px]">
-            <div className="text-right">
-              <p className="text-[11px] font-medium uppercase tracking-wide text-[#9CA3AF]">Roster</p>
-              <p className="font-semibold tabular-nums text-[#1F2937]">
-                {loadingUsers ? "—" : users.length}
-              </p>
-            </div>
-            <div className="text-right">
-              <p className="text-[11px] font-medium uppercase tracking-wide text-[#9CA3AF]">Draft</p>
-              <p className="font-semibold tabular-nums text-[#1F2937]">
-                {adminId ? rosterTotal : "—"}
-              </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className={`${statBoxCls("sky")} min-w-[88px] text-center`}>
+                <p className="text-lg font-semibold tabular-nums text-[#008CD3]">
+                  {loadingUsers ? "—" : users.length}
+                </p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                  Roster
+                </p>
+              </div>
+              <div className={`${statBoxCls("emerald")} min-w-[88px] text-center`}>
+                <p className="text-lg font-semibold tabular-nums text-emerald-700">
+                  {adminId ? rosterTotal : "—"}
+                </p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-600/80">
+                  Draft
+                </p>
+              </div>
             </div>
           </div>
         </div>
       </header>
 
-      <div className="mx-auto max-w-5xl lg:px-6 lg:pt-6">
-        <form id="create-team-form" onSubmit={handleSubmit} className={panelCls()}>
-          {/* Mobile & tablet tab panels */}
+      {loadingUsers && users.length === 0 ? (
+        <CreateTeamPageSkeleton />
+      ) : (
+        <form
+          id="create-team-form"
+          onSubmit={handleSubmit}
+          className={`${dashCardCls} overflow-hidden`}
+        >
+          {/* Mobile tab panels */}
           <div className="lg:hidden">
             {mobileTab === "details" ? (
-              <div className="bg-white">
-                <div className="space-y-3 border-b border-[#E4E7EC] p-3">
+              <div className="p-4">
+                <div className="space-y-4">
                   <div>
-                    <label htmlFor="team_name_mobile" className="mb-1 block text-[12px] font-medium text-[#374151]">
+                    <label
+                      htmlFor="team_name_mobile"
+                      className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-slate-500"
+                    >
                       Team name
                     </label>
                     <input
@@ -362,72 +470,77 @@ export default function CreateTeamPage() {
                     />
                   </div>
                   <div>
-                    <label htmlFor="team_info_mobile" className="mb-1 block text-[12px] font-medium text-[#374151]">
-                      Description <span className="font-normal text-[#9CA3AF]">(optional)</span>
+                    <label
+                      htmlFor="team_info_mobile"
+                      className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-slate-500"
+                    >
+                      Description{" "}
+                      <span className="font-normal normal-case tracking-normal text-slate-400">
+                        (optional)
+                      </span>
                     </label>
                     <textarea
                       id="team_info_mobile"
-                      className={`min-h-[64px] resize-none ${fieldCls()}`}
+                      className={`min-h-[80px] resize-none ${fieldCls()}`}
                       placeholder="Purpose or scope of this team"
                       value={teamInfo}
                       onChange={(e) => setTeamInfo(e.target.value)}
                     />
                   </div>
                 </div>
-                <div className="bg-[#F9FAFB] px-3 py-1.5">
-                  <p className="text-[11px] font-medium uppercase tracking-wide text-[#6B7280]">
+
+                <div className="mt-5 rounded-xl border border-slate-100 bg-slate-50/80 p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
                     Summary
                   </p>
-                </div>
-                <div className="divide-y divide-[#E4E7EC]">
-                  <div className="flex items-center justify-between gap-3 px-3 py-2.5">
-                    <span className="shrink-0 text-[13px] text-[#374151]">Admin</span>
-                    <span className="min-w-0 truncate text-right text-[13px] text-[#6B7280]">
-                      {selectedAdmin ? formatPickerName(selectedAdmin) : "Not selected"}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between px-3 py-2.5">
-                    <span className="text-[13px] text-[#374151]">Members</span>
-                    <span className="text-[13px] text-[#6B7280]">
-                      {adminId ? `${rosterTotal} total` : "—"}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between px-3 py-2.5">
-                    <span className="text-[13px] text-[#374151]">Org roster</span>
-                    <span className="text-[13px] text-[#6B7280]">
-                      {loadingUsers ? "…" : `${users.length} people`}
-                    </span>
+                  <div className="mt-3 space-y-2.5 text-[13px]">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-slate-500">Admin</span>
+                      <span className="min-w-0 truncate text-right font-medium text-slate-900">
+                        {selectedAdmin
+                          ? formatPickerName(selectedAdmin)
+                          : "Not selected"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-slate-500">Members</span>
+                      <span className="font-medium tabular-nums text-slate-900">
+                        {adminId ? `${rosterTotal} total` : "—"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-slate-500">Org roster</span>
+                      <span className="font-medium tabular-nums text-slate-900">
+                        {users.length} people
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
             ) : null}
 
             {mobileTab === "admin" ? (
-              <div>
-                <div className="border-b border-[#E4E7EC] bg-white p-3">
-                  <div className="relative">
-                    <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF]" />
-                    <input
-                      type="search"
-                      className={searchFieldCls()}
-                      placeholder="Search name or email"
-                      value={adminSearch}
-                      onChange={(e) => setAdminSearch(e.target.value)}
-                    />
-                  </div>
+              <div className="p-4">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="search"
+                    className={searchFieldCls()}
+                    placeholder="Search name or email"
+                    value={adminSearch}
+                    onChange={(e) => setAdminSearch(e.target.value)}
+                    disabled={loadingUsers}
+                  />
                 </div>
-                <p className="bg-[#F9FAFB] px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-[#6B7280]">
-                  Choose team admin
+                <p className={`mt-3 mb-2 ${dashSectionMetaCls}`}>
+                  Choose one team admin
                 </p>
                 {loadingUsers ? (
-                  <div className="flex items-center justify-center gap-2 py-12 text-[13px] text-[#6B7280]">
-                    <Loader2 className="h-4 w-4 animate-spin text-[#008CD3]" />
-                    Loading…
-                  </div>
+                  <PersonListSkeleton />
                 ) : (
-                  <ul className="max-h-[calc(100dvh-11.5rem-env(safe-area-inset-bottom))] divide-y divide-[#E4E7EC] overflow-y-auto overscroll-contain">
+                  <ul className="max-h-[calc(100dvh-14rem-env(safe-area-inset-bottom))] space-y-2 overflow-y-auto overscroll-contain">
                     {filteredAdmins.length === 0 ? (
-                      <li className="px-3 py-10 text-center text-[13px] text-[#6B7280]">
+                      <li className="rounded-xl border border-dashed border-slate-200 px-3 py-10 text-center text-sm text-slate-500">
                         No people match your search.
                       </li>
                     ) : (
@@ -439,32 +552,29 @@ export default function CreateTeamPage() {
                           <li key={orgUserListKey(u, "adm")}>
                             <button
                               type="button"
-                              onClick={() => {
-                                setAdminId(id);
-                                setSelectedMemberIds((prev) => {
-                                  const next = new Set(prev);
-                                  next.delete(id);
-                                  return next;
-                                });
-                              }}
-                              className={`flex w-full min-w-0 items-center gap-2.5 px-3 py-2.5 text-left transition active:bg-[#F5F7FA] ${
-                                picked ? "bg-[#E8F4FB]" : "bg-white"
-                              }`}
+                              onClick={() => selectAdmin(id)}
+                              className={personRowCls(picked)}
                             >
-                              <UserAvatar name={name} selected={picked} mobile />
+                              <UserAvatar name={name} selected={picked} />
                               <div className="min-w-0 flex-1">
-                                <p className="truncate text-[14px] font-medium text-[#1F2937]">{name}</p>
-                                <p className="truncate text-[12px] text-[#6B7280]">{u.user_email}</p>
+                                <p className="truncate text-[14px] font-medium text-slate-900">
+                                  {name}
+                                </p>
+                                <p className="truncate text-[12px] text-slate-500">
+                                  {u.user_email}
+                                </p>
                               </div>
                               <span
                                 className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${
                                   picked
                                     ? "border-[#008CD3] bg-[#008CD3] text-white"
-                                    : "border-[#D1D5DB] bg-white"
+                                    : "border-slate-300 bg-white"
                                 }`}
                                 aria-hidden
                               >
-                                {picked ? <Check className="h-3 w-3" strokeWidth={3} /> : null}
+                                {picked ? (
+                                  <Check className="h-3 w-3" strokeWidth={3} />
+                                ) : null}
                               </span>
                             </button>
                           </li>
@@ -477,27 +587,30 @@ export default function CreateTeamPage() {
             ) : null}
 
             {mobileTab === "members" ? (
-              <div>
-                <div className="border-b border-[#E4E7EC] bg-white p-3">
-                  <div className="relative">
-                    <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF]" />
-                    <input
-                      type="search"
-                      className={searchFieldCls()}
-                      placeholder="Search name or email"
-                      value={memberSearch}
-                      onChange={(e) => setMemberSearch(e.target.value)}
-                    />
-                  </div>
+              <div className="p-4">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="search"
+                    className={searchFieldCls()}
+                    placeholder="Search name or email"
+                    value={memberSearch}
+                    onChange={(e) => setMemberSearch(e.target.value)}
+                    disabled={loadingUsers}
+                  />
                 </div>
-                <p className="bg-[#F9FAFB] px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-[#6B7280]">
+                <p className={`mt-3 mb-2 ${dashSectionMetaCls}`}>
                   Add members
-                  {selectedMemberIds.size > 0 ? ` · ${selectedMemberIds.size} selected` : ""}
+                  {selectedMemberIds.size > 0
+                    ? ` · ${selectedMemberIds.size} selected`
+                    : ""}
                 </p>
-                {!loadingUsers ? (
-                  <ul className="max-h-[calc(100dvh-11.5rem-env(safe-area-inset-bottom))] divide-y divide-[#E4E7EC] overflow-y-auto overscroll-contain">
+                {loadingUsers ? (
+                  <PersonListSkeleton />
+                ) : (
+                  <ul className="max-h-[calc(100dvh-14rem-env(safe-area-inset-bottom))] space-y-2 overflow-y-auto overscroll-contain">
                     {filteredMembers.length === 0 ? (
-                      <li className="px-3 py-10 text-center text-[13px] text-[#6B7280]">
+                      <li className="rounded-xl border border-dashed border-slate-200 px-3 py-10 text-center text-sm text-slate-500">
                         {users.length === 0
                           ? "No employees in this organization."
                           : "No one left to add, or nothing matches your search."}
@@ -509,24 +622,26 @@ export default function CreateTeamPage() {
                         const name = formatPickerName(u);
                         return (
                           <li key={orgUserListKey(u, "m")}>
-                            <label
-                              className={`flex min-w-0 cursor-pointer items-center gap-2.5 px-3 py-2.5 transition active:bg-[#F5F7FA] ${
-                                on ? "bg-[#E8F4FB]" : "bg-white"
-                              }`}
-                            >
-                              <UserAvatar name={name} selected={on} mobile />
+                            <label className={`${personRowCls(on)} cursor-pointer`}>
+                              <UserAvatar name={name} selected={on} />
                               <div className="min-w-0 flex-1">
-                                <p className="truncate text-[14px] font-medium text-[#1F2937]">{name}</p>
-                                <p className="truncate text-[12px] text-[#6B7280]">{u.user_email}</p>
+                                <p className="truncate text-[14px] font-medium text-slate-900">
+                                  {name}
+                                </p>
+                                <p className="truncate text-[12px] text-slate-500">
+                                  {u.user_email}
+                                </p>
                               </div>
                               <span
                                 className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 ${
                                   on
                                     ? "border-[#008CD3] bg-[#008CD3] text-white"
-                                    : "border-[#D1D5DB] bg-white"
+                                    : "border-slate-300 bg-white"
                                 }`}
                               >
-                                {on ? <Check className="h-3 w-3" strokeWidth={3} /> : null}
+                                {on ? (
+                                  <Check className="h-3 w-3" strokeWidth={3} />
+                                ) : null}
                               </span>
                               <input
                                 type="checkbox"
@@ -540,11 +655,6 @@ export default function CreateTeamPage() {
                       })
                     )}
                   </ul>
-                ) : (
-                  <div className="flex items-center justify-center gap-2 py-12 text-[13px] text-[#6B7280]">
-                    <Loader2 className="h-4 w-4 animate-spin text-[#008CD3]" />
-                    Loading…
-                  </div>
                 )}
               </div>
             ) : null}
@@ -552,18 +662,28 @@ export default function CreateTeamPage() {
 
           {/* Desktop two-column form */}
           <div className="hidden lg:block">
-            <div className="grid divide-y divide-[#E4E7EC] xl:grid-cols-12 xl:divide-x xl:divide-y-0">
+            <div className="grid divide-y divide-slate-100 xl:grid-cols-12 xl:divide-x xl:divide-y-0">
               <div className="space-y-5 p-6 xl:col-span-5">
-                <div>
-                  <h2 className="text-[14px] font-semibold text-[#1F2937]">Team details</h2>
-                  <p className="mt-0.5 text-[12px] text-[#6B7280]">
-                    Shown in dashboards and member directory.
-                  </p>
+                <div className="flex items-start gap-3">
+                  <span className={iconBadgeCls("blue")}>
+                    <Users className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <h2 className="text-[15px] font-semibold tracking-tight text-slate-900">
+                      Team details
+                    </h2>
+                    <p className={dashSectionMetaCls}>
+                      Shown in dashboards and member directory.
+                    </p>
+                  </div>
                 </div>
 
                 <div className="space-y-4">
                   <div>
-                    <label className="mb-1 block text-[12px] font-medium text-[#374151]" htmlFor="team_name">
+                    <label
+                      className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-slate-500"
+                      htmlFor="team_name"
+                    >
                       Team name
                     </label>
                     <input
@@ -576,12 +696,18 @@ export default function CreateTeamPage() {
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-[12px] font-medium text-[#374151]" htmlFor="team_info">
-                      Description <span className="font-normal text-[#9CA3AF]">(optional)</span>
+                    <label
+                      className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-slate-500"
+                      htmlFor="team_info"
+                    >
+                      Description{" "}
+                      <span className="font-normal normal-case tracking-normal text-slate-400">
+                        (optional)
+                      </span>
                     </label>
                     <textarea
                       id="team_info"
-                      className={`min-h-[88px] resize-y ${fieldCls()}`}
+                      className={`min-h-[96px] resize-y ${fieldCls()}`}
                       placeholder="Purpose, scope, or how this team works with others"
                       value={teamInfo}
                       onChange={(e) => setTeamInfo(e.target.value)}
@@ -589,24 +715,28 @@ export default function CreateTeamPage() {
                   </div>
                 </div>
 
-                <div className="rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] p-4">
-                  <p className="text-[11px] font-medium uppercase tracking-wide text-[#6B7280]">Summary</p>
+                <div className="rounded-xl border border-slate-100 bg-slate-50/80 p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                    Summary
+                  </p>
                   <div className="mt-3 space-y-2.5 text-[13px]">
-                    <div className="flex justify-between gap-3 border-b border-[#E4E7EC] pb-2">
-                      <span className="text-[#6B7280]">Team</span>
-                      <span className="truncate text-right font-medium text-[#1F2937]">
+                    <div className="flex justify-between gap-3 border-b border-slate-100 pb-2.5">
+                      <span className="text-slate-500">Team</span>
+                      <span className="truncate text-right font-medium text-slate-900">
                         {teamName.trim() || "—"}
                       </span>
                     </div>
-                    <div className="flex justify-between gap-3 border-b border-[#E4E7EC] pb-2">
-                      <span className="text-[#6B7280]">Admin</span>
-                      <span className="truncate text-right font-medium text-[#1F2937]">
-                        {selectedAdmin ? formatPickerName(selectedAdmin) : "Not selected"}
+                    <div className="flex justify-between gap-3 border-b border-slate-100 pb-2.5">
+                      <span className="text-slate-500">Admin</span>
+                      <span className="truncate text-right font-medium text-slate-900">
+                        {selectedAdmin
+                          ? formatPickerName(selectedAdmin)
+                          : "Not selected"}
                       </span>
                     </div>
                     <div className="flex justify-between gap-3">
-                      <span className="text-[#6B7280]">Starting roster</span>
-                      <span className="font-medium tabular-nums text-[#1F2937]">
+                      <span className="text-slate-500">Starting roster</span>
+                      <span className="font-medium tabular-nums text-slate-900">
                         {adminId ? `${rosterTotal} people` : "—"}
                       </span>
                     </div>
@@ -616,36 +746,40 @@ export default function CreateTeamPage() {
 
               <div className="space-y-6 p-6 xl:col-span-7">
                 <section>
-                  <div className="flex items-center gap-2">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#E8F4FB] text-[#008CD3]">
-                      <Crown className="h-4 w-4" strokeWidth={2} />
+                  <div className="flex items-center gap-3">
+                    <span className={iconBadgeCls("amber")}>
+                      <Crown className="h-4 w-4" />
                     </span>
                     <div>
-                      <h2 className="text-[14px] font-semibold text-[#1F2937]">Team admin</h2>
-                      <p className="text-[12px] text-[#6B7280]">One owner for approvals and visibility.</p>
+                      <h2 className="text-[15px] font-semibold tracking-tight text-slate-900">
+                        Team admin
+                      </h2>
+                      <p className={dashSectionMetaCls}>
+                        One owner for approvals and visibility.
+                      </p>
                     </div>
                   </div>
 
                   <div className="relative mt-3">
-                    <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF]" />
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                     <input
                       type="search"
                       className={searchFieldCls()}
                       placeholder="Search by name or email"
                       value={adminSearch}
                       onChange={(e) => setAdminSearch(e.target.value)}
+                      disabled={loadingUsers}
                     />
                   </div>
 
                   {loadingUsers ? (
-                    <div className="mt-4 flex items-center justify-center gap-2 rounded-lg border border-dashed border-[#E4E7EC] py-10 text-[13px] text-[#6B7280]">
-                      <Loader2 className="h-4 w-4 animate-spin text-[#008CD3]" />
-                      Loading directory…
+                    <div className="mt-3">
+                      <PersonListSkeleton count={4} />
                     </div>
                   ) : (
-                    <ul className="mt-3 max-h-[min(260px,38vh)] space-y-1.5 overflow-y-auto overscroll-contain pr-1 [scrollbar-width:thin]">
+                    <ul className="mt-3 max-h-[min(260px,38vh)] space-y-2 overflow-y-auto overscroll-contain pr-1 [scrollbar-width:thin]">
                       {filteredAdmins.length === 0 ? (
-                        <li className="rounded-lg border border-dashed border-[#E4E7EC] py-8 text-center text-[13px] text-[#6B7280]">
+                        <li className="rounded-xl border border-dashed border-slate-200 py-8 text-center text-sm text-slate-500">
                           No people match your search.
                         </li>
                       ) : (
@@ -657,34 +791,29 @@ export default function CreateTeamPage() {
                             <li key={orgUserListKey(u, "adm")}>
                               <button
                                 type="button"
-                                onClick={() => {
-                                  setAdminId(id);
-                                  setSelectedMemberIds((prev) => {
-                                    const next = new Set(prev);
-                                    next.delete(id);
-                                    return next;
-                                  });
-                                }}
-                                className={`flex w-full min-w-0 items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition ${
-                                  picked
-                                    ? "border-[#008CD3]/40 bg-[#E8F4FB]"
-                                    : "border-[#E4E7EC] bg-white hover:bg-[#F9FAFB]"
-                                }`}
+                                onClick={() => selectAdmin(id)}
+                                className={personRowCls(picked)}
                               >
                                 <UserAvatar name={name} selected={picked} />
                                 <div className="min-w-0 flex-1">
-                                  <p className="truncate text-[13px] font-medium text-[#1F2937]">{name}</p>
-                                  <p className="truncate text-[12px] text-[#6B7280]">{u.user_email}</p>
+                                  <p className="truncate text-[13px] font-medium text-slate-900">
+                                    {name}
+                                  </p>
+                                  <p className="truncate text-[12px] text-slate-500">
+                                    {u.user_email}
+                                  </p>
                                 </div>
                                 <span
                                   className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 ${
                                     picked
                                       ? "border-[#008CD3] bg-[#008CD3] text-white"
-                                      : "border-[#D1D5DB] bg-white"
+                                      : "border-slate-300 bg-white"
                                   }`}
                                   aria-hidden
                                 >
-                                  {picked ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : null}
+                                  {picked ? (
+                                    <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                                  ) : null}
                                 </span>
                               </button>
                             </li>
@@ -696,33 +825,40 @@ export default function CreateTeamPage() {
                 </section>
 
                 <section>
-                  <div className="flex items-center gap-2">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#F3F4F6] text-[#374151]">
-                      <UserPlus className="h-4 w-4" strokeWidth={2} />
+                  <div className="flex items-center gap-3">
+                    <span className={iconBadgeCls("slate")}>
+                      <UserPlus className="h-4 w-4" />
                     </span>
                     <div>
-                      <h2 className="text-[14px] font-semibold text-[#1F2937]">Additional members</h2>
-                      <p className="text-[12px] text-[#6B7280]">
+                      <h2 className="text-[15px] font-semibold tracking-tight text-slate-900">
+                        Additional members
+                      </h2>
+                      <p className={dashSectionMetaCls}>
                         Admin is included automatically. Add others as needed.
                       </p>
                     </div>
                   </div>
 
                   <div className="relative mt-3">
-                    <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF]" />
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                     <input
                       type="search"
                       className={searchFieldCls()}
                       placeholder="Filter roster"
                       value={memberSearch}
                       onChange={(e) => setMemberSearch(e.target.value)}
+                      disabled={loadingUsers}
                     />
                   </div>
 
-                  {!loadingUsers ? (
-                    <ul className="mt-3 max-h-[min(260px,38vh)] space-y-1.5 overflow-y-auto overscroll-contain pr-1 [scrollbar-width:thin]">
+                  {loadingUsers ? (
+                    <div className="mt-3">
+                      <PersonListSkeleton count={4} />
+                    </div>
+                  ) : (
+                    <ul className="mt-3 max-h-[min(260px,38vh)] space-y-2 overflow-y-auto overscroll-contain pr-1 [scrollbar-width:thin]">
                       {filteredMembers.length === 0 ? (
-                        <li className="rounded-lg border border-dashed border-[#E4E7EC] py-8 text-center text-[13px] text-[#6B7280]">
+                        <li className="rounded-xl border border-dashed border-slate-200 py-8 text-center text-sm text-slate-500">
                           {users.length === 0
                             ? "No employees in this organization."
                             : "No one left to add, or nothing matches your search."}
@@ -734,21 +870,19 @@ export default function CreateTeamPage() {
                           const name = formatPickerName(u);
                           return (
                             <li key={orgUserListKey(u, "m")}>
-                              <label
-                                className={`flex min-w-0 cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2.5 transition ${
-                                  on
-                                    ? "border-[#008CD3]/40 bg-[#E8F4FB]"
-                                    : "border-[#E4E7EC] bg-white hover:bg-[#F9FAFB]"
-                                }`}
-                              >
+                              <label className={`${personRowCls(on)} cursor-pointer`}>
                                 <UserAvatar name={name} selected={on} />
                                 <div className="min-w-0 flex-1">
-                                  <p className="truncate text-[13px] font-medium text-[#1F2937]">{name}</p>
-                                  <p className="truncate text-[12px] text-[#6B7280]">{u.user_email}</p>
+                                  <p className="truncate text-[13px] font-medium text-slate-900">
+                                    {name}
+                                  </p>
+                                  <p className="truncate text-[12px] text-slate-500">
+                                    {u.user_email}
+                                  </p>
                                 </div>
                                 <input
                                   type="checkbox"
-                                  className="h-4 w-4 shrink-0 cursor-pointer rounded border-[#D1D5DB] text-[#008CD3] focus:ring-[#008CD3]/20"
+                                  className="h-4 w-4 shrink-0 cursor-pointer rounded border-slate-300 text-[#008CD3] focus:ring-[#008CD3]/20"
                                   checked={on}
                                   onChange={() => toggleMember(id)}
                                 />
@@ -758,13 +892,13 @@ export default function CreateTeamPage() {
                         })
                       )}
                     </ul>
-                  ) : null}
+                  )}
 
                   {!loadingUsers && selectedMemberIds.size > 0 ? (
-                    <p className="mt-2 flex items-center gap-1.5 text-[12px] text-[#6B7280]">
-                      <Users className="h-3.5 w-3.5" />
+                    <p className="mt-3 flex items-center gap-1.5 text-[12px] text-slate-500">
+                      <Users className="h-3.5 w-3.5 text-[#008CD3]" />
                       <span>
-                        <strong className="font-semibold text-[#374151]">
+                        <strong className="font-semibold text-slate-700">
                           {selectedMemberIds.size}
                         </strong>{" "}
                         selected for day-one roster
@@ -776,9 +910,13 @@ export default function CreateTeamPage() {
             </div>
           </div>
 
-          {/* Mobile & tablet bottom bar */}
-          <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#E4E7EC] bg-white px-3 py-2.5 pb-[calc(0.625rem+env(safe-area-inset-bottom))] lg:hidden">
-            <button type="submit" disabled={!canSubmit} className={btnPrimaryCls()}>
+          {/* Mobile bottom bar */}
+          <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200/80 bg-white/95 px-3 py-2.5 pb-[calc(0.625rem+env(safe-area-inset-bottom))] backdrop-blur-md lg:hidden">
+            <button
+              type="submit"
+              disabled={!canSubmit}
+              className={btnBrandCls(true)}
+            >
               {submitting ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
@@ -789,21 +927,25 @@ export default function CreateTeamPage() {
           </div>
 
           {/* Desktop footer */}
-          <div className="hidden items-center justify-between gap-3 border-t border-[#E4E7EC] bg-[#F9FAFB] px-6 py-4 lg:flex">
-            <button type="button" onClick={() => router.push(backHref)} className={btnSecondaryCls()}>
+          <div className="hidden items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/70 px-6 py-4 lg:flex">
+            <button
+              type="button"
+              onClick={() => router.push(backHref)}
+              className={btnGhostCls()}
+            >
               Cancel
             </button>
             <button
               type="submit"
               disabled={!canSubmit}
-              className={btnPrimaryCls(false)}
+              className={btnBrandCls()}
             >
               {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Create team
             </button>
           </div>
         </form>
-      </div>
+      )}
 
       {toast && typeof document !== "undefined"
         ? createPortal(
@@ -813,17 +955,17 @@ export default function CreateTeamPage() {
               aria-live="polite"
             >
               <div
-                className={`pointer-events-auto flex max-w-md items-start gap-2.5 rounded-lg border px-3 py-2.5 shadow-lg sm:min-w-[320px] ${
+                className={`pointer-events-auto flex max-w-md items-start gap-2.5 rounded-2xl border bg-white px-3 py-2.5 shadow-xl sm:min-w-[320px] ${
                   toast.type === "success"
-                    ? "border-[#A8DAB5] bg-white text-[#1F2937]"
-                    : "border-[#F5C6C2] bg-white text-[#1F2937]"
+                    ? "border-emerald-200"
+                    : "border-rose-200"
                 }`}
               >
                 <span
-                  className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                  className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${
                     toast.type === "success"
-                      ? "bg-[#E6F4EA] text-[#0F9D58]"
-                      : "bg-[#FCE8E6] text-[#D93025]"
+                      ? "bg-emerald-50 text-emerald-600"
+                      : "bg-rose-50 text-rose-600"
                   }`}
                 >
                   {toast.type === "success" ? (
@@ -833,15 +975,17 @@ export default function CreateTeamPage() {
                   )}
                 </span>
                 <div className="min-w-0 flex-1 pt-0.5">
-                  <p className="text-[13px] font-semibold text-[#1F2937]">
+                  <p className="text-[13px] font-semibold text-slate-900">
                     {toast.type === "success" ? "All set" : "Something went wrong"}
                   </p>
-                  <p className="mt-0.5 text-[12px] leading-snug text-[#6B7280]">{toast.message}</p>
+                  <p className="mt-0.5 text-[12px] leading-snug text-slate-500">
+                    {toast.message}
+                  </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setToast(null)}
-                  className="shrink-0 rounded-lg p-1 text-[#9CA3AF] transition hover:bg-[#F3F4F6] hover:text-[#374151]"
+                  className="shrink-0 rounded-lg p-1 text-slate-400 transition hover:bg-slate-50 hover:text-slate-600"
                   aria-label="Dismiss notification"
                 >
                   <X className="h-4 w-4" />

@@ -24,8 +24,19 @@ import {
   PlusCircle,
   Briefcase,
   CalendarDays,
+  Sparkles,
+  Circle,
+  ArrowRight,
 } from "lucide-react";
 import { useManagementDashboardContext } from "@/components/portal-dashboard/Layout/ManagementDashboardContext";
+import {
+  btnBrandCls,
+  btnGhostCls,
+  dashCardCls,
+  dashPageCls,
+  dashSectionMetaCls,
+  iconBadgeCls,
+} from "@/components/portal-dashboard/home/dashboardTokens";
 import {
   addUserAddress,
   addUserExternalInformation,
@@ -51,74 +62,246 @@ const ONBOARDING_STEPS_ORDER = [
 
 type OnboardingWizardStep = (typeof ONBOARDING_STEPS_ORDER)[number];
 
+function Shimmer({ className = "" }: { className?: string }) {
+  return <div className={`skeleton-shimmer rounded-xl ${className}`} />;
+}
+
+function EmployeeOnboardingSkeleton() {
+  return (
+    <div className={`${dashPageCls} pb-8`} aria-busy="true" aria-label="Loading employee onboarding">
+      <div className={`${dashCardCls} overflow-hidden lg:hidden`}>
+        <div className="space-y-3 p-4">
+          <div className="flex items-center gap-3">
+            <Shimmer className="h-10 w-10 rounded-xl" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <Shimmer className="h-4 w-40" />
+              <Shimmer className="h-3 w-28" />
+            </div>
+          </div>
+          <Shimmer className="h-1.5 w-full rounded-full" />
+          <div className="flex gap-2 overflow-hidden">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Shimmer key={i} className="h-7 w-16 shrink-0 rounded-full" />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className={`${dashCardCls} hidden overflow-hidden lg:block`}>
+        <div className="border-b border-slate-100 bg-gradient-to-r from-[#F8FAFC] via-white to-[#F0F9FF]/40 px-6 py-5">
+          <div className="flex items-center gap-4">
+            <Shimmer className="h-11 w-11 rounded-xl" />
+            <div className="space-y-2">
+              <Shimmer className="h-3 w-32" />
+              <Shimmer className="h-6 w-56" />
+              <Shimmer className="h-4 w-80 max-w-full" />
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-3 px-6 py-4">
+          {Array.from({ length: 7 }).map((_, i) => (
+            <Shimmer key={i} className="h-8 w-24 rounded-full" />
+          ))}
+        </div>
+      </div>
+
+      <div className={`${dashCardCls} space-y-4 p-4 sm:p-5 lg:p-6`}>
+        <div className="flex items-center gap-3">
+          <Shimmer className="h-10 w-10 rounded-xl" />
+          <div className="space-y-2">
+            <Shimmer className="h-4 w-36" />
+            <Shimmer className="h-3 w-64 max-w-full" />
+          </div>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className={`space-y-2 ${i === 0 || i === 1 ? "sm:col-span-2" : ""}`}>
+              <Shimmer className="h-3 w-24" />
+              <Shimmer className="h-10 w-full" />
+            </div>
+          ))}
+        </div>
+        <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+          <Shimmer className="h-10 w-24" />
+          <Shimmer className="h-10 w-32" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function labelCls() {
-  return "mb-1 block text-[12px] font-medium text-[#374151] lg:text-[13px]";
+  return "mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-slate-500";
 }
 
 function inputCls() {
-  return "w-full rounded-lg border border-[#E4E7EC] bg-white px-3 py-2 text-[14px] text-[#1F2937] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15";
+  return "w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-[13px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15 disabled:opacity-60";
 }
 
 function stepPanelShell() {
-  return "overflow-hidden rounded-lg border border-[#E4E7EC] bg-white p-3 shadow-sm sm:p-4 lg:p-6";
+  return `${dashCardCls} p-4 sm:p-5 lg:p-6`;
 }
 
 function stepSectionHeaderShell() {
-  return "mb-4 flex gap-2.5 max-lg:mb-3 max-lg:rounded-lg max-lg:border max-lg:border-[#E4E7EC] max-lg:bg-[#F9FAFB] max-lg:p-2.5 lg:mb-5 lg:border-0 lg:bg-transparent lg:p-0";
+  return "mb-4 flex gap-3 max-lg:mb-3 max-lg:rounded-xl max-lg:border max-lg:border-slate-100 max-lg:bg-slate-50/80 max-lg:p-3 lg:mb-5 lg:border-0 lg:bg-transparent lg:p-0";
 }
 
 function stepIconShellCls() {
-  return "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#E8F4FB] text-[#008CD3] lg:h-10 lg:w-10";
+  return iconBadgeCls("blue");
 }
 
 function stepFooterShell() {
-  return "flex flex-col gap-2 border-t border-[#E4E7EC] pt-4 lg:flex-row lg:flex-wrap lg:items-center lg:gap-2 lg:pt-5";
+  return "flex flex-col gap-2 border-t border-slate-100 pt-4 lg:flex-row lg:flex-wrap lg:items-center lg:gap-2 lg:pt-5";
 }
 
 function stepFooterEndShell() {
-  return "flex flex-col gap-2 border-t border-[#E4E7EC] pt-4 lg:flex-row lg:justify-end lg:gap-2 lg:pt-5";
+  return "flex flex-col gap-2 border-t border-slate-100 pt-4 lg:flex-row lg:justify-end lg:gap-2 lg:pt-5";
 }
 
 function btnPrimaryCls() {
-  return "inline-flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-lg bg-[#008CD3] px-4 py-2 text-[14px] font-medium text-white transition hover:bg-[#0070AA] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 lg:w-auto";
+  return `${btnBrandCls(true)} lg:w-auto`;
 }
 
 function btnSecondaryCls() {
-  return "inline-flex min-h-[40px] w-full items-center justify-center rounded-lg border border-[#E4E7EC] bg-white px-4 py-2 text-[14px] font-medium text-[#374151] transition hover:bg-[#F9FAFB] disabled:opacity-50 lg:w-auto";
+  return `${btnGhostCls(true)} lg:w-auto`;
 }
 
 function alertSuccessCls() {
-  return "mb-4 flex items-start gap-2 rounded-lg border border-[#A8DAB5] bg-[#E6F4EA] px-3 py-2.5 text-[13px] text-[#1F2937] max-lg:mb-3";
+  return "mb-4 flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-[13px] text-emerald-900 max-lg:mb-3";
 }
 
 function alertErrorCls() {
-  return "mb-4 flex items-start gap-2 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2.5 text-[13px] text-[#1F2937] max-lg:mb-3";
+  return "mb-4 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-[13px] text-rose-900 max-lg:mb-3";
 }
 
 function btnSkipCls() {
-  return "inline-flex min-h-[40px] w-full items-center justify-center rounded-lg border border-dashed border-[#E4E7EC] bg-[#F9FAFB] px-4 py-2 text-[13px] font-medium text-[#374151] transition hover:border-[#008CD3]/40 hover:bg-white disabled:opacity-50 lg:w-auto";
+  return "inline-flex min-h-[40px] w-full items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-2 text-[13px] font-medium text-slate-600 transition hover:border-[#008CD3]/40 hover:bg-white disabled:opacity-50 lg:w-auto";
 }
 
 function btnAddCls() {
-  return "inline-flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-[#008CD3]/50 bg-[#E8F4FB] px-4 py-2 text-[13px] font-medium text-[#008CD3] transition hover:bg-[#008CD3]/10 disabled:opacity-50 lg:w-auto";
+  return "inline-flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-[#008CD3]/40 bg-[#E8F4FB] px-4 py-2 text-[13px] font-medium text-[#008CD3] transition hover:bg-[#008CD3]/10 disabled:opacity-50 lg:w-auto";
 }
 
 function stepTitleCls() {
-  return "text-[15px] font-semibold text-[#1F2937] lg:text-[16px]";
+  return "text-[15px] font-semibold tracking-tight text-slate-900 lg:text-[16px]";
 }
 
 function stepDescCls() {
-  return "mt-0.5 text-[11px] text-[#6B7280] max-lg:line-clamp-2 lg:text-[12px]";
+  return `mt-0.5 max-lg:line-clamp-2 ${dashSectionMetaCls}`;
 }
 
 const ONBOARDING_STEP_NAV = [
-  { key: "basic" as const, n: "1", label: "Basics", short: "Basics" },
-  { key: "external" as const, n: "2", label: "Emergency", short: "Emergency" },
-  { key: "reference" as const, n: "3", label: "Prev. company", short: "Company" },
-  { key: "leave" as const, n: "4", label: "Leave schedule", short: "Leave" },
-  { key: "assets" as const, n: "5", label: "Assets", short: "Assets" },
-  { key: "documents" as const, n: "6", label: "Documents", short: "Docs" },
-  { key: "address" as const, n: "7", label: "Address", short: "Address" },
+  {
+    key: "basic" as const,
+    n: "1",
+    label: "Basics",
+    short: "Basics",
+    icon: UserPlus,
+    optional: false,
+    title: "Account basics",
+    summary:
+      "Create the employee login profile with identity, contact, role, and a temporary password.",
+    checklist: [
+      "Full name, work email & phone",
+      "Employee code & organization role",
+      "Secure temporary password",
+    ],
+  },
+  {
+    key: "external" as const,
+    n: "2",
+    label: "Emergency",
+    short: "Emergency",
+    icon: ShieldCheck,
+    optional: false,
+    title: "Emergency contact",
+    summary:
+      "Capture a trusted contact for workplace emergencies and relation to the employee.",
+    checklist: [
+      "Emergency contact full name",
+      "Phone number",
+      "Blood-line / family relation",
+    ],
+  },
+  {
+    key: "reference" as const,
+    n: "3",
+    label: "Prev. company",
+    short: "Company",
+    icon: Briefcase,
+    optional: true,
+    title: "Previous company",
+    summary:
+      "Optional employment history — last company, role, and experience details if relevant.",
+    checklist: [
+      "Previous company name",
+      "Last designation",
+      "Years of experience (if any)",
+    ],
+  },
+  {
+    key: "leave" as const,
+    n: "4",
+    label: "Leave schedule",
+    short: "Leave",
+    icon: CalendarDays,
+    optional: true,
+    title: "Leave schedule",
+    summary:
+      "Optional leave policy notes for this hire — skip if you’ll configure leave later.",
+    checklist: [
+      "Leave entitlements (if known)",
+      "Or skip and finish later",
+    ],
+  },
+  {
+    key: "assets" as const,
+    n: "5",
+    label: "Assets",
+    short: "Assets",
+    icon: Package,
+    optional: true,
+    title: "Company assets",
+    summary:
+      "Assign day-one hardware or accessories (laptop, ID card, etc.) with optional photos.",
+    checklist: [
+      "Asset type & serial / notes",
+      "Optional photo attachments",
+      "Or skip if nothing to issue yet",
+    ],
+  },
+  {
+    key: "documents" as const,
+    n: "6",
+    label: "Documents",
+    short: "Docs",
+    icon: FileStack,
+    optional: false,
+    title: "KYC & documents",
+    summary:
+      "Upload identity and HR documents — photo, Aadhaar, PAN, and optional letters.",
+    checklist: [
+      "Passport photo, Aadhaar & PAN",
+      "Optional resignation / appointment letters",
+      "PNG, JPG, WebP or PDF (max 5 MB)",
+    ],
+  },
+  {
+    key: "address" as const,
+    n: "7",
+    label: "Address",
+    short: "Address",
+    icon: MapPin,
+    optional: true,
+    title: "Residential address",
+    summary:
+      "Permanent and current addresses for records — can be skipped and added later.",
+    checklist: [
+      "Permanent address details",
+      "Current address (or same-as toggle)",
+      "Or skip to finish onboarding",
+    ],
+  },
 ] as const;
 
 const PASSWORD_MIN = 8;
@@ -374,8 +557,8 @@ function AddressFormFields({
   disabled?: boolean;
 }) {
   return (
-    <div className="space-y-4 rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] p-3 sm:p-4">
-      <h3 className="text-[14px] font-semibold text-[#1F2937]">{title}</h3>
+    <div className="space-y-4 rounded-xl border border-slate-100 bg-slate-50/80 p-3 sm:p-4">
+      <h3 className="text-[14px] font-semibold tracking-tight text-slate-900">{title}</h3>
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor={`${idPrefix}-country`} className={labelCls()}>
@@ -430,7 +613,7 @@ function AddressFormFields({
           />
         </div>
         <div className="sm:col-span-2">
-          <label className="flex items-center gap-2 text-[13px] font-medium text-[#1F2937]">
+          <label className="flex items-center gap-2 text-[13px] font-medium text-slate-900">
             <input
               type="checkbox"
               checked={values.is_from_village}
@@ -441,7 +624,7 @@ function AddressFormFields({
                 });
               }}
               disabled={disabled}
-              className="h-4 w-4 rounded border-[#E4E7EC] text-[#008CD3] focus:ring-[#008CD3]/30"
+              className="h-4 w-4 rounded border-slate-300 text-[#008CD3] focus:ring-[#008CD3]/30"
             />
             Employee is from a village
           </label>
@@ -507,14 +690,7 @@ function AddressFormFields({
 
 export default function EmployeOnboardingPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="mx-auto flex min-h-[40vh] max-w-4xl flex-col items-center justify-center gap-3 px-3 py-6 text-[#6B7280] sm:px-4 lg:px-6">
-          <Loader2 className="h-8 w-8 animate-spin text-[#008CD3]" aria-hidden />
-          <p className="text-sm">Loading employee onboarding…</p>
-        </div>
-      }
-    >
+    <Suspense fallback={<EmployeeOnboardingSkeleton />}>
       <EmployeOnboardingPageContent />
     </Suspense>
   );
@@ -576,6 +752,7 @@ function EmployeOnboardingPageContent() {
   const [documentsError, setDocumentsError] = useState<string | null>(null);
   const [previewModalField, setPreviewModalField] =
     useState<EmployeeOnboardingDocumentField | null>(null);
+  const [journeyPreviewOpen, setJourneyPreviewOpen] = useState(false);
 
   const docInputRefs = useRef<
     Partial<Record<EmployeeOnboardingDocumentField, HTMLInputElement | null>>
@@ -1140,33 +1317,262 @@ function EmployeOnboardingPageContent() {
     previewModalField && docFiles[previewModalField] ? docFiles[previewModalField] : undefined;
   const modalUrl = previewModalField ? previewUrls[previewModalField] : undefined;
 
+  useEffect(() => {
+    if (!journeyPreviewOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setJourneyPreviewOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [journeyPreviewOpen]);
+
   const currentStepIndex = ONBOARDING_STEPS_ORDER.indexOf(onboardingStep);
   const progressPct = ((currentStepIndex + 1) / ONBOARDING_STEPS_ORDER.length) * 100;
   const currentStepLabel =
     ONBOARDING_STEP_NAV.find((s) => s.key === onboardingStep)?.label ?? "Onboarding";
 
+  const journeyPreviewModal = journeyPreviewOpen ? (
+    <div
+      className="fixed inset-0 z-[10050] flex items-end justify-center sm:items-center sm:p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="onboarding-journey-title"
+    >
+      <button
+        type="button"
+        className="absolute inset-0 bg-slate-900/45 backdrop-blur-[2px]"
+        aria-label="Close journey preview"
+        onClick={() => setJourneyPreviewOpen(false)}
+      />
+      <div className="relative flex max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl border border-slate-200/90 bg-white shadow-2xl sm:max-h-[88vh] sm:rounded-2xl">
+        <div className="relative shrink-0 overflow-hidden border-b border-slate-100 bg-gradient-to-r from-[#F8FAFC] via-white to-[#F0F9FF]/50 px-4 py-4 sm:px-6 sm:py-5">
+          <div
+            className="pointer-events-none absolute -right-8 -top-10 h-36 w-36 rounded-full bg-[#008CD3]/10 blur-2xl"
+            aria-hidden
+          />
+          <div className="relative flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-start gap-3">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#008CD3] to-[#0C123A] text-white shadow-md shadow-[#008CD3]/25">
+                <Sparkles className="h-5 w-5" aria-hidden />
+              </span>
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#008CD3]">
+                  Premium preview
+                </p>
+                <h2
+                  id="onboarding-journey-title"
+                  className="mt-0.5 text-[17px] font-semibold tracking-tight text-slate-900 sm:text-[19px]"
+                >
+                  Onboarding journey map
+                </h2>
+                <p className={`mt-1 ${dashSectionMetaCls}`}>
+                  Preview all {ONBOARDING_STEPS_ORDER.length} steps before you fill
+                  them — know what&apos;s required vs optional.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setJourneyPreviewOpen(false)}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200/90 text-slate-500 transition hover:bg-slate-50 hover:text-slate-800"
+              aria-label="Close"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="relative mt-4 flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E8F4FB] px-2.5 py-1 text-[11px] font-semibold text-[#008CD3]">
+              <Circle className="h-2 w-2 fill-current" aria-hidden />
+              You are on step {currentStepIndex + 1}
+            </span>
+            <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
+              {currentStepIndex} completed
+            </span>
+            <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
+              {ONBOARDING_STEPS_ORDER.length - currentStepIndex - 1} remaining
+            </span>
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6">
+          <ol className="relative space-y-0">
+            {ONBOARDING_STEP_NAV.map((step, index) => {
+              const Icon = step.icon;
+              const done = currentStepIndex > index;
+              const active = onboardingStep === step.key;
+              const upcoming = currentStepIndex < index;
+              const isLast = index === ONBOARDING_STEP_NAV.length - 1;
+
+              return (
+                <li key={step.key} className="relative flex gap-3 pb-5 last:pb-1 sm:gap-4">
+                  {!isLast ? (
+                    <span
+                      className={`absolute left-[17px] top-10 h-[calc(100%-1.25rem)] w-px sm:left-[19px] ${
+                        done ? "bg-emerald-300" : "bg-slate-200"
+                      }`}
+                      aria-hidden
+                    />
+                  ) : null}
+
+                  <div className="relative z-[1] flex shrink-0 flex-col items-center">
+                    <span
+                      className={`flex h-9 w-9 items-center justify-center rounded-full text-[12px] font-bold shadow-sm ring-4 ring-white sm:h-10 sm:w-10 ${
+                        done
+                          ? "bg-emerald-500 text-white"
+                          : active
+                            ? "bg-[#008CD3] text-white"
+                            : "bg-slate-100 text-slate-500"
+                      }`}
+                    >
+                      {done ? (
+                        <CheckCircle2 className="h-4 w-4 sm:h-5 sm:w-5" aria-hidden />
+                      ) : (
+                        step.n
+                      )}
+                    </span>
+                  </div>
+
+                  <div
+                    className={`min-w-0 flex-1 rounded-2xl border p-3.5 transition sm:p-4 ${
+                      active
+                        ? "border-[#008CD3]/35 bg-gradient-to-br from-[#E8F4FB]/90 to-white shadow-[0_8px_24px_rgba(0,140,211,0.08)]"
+                        : done
+                          ? "border-emerald-100 bg-emerald-50/40"
+                          : "border-slate-100 bg-slate-50/60"
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div className="flex min-w-0 items-start gap-2.5">
+                        <span
+                          className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                            active
+                              ? "bg-[#008CD3]/15 text-[#008CD3]"
+                              : done
+                                ? "bg-emerald-100 text-emerald-700"
+                                : "bg-white text-slate-500 ring-1 ring-slate-200/80"
+                          }`}
+                        >
+                          <Icon className="h-4 w-4" aria-hidden />
+                        </span>
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="text-[14px] font-semibold tracking-tight text-slate-900 sm:text-[15px]">
+                              {step.title}
+                            </h3>
+                            {step.optional ? (
+                              <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 ring-1 ring-amber-200/70">
+                                Optional
+                              </span>
+                            ) : (
+                              <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-700 ring-1 ring-rose-200/60">
+                                Required
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-1 text-[12px] leading-relaxed text-slate-500 sm:text-[13px]">
+                            {step.summary}
+                          </p>
+                        </div>
+                      </div>
+                      {active ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-[#008CD3] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white">
+                          Current
+                        </span>
+                      ) : done ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-700">
+                          Done
+                        </span>
+                      ) : upcoming ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-400 ring-1 ring-slate-200">
+                          Upcoming
+                        </span>
+                      ) : null}
+                    </div>
+
+                    <ul className="mt-3 space-y-1.5 border-t border-slate-100/80 pt-3">
+                      {step.checklist.map((item) => (
+                        <li
+                          key={item}
+                          className="flex items-start gap-2 text-[12px] text-slate-600 sm:text-[13px]"
+                        >
+                          <ArrowRight
+                            className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${
+                              active
+                                ? "text-[#008CD3]"
+                                : done
+                                  ? "text-emerald-500"
+                                  : "text-slate-300"
+                            }`}
+                            aria-hidden
+                          />
+                          <span>{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+
+        <div className="shrink-0 border-t border-slate-100 bg-slate-50/80 px-4 py-3 sm:px-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <p className={`hidden sm:block ${dashSectionMetaCls}`}>
+              Tip: optional steps can be skipped during the flow.
+            </p>
+            <button
+              type="button"
+              onClick={() => setJourneyPreviewOpen(false)}
+              className={`${btnBrandCls(true)} sm:w-auto`}
+            >
+              Continue onboarding
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   return (
-    <div className="min-h-full bg-[#F5F7FA] pb-4 max-lg:pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:space-y-4 lg:pb-8">
+    <div className={`${dashPageCls} pb-4 max-lg:pb-[calc(4.5rem+env(safe-area-inset-bottom))]`}>
       {/* Mobile & tablet: sticky header + progress */}
-      <div className="sticky top-0 z-20 border-b border-[#E4E7EC] bg-white shadow-sm lg:hidden">
-        <div className="flex items-center gap-2.5 px-3 py-2.5">
+      <div className="sticky top-0 z-20 -mx-3 border-b border-slate-200/80 bg-white/95 px-3 pb-3 pt-3 shadow-[0_1px_3px_rgba(15,23,42,0.06)] backdrop-blur-md sm:-mx-5 sm:px-4 lg:hidden">
+        <div className="flex items-center gap-3">
           <span className={stepIconShellCls()}>
             <UserPlus className="h-4 w-4" aria-hidden />
           </span>
           <div className="min-w-0 flex-1">
-            <h1 className="truncate text-[16px] font-semibold text-[#1F2937]">Employee onboarding</h1>
-            <p className="truncate text-[12px] text-[#6B7280]">{orgName}</p>
+            <h1 className="truncate text-[17px] font-semibold tracking-tight text-slate-900">
+              Employee onboarding
+            </h1>
+            <p className={`truncate ${dashSectionMetaCls}`}>{orgName}</p>
           </div>
+          <button
+            type="button"
+            onClick={() => setJourneyPreviewOpen(true)}
+            className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl border border-[#008CD3]/25 bg-gradient-to-r from-[#E8F4FB] to-white px-2.5 text-[11px] font-semibold text-[#008CD3] shadow-sm transition active:scale-[0.98] hover:border-[#008CD3]/40"
+            aria-label="Preview all onboarding steps"
+          >
+            <Sparkles className="h-3.5 w-3.5" aria-hidden />
+            Preview
+          </button>
         </div>
-        <div className="border-t border-[#E4E7EC] px-3 pb-2.5 pt-2">
+        <div className="mt-3">
           <div className="mb-1.5 flex items-center justify-between gap-2 text-[11px]">
             <span className="font-semibold text-[#008CD3]">
               Step {currentStepIndex + 1} of {ONBOARDING_STEPS_ORDER.length}
             </span>
-            <span className="truncate text-[#6B7280]">{currentStepLabel}</span>
+            <span className="truncate text-slate-500">{currentStepLabel}</span>
           </div>
           <div
-            className="h-1 overflow-hidden rounded-full bg-[#E4E7EC]"
+            className="h-1.5 overflow-hidden rounded-full bg-slate-100"
             role="progressbar"
             aria-valuenow={currentStepIndex + 1}
             aria-valuemin={1}
@@ -1179,7 +1585,7 @@ function EmployeOnboardingPageContent() {
             />
           </div>
         </div>
-        <div className="flex gap-1.5 overflow-x-auto border-t border-[#E4E7EC] bg-[#F9FAFB] px-2 py-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="mt-3 flex gap-1.5 overflow-x-auto rounded-xl bg-slate-100/80 p-1.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {ONBOARDING_STEP_NAV.map(({ key, short, n }) => {
             const order = [...ONBOARDING_STEPS_ORDER];
             const cur = order.indexOf(onboardingStep);
@@ -1189,12 +1595,12 @@ function EmployeOnboardingPageContent() {
             return (
               <span
                 key={key}
-                className={`inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium ${
+                className={`inline-flex shrink-0 items-center gap-1 rounded-lg px-2.5 py-1.5 text-[10px] font-semibold ${
                   active
-                    ? "bg-white text-[#008CD3] ring-1 ring-[#008CD3]/30"
+                    ? "bg-white text-[#008CD3] shadow-sm"
                     : done
-                      ? "bg-[#E6F4EA] text-[#0F9D58]"
-                      : "bg-white text-[#6B7280] ring-1 ring-[#E4E7EC]"
+                      ? "bg-emerald-50 text-emerald-700"
+                      : "text-slate-500"
                 }`}
               >
                 {done ? (
@@ -1209,58 +1615,127 @@ function EmployeOnboardingPageContent() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-5xl space-y-3 px-3 pt-3 sm:px-4 lg:space-y-4 lg:px-6 lg:pt-6">
       {/* Desktop: page intro */}
-      <div className={`${stepPanelShell()} hidden lg:block`}>
-        <div className="flex items-start gap-3">
-          <span className={stepIconShellCls()}>
-            <UserPlus className="h-4 w-4" aria-hidden />
-          </span>
-          <div className="min-w-0">
-            <h1 className="text-[18px] font-semibold text-[#1F2937]">Employee onboarding</h1>
-            <p className="mt-0.5 text-[13px] text-[#6B7280]">
-              Seven steps for <span className="font-medium text-[#374151]">{orgName}</span>: basics, emergency
-              contact, previous company (optional), leave schedule (optional), assets, documents, and address.
-            </p>
+      <header className={`${dashCardCls} hidden overflow-hidden lg:block`}>
+        <div className="border-b border-slate-100 bg-gradient-to-r from-[#F8FAFC] via-white to-[#F0F9FF]/40 px-6 py-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="flex items-start gap-4">
+              <span className={stepIconShellCls()}>
+                <UserPlus className="h-5 w-5" aria-hidden />
+              </span>
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+                  Organization · Employees
+                </p>
+                <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">
+                  Employee onboarding
+                </h1>
+                <p className={`mt-1 max-w-2xl ${dashSectionMetaCls}`}>
+                  Seven steps for{" "}
+                  <span className="font-medium text-slate-700">{orgName}</span>:
+                  basics, emergency contact, previous company (optional), leave
+                  schedule (optional), assets, documents, and address.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setJourneyPreviewOpen(true)}
+                className="inline-flex min-h-[40px] items-center gap-2 rounded-xl border border-[#008CD3]/25 bg-gradient-to-r from-[#E8F4FB] via-white to-[#F8FAFC] px-3.5 py-2 text-[13px] font-semibold text-[#008CD3] shadow-sm transition hover:border-[#008CD3]/45 hover:shadow-md"
+              >
+                <Sparkles className="h-4 w-4" aria-hidden />
+                Preview journey
+              </button>
+              <div className="rounded-xl bg-sky-50/80 px-3.5 py-3 text-center">
+                <p className="text-lg font-semibold tabular-nums text-[#008CD3]">
+                  {currentStepIndex + 1}/{ONBOARDING_STEPS_ORDER.length}
+                </p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                  Progress
+                </p>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+        <nav className="px-6 py-4" aria-label="Onboarding steps">
+          <ol className="flex flex-wrap items-center gap-2">
+            {ONBOARDING_STEP_NAV.map(({ key, n, label }) => {
+              const order = [...ONBOARDING_STEPS_ORDER];
+              const cur = order.indexOf(onboardingStep);
+              const ix = order.indexOf(key);
+              const done = cur > ix;
+              const active = onboardingStep === key;
+              return (
+                <li
+                  key={key}
+                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-semibold ${
+                    active
+                      ? "bg-[#E8F4FB] text-[#008CD3] ring-1 ring-[#008CD3]/25"
+                      : done
+                        ? "bg-emerald-50 text-emerald-700"
+                        : "bg-slate-50 text-slate-400"
+                  }`}
+                >
+                  {done ? (
+                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  ) : (
+                    <span
+                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] ${
+                        active
+                          ? "bg-[#008CD3] text-white"
+                          : "bg-slate-200 text-slate-600"
+                      }`}
+                    >
+                      {n}
+                    </span>
+                  )}
+                  {label}
+                </li>
+              );
+            })}
+          </ol>
+          <div
+            className="mt-4 h-1.5 overflow-hidden rounded-full bg-slate-100"
+            role="progressbar"
+            aria-valuenow={currentStepIndex + 1}
+            aria-valuemin={1}
+            aria-valuemax={ONBOARDING_STEPS_ORDER.length}
+            aria-label="Onboarding progress"
+          >
+            <div
+              className="h-full rounded-full bg-[#008CD3] transition-all duration-300"
+              style={{ width: `${progressPct}%` }}
+            />
+          </div>
+        </nav>
+      </header>
 
-      {/* Desktop: step list */}
-      <nav className={`${stepPanelShell()} hidden lg:block`} aria-label="Onboarding steps">
-        <ol className="flex flex-wrap items-center gap-4 text-[13px] lg:gap-6">
-          {ONBOARDING_STEP_NAV.map(({ key, n, label }) => {
-            const order = [...ONBOARDING_STEPS_ORDER];
-            const cur = order.indexOf(onboardingStep);
-            const ix = order.indexOf(key);
-            const done = cur > ix;
-            const active = onboardingStep === key;
-            return (
-              <li
-                key={key}
-                className={`flex items-center gap-1.5 font-medium ${
-                  active ? "text-[#008CD3]" : done ? "text-[#0F9D58]" : "text-[#9CA3AF]"
-                }`}
-              >
-                {done ? (
-                  <CheckCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                ) : (
-                  <span
-                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] ${
-                      active ? "bg-[#008CD3] text-white" : "bg-[#E4E7EC] text-[#6B7280]"
-                    }`}
-                  >
-                    {n}
-                  </span>
-                )}
-                {label}
-              </li>
-            );
-          })}
-        </ol>
-      </nav>
+      {rolesLoading && onboardingStep === "basic" ? (
+        <div className={`${dashCardCls} space-y-4 p-4 sm:p-5 lg:p-6`} aria-busy="true">
+          <div className="flex items-center gap-3">
+            <Shimmer className="h-10 w-10 rounded-xl" />
+            <div className="space-y-2">
+              <Shimmer className="h-4 w-36" />
+              <Shimmer className="h-3 w-64 max-w-full" />
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className={`space-y-2 ${i < 2 ? "sm:col-span-2" : ""}`}>
+                <Shimmer className="h-3 w-24" />
+                <Shimmer className="h-10 w-full" />
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+            <Shimmer className="h-10 w-24" />
+            <Shimmer className="h-10 w-32" />
+          </div>
+        </div>
+      ) : null}
 
-      {onboardingStep === "basic" && (
+      {!(rolesLoading && onboardingStep === "basic") && onboardingStep === "basic" && (
         <div className={stepPanelShell()}>
           <div className={stepSectionHeaderShell()}>
             <span className={stepIconShellCls()}>
@@ -1280,13 +1755,13 @@ function EmployeOnboardingPageContent() {
               role="status"
             >
               <div className="flex items-start gap-2">
-                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#0F9D58]" aria-hidden />
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
                 <span>{addressSuccess}</span>
               </div>
               <button
                 type="button"
                 onClick={() => setAddressSuccess(null)}
-                className="shrink-0 rounded-lg border border-[#A8DAB5] bg-white px-3 py-1.5 text-[12px] font-medium text-[#1F2937] transition hover:bg-[#F9FAFB]"
+                className="shrink-0 rounded-lg border border-emerald-200 bg-white px-3 py-1.5 text-[12px] font-medium text-slate-900 transition hover:bg-slate-50"
               >
                 Dismiss
               </button>
@@ -1295,7 +1770,7 @@ function EmployeOnboardingPageContent() {
 
           {success && (
             <div className={alertSuccessCls()} role="status">
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#0F9D58]" aria-hidden />
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
               <span>{success}</span>
             </div>
           )}
@@ -1384,9 +1859,9 @@ function EmployeOnboardingPageContent() {
                   Role <span className="text-red-500">*</span>
                 </label>
                 {rolesLoading ? (
-                  <div className="flex items-center gap-2 rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] px-3 py-2 text-[13px] text-[#6B7280]">
-                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                    Loading roles…
+                  <div className="space-y-2" aria-busy="true">
+                    <Shimmer className="h-10 w-full" />
+                    <p className={dashSectionMetaCls}>Loading roles…</p>
                   </div>
                 ) : (
                   <select
@@ -1430,7 +1905,7 @@ function EmployeOnboardingPageContent() {
                   />
                   <button
                     type="button"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-[#6B7280] outline-none transition hover:bg-[#F3F4F6]"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-slate-500 outline-none transition hover:bg-slate-100"
                     onClick={() => setShowPassword((v) => !v)}
                     aria-label={showPassword ? "Hide password" : "Show password"}
                   >
@@ -1458,7 +1933,7 @@ function EmployeOnboardingPageContent() {
                   />
                   <button
                     type="button"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-[#6B7280] outline-none transition hover:bg-[#F3F4F6]"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-slate-500 outline-none transition hover:bg-slate-100"
                     onClick={() => setShowConfirmPassword((v) => !v)}
                     aria-label={showConfirmPassword ? "Hide" : "Show"}
                   >
@@ -1512,7 +1987,7 @@ function EmployeOnboardingPageContent() {
               </h2>
               <p className={stepDescCls()}>
                 For{" "}
-                <span className="font-medium text-[#374151]">{createdEmployeeName}</span>.
+                <span className="font-medium text-slate-700">{createdEmployeeName}</span>.
                 Saved to organizational records (step&nbsp;2 of&nbsp;7).
               </p>
             </div>
@@ -1620,14 +2095,14 @@ function EmployeOnboardingPageContent() {
               <h2 className={stepTitleCls()}>Previous company reference</h2>
               <p className={stepDescCls()}>
                 Optional background verification for{" "}
-                <span className="font-medium text-[#374151]">{createdEmployeeName}</span>. Experienced
+                <span className="font-medium text-slate-700">{createdEmployeeName}</span>. Experienced
                 hires can add prior employer details; freshers can skip (step&nbsp;3 of&nbsp;7).
               </p>
             </div>
           </div>
 
           <div className="space-y-4">
-            <p className="text-[13px] text-[#6B7280]">
+            <p className="text-[13px] text-slate-500">
               Capture previous company name, employment dates, and an HR or reporting manager contact for
               verification. You can add multiple previous employers on the next screen.
             </p>
@@ -1665,14 +2140,14 @@ function EmployeOnboardingPageContent() {
               <h2 className={stepTitleCls()}>Leave schedule</h2>
               <p className={stepDescCls()}>
                 Optional — define when and how{" "}
-                <span className="font-medium text-[#374151]">{createdEmployeeName}</span> receives
+                <span className="font-medium text-slate-700">{createdEmployeeName}</span> receives
                 leave credits per type (step&nbsp;4 of&nbsp;7).
               </p>
             </div>
           </div>
 
           <div className="space-y-4">
-            <p className="text-[13px] text-[#6B7280]">
+            <p className="text-[13px] text-slate-500">
               Choose organization leave types, set allocation frequency, leaves per cycle, carry-forward
               rules, and the first credit date. You can assign different schedules for each leave type.
             </p>
@@ -1710,8 +2185,8 @@ function EmployeOnboardingPageContent() {
               <h2 className={stepTitleCls()}>Assign assets</h2>
               <p className={stepDescCls()}>
                 Optional — allocate laptops, badges, SIMs, etc. for{" "}
-                <span className="font-medium text-[#374151]">{createdEmployeeName}</span>. Add rows with
-                <span className="font-medium text-[#374151]"> Add asset</span>, or skip (step&nbsp;5 of&nbsp;7).
+                <span className="font-medium text-slate-700">{createdEmployeeName}</span>. Add rows with
+                <span className="font-medium text-slate-700"> Add asset</span>, or skip (step&nbsp;5 of&nbsp;7).
               </p>
             </div>
           </div>
@@ -1729,17 +2204,17 @@ function EmployeOnboardingPageContent() {
           <form onSubmit={handleAssetsSubmit} className="space-y-4">
             <div className="space-y-3">
               {assetDraftRows.length === 0 && (
-                <p className="text-[13px] text-[#6B7280]">
+                <p className="text-[13px] text-slate-500">
                   No rows yet. Click <strong>Add asset</strong> to attach one or more assignments, or skip.
                 </p>
               )}
               {assetDraftRows.map((row, idx) => (
                 <div
                   key={row.key}
-                  className="rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] p-3 sm:p-4"
+                  className="rounded-lg border border-slate-200 bg-slate-50 p-3 sm:p-4"
                 >
                   <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-[13px] font-semibold text-[#1F2937]">Asset {idx + 1}</span>
+                    <span className="text-[13px] font-semibold text-slate-900">Asset {idx + 1}</span>
                     <button
                       type="button"
                       disabled={assetsSubmitting}
@@ -1798,7 +2273,7 @@ function EmployeOnboardingPageContent() {
                     <div>
                       <label className={labelCls()} htmlFor={`asset-handover-${row.key}`}>
                         Handover date/time{" "}
-                        <span className="text-[11px] font-normal text-[#9CA3AF]">(optional)</span>
+                        <span className="text-[11px] font-normal text-slate-400">(optional)</span>
                       </label>
                       <input
                         id={`asset-handover-${row.key}`}
@@ -1819,7 +2294,7 @@ function EmployeOnboardingPageContent() {
                     <div className="sm:col-span-2">
                       <label className={labelCls()} htmlFor={`asset-summary-${row.key}`}>
                         Summary{" "}
-                        <span className="text-[11px] font-normal text-[#9CA3AF]">(optional)</span>
+                        <span className="text-[11px] font-normal text-slate-400">(optional)</span>
                       </label>
                       <input
                         id={`asset-summary-${row.key}`}
@@ -1839,7 +2314,7 @@ function EmployeOnboardingPageContent() {
                     <div className="sm:col-span-2">
                       <label className={labelCls()} htmlFor={`asset-file-${row.key}`}>
                         Photo / receipt (PNG, JPG, WebP, PDF, max 5&nbsp;MB){" "}
-                        <span className="text-[11px] font-normal text-[#9CA3AF]">(optional)</span>
+                        <span className="text-[11px] font-normal text-slate-400">(optional)</span>
                       </label>
                       <input
                         id={`asset-file-${row.key}`}
@@ -1941,7 +2416,7 @@ function EmployeOnboardingPageContent() {
               <h2 className={stepTitleCls()}>Employee documents</h2>
               <p className={stepDescCls()}>
                 Step&nbsp;6 of&nbsp;7 — tap a frame for full screen preview. Wrong file? Use{" "}
-                <span className="font-medium text-[#374151]">Change file</span>. PNG/JPG/WebP/PDF · max{" "}
+                <span className="font-medium text-slate-700">Change file</span>. PNG/JPG/WebP/PDF · max{" "}
                 5&nbsp;MB each.
               </p>
             </div>
@@ -1974,10 +2449,10 @@ function EmployeOnboardingPageContent() {
                         )}
                         {required && <span className="text-red-500">*</span>}
                       </label>
-                      <p className="mb-2 text-[11px] text-[#6B7280]">{hint}</p>
+                      <p className="mb-2 text-[11px] text-slate-500">{hint}</p>
 
                       <div
-                        className={`relative mx-auto flex w-full items-center justify-center overflow-hidden rounded-lg border border-dashed border-[#E4E7EC] bg-[#F9FAFB] ${skeletonFrameClass(skeleton)}`}
+                        className={`relative mx-auto flex w-full items-center justify-center overflow-hidden rounded-lg border border-dashed border-slate-200 bg-slate-50 ${skeletonFrameClass(skeleton)}`}
                       >
                         <input
                           ref={(el) => {
@@ -1996,13 +2471,13 @@ function EmployeOnboardingPageContent() {
                           <button
                             type="button"
                             onClick={() => docInputRefs.current[field]?.click()}
-                            className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 px-3 text-center text-[#6B7280] transition hover:bg-white/60"
+                            className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 px-3 text-center text-slate-500 transition hover:bg-white/60"
                           >
                             <IconCmp className="h-8 w-8 text-[#D1D5DB]" aria-hidden />
-                            <span className="text-[10px] font-medium uppercase tracking-wide text-[#9CA3AF]">
+                            <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
                               Upload
                             </span>
-                            <span className="text-[11px] text-[#6B7280]">Tap to attach</span>
+                            <span className="text-[11px] text-slate-500">Tap to attach</span>
                           </button>
                         )}
 
@@ -2016,7 +2491,7 @@ function EmployeOnboardingPageContent() {
                             {isPdfFile(file) ? (
                               <div className="flex flex-col items-center gap-2 p-6 text-center">
                                 <FileText className="h-14 w-14 text-[#008CD3]" aria-hidden />
-                                <span className="text-xs font-medium text-[#1F2937]">PDF</span>
+                                <span className="text-xs font-medium text-slate-900">PDF</span>
                                 <span className="truncate px-2 text-[10px] text-slate-500">
                                   {file.name}
                                 </span>
@@ -2029,7 +2504,7 @@ function EmployeOnboardingPageContent() {
                                 className="h-full w-full object-contain"
                               />
                             )}
-                            <span className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full bg-[#1F2937]/80 px-2 py-1 text-[10px] font-semibold text-white opacity-0 transition group-hover:opacity-100">
+                            <span className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full bg-slate-900/80 px-2 py-1 text-[10px] font-semibold text-white opacity-0 transition group-hover:opacity-100">
                               <Maximize2 className="h-3 w-3" aria-hidden />
                               Enlarge
                             </span>
@@ -2113,12 +2588,12 @@ function EmployeOnboardingPageContent() {
           onClick={() => setPreviewModalField(null)}
         >
           <div
-            className="relative max-h-[92vh] w-full max-w-4xl overflow-hidden rounded-t-xl border border-[#E4E7EC] bg-white shadow-xl sm:rounded-lg"
+            className="relative max-h-[92vh] w-full max-w-4xl overflow-hidden rounded-t-xl border border-slate-200 bg-white shadow-xl sm:rounded-lg"
             onClick={(ev) => ev.stopPropagation()}
           >
-            <div className="flex items-start justify-between gap-3 border-b border-[#E4E7EC] px-3 py-2.5 sm:px-4">
+            <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-3 py-2.5 sm:px-4">
               <div>
-                <h3 id="doc-preview-title" className="text-sm font-bold text-[#1F2937]">
+                <h3 id="doc-preview-title" className="text-sm font-bold text-slate-900">
                   {ONBOARDING_DOC_SLOTS.find((s) => s.field === previewModalField)?.label ??
                     "Preview"}
                 </h3>
@@ -2127,7 +2602,7 @@ function EmployeOnboardingPageContent() {
               <div className="flex shrink-0 gap-2">
                 <button
                   type="button"
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-[#1F2937] hover:bg-slate-50"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-900 hover:bg-slate-50"
                   onClick={() => docInputRefs.current[previewModalField]?.click()}
                 >
                   <RefreshCw className="h-3.5 w-3.5" aria-hidden />
@@ -2135,7 +2610,7 @@ function EmployeOnboardingPageContent() {
                 </button>
                 <button
                   type="button"
-                  className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-[#1F2937]"
+                  className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
                   onClick={() => setPreviewModalField(null)}
                   aria-label="Close preview"
                 >
@@ -2176,7 +2651,7 @@ function EmployeOnboardingPageContent() {
               <h2 className={stepTitleCls()}>Employee address</h2>
               <p className={stepDescCls()}>
                 Permanent and current address for{" "}
-                <span className="font-medium text-[#374151]">{createdEmployeeName}</span> (step&nbsp;7
+                <span className="font-medium text-slate-700">{createdEmployeeName}</span> (step&nbsp;7
                 of&nbsp;7). Optional — skip if you&apos;ll capture this later.
               </p>
             </div>
@@ -2203,7 +2678,7 @@ function EmployeOnboardingPageContent() {
               disabled={addressSubmitting}
             />
 
-            <label className="flex items-center gap-2 rounded-lg border border-[#E4E7EC] bg-white px-3 py-2.5 text-[13px] font-medium text-[#1F2937]">
+            <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-[13px] font-medium text-slate-900">
               <input
                 type="checkbox"
                 checked={currentSameAsPermanent}
@@ -2215,7 +2690,7 @@ function EmployeOnboardingPageContent() {
                   }
                 }}
                 disabled={addressSubmitting}
-                className="h-4 w-4 rounded border-[#E4E7EC] text-[#008CD3] focus:ring-[#008CD3]/30"
+                className="h-4 w-4 rounded border-slate-200 text-[#008CD3] focus:ring-[#008CD3]/30"
               />
               Current address is same as permanent address
             </label>
@@ -2268,7 +2743,8 @@ function EmployeOnboardingPageContent() {
           </form>
         </div>
       )}
-      </div>
+
+      {journeyPreviewModal}
     </div>
   );
 }
