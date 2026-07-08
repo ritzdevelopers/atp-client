@@ -1,13 +1,17 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useParams, useRouter } from "next/navigation";
 import { LayoutGrid, LogOut } from "lucide-react";
 import HeaderFeatureSearch from "@/components/portal-dashboard/Layout/HeaderFeatureSearch";
 import { useManagementShell } from "@/components/portal-dashboard/Layout/ManagementShellContext";
 
 function Header() {
   const router = useRouter();
+  const params = useParams();
+  const orgId = String(params?.org_id ?? "");
+  const homeHref = orgId ? `/dashboard/${orgId}/home` : "/";
   const { appsPanelOpen, toggleAppsPanel } = useManagementShell();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
@@ -39,13 +43,17 @@ function Header() {
             <LayoutGrid className="h-[18px] w-[18px]" aria-hidden />
           </button>
 
-          <div className="flex min-h-0 min-w-0 shrink-0 items-center md:max-w-[220px] lg:max-w-[260px]">
+          <Link
+            href={homeHref}
+            className="flex min-h-0 min-w-0 shrink-0 cursor-pointer items-center rounded-lg transition-opacity hover:opacity-80 md:max-w-[220px] lg:max-w-[260px]"
+            aria-label="Go to home"
+          >
             <img
               src="/portal/layout/logo.png"
               alt="Company"
               className="h-8 w-auto max-w-[min(160px,32vw)] shrink-0 object-contain object-left sm:h-9"
             />
-          </div>
+          </Link>
 
           <HeaderFeatureSearch />
 

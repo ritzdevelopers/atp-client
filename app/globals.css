@@ -139,6 +139,37 @@
   animation: apps-panel-enter 0.28s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
+@keyframes apps-subpanel-enter {
+  from {
+    opacity: 0;
+    transform: translateX(-10px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+.apps-subpanel-enter {
+  animation: apps-subpanel-enter 0.22s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes apps-subitem-enter {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.apps-subitem-enter {
+  animation: apps-subitem-enter 0.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  opacity: 0;
+}
+
 @keyframes hero-rise {
   from {
     opacity: 0;
@@ -230,6 +261,8 @@
   .badge-pulse-dot,
   .timer-pulse,
   .apps-panel-enter,
+  .apps-subpanel-enter,
+  .apps-subitem-enter,
   .hero-rise,
   .fav-card-enter,
   .feature-child-card {

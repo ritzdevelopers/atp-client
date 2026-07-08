@@ -48,6 +48,71 @@ const CARD_TONES = [
   "bg-[#E8EAF6] border-[#C5CAE9] text-[#3949AB]",
 ];
 
+const DRAG_SCROLL_CLASS =
+  "cursor-grab select-none active:cursor-grabbing [touch-action:pan-y]";
+
+function useDragToScroll(ref: RefObject<HTMLDivElement | null>) {
+  const drag = useRef({
+    active: false,
+    startX: 0,
+    scrollLeft: 0,
+    moved: false,
+  });
+
+  const stopDrag = useCallback(() => {
+    drag.current.active = false;
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
+  }, []);
+
+  useEffect(() => {
+    const onMove = (e: PointerEvent) => {
+      if (!drag.current.active) return;
+      const el = ref.current;
+      if (!el) return;
+      const dx = e.clientX - drag.current.startX;
+      if (Math.abs(dx) > 4) drag.current.moved = true;
+      el.scrollLeft = drag.current.scrollLeft - dx;
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", stopDrag);
+    window.addEventListener("pointercancel", stopDrag);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", stopDrag);
+      window.removeEventListener("pointercancel", stopDrag);
+    };
+  }, [ref, stopDrag]);
+
+  const onPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (e.button !== 0) return;
+      const el = ref.current;
+      if (!el) return;
+      drag.current = {
+        active: true,
+        startX: e.clientX,
+        scrollLeft: el.scrollLeft,
+        moved: false,
+      };
+      document.body.style.cursor = "grabbing";
+      document.body.style.userSelect = "none";
+    },
+    [ref],
+  );
+
+  const onClickCapture = useCallback((e: React.MouseEvent) => {
+    if (drag.current.moved) {
+      e.preventDefault();
+      e.stopPropagation();
+      drag.current.moved = false;
+    }
+  }, []);
+
+  return { onPointerDown, onClickCapture };
+}
+
 function badgeForTile(tileId: string, handoverPendingCount: number): number | null {
   return tileId === "asset-handover" && handoverPendingCount > 0
     ? handoverPendingCount
@@ -115,6 +180,7 @@ function ModuleToolsStrip({
 }) {
   const internalRef = useRef<HTMLDivElement>(null);
   const scrollRef = trackRef ?? internalRef;
+  const dragScroll = useDragToScroll(scrollRef);
   const Icon = group.icon;
   const tone = CARD_TONES[accentIndex % CARD_TONES.length];
 
@@ -158,7 +224,10 @@ function ModuleToolsStrip({
 
       <div
         ref={scrollRef}
-        className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2 pt-0.5 [scrollbar-width:thin]"
+        className={`flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2 pt-0.5 [scrollbar-width:thin] ${DRAG_SCROLL_CLASS}`}
+        onPointerDown={dragScroll.onPointerDown}
+        onClickCapture={dragScroll.onClickCapture}
+        title="Drag to scroll tools"
       >
         {group.items.map((tile, index) => (
           <FavouriteToolCard
@@ -187,6 +256,7 @@ export default function HomeFeaturesSlider({
   );
   const tabsRef = useRef<HTMLDivElement>(null);
   const toolsTrackRef = useRef<HTMLDivElement>(null);
+  const tabsDragScroll = useDragToScroll(tabsRef);
   const [activeGroupId, setActiveGroupId] = useState<string | null>(DEFAULT_HOME_MODULE_ID);
   const [canScrollTabsLeft, setCanScrollTabsLeft] = useState(false);
   const [canScrollTabsRight, setCanScrollTabsRight] = useState(false);
@@ -291,7 +361,7 @@ export default function HomeFeaturesSlider({
               Workspace modules
             </h2>
             <p className="mt-1 text-[14px] text-[#5C6978] sm:text-[15px]">
-              {orderedGroups.length} modules · {tiles.length} tools available · pick a module to explore
+              {orderedGroups.length} modules · {tiles.length} tools available · pick a module or drag to browse
             </p>
           </div>
         </div>
@@ -319,9 +389,12 @@ export default function HomeFeaturesSlider({
 
       <div
         ref={tabsRef}
-        className="mb-6 flex gap-3 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className={`mb-6 flex gap-3 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${DRAG_SCROLL_CLASS}`}
         role="tablist"
         aria-label="Feature modules"
+        onPointerDown={tabsDragScroll.onPointerDown}
+        onClickCapture={tabsDragScroll.onClickCapture}
+        title="Drag to scroll modules"
       >
         {orderedGroups.map((group, index) => {
           const Icon = group.icon;
@@ -369,7 +442,7 @@ export default function HomeFeaturesSlider({
       <div className="rounded-2xl border border-[#E4E7EC]/90 bg-white px-5 py-6 shadow-[0_4px_24px_rgba(15,23,42,0.05)] sm:px-7 sm:py-7">
         <div className="mb-5 flex items-center justify-between gap-3">
           <p className="text-[13px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
-            Quick access
+            Quick access · drag to scroll
           </p>
           <div className="flex items-center gap-2">
             <button

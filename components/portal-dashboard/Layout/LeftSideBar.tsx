@@ -11,7 +11,7 @@ import { isCurrentUserOrgAdmin, readRoleNameFromToken } from "@/lib/orgAdminAcce
 import { useManagementDashboardContext } from "@/components/portal-dashboard/Layout/ManagementDashboardContext";
 import { useManagementShellOptional } from "@/components/portal-dashboard/Layout/ManagementShellContext";
 import { useRouter, useParams, usePathname } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { BiSolidUserPlus, BiTask } from "react-icons/bi";
 import {
@@ -36,6 +36,114 @@ import {
 
 /** Desktop (lg+) nav icons — mobile keeps `NavItem.icon` unchanged. */
 const LG_ICON = "shrink-0 text-[17px] leading-none";
+
+type NavIconTheme = {
+  bg: string;
+  text: string;
+  activeBg: string;
+  activeRing: string;
+};
+
+const NAV_ICON_THEMES: Record<string, NavIconTheme> = {
+  home: {
+    bg: "bg-sky-50",
+    text: "text-sky-600",
+    activeBg: "bg-sky-100",
+    activeRing: "ring-sky-200/80",
+  },
+  "manage-organization-information": {
+    bg: "bg-indigo-50",
+    text: "text-indigo-600",
+    activeBg: "bg-indigo-100",
+    activeRing: "ring-indigo-200/80",
+  },
+  "employee-management": {
+    bg: "bg-violet-50",
+    text: "text-violet-600",
+    activeBg: "bg-violet-100",
+    activeRing: "ring-violet-200/80",
+  },
+  "employees-roles-management": {
+    bg: "bg-amber-50",
+    text: "text-amber-600",
+    activeBg: "bg-amber-100",
+    activeRing: "ring-amber-200/80",
+  },
+  "employees-features-management": {
+    bg: "bg-rose-50",
+    text: "text-rose-600",
+    activeBg: "bg-rose-100",
+    activeRing: "ring-rose-200/80",
+  },
+  "dashboard-management": {
+    bg: "bg-cyan-50",
+    text: "text-cyan-600",
+    activeBg: "bg-cyan-100",
+    activeRing: "ring-cyan-200/80",
+  },
+  "company-ip-addresses-management": {
+    bg: "bg-teal-50",
+    text: "text-teal-600",
+    activeBg: "bg-teal-100",
+    activeRing: "ring-teal-200/80",
+  },
+  "company-shift-management": {
+    bg: "bg-blue-50",
+    text: "text-blue-600",
+    activeBg: "bg-blue-100",
+    activeRing: "ring-blue-200/80",
+  },
+  "company-holiday-management": {
+    bg: "bg-orange-50",
+    text: "text-orange-600",
+    activeBg: "bg-orange-100",
+    activeRing: "ring-orange-200/80",
+  },
+  "company-attendance-management": {
+    bg: "bg-emerald-50",
+    text: "text-emerald-600",
+    activeBg: "bg-emerald-100",
+    activeRing: "ring-emerald-200/80",
+  },
+  "company-leave-management": {
+    bg: "bg-fuchsia-50",
+    text: "text-fuchsia-600",
+    activeBg: "bg-fuchsia-100",
+    activeRing: "ring-fuchsia-200/80",
+  },
+  "payroll-management": {
+    bg: "bg-lime-50",
+    text: "text-lime-700",
+    activeBg: "bg-lime-100",
+    activeRing: "ring-lime-200/80",
+  },
+  "task-management": {
+    bg: "bg-purple-50",
+    text: "text-purple-600",
+    activeBg: "bg-purple-100",
+    activeRing: "ring-purple-200/80",
+  },
+};
+
+const DEFAULT_NAV_ICON_THEME: NavIconTheme = {
+  bg: "bg-slate-50",
+  text: "text-slate-600",
+  activeBg: "bg-slate-100",
+  activeRing: "ring-slate-200/80",
+};
+
+function navIconTheme(id: string): NavIconTheme {
+  return NAV_ICON_THEMES[id] ?? DEFAULT_NAV_ICON_THEME;
+}
+
+function navIconBadgeCls(id: string, active: boolean): string {
+  const theme = navIconTheme(id);
+  return `flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all duration-200 ${
+    active
+      ? `${theme.activeBg} ${theme.text} ring-2 ${theme.activeRing}`
+      : `${theme.bg} ${theme.text} group-hover:scale-105`
+  }`;
+}
 
 function desktopNavIcon(
   id: string,
@@ -66,6 +174,8 @@ function desktopNavIcon(
       return <MdOutlineEventNote className={LG_ICON} aria-hidden />;
     case "payroll-management":
       return <MdPayments className={LG_ICON} aria-hidden />;
+    case "task-management":
+      return <BiTask className={LG_ICON} aria-hidden />;
     default:
       return fallback;
   }
@@ -527,6 +637,49 @@ function LeftSideBar({
   const [activeSub, setActiveSub] = useState("employee");
   const [mobileFullMenuOpen, setMobileFullMenuOpen] = useState(false);
   const [mobileSubParent, setMobileSubParent] = useState<NavItem | null>(null);
+  const [hoveredNavId, setHoveredNavId] = useState<string | null>(null);
+  const hoverCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearHoverCloseTimer = useCallback(() => {
+    if (hoverCloseTimerRef.current != null) {
+      clearTimeout(hoverCloseTimerRef.current);
+      hoverCloseTimerRef.current = null;
+    }
+  }, []);
+
+  const openHoverPanel = useCallback(
+    (itemId: string) => {
+      clearHoverCloseTimer();
+      setHoveredNavId(itemId);
+    },
+    [clearHoverCloseTimer],
+  );
+
+  const scheduleHoverPanelClose = useCallback(() => {
+    clearHoverCloseTimer();
+    hoverCloseTimerRef.current = setTimeout(() => {
+      setHoveredNavId(null);
+      hoverCloseTimerRef.current = null;
+    }, 180);
+  }, [clearHoverCloseTimer]);
+
+  useEffect(() => {
+    return () => {
+      clearHoverCloseTimer();
+    };
+  }, [clearHoverCloseTimer]);
+
+  useEffect(() => {
+    if (!appsPanelOpen) {
+      setHoveredNavId(null);
+      clearHoverCloseTimer();
+      return;
+    }
+    const active = visibleNavItems.find((item) => item.id === activeMain);
+    if (active && active.children.length > 0) {
+      setHoveredNavId(active.id);
+    }
+  }, [appsPanelOpen, activeMain, visibleNavItems, clearHoverCloseTimer]);
 
   type BottomSlot = { kind: "nav"; item: NavItem } | { kind: "my-attendance" };
 
@@ -648,13 +801,17 @@ function LeftSideBar({
     return () => window.clearTimeout(t);
   }, [visibleNavItems, activeMain, activeSub]);
 
-  const activeItem = visibleNavItems.find((item) => item.id === activeMain);
-  const subItems = activeItem?.children || [];
+  const hoveredItem = hoveredNavId
+    ? visibleNavItems.find((item) => item.id === hoveredNavId)
+    : null;
+  const flyoutSubItems = hoveredItem?.children ?? [];
 
   const handleMainClick = (item: NavItem) => {
     setActiveMain(item.id);
     if (item.children.length > 0) {
       setActiveSub(item.children[0].id);
+      openHoverPanel(item.id);
+      return;
     }
     if (item.path) {
       router.push(item.path);
@@ -761,7 +918,7 @@ function LeftSideBar({
       {/* Desktop (lg+): floating "Your Apps" panel — toggled from header menu */}
       <div className="pointer-events-none hidden lg:block" aria-hidden={!appsPanelOpen}>
         <div
-          className={`fixed inset-0 z-[10015] bg-[#1F2937]/20 backdrop-blur-[2px] transition-opacity duration-300 ${
+          className={`fixed inset-0 z-[10015] bg-[#1F2937]/25 backdrop-blur-[3px] transition-opacity duration-300 ${
             appsPanelOpen
               ? "pointer-events-auto opacity-100"
               : "pointer-events-none opacity-0"
@@ -769,122 +926,193 @@ function LeftSideBar({
           onClick={() => closeAppsPanel?.()}
           aria-hidden={!appsPanelOpen}
         />
-        <aside
-          className={`fixed left-4 top-[calc(3.75rem+0.75rem)] z-[10020] flex max-h-[min(78vh,720px)] w-[min(19rem,88vw)] flex-col overflow-hidden rounded-2xl border border-[#E4E7EC] bg-white shadow-[0_20px_60px_rgba(15,23,42,0.18)] transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] ${
+        <div
+          className={`fixed left-4 top-[calc(3.75rem+0.75rem)] z-[10020] flex items-start gap-2 transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] ${
             appsPanelOpen
               ? "pointer-events-auto translate-x-0 opacity-100"
               : "pointer-events-none -translate-x-4 opacity-0"
-          } ${appsPanelOpen ? "apps-panel-enter" : ""}`}
-          role="dialog"
-          aria-modal={appsPanelOpen}
-          aria-label="Your apps"
-          aria-hidden={!appsPanelOpen}
+          }`}
+          onMouseLeave={scheduleHoverPanelClose}
         >
-          <div className="border-b border-[#E4E7EC] px-4 py-3.5">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#9CA3AF]">
-              Your Apps
-            </p>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-1 [scrollbar-width:thin]">
-            {visibleNavItems.length === 0 ? (
-              <p className="px-4 py-6 text-sm text-[#6B7280]">
-                No features available for your role.
+          <aside
+            className={`flex max-h-[min(78vh,720px)] w-[min(19rem,88vw)] flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_24px_64px_rgba(15,23,42,0.14)] ${
+              appsPanelOpen ? "apps-panel-enter" : ""
+            }`}
+            role="dialog"
+            aria-modal={appsPanelOpen}
+            aria-label="Your apps"
+            aria-hidden={!appsPanelOpen}
+          >
+            <div className="border-b border-slate-100 bg-gradient-to-r from-[#F8FAFC] via-white to-[#F0F9FF]/40 px-4 py-3.5">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400">
+                Your Apps
               </p>
-            ) : (
-              visibleNavItems.map((item) => {
-                const itemActive =
-                  activeMain === item.id ||
-                  Boolean(item.path && pathname?.startsWith(item.path)) ||
-                  item.children.some(
-                    (c) => c.path && pathname?.startsWith(c.path),
+              <p className="mt-0.5 text-[13px] font-medium text-slate-600">
+                Hover a feature to see sub-pages
+              </p>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-2 [scrollbar-width:thin]">
+              {visibleNavItems.length === 0 ? (
+                <p className="px-3 py-6 text-sm text-slate-500">
+                  No features available for your role.
+                </p>
+              ) : (
+                visibleNavItems.map((item) => {
+                  const itemActive =
+                    activeMain === item.id ||
+                    Boolean(item.path && pathname?.startsWith(item.path)) ||
+                    item.children.some(
+                      (c) => c.path && pathname?.startsWith(c.path),
+                    );
+                  const isHovered = hoveredNavId === item.id;
+                  const hasChildren = item.children.length > 0;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => handleMainClick(item)}
+                      onMouseEnter={() => {
+                        if (hasChildren) openHoverPanel(item.id);
+                        else {
+                          clearHoverCloseTimer();
+                          setHoveredNavId(null);
+                        }
+                      }}
+                      onFocus={() => {
+                        if (hasChildren) openHoverPanel(item.id);
+                      }}
+                      className={`group relative mb-0.5 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[14px] font-medium transition-all duration-200 ${
+                        itemActive || isHovered
+                          ? "bg-[#E8F4FB]/90 text-[#0077B6] shadow-[inset_3px_0_0_0_#008CD3]"
+                          : "text-slate-700 hover:bg-slate-50 hover:text-[#008CD3]"
+                      }`}
+                    >
+                      <span className={navIconBadgeCls(item.id, itemActive || isHovered)}>
+                        {desktopNavIcon(item.id, item.icon)}
+                      </span>
+                      <span className="min-w-0 flex-1 leading-snug">{item.name}</span>
+                      {hasChildren ? (
+                        <MdChevronRight
+                          className={`shrink-0 text-lg transition-all duration-200 ${
+                            isHovered
+                              ? "translate-x-0.5 text-[#008CD3]"
+                              : "text-slate-400 group-hover:text-[#008CD3]"
+                          }`}
+                          aria-hidden
+                        />
+                      ) : null}
+                    </button>
                   );
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => handleMainClick(item)}
-                    className={`mx-2 flex w-[calc(100%-1rem)] items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[14px] font-medium transition-colors duration-150 ${
-                      itemActive
-                        ? "bg-[#E8F4FB] text-[#008CD3]"
-                        : "text-[#374151] hover:bg-[#F9FAFB] hover:text-[#008CD3]"
-                    }`}
-                  >
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#F9FAFB] text-[18px] text-[#6B7280]">
-                      {desktopNavIcon(item.id, item.icon)}
-                    </span>
-                    <span className="min-w-0 flex-1 leading-snug">{item.name}</span>
-                    {item.children.length > 0 ? (
-                      <MdChevronRight className="shrink-0 text-lg text-[#9CA3AF]" aria-hidden />
-                    ) : null}
-                  </button>
-                );
-              })
-            )}
+                })
+              )}
 
-            {!isAdmin ? (
+              <div className="my-2 border-t border-slate-100" />
+
+              {!isAdmin ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    router.push(`${base}/my-attendance-history`);
+                    closeAppsPanel?.();
+                  }}
+                  onMouseEnter={() => {
+                    clearHoverCloseTimer();
+                    setHoveredNavId(null);
+                  }}
+                  className={`group mb-0.5 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[14px] font-medium transition-all duration-200 ${
+                    myHistoryActive
+                      ? "bg-[#E8F4FB]/90 text-[#0077B6] shadow-[inset_3px_0_0_0_#008CD3]"
+                      : "text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  <span className={navIconBadgeCls("company-attendance-management", myHistoryActive)}>
+                    <MdHistory className={LG_ICON} aria-hidden />
+                  </span>
+                  My attendance
+                </button>
+              ) : null}
+
               <button
                 type="button"
                 onClick={() => {
-                  router.push(`${base}/my-attendance-history`);
+                  router.push(`${base}/sync-connection`);
                   closeAppsPanel?.();
                 }}
-                className={`mx-2 mt-1 flex w-[calc(100%-1rem)] items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[14px] font-medium transition-colors ${
-                  myHistoryActive
-                    ? "bg-[#E8F4FB] text-[#008CD3]"
-                    : "text-[#374151] hover:bg-[#F9FAFB]"
+                onMouseEnter={() => {
+                  clearHoverCloseTimer();
+                  setHoveredNavId(null);
+                }}
+                className={`group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[14px] font-medium transition-all duration-200 ${
+                  chatActive
+                    ? "bg-[#E8F4FB]/90 text-[#0077B6] shadow-[inset_3px_0_0_0_#008CD3]"
+                    : "text-slate-700 hover:bg-slate-50"
                 }`}
               >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#F9FAFB] text-[18px]">
-                  <MdHistory className={LG_ICON} aria-hidden />
+                <span className={navIconBadgeCls("dashboard-management", chatActive)}>
+                  <MdOutlineChat className={LG_ICON} aria-hidden />
                 </span>
-                My attendance
+                Team chat
               </button>
-            ) : null}
-
-            <button
-              type="button"
-              onClick={() => {
-                router.push(`${base}/sync-connection`);
-                closeAppsPanel?.();
-              }}
-              className={`mx-2 flex w-[calc(100%-1rem)] items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[14px] font-medium transition-colors ${
-                chatActive
-                  ? "bg-[#E8F4FB] text-[#008CD3]"
-                  : "text-[#374151] hover:bg-[#F9FAFB]"
-              }`}
-            >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#F9FAFB] text-[18px]">
-                <MdOutlineChat className={LG_ICON} aria-hidden />
-              </span>
-              Team chat
-            </button>
-          </div>
-
-          {subItems.length > 0 && activeItem ? (
-            <div className="border-t border-[#E4E7EC] bg-[#F9FAFB] px-2 py-2">
-              <p className="truncate px-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
-                {activeItem.name}
-              </p>
-              {subItems.map((sub) => {
-                const isSubActive = activeSub === sub.id;
-                return (
-                  <button
-                    key={sub.id}
-                    type="button"
-                    onClick={() => handleSubClick(sub)}
-                    className={`w-full rounded-lg px-2.5 py-2 text-left text-[12px] font-medium transition-colors ${
-                      isSubActive
-                        ? "bg-white text-[#008CD3] shadow-sm"
-                        : "text-[#374151] hover:bg-white hover:text-[#008CD3]"
-                    }`}
-                  >
-                    {sub.name}
-                  </button>
-                );
-              })}
             </div>
+          </aside>
+
+          {flyoutSubItems.length > 0 && hoveredItem ? (
+            <aside
+              className="apps-subpanel-enter flex max-h-[min(78vh,720px)] w-[min(17rem,72vw)] flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_20px_56px_rgba(15,23,42,0.12)]"
+              role="navigation"
+              aria-label={`${hoveredItem.name} sub-pages`}
+              onMouseEnter={() => openHoverPanel(hoveredItem.id)}
+              onMouseLeave={scheduleHoverPanelClose}
+            >
+              <div
+                className={`border-b border-slate-100 px-4 py-3.5 ${navIconTheme(hoveredItem.id).bg}`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <span className={navIconBadgeCls(hoveredItem.id, true)}>
+                    {desktopNavIcon(hoveredItem.id, hoveredItem.icon)}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-[13px] font-semibold text-slate-900">
+                      {hoveredItem.name}
+                    </p>
+                    <p className="text-[11px] text-slate-500">
+                      {flyoutSubItems.length} sub-page
+                      {flyoutSubItems.length === 1 ? "" : "s"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 [scrollbar-width:thin]">
+                {flyoutSubItems.map((sub, index) => {
+                  const isSubActive = Boolean(
+                    sub.path && pathname?.startsWith(sub.path),
+                  );
+                  return (
+                    <button
+                      key={sub.id}
+                      type="button"
+                      onClick={() => handleSubClick(sub)}
+                      className={`apps-subitem-enter mb-0.5 flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-[13px] font-medium transition-all duration-200 ${
+                        isSubActive
+                          ? "bg-[#E8F4FB] text-[#0077B6] shadow-sm"
+                          : "text-slate-700 hover:bg-slate-50 hover:pl-4 hover:text-[#008CD3]"
+                      }`}
+                      style={{ animationDelay: `${index * 35}ms` }}
+                    >
+                      <span
+                        className={`h-1.5 w-1.5 shrink-0 rounded-full transition-colors ${
+                          isSubActive ? "bg-[#008CD3]" : "bg-slate-300"
+                        }`}
+                        aria-hidden
+                      />
+                      <span className="min-w-0 leading-snug">{sub.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </aside>
           ) : null}
-        </aside>
+        </div>
       </div>
 
       {/* Bottom tab bar (< lg): quick tabs + Menu */}
@@ -991,10 +1219,13 @@ function LeftSideBar({
           aria-label="Navigation menu"
           aria-hidden={!mobileFullMenuOpen}
         >
-          <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-            <span className="text-sm font-semibold text-slate-900">
-              Your Apps
-            </span>
+          <div className="flex items-center justify-between border-b border-slate-200 bg-gradient-to-r from-[#F8FAFC] to-white px-4 py-3">
+            <div>
+              <span className="text-sm font-semibold text-slate-900">
+                Your Apps
+              </span>
+              <p className="text-[11px] text-slate-500">Tap a feature to open</p>
+            </div>
             <button
               type="button"
               onClick={() => closeMobileDrawers()}
@@ -1022,13 +1253,15 @@ function LeftSideBar({
                     key={item.id}
                     type="button"
                     onClick={() => selectMobileNavItem(item)}
-                    className={`flex w-full items-center gap-3 border-b border-slate-200 px-4 py-3 text-left text-sm font-medium transition-colors duration-150 ${
+                    className={`flex w-full items-center gap-3 border-b border-slate-100 px-4 py-3 text-left text-sm font-medium transition-colors duration-150 ${
                       itemActive
-                        ? "bg-amber-50/80 text-amber-900"
+                        ? "bg-[#E8F4FB]/80 text-[#0077B6]"
                         : "text-slate-800 active:bg-slate-100"
                     }`}
                   >
-                    <span className="text-xl text-slate-600">{item.icon}</span>
+                    <span className={navIconBadgeCls(item.id, itemActive)}>
+                      {desktopNavIcon(item.id, item.icon)}
+                    </span>
                     <span className="min-w-0 flex-1 leading-snug">
                       {item.name}
                     </span>
@@ -1099,10 +1332,17 @@ function LeftSideBar({
           }
           aria-hidden={!mobileSubParent}
         >
-          <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-3 py-3">
-            <span className="min-w-0 truncate text-sm font-semibold text-slate-900">
-              {mobileSubParent?.name ?? ""}
-            </span>
+          <div className="flex items-center justify-between gap-2 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white px-3 py-3">
+            <div className="flex min-w-0 items-center gap-2">
+              {mobileSubParent ? (
+                <span className={navIconBadgeCls(mobileSubParent.id, true)}>
+                  {desktopNavIcon(mobileSubParent.id, mobileSubParent.icon)}
+                </span>
+              ) : null}
+              <span className="min-w-0 truncate text-sm font-semibold text-slate-900">
+                {mobileSubParent?.name ?? ""}
+              </span>
+            </div>
             <button
               type="button"
               onClick={() => setMobileSubParent(null)}
@@ -1125,9 +1365,9 @@ function LeftSideBar({
                     handleSubClick(sub);
                     setMobileSubParent(null);
                   }}
-                  className={`w-full border-b border-slate-200 px-4 py-3 text-left text-sm font-medium transition-colors duration-150 ${
+                  className={`w-full border-b border-slate-100 px-4 py-3 text-left text-sm font-medium transition-all duration-200 ${
                     subActive
-                      ? "bg-slate-100 text-amber-900"
+                      ? "bg-[#E8F4FB] text-[#0077B6]"
                       : "text-slate-800 active:bg-slate-50"
                   }`}
                 >
