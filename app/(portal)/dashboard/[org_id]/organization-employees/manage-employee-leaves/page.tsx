@@ -37,11 +37,24 @@ import {
 } from "@/services/employeeLeaveManagement";
 import {
   fetchAllRegularizationRequests,
+  fetchMyRegularizationHrReviews,
   fetchRegularizationRequestById,
+  updateRegularizationHrReview,
   updateRegularizationRequest,
+  type RegularizationHrReviewRow,
   type RegularizationManagerRow,
   type RegularizationRequestType,
 } from "@/services/regularization";
+import { useManagementDashboardContext } from "@/components/portal-dashboard/Layout/ManagementDashboardContext";
+import {
+  countPendingRegularizationItems,
+  isHrOrAdminRole,
+  isRegularizationTabItemActionable,
+  mergeRegularizationQueues,
+  regularizationDisplayStatus,
+  type RegularizationQueueKind,
+  type RegularizationTabItem,
+} from "@/lib/regularizationQueue";
 import {
   fetchManagerCompOffById,
   fetchRMAllCompOffs,
@@ -101,11 +114,13 @@ type AttFilters = {
 };
 
 type RegFilters = {
-  reg_status: "" | "pending" | "approved" | "rejected";
+  reg_status: "" | "pending" | "hr_pending" | "approved" | "rejected";
   request_type: "" | RegularizationRequestType;
   action_date: string;
   is_ascending: "ASC" | "DESC";
 };
+
+type RegModalAction = "approved" | "rejected" | "hr_pending";
 
 type CompFilters = {
   query_status: "" | "pending" | "approved" | "rejected";
@@ -196,6 +211,8 @@ function statusBadgeClass(status: string): string {
     return "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200/60";
   if (s === "rejected")
     return "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold bg-rose-50 text-rose-700 ring-1 ring-rose-200/60";
+  if (s === "hr_pending")
+    return "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold bg-violet-50 text-violet-700 ring-1 ring-violet-200/60";
   return "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold bg-amber-50 text-amber-700 ring-1 ring-amber-200/60";
 }
 
@@ -269,6 +286,8 @@ function ManageEmployeeLeavesPageContent() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const dashboardCtx = useManagementDashboardContext();
+  const viewerIsHrOrAdmin = isHrOrAdminRole(dashboardCtx?.user?.user_role_name);
   const orgId = String(params?.org_id ?? "");
   const initialAttFilterKey = stableFilterKey(EMPTY_ATT_FILTERS);
   const cachedAttendance = orgId
@@ -325,17 +344,22 @@ function ManageEmployeeLeavesPageContent() {
   const [appliedRegFilters, setAppliedRegFilters] = useState<RegFilters>({
     ...EMPTY_REG_FILTERS,
   });
-  const [regRows, setRegRows] = useState<RegularizationManagerRow[]>([]);
+  const [regTabItems, setRegTabItems] = useState<RegularizationTabItem[]>([]);
   const [regLoading, setRegLoading] = useState(false);
   const [regRefreshing, setRegRefreshing] = useState(false);
   const [regError, setRegError] = useState<string | null>(null);
   const [regModal, setRegModal] = useState<{
     id: number;
-    action: "approved" | "rejected";
+    queue: RegularizationQueueKind;
+    action: RegModalAction;
   } | null>(null);
   const [regModalReason, setRegModalReason] = useState("");
+  const [regModalHrId, setRegModalHrId] = useState("");
+  const [hrAssignees, setHrAssignees] = useState<OrgUserRow[]>([]);
   const [regModalSubmitting, setRegModalSubmitting] = useState(false);
   const [regDetail, setRegDetail] = useState<RegularizationManagerRow | null>(null);
+  const [regDetailQueue, setRegDetailQueue] =
+    useState<RegularizationQueueKind>("manager");
   const [regDetailLoading, setRegDetailLoading] = useState(false);
 
   const [compFilters, setCompFilters] = useState<CompFilters>({ ...EMPTY_COMP_FILTERS });
@@ -518,15 +542,67 @@ function ManageEmployeeLeavesPageContent() {
       setRegError(null);
 
       try {
-        const rows = await fetchAllRegularizationRequests(token, orgIdNum, {
-          reg_status: f.reg_status || undefined,
+        const managerFilters: {
+          reg_status?: RegFilters["reg_status"];
+          request_type?: RegularizationRequestType;
+          action_date?: string;
+          is_ascending: RegFilters["is_ascending"];
+        } = {
           request_type: f.request_type || undefined,
           action_date: f.action_date.trim() || undefined,
           is_ascending: f.is_ascending,
+        };
+
+        const hrFilters: {
+          hr_action?: "pending" | "approved" | "rejected";
+          reg_status?: RegFilters["reg_status"];
+          request_type?: RegularizationRequestType;
+          action_date?: string;
+          is_ascending: RegFilters["is_ascending"];
+        } = {
+          request_type: f.request_type || undefined,
+          action_date: f.action_date.trim() || undefined,
+          is_ascending: f.is_ascending,
+        };
+
+        if (f.reg_status === "pending") {
+          managerFilters.reg_status = "pending";
+          hrFilters.hr_action = "pending";
+          hrFilters.reg_status = "hr_pending";
+        } else if (f.reg_status === "hr_pending") {
+          managerFilters.reg_status = "hr_pending";
+          hrFilters.reg_status = "hr_pending";
+          hrFilters.hr_action = "pending";
+        } else if (f.reg_status === "approved" || f.reg_status === "rejected") {
+          managerFilters.reg_status = f.reg_status;
+          hrFilters.hr_action = f.reg_status;
+          hrFilters.reg_status = f.reg_status;
+        } else if (f.reg_status) {
+          managerFilters.reg_status = f.reg_status;
+          hrFilters.reg_status = f.reg_status;
+        }
+
+        const managerRows = await fetchAllRegularizationRequests(token, orgIdNum, {
+          reg_status: managerFilters.reg_status || undefined,
+          request_type: managerFilters.request_type,
+          action_date: managerFilters.action_date,
+          is_ascending: managerFilters.is_ascending,
         });
-        setRegRows(rows);
+
+        let hrRows: RegularizationHrReviewRow[] = [];
+        if (viewerIsHrOrAdmin) {
+          hrRows = await fetchMyRegularizationHrReviews(token, orgIdNum, {
+            hr_action: hrFilters.hr_action,
+            reg_status: hrFilters.reg_status || undefined,
+            request_type: hrFilters.request_type,
+            action_date: hrFilters.action_date,
+            is_ascending: hrFilters.is_ascending,
+          });
+        }
+
+        setRegTabItems(mergeRegularizationQueues(managerRows, hrRows));
       } catch (e) {
-        if (isManualRefresh) setRegRows([]);
+        if (isManualRefresh) setRegTabItems([]);
         setRegError(
           e instanceof Error ? e.message : "Could not load regularization requests.",
         );
@@ -535,7 +611,7 @@ function ManageEmployeeLeavesPageContent() {
         setRegRefreshing(false);
       }
     },
-    [orgId],
+    [orgId, viewerIsHrOrAdmin],
   );
 
   const loadCompOff = useCallback(
@@ -754,9 +830,37 @@ function ManageEmployeeLeavesPageContent() {
     }
   };
 
-  const openRegModal = (id: number, action: "approved" | "rejected") => {
-    setRegModal({ id, action });
+  const openRegModal = (
+    id: number,
+    action: RegModalAction,
+    queue: RegularizationQueueKind,
+  ) => {
+    setRegModal({ id, action, queue });
     setRegModalReason("");
+    setRegModalHrId("");
+    if (action === "hr_pending") {
+      void ensureHrAssignees();
+    }
+  };
+
+  const ensureHrAssignees = async () => {
+    if (hrAssignees.length > 0) return;
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    try {
+      const users = orgUsers.length > 0 ? orgUsers : await getAllOrgUsers(token);
+      const reviewers = users.filter((user) => {
+        const role = String(user.role_name ?? user.user_role_name ?? "")
+          .trim()
+          .toLowerCase();
+        if (role !== "hr" && role !== "admin") return false;
+        const uid = Number(user.id ?? (user as { user_id?: number | string }).user_id);
+        return Number.isInteger(uid) && uid > 0;
+      });
+      setHrAssignees(reviewers);
+    } catch {
+      /* optional list */
+    }
   };
 
   const submitRegModal = async () => {
@@ -777,20 +881,50 @@ function ManageEmployeeLeavesPageContent() {
       return;
     }
 
+    if (regModal.action === "hr_pending") {
+      const hrId = Number(regModalHrId);
+      if (!Number.isInteger(hrId) || hrId <= 0) {
+        setNotice({ type: "err", text: "Please select an HR reviewer." });
+        return;
+      }
+    }
+
     setRegModalSubmitting(true);
     setNotice(null);
     try {
-      await updateRegularizationRequest(token, orgIdNum, regModal.id, {
-        reg_status: regModal.action,
-        review_comment: reason || undefined,
-      });
-      setNotice({
-        type: "ok",
-        text:
-          regModal.action === "approved"
-            ? "Regularization request approved."
-            : "Regularization request rejected.",
-      });
+      if (regModal.queue === "hr") {
+        await updateRegularizationHrReview(token, orgIdNum, regModal.id, {
+          hr_action: regModal.action === "approved" ? "approved" : "rejected",
+          review_comment: reason || undefined,
+        });
+        setNotice({
+          type: "ok",
+          text:
+            regModal.action === "approved"
+              ? "Regularization request approved."
+              : "Regularization request rejected.",
+        });
+      } else if (regModal.action === "hr_pending") {
+        await updateRegularizationRequest(token, orgIdNum, regModal.id, {
+          reg_status: "hr_pending",
+          hr_id: Number(regModalHrId),
+          review_comment: reason || undefined,
+        });
+        setNotice({
+          type: "ok",
+          text: "Regularization request forwarded to HR for final approval.",
+        });
+      } else {
+        await updateRegularizationRequest(token, orgIdNum, regModal.id, {
+          reg_status: "rejected",
+          review_comment: reason,
+        });
+        setNotice({
+          type: "ok",
+          text: "Regularization request rejected.",
+        });
+      }
+
       setRegModal(null);
       if (regDetail?.id === regModal.id) {
         setRegDetail(null);
@@ -807,7 +941,45 @@ function ManageEmployeeLeavesPageContent() {
     }
   };
 
-  const openRegDetail = async (id: number) => {
+  const openRegDetail = async (item: RegularizationTabItem) => {
+    setRegDetailQueue(item.queue);
+    if (item.queue === "hr") {
+      setRegDetail(item.row as RegularizationManagerRow);
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setNotice({ type: "err", text: "Not signed in." });
+      return;
+    }
+    const orgIdNum = Number(orgId);
+    if (Number.isNaN(orgIdNum)) return;
+
+    setRegDetailLoading(true);
+    setRegDetail(null);
+    try {
+      const row = await fetchRegularizationRequestById(token, orgIdNum, item.row.id);
+      setRegDetail(row);
+    } catch (e) {
+      setNotice({
+        type: "err",
+        text:
+          e instanceof Error ? e.message : "Could not load regularization request.",
+      });
+    } finally {
+      setRegDetailLoading(false);
+    }
+  };
+
+  const openRegDetailById = async (id: number) => {
+    const found = regTabItems.find((item) => item.row.id === id);
+    if (found) {
+      await openRegDetail(found);
+      return;
+    }
+
+    setRegDetailQueue("manager");
     const token = localStorage.getItem("token");
     if (!token) {
       setNotice({ type: "err", text: "Not signed in." });
@@ -926,9 +1098,9 @@ function ManageEmployeeLeavesPageContent() {
     if (deepLinkHandledRef.current === key) return;
 
     if (tab === "regularization") {
-      if (mainTab !== "regularization") return;
+      if (mainTab !== "regularization" || regLoading) return;
       deepLinkHandledRef.current = key;
-      void openRegDetail(id).finally(() => clearDeepLinkParams("regularization"));
+      void openRegDetailById(id).finally(() => clearDeepLinkParams("regularization"));
       return;
     }
 
@@ -1006,14 +1178,21 @@ function ManageEmployeeLeavesPageContent() {
     let pending = 0;
     let approved = 0;
     let rejected = 0;
-    for (const r of regRows) {
-      const s = String(r.reg_status).toLowerCase();
+    let hrPending = 0;
+    for (const item of regTabItems) {
+      const s = regularizationDisplayStatus(item);
       if (s === "pending") pending += 1;
+      else if (s === "hr_pending") hrPending += 1;
       else if (s === "approved") approved += 1;
       else if (s === "rejected") rejected += 1;
     }
-    return { pending, approved, rejected, total: regRows.length };
-  }, [regRows]);
+    return {
+      pending: pending + hrPending,
+      approved,
+      rejected,
+      total: regTabItems.length,
+    };
+  }, [regTabItems]);
 
   const compCounts = useMemo(() => {
     let pending = 0;
@@ -1914,7 +2093,8 @@ function ManageEmployeeLeavesPageContent() {
               <div>
                 <h2 className={dashSectionTitleCls}>Filters</h2>
                 <p className="text-[12px] text-[#6B7280]">
-                  Regularization requests assigned to you as reporting manager.
+                  Reporting manager queue
+                  {viewerIsHrOrAdmin ? " and HR-assigned reviews." : "."}
                 </p>
               </div>
             </div>
@@ -1934,7 +2114,10 @@ function ManageEmployeeLeavesPageContent() {
                     className={filterFieldCls()}
                   >
                     <option value="">All statuses</option>
-                    <option value="pending">Pending</option>
+                    <option value="pending">Pending (manager)</option>
+                    {viewerIsHrOrAdmin ? (
+                      <option value="hr_pending">Awaiting HR</option>
+                    ) : null}
                     <option value="approved">Approved</option>
                     <option value="rejected">Rejected</option>
                   </select>
@@ -2023,25 +2206,35 @@ function ManageEmployeeLeavesPageContent() {
           {!regLoading && !regError ? (
             <div className={`${listCardCls()} p-4 sm:p-5 overflow-hidden lg:p-0`}>
               <div className="space-y-3 lg:hidden lg:p-0">
-                {regRows.length === 0 ? (
+                {regTabItems.length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-12 text-center text-slate-500">
                     <p className="font-medium text-[#374151]">
                       No regularization requests match your filters.
                     </p>
                   </div>
                 ) : (
-                  regRows.map((row) => {
-                    const pending = String(row.reg_status).toLowerCase() === "pending";
+                  regTabItems.map((item) => {
+                    const row = item.row;
+                    const actionable = isRegularizationTabItemActionable(item);
+                    const displayStatus = regularizationDisplayStatus(item);
                     return (
                       <RegularizationRequestCard
-                        key={row.id}
+                        key={`${item.queue}-${row.id}`}
                         domId={regularizationRequestDomId(row.id)}
                         row={row}
-                        pending={pending}
+                        queue={item.queue}
+                        displayStatus={displayStatus}
+                        actionable={actionable}
                         modalBusy={regModalSubmitting && regModal?.id === row.id}
-                        onView={() => void openRegDetail(row.id)}
-                        onApprove={() => openRegModal(row.id, "approved")}
-                        onReject={() => openRegModal(row.id, "rejected")}
+                        onView={() => void openRegDetail(item)}
+                        onApprove={() =>
+                          openRegModal(
+                            row.id,
+                            item.queue === "hr" ? "approved" : "hr_pending",
+                            item.queue,
+                          )
+                        }
+                        onReject={() => openRegModal(row.id, "rejected", item.queue)}
                       />
                     );
                   })
@@ -2049,10 +2242,11 @@ function ManageEmployeeLeavesPageContent() {
               </div>
 
               <div className="hidden overflow-x-auto lg:block">
-                <table className="min-w-[1040px] w-full border-collapse text-left text-sm">
+                <table className="min-w-[1140px] w-full border-collapse text-left text-sm">
                   <thead>
                     <tr className={tableHeadCls()}>
                       <th className="px-4 py-3.5 sm:px-5">Employee</th>
+                      <th className="px-4 py-3.5 sm:px-5">Reporting manager</th>
                       <th className="px-4 py-3.5 sm:px-5">Type</th>
                       <th className="px-4 py-3.5 sm:px-5">Action date</th>
                       <th className="px-4 py-3.5 sm:px-5">Times</th>
@@ -2064,20 +2258,33 @@ function ManageEmployeeLeavesPageContent() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {regRows.length === 0 ? (
+                    {regTabItems.length === 0 ? (
                       <tr>
-                        <td colSpan={9} className="px-4 py-12 text-center text-[#6B7280]">
+                        <td colSpan={10} className="px-4 py-12 text-center text-[#6B7280]">
                           <p className="font-medium text-[#374151]">
                             No regularization requests match your filters.
                           </p>
                         </td>
                       </tr>
                     ) : (
-                      regRows.map((row) => {
-                        const pending = String(row.reg_status).toLowerCase() === "pending";
+                      regTabItems.map((item) => {
+                        const row = item.row;
+                        const actionable = isRegularizationTabItemActionable(item);
+                        const displayStatus = regularizationDisplayStatus(item);
+                        const hrRow =
+                          item.queue === "hr"
+                            ? (row as RegularizationHrReviewRow)
+                            : null;
+                        const reportingManagerName =
+                          hrRow?.reporting_manager_info?.user_name ??
+                          row.reporting_manager_name ??
+                          null;
+                        const reportingManagerEmail =
+                          hrRow?.reporting_manager_info?.user_email ??
+                          null;
                         return (
                           <tr
-                            key={row.id}
+                            key={`${item.queue}-${row.id}`}
                             id={regularizationRequestDomId(row.id)}
                             className="bg-white transition hover:bg-slate-50/80"
                           >
@@ -2090,6 +2297,27 @@ function ManageEmployeeLeavesPageContent() {
                                   {row.employee_email}
                                 </div>
                               ) : null}
+                              {item.queue === "hr" ? (
+                                <div className="mt-1 text-[11px] font-medium text-violet-600">
+                                  HR review
+                                </div>
+                              ) : null}
+                            </td>
+                            <td className="px-4 py-3 sm:px-5">
+                              {reportingManagerName ? (
+                                <>
+                                  <div className="text-[13px] font-medium text-[#1F2937]">
+                                    {reportingManagerName}
+                                  </div>
+                                  {reportingManagerEmail ? (
+                                    <div className="mt-0.5 text-[12px] text-[#6B7280]">
+                                      {reportingManagerEmail}
+                                    </div>
+                                  ) : null}
+                                </>
+                              ) : (
+                                <span className="text-[12px] text-[#9CA3AF]">—</span>
+                              )}
                             </td>
                             <td className="px-4 py-3 text-[13px] text-[#374151] sm:px-5">
                               {regRequestTypeLabel(row.request_type)}
@@ -2123,9 +2351,9 @@ function ManageEmployeeLeavesPageContent() {
                             </td>
                             <td className="px-4 py-4 sm:px-5">
                               <span
-                                className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium ${statusBadgeClass(row.reg_status)}`}
+                                className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium ${statusBadgeClass(displayStatus)}`}
                               >
-                                {row.reg_status}
+                                {displayStatus.replace(/_/g, " ")}
                               </span>
                             </td>
                             <td className="whitespace-nowrap px-4 py-3 text-[12px] text-[#6B7280] sm:px-5">
@@ -2135,31 +2363,39 @@ function ManageEmployeeLeavesPageContent() {
                               <div className="inline-flex flex-wrap justify-end gap-1.5">
                                 <button
                                   type="button"
-                                  onClick={() => void openRegDetail(row.id)}
+                                  onClick={() => void openRegDetail(item)}
                                   className={btnGhostCls()}
                                 >
                                   <Eye className="h-3.5 w-3.5" aria-hidden />
                                   View
                                 </button>
-                                {pending ? (
+                                {actionable ? (
                                   <>
                                     <button
                                       type="button"
                                       disabled={
                                         regModalSubmitting && regModal?.id === row.id
                                       }
-                                      onClick={() => openRegModal(row.id, "approved")}
+                                      onClick={() =>
+                                        openRegModal(
+                                          row.id,
+                                          item.queue === "hr" ? "approved" : "hr_pending",
+                                          item.queue,
+                                        )
+                                      }
                                       className={zohoApproveBtnCls()}
                                     >
                                       <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
-                                      Approve
+                                      {item.queue === "hr" ? "Approve" : "Forward to HR"}
                                     </button>
                                     <button
                                       type="button"
                                       disabled={
                                         regModalSubmitting && regModal?.id === row.id
                                       }
-                                      onClick={() => openRegModal(row.id, "rejected")}
+                                      onClick={() =>
+                                        openRegModal(row.id, "rejected", item.queue)
+                                      }
                                       className={zohoRejectBtnCls()}
                                     >
                                       <XCircle className="h-3.5 w-3.5" aria-hidden />
@@ -2560,12 +2796,16 @@ function ManageEmployeeLeavesPageContent() {
                 <h2 id="reg-modal-title" className="text-[16px] font-semibold text-[#1F2937]">
                   {regModal.action === "approved"
                     ? "Approve regularization"
-                    : "Reject regularization"}
+                    : regModal.action === "hr_pending"
+                      ? "Forward to HR"
+                      : "Reject regularization"}
                 </h2>
                 <p className="mt-0.5 text-[12px] text-[#6B7280]">
                   {regModal.action === "rejected"
                     ? "Review comment is required when rejecting."
-                    : "Optional review comment for the employee."}
+                    : regModal.action === "hr_pending"
+                      ? "Select an HR reviewer for final approval."
+                      : "Optional review comment for the employee."}
                 </p>
               </div>
               <button
@@ -2578,7 +2818,32 @@ function ManageEmployeeLeavesPageContent() {
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="px-4 py-3">
+            <div className="space-y-4 px-4 py-3">
+              {regModal.action === "hr_pending" ? (
+                <label className="block">
+                  <span className={labelCls()}>Assign HR reviewer</span>
+                  <select
+                    value={regModalHrId}
+                    onChange={(e) => setRegModalHrId(e.target.value)}
+                    className={filterFieldCls()}
+                  >
+                    <option value="">Select HR or admin…</option>
+                    {hrAssignees.map((user) => {
+                      const uid = String(
+                        user.id ?? (user as { user_id?: number | string }).user_id ?? "",
+                      );
+                      return (
+                        <option key={uid} value={uid}>
+                          {user.user_name || `User #${uid}`}
+                          {user.role_name || user.user_role_name
+                            ? ` (${user.role_name ?? user.user_role_name})`
+                            : ""}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </label>
+              ) : null}
               <label className="block">
                 <span className={labelCls()}>
                   Review comment{regModal.action === "rejected" ? " (required)" : ""}
@@ -2617,7 +2882,9 @@ function ManageEmployeeLeavesPageContent() {
                   ? "Submitting…"
                   : regModal.action === "approved"
                     ? "Submit approval"
-                    : "Submit rejection"}
+                    : regModal.action === "hr_pending"
+                      ? "Forward to HR"
+                      : "Submit rejection"}
               </button>
             </div>
           </div>
@@ -2676,6 +2943,25 @@ function ManageEmployeeLeavesPageContent() {
                         </span>
                       ) : null}
                     </CardField>
+                    <CardField label="Reporting manager" className="col-span-2">
+                      {(regDetail as RegularizationHrReviewRow).reporting_manager_info
+                        ?.user_name ||
+                        regDetail.reporting_manager_name ||
+                        (regDetail.reporting_manager
+                          ? `User #${regDetail.reporting_manager}`
+                          : "—")}
+                      {(regDetail as RegularizationHrReviewRow).reporting_manager_info
+                        ?.user_email || regDetail.reporting_manager_name ? (
+                        <span className="block text-[12px] text-[#6B7280]">
+                          {(regDetail as RegularizationHrReviewRow).reporting_manager_info
+                            ?.user_email ?? ""}
+                          {(regDetail as RegularizationHrReviewRow).reporting_manager_info
+                            ?.emp_code
+                            ? ` · ${(regDetail as RegularizationHrReviewRow).reporting_manager_info?.emp_code}`
+                            : ""}
+                        </span>
+                      ) : null}
+                    </CardField>
                     <CardField label="Action date">{formatDate(regDetail.action_date)}</CardField>
                     <CardField label="Status">
                       <span
@@ -2715,21 +3001,33 @@ function ManageEmployeeLeavesPageContent() {
                       </CardField>
                     ) : null}
                   </dl>
-                  {String(regDetail.reg_status).toLowerCase() === "pending" ? (
+                  {regDetail &&
+                  isRegularizationTabItemActionable({
+                    queue: regDetailQueue,
+                    row: regDetail,
+                  }) ? (
                     <div className="mt-4 flex flex-col gap-2 border-t border-[#E4E7EC] pt-4 sm:flex-row">
                       <button
                         type="button"
                         disabled={regModalSubmitting}
-                        onClick={() => openRegModal(regDetail.id, "approved")}
+                        onClick={() =>
+                          openRegModal(
+                            regDetail.id,
+                            regDetailQueue === "hr" ? "approved" : "hr_pending",
+                            regDetailQueue,
+                          )
+                        }
                         className={zohoApproveBtnCls(true)}
                       >
                         <CheckCircle2 className="h-4 w-4" aria-hidden />
-                        Approve
+                        {regDetailQueue === "hr" ? "Approve" : "Forward to HR"}
                       </button>
                       <button
                         type="button"
                         disabled={regModalSubmitting}
-                        onClick={() => openRegModal(regDetail.id, "rejected")}
+                        onClick={() =>
+                          openRegModal(regDetail.id, "rejected", regDetailQueue)
+                        }
                         className={zohoRejectBtnCls(true)}
                       >
                         <XCircle className="h-4 w-4" aria-hidden />
@@ -3268,7 +3566,9 @@ function CompOffRequestCard({
 function RegularizationRequestCard({
   row,
   domId,
-  pending,
+  queue,
+  displayStatus,
+  actionable,
   modalBusy,
   onView,
   onApprove,
@@ -3276,7 +3576,9 @@ function RegularizationRequestCard({
 }: {
   row: RegularizationManagerRow;
   domId?: string;
-  pending: boolean;
+  queue: RegularizationQueueKind;
+  displayStatus: string;
+  actionable: boolean;
   modalBusy: boolean;
   onView: () => void;
   onApprove: () => void;
@@ -3292,11 +3594,23 @@ function RegularizationRequestCard({
           {row.employee_email ? (
             <p className="mt-0.5 truncate text-[12px] text-[#6B7280]">{row.employee_email}</p>
           ) : null}
+          {queue === "hr" ? (
+            <p className="mt-1 text-[11px] font-medium text-violet-600">HR review</p>
+          ) : null}
+          {(queue === "hr"
+            ? (row as RegularizationHrReviewRow).reporting_manager_info?.user_name
+            : row.reporting_manager_name) ? (
+            <p className="mt-1 truncate text-[11px] text-[#6B7280]">
+              Manager:{" "}
+              {(row as RegularizationHrReviewRow).reporting_manager_info?.user_name ??
+                row.reporting_manager_name}
+            </p>
+          ) : null}
         </div>
         <span
-          className={`inline-flex shrink-0 items-center rounded-md px-2 py-0.5 text-[11px] font-medium ${statusBadgeClass(row.reg_status)}`}
+          className={`inline-flex shrink-0 items-center rounded-md px-2 py-0.5 text-[11px] font-medium ${statusBadgeClass(displayStatus)}`}
         >
-          {row.reg_status}
+          {displayStatus.replace(/_/g, " ")}
         </span>
       </div>
       <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3">
@@ -3321,7 +3635,7 @@ function RegularizationRequestCard({
           <Eye className="h-4 w-4" aria-hidden />
           View
         </button>
-        {pending ? (
+        {actionable ? (
           <>
             <button
               type="button"
@@ -3330,7 +3644,7 @@ function RegularizationRequestCard({
               className={zohoApproveBtnCls()}
             >
               <CheckCircle2 className="h-4 w-4" aria-hidden />
-              Approve
+              {queue === "hr" ? "Approve" : "Forward to HR"}
             </button>
             <button
               type="button"

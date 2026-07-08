@@ -29,8 +29,19 @@ import {
 } from "@/services/employeeLeaveManagement";
 import {
   fetchAllRegularizationRequests,
+  fetchMyRegularizationHrReviews,
+  type RegularizationHrReviewRow,
   type RegularizationManagerRow,
 } from "@/services/regularization";
+import {
+  countPendingRegularizationItems,
+  isHrOrAdminRole,
+  mergeRegularizationQueues,
+  regularizationDisplayStatus,
+  type RegularizationTabItem,
+} from "@/lib/regularizationQueue";
+import { readRoleNameFromToken } from "@/lib/orgAdminAccess";
+import { useManagementDashboardContext } from "@/components/portal-dashboard/Layout/ManagementDashboardContext";
 import {
   fetchRMAllCompOffs,
   type CompOffManagerRow,
@@ -40,7 +51,7 @@ import {
 } from "@/lib/manageEmployeeLeavesDeepLink";
 
 type NotifTab = "leaves" | "regularization" | "compoff";
-type StatusFilter = "" | "pending" | "approved" | "rejected";
+type StatusFilter = "" | "pending" | "hr_pending" | "approved" | "rejected";
 
 type TabCounts = {
   leaves: number;
@@ -65,6 +76,8 @@ function statusBadgeClass(status: string): string {
     return "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200/60";
   if (s === "rejected")
     return "bg-rose-50 text-rose-700 ring-1 ring-rose-200/60";
+  if (s === "hr_pending")
+    return "bg-violet-50 text-violet-700 ring-1 ring-violet-200/60";
   return "bg-amber-50 text-amber-700 ring-1 ring-amber-200/60";
 }
 
@@ -91,6 +104,10 @@ export default function HeaderNotificationsPanel() {
   const params = useParams();
   const orgId = String(params?.org_id ?? "");
   const orgIdNum = Number(orgId);
+  const dashboardCtx = useManagementDashboardContext();
+  const viewerRole =
+    dashboardCtx?.user?.user_role_name ?? readRoleNameFromToken();
+  const viewerIsHrOrAdmin = isHrOrAdminRole(viewerRole);
   const panelRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
@@ -108,7 +125,7 @@ export default function HeaderNotificationsPanel() {
     compoff: 0,
   });
   const [leaveRows, setLeaveRows] = useState<ReviewerLeaveRow[]>([]);
-  const [regRows, setRegRows] = useState<RegularizationManagerRow[]>([]);
+  const [regRows, setRegRows] = useState<RegularizationTabItem[]>([]);
   const [compRows, setCompRows] = useState<CompOffManagerRow[]>([]);
 
   const manageHref = orgId
@@ -119,12 +136,72 @@ export default function HeaderNotificationsPanel() {
     setMounted(true);
   }, []);
 
+  const loadRegularizationRows = useCallback(
+    async (
+      token: string,
+      filters?: {
+        reg_status?: StatusFilter;
+        action_date?: string;
+      },
+    ) => {
+      const managerFilters: {
+        reg_status?: RegularizationManagerRow["reg_status"];
+        action_date?: string;
+        is_ascending: "DESC";
+      } = { is_ascending: "DESC" };
+
+      const hrFilters: {
+        hr_action?: "pending" | "approved" | "rejected";
+        reg_status?: RegularizationHrReviewRow["reg_status"];
+        action_date?: string;
+        is_ascending: "DESC";
+      } = { is_ascending: "DESC" };
+
+      if (filters?.action_date) {
+        managerFilters.action_date = filters.action_date;
+        hrFilters.action_date = filters.action_date;
+      }
+
+      const status = filters?.reg_status;
+      if (status === "pending") {
+        managerFilters.reg_status = "pending";
+        hrFilters.hr_action = "pending";
+        hrFilters.reg_status = "hr_pending";
+      } else if (status === "hr_pending") {
+        managerFilters.reg_status = "hr_pending";
+        hrFilters.reg_status = "hr_pending";
+        hrFilters.hr_action = "pending";
+      } else if (status === "approved" || status === "rejected") {
+        managerFilters.reg_status = status;
+        hrFilters.hr_action = status;
+        hrFilters.reg_status = status;
+      } else if (status) {
+        managerFilters.reg_status = status;
+        hrFilters.reg_status = status;
+      }
+
+      const managerRows = await fetchAllRegularizationRequests(
+        token,
+        orgIdNum,
+        managerFilters,
+      );
+
+      let hrRows: RegularizationHrReviewRow[] = [];
+      if (viewerIsHrOrAdmin) {
+        hrRows = await fetchMyRegularizationHrReviews(token, orgIdNum, hrFilters);
+      }
+
+      return mergeRegularizationQueues(managerRows, hrRows);
+    },
+    [orgIdNum, viewerIsHrOrAdmin],
+  );
+
   const loadPendingCounts = useCallback(async () => {
     const token = localStorage.getItem("token");
     if (!token || !orgId || Number.isNaN(orgIdNum)) return;
 
     try {
-      const [leaves, reg, comp] = await Promise.all([
+      const [leaves, managerPending, hrReviews, comp] = await Promise.all([
         fetchLeavesWhereIAmReviewer(token, orgId, {
           my_query_status: "pending",
           is_ascending: "DESC",
@@ -133,14 +210,24 @@ export default function HeaderNotificationsPanel() {
           reg_status: "pending",
           is_ascending: "DESC",
         }),
+        viewerIsHrOrAdmin
+          ? fetchMyRegularizationHrReviews(token, orgIdNum, {
+              hr_action: "pending",
+              reg_status: "hr_pending",
+              is_ascending: "DESC",
+            })
+          : Promise.resolve([]),
         fetchRMAllCompOffs(token, orgIdNum, {
           query_status: "pending",
           is_ascending: "DESC",
         }),
       ]);
+
+      const mergedReg = mergeRegularizationQueues(managerPending, hrReviews);
+      const regPendingCount = countPendingRegularizationItems(mergedReg);
       const counts = {
         leaves: leaves.length,
-        regularization: reg.length,
+        regularization: regPendingCount,
         compoff: comp.length,
       };
       setTabCounts(counts);
@@ -148,7 +235,7 @@ export default function HeaderNotificationsPanel() {
     } catch {
       /* silent — badge optional */
     }
-  }, [orgId, orgIdNum]);
+  }, [orgId, orgIdNum, viewerIsHrOrAdmin]);
 
   const loadTabData = useCallback(async () => {
     const token = localStorage.getItem("token");
@@ -162,24 +249,28 @@ export default function HeaderNotificationsPanel() {
 
     try {
       if (activeTab === "leaves") {
+        const leaveStatus =
+          statusFilter && statusFilter !== "hr_pending" ? statusFilter : undefined;
         const rows = await fetchLeavesWhereIAmReviewer(token, orgId, {
-          my_query_status: statusFilter || undefined,
+          my_query_status: leaveStatus,
           created_at: dateFilter || undefined,
           is_ascending: "DESC",
         });
         setLeaveRows(rows);
       } else if (activeTab === "regularization") {
-        const rows = await fetchAllRegularizationRequests(token, orgIdNum, {
+        const rows = await loadRegularizationRows(token, {
           reg_status: statusFilter || undefined,
           action_date: dateFilter || undefined,
-          is_ascending: "DESC",
         });
         setRegRows(rows);
       } else {
+        const compStatus =
+          statusFilter && statusFilter !== "hr_pending" ? statusFilter : undefined;
         const rows = await fetchRMAllCompOffs(token, orgIdNum, {
-          query_status: statusFilter || undefined,
+          query_status: compStatus,
           compoff_date: dateFilter || undefined,
           is_ascending: "DESC",
+      
         });
         setCompRows(rows);
       }
@@ -188,7 +279,7 @@ export default function HeaderNotificationsPanel() {
     } finally {
       setLoading(false);
     }
-  }, [activeTab, statusFilter, dateFilter, orgId, orgIdNum]);
+  }, [activeTab, statusFilter, dateFilter, loadRegularizationRows, orgId, orgIdNum]);
 
   useEffect(() => {
     void loadPendingCounts();
@@ -342,6 +433,9 @@ export default function HeaderNotificationsPanel() {
             >
               <option value="">All</option>
               <option value="pending">Pending</option>
+              {viewerIsHrOrAdmin ? (
+                <option value="hr_pending">Awaiting HR</option>
+              ) : null}
               <option value="approved">Approved</option>
               <option value="rejected">Rejected</option>
             </select>
@@ -392,18 +486,34 @@ export default function HeaderNotificationsPanel() {
                     </li>
                   ))
                 : activeTab === "regularization"
-                  ? regRows.map((row) => (
-                      <li key={row.id}>
-                        <NotificationRow
-                          title={row.employee_name || `User #${row.user_id}`}
-                          subtitle={regTypeLabel(row.request_type)}
-                          meta={formatDate(row.action_date)}
-                          status={row.reg_status}
-                          href={buildManageLeavesHref(orgId, "regularization", row.id)}
-                          onNavigate={() => setOpen(false)}
-                        />
-                      </li>
-                    ))
+                  ? regRows.map((item) => {
+                      const managerName =
+                        item.queue === "hr"
+                          ? (item.row as RegularizationHrReviewRow)
+                              .reporting_manager_info?.user_name ??
+                            item.row.reporting_manager_name
+                          : item.row.reporting_manager_name;
+                      return (
+                        <li key={`${item.queue}-${item.row.id}`}>
+                          <NotificationRow
+                            title={item.row.employee_name || `User #${item.row.user_id}`}
+                            subtitle={
+                              managerName
+                                ? `${regTypeLabel(item.row.request_type)} · RM: ${managerName}`
+                                : regTypeLabel(item.row.request_type)
+                            }
+                            meta={formatDate(item.row.action_date)}
+                            status={regularizationDisplayStatus(item)}
+                            href={buildManageLeavesHref(
+                              orgId,
+                              "regularization",
+                              item.row.id,
+                            )}
+                            onNavigate={() => setOpen(false)}
+                          />
+                        </li>
+                      );
+                    })
                   : compRows.map((row) => (
                       <li key={row.id}>
                         <NotificationRow

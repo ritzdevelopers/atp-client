@@ -21,6 +21,7 @@ import {
   type RegularizationRow,
 } from "@/services/regularization";
 
+type WorkspaceTab = "requests" | "hr_verification";
 type StatusFilter = "all" | "pending" | "approved" | "rejected";
 
 function formatDate(value: string | null | undefined): string {
@@ -45,7 +46,14 @@ function statusBadgeClass(status: string): string {
   const s = status.toLowerCase();
   if (s === "approved") return "bg-emerald-50 text-emerald-700 ring-emerald-200";
   if (s === "rejected") return "bg-rose-50 text-rose-700 ring-rose-200";
+  if (s === "hr_pending") return "bg-violet-50 text-violet-700 ring-violet-200";
   return "bg-amber-50 text-amber-700 ring-amber-200";
+}
+
+function statusLabel(status: string): string {
+  const s = status.toLowerCase();
+  if (s === "hr_pending") return "Awaiting HR";
+  return s.replace(/_/g, " ");
 }
 
 function formatTimeValue(value: string | null | undefined): string {
@@ -65,6 +73,7 @@ export default function MyRegularizationWorkspace() {
   const [loading, setLoading] = useState(true);
   const [balanceLoading, setBalanceLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>("requests");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [deleteTarget, setDeleteTarget] = useState<RegularizationRow | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -123,15 +132,27 @@ export default function MyRegularizationWorkspace() {
   }, [refreshAll]);
 
   const filteredRequests = useMemo(() => {
+    if (activeTab === "hr_verification") {
+      return requests.filter(
+        (row) => String(row.reg_status).toLowerCase() === "hr_pending",
+      );
+    }
     if (statusFilter === "all") return requests;
     return requests.filter(
       (row) => String(row.reg_status).toLowerCase() === statusFilter,
     );
-  }, [requests, statusFilter]);
+  }, [requests, statusFilter, activeTab]);
 
   const pendingCount = useMemo(
     () =>
       requests.filter((r) => String(r.reg_status).toLowerCase() === "pending")
+        .length,
+    [requests],
+  );
+
+  const hrPendingCount = useMemo(
+    () =>
+      requests.filter((r) => String(r.reg_status).toLowerCase() === "hr_pending")
         .length,
     [requests],
   );
@@ -240,27 +261,68 @@ export default function MyRegularizationWorkspace() {
           </div>
         ) : null}
 
-        <div className="flex flex-wrap items-center gap-2">
-          {(["all", "pending", "approved", "rejected"] as const).map((status) => (
-            <button
-              key={status}
-              type="button"
-              onClick={() => setStatusFilter(status)}
-              className={`rounded-full px-3 py-1 text-xs font-medium capitalize ring-1 ring-inset transition ${
-                statusFilter === status
-                  ? "bg-indigo-600 text-white ring-indigo-600"
-                  : "bg-white text-slate-500 ring-slate-200 hover:bg-slate-50"
-              }`}
-            >
-              {status}
-              {status === "pending" && pendingCount > 0 ? (
-                <span className="ml-1 rounded-full bg-white/20 px-1.5 py-0.5 text-[10px]">
-                  {pendingCount}
-                </span>
-              ) : null}
-            </button>
-          ))}
+        <div className="flex gap-1 rounded-xl border border-slate-200 bg-slate-100/80 p-1">
+          <button
+            type="button"
+            onClick={() => setActiveTab("requests")}
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition ${
+              activeTab === "requests"
+                ? "bg-white text-indigo-700 shadow-sm"
+                : "text-slate-600 hover:text-slate-800"
+            }`}
+          >
+            My requests
+            {pendingCount > 0 ? (
+              <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">
+                {pendingCount}
+              </span>
+            ) : null}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("hr_verification")}
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition ${
+              activeTab === "hr_verification"
+                ? "bg-white text-violet-700 shadow-sm"
+                : "text-slate-600 hover:text-slate-800"
+            }`}
+          >
+            HR verification
+            {hrPendingCount > 0 ? (
+              <span className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold text-violet-700">
+                {hrPendingCount}
+              </span>
+            ) : null}
+          </button>
         </div>
+
+        {activeTab === "requests" ? (
+          <div className="flex flex-wrap items-center gap-2">
+            {(["all", "pending", "approved", "rejected"] as const).map((status) => (
+              <button
+                key={status}
+                type="button"
+                onClick={() => setStatusFilter(status)}
+                className={`rounded-full px-3 py-1 text-xs font-medium capitalize ring-1 ring-inset transition ${
+                  statusFilter === status
+                    ? "bg-indigo-600 text-white ring-indigo-600"
+                    : "bg-white text-slate-500 ring-slate-200 hover:bg-slate-50"
+                }`}
+              >
+                {status}
+                {status === "pending" && pendingCount > 0 ? (
+                  <span className="ml-1 rounded-full bg-white/20 px-1.5 py-0.5 text-[10px]">
+                    {pendingCount}
+                  </span>
+                ) : null}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-slate-500">
+            Requests forwarded by your reporting manager and awaiting HR approval.
+          </p>
+        )}
 
         {loading ? (
           <div className="flex justify-center py-16">
@@ -270,14 +332,18 @@ export default function MyRegularizationWorkspace() {
           <div className="rounded-xl border border-slate-200 bg-white px-6 py-12 text-center">
             <RotateCcw className="mx-auto h-10 w-10 text-slate-300" />
             <p className="mt-3 text-sm font-medium text-slate-800">
-              No regularization requests
+              {activeTab === "hr_verification"
+                ? "No HR verification requests"
+                : "No regularization requests"}
             </p>
             <p className="mt-1 text-xs text-slate-500">
-              {statusFilter === "all"
-                ? "Submit your first regularization request to get started."
-                : `No ${statusFilter} requests found.`}
+              {activeTab === "hr_verification"
+                ? "When your manager forwards a request to HR, it will appear here."
+                : statusFilter === "all"
+                  ? "Submit your first regularization request to get started."
+                  : `No ${statusFilter} requests found.`}
             </p>
-            {statusFilter === "all" && balance?.is_available ? (
+            {activeTab === "requests" && statusFilter === "all" && balance?.is_available ? (
               <Link
                 href={applyHref}
                 className="mt-4 inline-flex rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
@@ -306,9 +372,9 @@ export default function MyRegularizationWorkspace() {
                       </p>
                     </div>
                     <span
-                      className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold capitalize ring-1 ring-inset ${statusBadgeClass(status)}`}
+                      className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${statusBadgeClass(status)}`}
                     >
-                      {row.reg_status}
+                      {statusLabel(row.reg_status)}
                     </span>
                   </div>
 

@@ -23,7 +23,7 @@ export type RegularizationRow = {
   reporting_manager: number;
   reporting_manager_name?: string | null;
   reason: string;
-  reg_status: "pending" | "approved" | "rejected";
+  reg_status: "pending" | "hr_pending" | "approved" | "rejected";
   review_comment?: string | null;
   created_at?: string;
   updated_at?: string;
@@ -44,6 +44,30 @@ export type RegularizationManagerRow = RegularizationRow & {
   approved_by?: number | null;
   approved_by_name?: string | null;
   approved_at?: string | null;
+};
+
+export type RegularizationHrReviewRow = RegularizationManagerRow & {
+  hr_review_id: number;
+  regularization_id: number;
+  hr_id: number;
+  hr_action: "pending" | "approved" | "rejected";
+  hr_review_comment?: string | null;
+  hr_reviewed_at?: string | null;
+  hr_review_created_at?: string;
+  hr_review_updated_at?: string;
+  hr_reviewer_name?: string | null;
+  hr_reviewer_email?: string | null;
+  hr_reviewer_code?: string | null;
+  reporting_manager_phone?: string | null;
+  reporting_manager_role_name?: string | null;
+  reporting_manager_info?: {
+    user_id: number;
+    user_name?: string | null;
+    user_email?: string | null;
+    user_phone?: string | null;
+    emp_code?: string | null;
+    role_name?: string | null;
+  } | null;
 };
 
 export type RegularizationReportingManager = {
@@ -170,7 +194,7 @@ export async function fetchMyRegularization(
   token: string,
   orgId: number,
   filters?: {
-    reg_status?: "pending" | "approved" | "rejected";
+    reg_status?: "pending" | "hr_pending" | "approved" | "rejected";
     request_type?: RegularizationRequestType;
     action_date?: string;
   },
@@ -230,7 +254,7 @@ export async function fetchAllRegularizationRequests(
   token: string,
   orgId: number,
   filters?: {
-    reg_status?: "pending" | "approved" | "rejected";
+    reg_status?: "pending" | "hr_pending" | "approved" | "rejected";
     request_type?: RegularizationRequestType;
     action_date?: string;
     employee_id?: number;
@@ -295,8 +319,9 @@ export async function updateRegularizationRequest(
   orgId: number,
   regularizationId: number,
   payload: {
-    reg_status: "approved" | "rejected";
+    reg_status: "hr_pending" | "rejected";
     review_comment?: string;
+    hr_id?: number;
   },
 ): Promise<{ message?: string; result?: RegularizationManagerRow }> {
   const res = await fetch(
@@ -311,6 +336,7 @@ export async function updateRegularizationRequest(
         org_id: orgId,
         reg_status: payload.reg_status,
         review_comment: payload.review_comment,
+        hr_id: payload.hr_id,
       }),
     },
   );
@@ -323,6 +349,84 @@ export async function updateRegularizationRequest(
   return {
     message: json.message as string | undefined,
     result: json.result as RegularizationManagerRow | undefined,
+  };
+}
+
+export async function fetchMyRegularizationHrReviews(
+  token: string,
+  orgId: number,
+  filters?: {
+    hr_action?: "pending" | "approved" | "rejected";
+    reg_status?: "pending" | "hr_pending" | "approved" | "rejected";
+    request_type?: RegularizationRequestType;
+    action_date?: string;
+    employee_id?: number;
+    is_ascending?: "ASC" | "DESC";
+  },
+): Promise<RegularizationHrReviewRow[]> {
+  const params = new URLSearchParams({ org_id: String(orgId) });
+  if (filters?.hr_action) params.set("hr_action", filters.hr_action);
+  if (filters?.reg_status) params.set("reg_status", filters.reg_status);
+  if (filters?.request_type) params.set("request_type", filters.request_type);
+  if (filters?.action_date) params.set("action_date", filters.action_date);
+  if (filters?.employee_id != null) {
+    params.set("employee_id", String(filters.employee_id));
+  }
+  if (filters?.is_ascending) params.set("is_ascending", filters.is_ascending);
+
+  const res = await fetch(
+    `${API_URL}/api/regularization/get-my-regularization-hr-reviews?${params.toString()}`,
+    {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+  const json = await parseJson(res);
+  if (!res.ok) {
+    throw new Error(
+      (json.message as string) || "Could not load HR regularization reviews",
+    );
+  }
+  const result = json.result;
+  return Array.isArray(result) ? (result as RegularizationHrReviewRow[]) : [];
+}
+
+export async function updateRegularizationHrReview(
+  token: string,
+  orgId: number,
+  regularizationId: number,
+  payload: {
+    hr_action: "approved" | "rejected";
+    review_comment?: string;
+  },
+): Promise<{ message?: string; result?: RegularizationHrReviewRow }> {
+  const res = await fetch(
+    `${API_URL}/api/regularization/update-regularization-hr-review/${regularizationId}`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        org_id: orgId,
+        hr_action: payload.hr_action,
+        review_comment: payload.review_comment,
+      }),
+    },
+  );
+  const json = await parseJson(res);
+  if (!res.ok) {
+    throw new Error(
+      (json.message as string) || "Could not update HR regularization review",
+    );
+  }
+  return {
+    message: json.message as string | undefined,
+    result: json.result as RegularizationHrReviewRow | undefined,
   };
 }
 
