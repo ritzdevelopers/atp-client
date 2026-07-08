@@ -2,11 +2,10 @@
 
 import { useEffect, useState } from "react";
 import {
+  BIOMETRIC_LIVE_POLL_MS,
   fetchMyLiveAttendance,
   type DeviceLiveAttendance,
 } from "@/services/biometricAttendance";
-
-const POLL_MS = 5000;
 
 export function useDeviceLiveAttendance(orgId: string | null | undefined) {
   const [attendance, setAttendance] = useState<DeviceLiveAttendance | null>(null);
@@ -38,7 +37,7 @@ export function useDeviceLiveAttendance(orgId: string | null | undefined) {
     };
 
     void poll();
-    const timer = setInterval(poll, POLL_MS);
+    const timer = setInterval(poll, BIOMETRIC_LIVE_POLL_MS);
     return () => {
       cancelled = true;
       clearInterval(timer);
