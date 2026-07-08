@@ -26,12 +26,47 @@ export function HomeHeaderSkeleton() {
 }
 
 export function QuickNavRailSkeleton() {
+  return <FeaturesSliderSkeleton />;
+}
+
+export function FeaturesSliderSkeleton() {
   return (
-    <div>
-      <Shimmer className="mb-2.5 h-4 w-20" />
-      <div className="flex gap-2 overflow-hidden">
+    <div className="w-full space-y-5">
+      <div className="flex items-center gap-4">
+        <Shimmer className="h-12 w-12 rounded-2xl" />
+        <div className="space-y-2">
+          <Shimmer className="h-6 w-48" />
+          <Shimmer className="h-4 w-72" />
+        </div>
+      </div>
+      <div className="flex gap-3 overflow-hidden">
         {Array.from({ length: 6 }).map((_, i) => (
-          <Shimmer key={i} className="h-9 w-28 shrink-0 rounded-full" />
+          <Shimmer key={i} className="h-[52px] w-[160px] shrink-0 rounded-2xl" />
+        ))}
+      </div>
+      <div className="rounded-2xl border border-[#E4E7EC] p-6">
+        <Shimmer className="mb-5 h-5 w-32" />
+        <div className="flex gap-4 overflow-hidden">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Shimmer key={i} className="h-[156px] w-[212px] shrink-0 rounded-2xl" />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function AllToolsPanelSkeleton({ className = "" }: { className?: string }) {
+  return (
+    <div className={`${dashCardCls} overflow-hidden ${className}`}>
+      <div className="border-b border-[#EEF2F6] px-4 py-4">
+        <Shimmer className="h-4 w-24" />
+        <Shimmer className="mt-2 h-3 w-40" />
+        <Shimmer className="mt-3 h-10 w-full rounded-xl" />
+      </div>
+      <div className="space-y-2 p-3">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <Shimmer key={i} className="h-16 w-full rounded-xl" />
         ))}
       </div>
     </div>
@@ -182,26 +217,11 @@ export function HomePageLoadingSkeleton({
   showAttendance?: boolean;
 }) {
   return (
-    <div className="mx-auto flex w-full max-w-[1360px] flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-[min(100%,1880px)] flex-col gap-6 px-3 sm:px-5 xl:px-6">
+      <Shimmer className="h-[52px] rounded-2xl" />
       <HomeHeaderSkeleton />
-      <QuickNavRailSkeleton />
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12 lg:gap-6">
-        <div className="flex flex-col gap-5 lg:col-span-8">
-          {showAttendance ? <AttendanceCardSkeleton /> : null}
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-            <LivePanelShellSkeleton title="Team presence" />
-            <LivePanelShellSkeleton title="Biometric feed" />
-          </div>
-          {showAttendance ? <MyTeamsSkeleton /> : null}
-        </div>
-        <div className="flex flex-col gap-5 lg:col-span-4">
-          <ProfileSummarySkeleton />
-          <AssetHandoverCardSkeleton />
-        </div>
-        <div className="lg:col-span-12">
-          <AddressesSkeleton />
-        </div>
-      </div>
+      <FeaturesSliderSkeleton />
+      <AssetHandoverCardSkeleton />
     </div>
   );
 }

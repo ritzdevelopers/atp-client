@@ -15,6 +15,9 @@ import {
   ShieldPlus,
   CheckCircle2,
   Info,
+  BookOpen,
+  Hash,
+  MoreHorizontal,
 } from "lucide-react";
 import { useManagementDashboardContext } from "@/components/portal-dashboard/Layout/ManagementDashboardContext";
 import {
@@ -57,30 +60,28 @@ function roleInitials(name: string) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-function labelCls(mobile = false) {
-  return mobile
-    ? "mb-1.5 block text-[13px] font-medium text-[#6B7280]"
-    : "mb-1.5 block text-sm font-medium text-[#0C123A]";
+function labelCls() {
+  return "mb-1.5 block text-[13px] font-medium text-[#374151]";
 }
 
 function inputCls() {
-  return "w-full rounded-lg border border-[#E4E7EC] bg-white px-3.5 py-3 text-[15px] text-[#1F2937] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15 lg:border-slate-200 lg:py-2.5 lg:text-sm lg:text-[#0C123A] lg:shadow-sm lg:focus:border-[#C99237] lg:focus:ring-[#C99237]/20";
+  return "w-full rounded-lg border border-[#E4E7EC] bg-white px-3.5 py-2.5 text-[14px] text-[#1F2937] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15 disabled:bg-[#F9FAFB] disabled:text-[#9CA3AF]";
 }
 
-function zohoSearchCls() {
-  return "w-full rounded-lg border border-[#E4E7EC] bg-white py-2.5 pl-10 pr-4 text-[15px] text-[#1F2937] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15 lg:text-sm";
+function searchCls() {
+  return "w-full rounded-lg border border-[#E4E7EC] bg-white py-2.5 pl-10 pr-4 text-[14px] text-[#1F2937] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15";
 }
 
-function zohoPrimaryBtnCls(full = false) {
-  return `inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-[#008CD3] px-5 py-2.5 text-[15px] font-medium text-white transition active:scale-[0.98] hover:bg-[#0070AA] disabled:pointer-events-none disabled:opacity-50 lg:min-h-[40px] lg:bg-[#C99237] lg:px-4 lg:py-2 lg:text-sm lg:font-bold lg:text-[#0C123A] lg:hover:bg-[#b87d2e] ${full ? "w-full" : ""}`;
+function primaryBtnCls(full = false) {
+  return `inline-flex min-h-[42px] items-center justify-center gap-2 rounded-lg bg-[#008CD3] px-4 py-2.5 text-[14px] font-medium text-white shadow-sm transition hover:bg-[#0070AA] active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full" : ""}`;
 }
 
-function zohoSecondaryBtnCls(full = false) {
-  return `inline-flex min-h-[44px] items-center justify-center rounded-lg border border-[#E4E7EC] bg-white px-4 py-2.5 text-[15px] font-medium text-[#1F2937] transition active:scale-[0.98] hover:bg-[#F5F7FA] disabled:pointer-events-none disabled:opacity-50 lg:min-h-[40px] lg:border-slate-200 lg:text-sm lg:font-semibold lg:text-[#0C123A] lg:shadow-sm lg:hover:bg-slate-50 ${full ? "w-full" : ""}`;
+function secondaryBtnCls(full = false) {
+  return `inline-flex min-h-[42px] items-center justify-center gap-2 rounded-lg border border-[#E4E7EC] bg-white px-4 py-2.5 text-[14px] font-medium text-[#374151] shadow-sm transition hover:bg-[#F9FAFB] active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full" : ""}`;
 }
 
-function zohoPanelCls() {
-  return "overflow-hidden rounded-xl border border-[#E4E7EC] bg-white shadow-sm lg:rounded-2xl lg:border-slate-200/90";
+function cardCls() {
+  return "overflow-hidden rounded-xl border border-[#E4E7EC] bg-white shadow-sm";
 }
 
 function formatRoleDisplay(name: string | undefined) {
@@ -101,8 +102,8 @@ export default function ManageRolesPage() {
     <Suspense
       fallback={
         <div className="flex flex-col items-center justify-center gap-3 py-24 text-[#6B7280]">
-          <Loader2 className="h-9 w-9 animate-spin text-[#008CD3]" />
-          <p className="text-[15px]">Loading roles…</p>
+          <Loader2 className="h-8 w-8 animate-spin text-[#008CD3]" />
+          <p className="text-[14px]">Loading roles…</p>
         </div>
       }
     >
@@ -147,6 +148,8 @@ function ManageRolesPageContent() {
   const [deleteRole, setDeleteRole] = useState<OrgRoleRow | null>(null);
   const [deleteSaving, setDeleteSaving] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   const editInputRef = useRef<HTMLInputElement>(null);
   const createInputRef = useRef<HTMLInputElement>(null);
@@ -249,18 +252,33 @@ function ManageRolesPageContent() {
         setDeleteRole(null);
         setDeleteError(null);
       }
+      setOpenMenuId(null);
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [editRole, deleteRole]);
 
+  useEffect(() => {
+    if (!openMenuId) return;
+    function onPointerDown(e: MouseEvent) {
+      const target = e.target as HTMLElement;
+      if (!target.closest("[data-role-menu]")) {
+        setOpenMenuId(null);
+      }
+    }
+    window.addEventListener("mousedown", onPointerDown);
+    return () => window.removeEventListener("mousedown", onPointerDown);
+  }, [openMenuId]);
+
   function openEdit(role: OrgRoleRow) {
+    setOpenMenuId(null);
     setEditError(null);
     setEditRole(role);
     setEditName(role.role_name ?? "");
   }
 
   function openDelete(role: OrgRoleRow) {
+    setOpenMenuId(null);
     setDeleteError(null);
     setDeleteRole(role);
   }
@@ -377,7 +395,7 @@ function ManageRolesPageContent() {
 
   const createStatusBanner = createSuccess ? (
     <div
-      className="flex items-start gap-2 rounded-lg border border-[#A8DAB5] bg-[#E6F4EA] px-4 py-3 text-[14px] text-[#0F9D58] lg:text-sm lg:text-emerald-900"
+      className="flex items-start gap-2.5 rounded-lg border border-[#A8DAB5] bg-[#E6F4EA] px-4 py-3 text-[13px] text-[#0F9D58]"
       role="status"
     >
       <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
@@ -385,7 +403,7 @@ function ManageRolesPageContent() {
     </div>
   ) : createError ? (
     <div
-      className="flex items-start gap-2 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-4 py-3 text-[14px] text-[#D93025] lg:text-sm lg:text-red-900"
+      className="flex items-start gap-2.5 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-4 py-3 text-[13px] text-[#D93025]"
       role="alert"
     >
       <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
@@ -396,13 +414,13 @@ function ManageRolesPageContent() {
   const createFormFields = (mobile: boolean) => (
     <>
       <div>
-        <label htmlFor={mobile ? "org-context-mobile" : "org-context"} className={labelCls(mobile)}>
+        <label htmlFor={mobile ? "org-context-mobile" : "org-context"} className={labelCls()}>
           Organization
         </label>
         <input
           id={mobile ? "org-context-mobile" : "org-context"}
           type="text"
-          className={`${inputCls()} bg-[#F5F7FA] text-[#6B7280] lg:bg-slate-50`}
+          className={`${inputCls()} bg-[#F9FAFB] text-[#6B7280]`}
           value={orgMissing ? "—" : `${orgName} (ID: ${organizationIdNum})`}
           readOnly
           tabIndex={-1}
@@ -410,8 +428,8 @@ function ManageRolesPageContent() {
         />
       </div>
       <div>
-        <label htmlFor={mobile ? "role-name-mobile" : "role-name"} className={labelCls(mobile)}>
-          Role name <span className="text-[#D93025] lg:text-red-500">*</span>
+        <label htmlFor={mobile ? "role-name-mobile" : "role-name"} className={labelCls()}>
+          Role name <span className="text-[#D93025]">*</span>
         </label>
         <input
           ref={mobile ? createInputRef : undefined}
@@ -427,7 +445,7 @@ function ManageRolesPageContent() {
           required
           minLength={2}
         />
-        <p className="mt-1.5 text-[13px] text-[#6B7280] lg:text-xs lg:text-slate-500">
+        <p className="mt-1.5 text-[12px] text-[#6B7280]">
           Examples: manager, hr, staff. Duplicates are not allowed for this organization.
         </p>
       </div>
@@ -436,23 +454,24 @@ function ManageRolesPageContent() {
 
   const guidePanel = (
     <div className="space-y-3">
-      <div className={`${zohoPanelCls()} p-4`}>
-        <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">
-          About roles
-        </p>
-        <p className="mt-2 text-[14px] leading-relaxed text-[#4B5563]">
+      <div className={`${cardCls()} p-4`}>
+        <div className="flex items-center gap-2">
+          <BookOpen className="h-4 w-4 text-[#008CD3]" aria-hidden />
+          <p className="text-[13px] font-semibold text-[#1F2937]">About roles</p>
+        </div>
+        <p className="mt-2.5 text-[13px] leading-relaxed text-[#6B7280]">
           Roles define permission groups for employees. After creating a role, assign features and
           map users from employee management screens.
         </p>
       </div>
-      <div className={`${zohoPanelCls()} p-4`}>
-        <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">
+      <div className={`${cardCls()} p-4`}>
+        <p className="text-[12px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
           Naming rules
         </p>
-        <ul className="mt-3 space-y-3">
+        <ul className="mt-3 space-y-2.5">
           {GUIDE_ITEMS.map((item) => (
-            <li key={item} className="flex gap-3 text-[14px] text-[#4B5563]">
-              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#E8F4FB] text-[11px] font-semibold text-[#008CD3]">
+            <li key={item} className="flex gap-2.5 text-[13px] text-[#4B5563]">
+              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#E8F4FB] text-[10px] font-bold text-[#008CD3]">
                 ✓
               </span>
               {item}
@@ -460,10 +479,10 @@ function ManageRolesPageContent() {
           ))}
         </ul>
       </div>
-      <div className="rounded-xl border border-[#E4E7EC] bg-[#E8F4FB] p-4">
+      <div className="rounded-xl border border-[#C5E4F3] bg-[#E8F4FB]/60 p-4">
         <div className="flex gap-3">
-          <Info className="h-5 w-5 shrink-0 text-[#008CD3]" />
-          <p className="text-[14px] leading-relaxed text-[#4B5563]">
+          <Info className="h-4 w-4 shrink-0 text-[#008CD3] mt-0.5" />
+          <p className="text-[13px] leading-relaxed text-[#4B5563]">
             New roles appear in feature assignment and employee management once saved.
           </p>
         </div>
@@ -471,33 +490,156 @@ function ManageRolesPageContent() {
     </div>
   );
 
+  function RoleCard({ role, variant }: { role: OrgRoleRow; variant: "mobile" | "desktop" }) {
+    const displayName = formatRoleDisplay(role.role_name);
+    const rawName = String(role.role_name ?? displayName);
+    const roleId = String(role.id);
+    const menuOpen = openMenuId === roleId;
+
+    if (variant === "mobile") {
+      return (
+        <article className={`${cardCls()} transition active:scale-[0.995]`}>
+          <div className="flex items-center gap-3 p-3.5">
+            <span
+              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-sm font-semibold ${roleColorClass(rawName)}`}
+            >
+              {roleInitials(rawName)}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[15px] font-semibold text-[#1F2937]">{displayName}</p>
+              <p className="mt-0.5 flex items-center gap-1 text-[12px] text-[#9CA3AF]">
+                <Hash className="h-3 w-3" aria-hidden />
+                {roleId}
+              </p>
+            </div>
+            <div className="flex shrink-0 gap-1">
+              <button
+                type="button"
+                onClick={() => openEdit(role)}
+                className="flex h-9 w-9 items-center justify-center rounded-lg text-[#008CD3] transition active:bg-[#E8F4FB]"
+                aria-label={`Edit ${displayName}`}
+              >
+                <Pencil className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => openDelete(role)}
+                className="flex h-9 w-9 items-center justify-center rounded-lg text-[#D93025] transition active:bg-[#FCE8E6]"
+                aria-label={`Delete ${displayName}`}
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </article>
+      );
+    }
+
+    return (
+      <article
+        className={`group relative ${cardCls()} transition hover:border-[#008CD3]/25 hover:shadow-md`}
+      >
+        <div className="flex items-start gap-3 p-4">
+          <span
+            className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-sm font-bold ${roleColorClass(rawName)}`}
+          >
+            {roleInitials(rawName)}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[15px] font-semibold text-[#1F2937]">{displayName}</p>
+            <p className="mt-1 inline-flex items-center gap-1 rounded-md bg-[#F9FAFB] px-2 py-0.5 text-[11px] font-medium text-[#6B7280]">
+              <Hash className="h-3 w-3" aria-hidden />
+              ID {roleId}
+            </p>
+          </div>
+          <div className="relative shrink-0" data-role-menu>
+            <button
+              type="button"
+              onClick={() => setOpenMenuId(menuOpen ? null : roleId)}
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-[#6B7280] opacity-0 transition group-hover:opacity-100 hover:bg-[#F9FAFB] focus:opacity-100"
+              aria-label={`Actions for ${displayName}`}
+              aria-expanded={menuOpen}
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </button>
+            {menuOpen ? (
+              <div
+                role="menu"
+                className="absolute right-0 top-full z-20 mt-1 min-w-[9.5rem] rounded-lg border border-[#E4E7EC] bg-white py-1 shadow-xl"
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => openEdit(role)}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] text-[#374151] hover:bg-[#F9FAFB]"
+                >
+                  <Pencil className="h-3.5 w-3.5 text-[#008CD3]" aria-hidden />
+                  Edit role
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => openDelete(role)}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] text-[#D93025] hover:bg-[#FCE8E6]/40"
+                >
+                  <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                  Delete role
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+        <div className="flex gap-2 border-t border-[#F3F4F6] px-4 py-2.5 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
+          <button
+            type="button"
+            onClick={() => openEdit(role)}
+            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#E4E7EC] bg-white py-1.5 text-[12px] font-medium text-[#374151] transition hover:border-[#008CD3]/30 hover:bg-[#E8F4FB]/40"
+          >
+            <Pencil className="h-3.5 w-3.5 text-[#008CD3]" aria-hidden />
+            Edit
+          </button>
+          <button
+            type="button"
+            onClick={() => openDelete(role)}
+            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#FFCDD2] bg-white py-1.5 text-[12px] font-medium text-[#D93025] transition hover:bg-[#FCE8E6]/50"
+          >
+            <Trash2 className="h-3.5 w-3.5" aria-hidden />
+            Delete
+          </button>
+        </div>
+      </article>
+    );
+  }
+
   const rolesListContent = (
     <>
       {listError ? (
-        <div className="mx-4 mt-3 flex items-start gap-2 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-4 py-3 text-[14px] text-[#D93025] lg:mx-0 lg:mb-4">
+        <div className="mx-3 mb-3 flex items-start gap-2.5 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-4 py-3 text-[13px] text-[#D93025] lg:mx-0">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           <span>{listError}</span>
         </div>
       ) : null}
 
       {listLoading && !listError ? (
-        <div className="flex flex-col items-center justify-center gap-3 py-24 text-[#6B7280]">
-          <Loader2 className="h-9 w-9 animate-spin text-[#008CD3]" />
-          <p className="text-[15px]">Loading roles…</p>
+        <div className="flex flex-col items-center justify-center gap-3 py-20 text-[#6B7280]">
+          <Loader2 className="h-8 w-8 animate-spin text-[#008CD3]" />
+          <p className="text-[14px]">Loading roles…</p>
         </div>
       ) : null}
 
       {!listLoading && !listError && roles.length === 0 ? (
-        <div className="mx-4 mt-4 rounded-xl border border-dashed border-[#E4E7EC] bg-white px-6 py-16 text-center lg:mx-0">
-          <Shield className="mx-auto h-10 w-10 text-[#9CA3AF]" />
-          <p className="mt-4 text-[17px] font-semibold text-[#1F2937]">No roles yet</p>
-          <p className="mt-2 text-[14px] text-[#6B7280]">
-            Create your first role using the Create tab or the form on the left.
+        <div className="mx-3 rounded-xl border border-dashed border-[#E4E7EC] bg-white px-6 py-16 text-center lg:mx-0">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#E8F4FB]">
+            <Shield className="h-7 w-7 text-[#008CD3]" />
+          </div>
+          <p className="mt-4 text-[16px] font-semibold text-[#1F2937]">No roles yet</p>
+          <p className="mt-1.5 text-[13px] text-[#6B7280]">
+            Create your first role to start assigning permissions.
           </p>
           <button
             type="button"
             onClick={() => setMobileMainTab("create")}
-            className={`mt-6 ${zohoPrimaryBtnCls()}`}
+            className={`mt-5 ${primaryBtnCls()}`}
           >
             <ShieldPlus className="h-4 w-4" aria-hidden />
             Create role
@@ -507,138 +649,59 @@ function ManageRolesPageContent() {
 
       {!listLoading && !listError && roles.length > 0 ? (
         <>
-          <ul className="mt-1 divide-y divide-[#E4E7EC] border-t border-[#E4E7EC] bg-white lg:hidden">
-            {filteredRoles.length === 0 ? (
-              <li className="px-4 py-12 text-center text-[15px] text-[#6B7280]">
-                No roles match your search.
-              </li>
-            ) : (
-              filteredRoles.map((role) => {
-                const displayName = formatRoleDisplay(role.role_name);
-                const rawName = String(role.role_name ?? displayName);
-                return (
-                  <li key={String(role.id)}>
-                    <div className="flex items-center gap-3 px-4 py-3.5">
-                      <span
-                        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-sm font-semibold ${roleColorClass(rawName)}`}
-                      >
-                        {roleInitials(rawName)}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-[16px] font-medium text-[#1F2937]">
-                          {displayName}
-                        </p>
-                        <p className="text-[13px] text-[#9CA3AF]">ID {String(role.id)}</p>
-                      </div>
-                      <div className="flex shrink-0 gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => openEdit(role)}
-                          className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#008CD3] active:bg-[#E8F4FB]"
-                          aria-label={`Edit ${displayName}`}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => openDelete(role)}
-                          className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#FFCDD2] text-[#C62828] active:bg-[#FFECEC]"
-                          aria-label={`Delete ${displayName}`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                  </li>
-                );
-              })
-            )}
-          </ul>
-
-          <div className="hidden overflow-x-auto lg:block">
-            <table className="w-full min-w-[520px] text-left text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 bg-slate-50/80">
-                  <th className="px-6 py-3 font-semibold text-[#0C123A]">Role</th>
-                  <th className="hidden px-6 py-3 font-semibold text-[#0C123A] sm:table-cell">
-                    ID
-                  </th>
-                  <th className="px-6 py-3 text-right font-semibold text-[#0C123A]">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredRoles.length === 0 ? (
-                  <tr>
-                    <td colSpan={3} className="px-6 py-12 text-center text-slate-500">
-                      No roles match your search.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredRoles.map((role) => (
-                    <tr key={String(role.id)} className="border-b border-slate-100 last:border-0">
-                      <td className="px-6 py-4 font-medium text-[#0C123A]">
-                        {formatRoleDisplay(role.role_name)}
-                      </td>
-                      <td className="hidden px-6 py-4 text-slate-500 sm:table-cell">{role.id}</td>
-                      <td className="px-6 py-4">
-                        <div className="flex justify-end gap-2">
-                          <button
-                            type="button"
-                            onClick={() => openEdit(role)}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-[#0C123A] shadow-sm transition hover:border-[#C99237]/50 hover:bg-[#C99237]/5"
-                          >
-                            <Pencil className="h-3.5 w-3.5" aria-hidden />
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => openDelete(role)}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 shadow-sm transition hover:bg-red-50"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" aria-hidden />
-                            Delete
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+          {filteredRoles.length === 0 ? (
+            <div className="px-3 py-16 text-center lg:px-0">
+              <Search className="mx-auto h-8 w-8 text-[#D1D5DB]" aria-hidden />
+              <p className="mt-3 text-[14px] font-medium text-[#374151]">No matching roles</p>
+              <p className="mt-1 text-[13px] text-[#6B7280]">Try a different search term.</p>
+            </div>
+          ) : (
+            <>
+              <div className="flex flex-col gap-2.5 px-3 pb-3 lg:hidden">
+                {filteredRoles.map((role) => (
+                  <RoleCard key={String(role.id)} role={role} variant="mobile" />
+                ))}
+              </div>
+              <div className="hidden gap-4 p-5 lg:grid lg:grid-cols-2 xl:grid-cols-3">
+                {filteredRoles.map((role) => (
+                  <RoleCard key={String(role.id)} role={role} variant="desktop" />
+                ))}
+              </div>
+            </>
+          )}
         </>
       ) : null}
     </>
   );
 
   return (
-    <div className="min-h-full bg-[#F5F7FA] pb-28 lg:space-y-6 lg:bg-transparent lg:pb-0">
-      {/* Mobile & tablet */}
+    <div className="min-h-full bg-[#F5F7FA] pb-28 lg:space-y-5 lg:bg-transparent lg:pb-0">
+      {/* ── Mobile & tablet ── */}
       <div className="lg:hidden">
-        <div className="sticky top-0 z-20 border-b border-[#E4E7EC] bg-white shadow-sm">
+        <div className="sticky top-0 z-20 border-b border-[#E4E7EC] bg-white/95 shadow-sm backdrop-blur-sm">
           <div className="flex items-center gap-3 px-4 py-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#E8F4FB] text-[#008CD3]">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#E8F4FB] text-[#008CD3]">
               <Shield className="h-5 w-5" aria-hidden />
             </span>
             <div className="min-w-0 flex-1">
-              <h1 className="truncate text-[17px] font-semibold text-[#1F2937]">Organization roles</h1>
-              <p className="truncate text-[13px] text-[#6B7280]">{orgName}</p>
+              <h1 className="truncate text-[16px] font-semibold text-[#1F2937]">Organization roles</h1>
+              <p className="truncate text-[12px] text-[#6B7280]">{orgName}</p>
             </div>
             <button
               type="button"
               onClick={() => void loadRoles(true)}
               disabled={listLoading || listRefreshing || orgMissing}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#008CD3] active:bg-[#F5F7FA] disabled:opacity-50"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#008CD3] transition active:bg-[#F9FAFB] disabled:opacity-50"
               aria-label="Refresh roles"
             >
               <RefreshCw
-                className={`h-5 w-5 ${listLoading || listRefreshing ? "animate-spin" : ""}`}
+                className={`h-4 w-4 ${listLoading || listRefreshing ? "animate-spin" : ""}`}
               />
             </button>
           </div>
 
           <div className="px-4 pb-3">
-            <div className="flex rounded-lg bg-[#F5F7FA] p-1">
+            <div className="flex rounded-lg bg-[#F3F4F6] p-1">
               {mobileTabs.map((tab) => (
                 <button
                   key={tab.id}
@@ -653,10 +716,10 @@ function ManageRolesPageContent() {
                   {tab.label}
                   {"count" in tab && tab.count != null ? (
                     <span
-                      className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] ${
+                      className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-semibold ${
                         mobileMainTab === tab.id
                           ? "bg-[#E8F4FB] text-[#008CD3]"
-                          : "bg-[#E4E7EC] text-[#6B7280]"
+                          : "bg-[#E5E7EB] text-[#6B7280]"
                       }`}
                     >
                       {tab.count > 99 ? "99+" : tab.count}
@@ -668,22 +731,33 @@ function ManageRolesPageContent() {
           </div>
 
           {mobileMainTab === "roles" ? (
-            <div className="border-t border-[#E4E7EC] px-4 py-2.5">
+            <div className="border-t border-[#F3F4F6] px-4 py-2.5">
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF]" />
                 <input
                   type="search"
                   value={roleSearchQuery}
                   onChange={(e) => setRoleSearchQuery(e.target.value)}
-                  placeholder="Search roles"
-                  className={zohoSearchCls()}
+                  placeholder="Search roles by name or ID"
+                  className={searchCls()}
                 />
               </div>
             </div>
           ) : null}
         </div>
 
-        {mobileMainTab === "roles" ? <div>{rolesListContent}</div> : null}
+        {mobileMainTab === "roles" ? (
+          <div className="pt-3">
+            {!listLoading && !listError && roles.length > 0 ? (
+              <p className="mb-2 px-3 text-[12px] text-[#6B7280]">
+                Showing{" "}
+                <span className="font-semibold text-[#1F2937]">{filteredRoles.length}</span> of{" "}
+                <span className="font-semibold text-[#1F2937]">{roles.length}</span> roles
+              </p>
+            ) : null}
+            {rolesListContent}
+          </div>
+        ) : null}
 
         {mobileMainTab === "create" ? (
           <div className="p-4">
@@ -691,8 +765,12 @@ function ManageRolesPageContent() {
             <form
               id="create-role-mobile-form"
               onSubmit={submitCreate}
-              className={`${zohoPanelCls()} space-y-4 p-4`}
+              className={`${cardCls()} space-y-4 p-4`}
             >
+              <div className="flex items-center gap-2 border-b border-[#F3F4F6] pb-3">
+                <ShieldPlus className="h-4 w-4 text-[#008CD3]" aria-hidden />
+                <h2 className="text-[15px] font-semibold text-[#1F2937]">New role</h2>
+              </div>
               {createFormFields(true)}
             </form>
           </div>
@@ -701,16 +779,16 @@ function ManageRolesPageContent() {
         {mobileMainTab === "guide" ? <div className="p-4">{guidePanel}</div> : null}
 
         {mobileMainTab === "create" ? (
-          <div className="fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-30 border-t border-[#E4E7EC] bg-white px-4 py-3 shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
+          <div className="fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-30 border-t border-[#E4E7EC] bg-white/95 px-4 py-3 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] backdrop-blur-sm">
             <div className="flex gap-2">
-              <button type="button" onClick={clearCreateForm} className={zohoSecondaryBtnCls(true)}>
+              <button type="button" onClick={clearCreateForm} className={secondaryBtnCls(true)}>
                 Clear
               </button>
               <button
                 type="submit"
                 form="create-role-mobile-form"
                 disabled={createSaving || orgMissing}
-                className={zohoPrimaryBtnCls(true)}
+                className={primaryBtnCls(true)}
               >
                 {createSaving ? (
                   <>
@@ -729,54 +807,83 @@ function ManageRolesPageContent() {
         ) : null}
       </div>
 
-      {/* Desktop */}
-      <div className="hidden space-y-6 lg:block">
-        <div className={`${zohoPanelCls()} p-6 sm:p-8`}>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex gap-3">
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#C99237]/12">
-                <Shield className="h-6 w-6 text-[#C99237]" aria-hidden />
+      {/* ── Desktop ── */}
+      <div className="hidden lg:block">
+        <header className="mb-5 overflow-hidden rounded-2xl border border-[#E4E7EC] bg-gradient-to-br from-[#0C123A] via-[#151e59] to-[#008CD3] p-6 text-white shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 backdrop-blur-sm">
+                <Shield className="h-5 w-5" aria-hidden />
               </span>
               <div>
-                <h1 className="text-xl font-bold text-[#0C123A] sm:text-2xl">Organization roles</h1>
-                <p className="mt-1 text-sm text-slate-500">
-                  Create, view, rename, or remove roles for{" "}
-                  <span className="font-medium text-slate-700">{orgName}</span>.
+                <h1 className="text-xl font-semibold tracking-tight">Organization roles</h1>
+                <p className="mt-1 text-sm text-white/75">
+                  Manage permission groups for{" "}
+                  <span className="font-medium text-white">{orgName}</span>
                 </p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => void loadRoles(true)}
-              disabled={listLoading || listRefreshing || orgMissing}
-              className={zohoSecondaryBtnCls()}
-            >
-              <RefreshCw
-                className={`h-4 w-4 ${listLoading || listRefreshing ? "animate-spin" : ""}`}
-              />
-              Refresh
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void loadRoles(true)}
+                disabled={listLoading || listRefreshing || orgMissing}
+                className="inline-flex items-center gap-2 rounded-lg border border-white/30 bg-white/10 px-3 py-2 text-[13px] font-medium text-white backdrop-blur-sm transition hover:bg-white/20 disabled:opacity-50"
+              >
+                <RefreshCw
+                  className={`h-4 w-4 ${listLoading || listRefreshing ? "animate-spin" : ""}`}
+                />
+                Refresh
+              </button>
+              {!listLoading && !listError ? (
+                <>
+                  <div className="rounded-lg bg-white/10 px-3 py-2 text-center backdrop-blur-sm">
+                    <p className="text-lg font-semibold leading-none text-[#A8E6CF]">
+                      {roles.length}
+                    </p>
+                    <p className="mt-1 text-[10px] uppercase tracking-wide text-white/70">
+                      Total roles
+                    </p>
+                  </div>
+                  {roleSearchQuery.trim() ? (
+                    <div className="rounded-lg bg-white/10 px-3 py-2 text-center backdrop-blur-sm">
+                      <p className="text-lg font-semibold leading-none text-white">
+                        {filteredRoles.length}
+                      </p>
+                      <p className="mt-1 text-[10px] uppercase tracking-wide text-white/70">
+                        Filtered
+                      </p>
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
+            </div>
           </div>
-        </div>
+        </header>
 
-        <div className="grid gap-6 lg:grid-cols-12">
-          <div className="space-y-6 lg:col-span-4">
-            <div className={`${zohoPanelCls()} p-6`}>
-              <div className="mb-4 flex items-center gap-2">
-                <ShieldPlus className="h-5 w-5 text-[#008CD3]" aria-hidden />
-                <h2 className="text-lg font-bold text-[#0C123A]">Create role</h2>
+        <div className="grid gap-5 xl:grid-cols-12">
+          <div className="space-y-4 xl:col-span-4">
+            <div className={`${cardCls()} p-5`}>
+              <div className="mb-4 flex items-center gap-2.5 border-b border-[#F3F4F6] pb-3">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#E8F4FB]">
+                  <ShieldPlus className="h-4 w-4 text-[#008CD3]" aria-hidden />
+                </span>
+                <div>
+                  <h2 className="text-[15px] font-semibold text-[#1F2937]">Create role</h2>
+                  <p className="text-[12px] text-[#6B7280]">Add a new permission group</p>
+                </div>
               </div>
               {createStatusBanner ? <div className="mb-4">{createStatusBanner}</div> : null}
               <form onSubmit={submitCreate} className="space-y-4">
                 {createFormFields(false)}
-                <div className="flex flex-col gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end">
-                  <button type="button" onClick={clearCreateForm} className={zohoSecondaryBtnCls()}>
+                <div className="flex flex-col gap-2 border-t border-[#F3F4F6] pt-4 sm:flex-row sm:justify-end">
+                  <button type="button" onClick={clearCreateForm} className={secondaryBtnCls()}>
                     Clear
                   </button>
                   <button
                     type="submit"
                     disabled={createSaving || orgMissing}
-                    className={zohoPrimaryBtnCls()}
+                    className={primaryBtnCls()}
                   >
                     {createSaving ? (
                       <>
@@ -796,33 +903,45 @@ function ManageRolesPageContent() {
             {guidePanel}
           </div>
 
-          <div className={`${zohoPanelCls()} lg:col-span-8`}>
-            <div className="border-b border-slate-100 px-6 py-4">
+          <div className={`${cardCls()} xl:col-span-8`}>
+            <div className="border-b border-[#F3F4F6] px-5 py-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <h2 className="text-lg font-bold text-[#0C123A]">All roles</h2>
-                  <p className="text-sm text-slate-500">
-                    {roles.length} role{roles.length === 1 ? "" : "s"} in this organization
+                  <h2 className="text-[15px] font-semibold text-[#1F2937]">All roles</h2>
+                  <p className="mt-0.5 text-[12px] text-[#6B7280]">
+                    {listLoading
+                      ? "Loading…"
+                      : `${filteredRoles.length} of ${roles.length} role${roles.length === 1 ? "" : "s"}`}
                   </p>
                 </div>
-                <div className="relative w-full sm:max-w-xs">
+                <div className="relative w-full sm:max-w-[260px]">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF]" />
                   <input
                     type="search"
                     value={roleSearchQuery}
                     onChange={(e) => setRoleSearchQuery(e.target.value)}
-                    placeholder="Search roles"
-                    className={zohoSearchCls()}
+                    placeholder="Search roles…"
+                    className={searchCls()}
                   />
+                  {roleSearchQuery.trim() ? (
+                    <button
+                      type="button"
+                      onClick={() => setRoleSearchQuery("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-[#9CA3AF] hover:bg-[#F3F4F6] hover:text-[#374151]"
+                      aria-label="Clear search"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  ) : null}
                 </div>
               </div>
             </div>
-            <div className="p-0">{rolesListContent}</div>
+            {rolesListContent}
           </div>
         </div>
       </div>
 
-      {/* Edit role modal */}
+      {/* ── Edit role modal ── */}
       {editRole && (
         <div
           className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4"
@@ -832,46 +951,53 @@ function ManageRolesPageContent() {
         >
           <button
             type="button"
-            className="absolute inset-0 bg-[#1F2937]/40 backdrop-blur-[1px] sm:bg-[#0C123A]/40 sm:backdrop-blur-[2px]"
+            className="absolute inset-0 bg-[#111B21]/50 backdrop-blur-[2px]"
             aria-label="Close dialog"
             onClick={() => !editSaving && setEditRole(null)}
           />
-          <div className="relative z-10 flex max-h-[92dvh] w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-[#E4E7EC] bg-white shadow-2xl sm:rounded-2xl sm:border-slate-200 sm:p-6 sm:shadow-xl">
-            <div className="shrink-0 border-b border-[#E4E7EC] px-4 py-4 sm:border-0 sm:p-0 sm:[border-top:3px_solid_#008CD3]">
+          <div className="relative z-10 flex max-h-[92dvh] w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-[#E4E7EC] bg-white shadow-2xl sm:rounded-2xl sm:shadow-xl">
+            <div className="shrink-0 border-b border-[#F3F4F6] px-5 py-4 sm:border-t-[3px] sm:border-t-[#008CD3]">
               <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h2
-                    id="edit-role-title"
-                    className="text-[17px] font-semibold text-[#1F2937] sm:text-lg sm:font-bold sm:text-[#0C123A]"
+                <div className="flex items-start gap-3">
+                  <span
+                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-bold ${roleColorClass(editName || editRole.role_name || "")}`}
                   >
-                    Edit role
-                  </h2>
-                  <p className="mt-1 text-[13px] text-[#6B7280] sm:text-sm sm:text-slate-500">
-                    Saved in lowercase for your organization.
-                  </p>
+                    {roleInitials(editName || editRole.role_name || "")}
+                  </span>
+                  <div>
+                    <h2
+                      id="edit-role-title"
+                      className="text-[16px] font-semibold text-[#1F2937]"
+                    >
+                      Edit role
+                    </h2>
+                    <p className="mt-0.5 text-[12px] text-[#6B7280]">
+                      Saved in lowercase for your organization.
+                    </p>
+                  </div>
                 </div>
                 <button
                   type="button"
                   disabled={editSaving}
-                  className="flex h-9 w-9 items-center justify-center rounded-lg text-[#6B7280] active:bg-[#F5F7FA]"
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-[#6B7280] transition hover:bg-[#F9FAFB]"
                   aria-label="Close"
                   onClick={() => setEditRole(null)}
                 >
-                  <X className="h-5 w-5" />
+                  <X className="h-4 w-4" />
                 </button>
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-0">
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
               {editError && (
-                <div className="mb-4 flex items-start gap-2 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2 text-[14px] text-[#D93025]">
+                <div className="mb-4 flex items-start gap-2.5 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2.5 text-[13px] text-[#D93025]">
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
                   {editError}
                 </div>
               )}
               <form onSubmit={submitEdit} className="space-y-4">
                 <div>
-                  <label htmlFor="edit-role-name" className={labelCls(true)}>
+                  <label htmlFor="edit-role-name" className={labelCls()}>
                     Role name
                   </label>
                   <input
@@ -886,16 +1012,16 @@ function ManageRolesPageContent() {
                     required
                   />
                 </div>
-                <div className="flex flex-col-reverse gap-2 border-t border-[#E4E7EC] pt-4 sm:flex-row sm:justify-end sm:border-0">
+                <div className="flex flex-col-reverse gap-2 border-t border-[#F3F4F6] pt-4 sm:flex-row sm:justify-end">
                   <button
                     type="button"
                     disabled={editSaving}
                     onClick={() => setEditRole(null)}
-                    className={zohoSecondaryBtnCls(true)}
+                    className={secondaryBtnCls(true)}
                   >
                     Cancel
                   </button>
-                  <button type="submit" disabled={editSaving} className={zohoPrimaryBtnCls()}>
+                  <button type="submit" disabled={editSaving} className={primaryBtnCls()}>
                     {editSaving ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
@@ -912,7 +1038,7 @@ function ManageRolesPageContent() {
         </div>
       )}
 
-      {/* Delete confirmation modal */}
+      {/* ── Delete confirmation modal ── */}
       {deleteRole && (
         <div
           className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4"
@@ -922,31 +1048,34 @@ function ManageRolesPageContent() {
         >
           <button
             type="button"
-            className="absolute inset-0 bg-[#1F2937]/40 backdrop-blur-[1px] sm:bg-[#0C123A]/40 sm:backdrop-blur-[2px]"
+            className="absolute inset-0 bg-[#111B21]/50 backdrop-blur-[2px]"
             aria-label="Close dialog"
             onClick={() => !deleteSaving && setDeleteRole(null)}
           />
-          <div className="relative z-10 w-full max-w-md rounded-t-2xl border border-[#E4E7EC] bg-white p-4 shadow-2xl sm:rounded-2xl sm:border-slate-200 sm:p-6 sm:shadow-xl">
+          <div className="relative z-10 w-full max-w-md rounded-t-2xl border border-[#E4E7EC] bg-white p-5 shadow-2xl sm:rounded-2xl">
             <div className="mb-4 flex gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#FFECEC]">
-                <AlertTriangle className="h-5 w-5 text-[#C62828]" aria-hidden />
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#FCE8E6]">
+                <AlertTriangle className="h-5 w-5 text-[#D93025]" aria-hidden />
               </span>
               <div>
                 <h2
                   id="delete-role-title"
-                  className="text-[17px] font-semibold text-[#1F2937] sm:text-lg sm:font-bold sm:text-[#0C123A]"
+                  className="text-[16px] font-semibold text-[#1F2937]"
                 >
                   Delete role?
                 </h2>
-                <p className="mt-2 text-[14px] text-[#4B5563] sm:text-sm sm:text-slate-600">
+                <p className="mt-2 text-[13px] leading-relaxed text-[#6B7280]">
                   This will permanently remove{" "}
-                  <strong>{formatRoleDisplay(deleteRole.role_name)}</strong> (ID {deleteRole.id})
-                  from {orgName}. Users assigned only to this role may be affected.
+                  <strong className="text-[#1F2937]">
+                    {formatRoleDisplay(deleteRole.role_name)}
+                  </strong>{" "}
+                  (ID {deleteRole.id}) from {orgName}. Users assigned only to this role may be
+                  affected.
                 </p>
               </div>
             </div>
             {deleteError && (
-              <div className="mb-4 flex items-start gap-2 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2 text-[14px] text-[#D93025]">
+              <div className="mb-4 flex items-start gap-2.5 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2.5 text-[13px] text-[#D93025]">
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
                 {deleteError}
               </div>
@@ -956,7 +1085,7 @@ function ManageRolesPageContent() {
                 type="button"
                 disabled={deleteSaving}
                 onClick={() => setDeleteRole(null)}
-                className={zohoSecondaryBtnCls(true)}
+                className={secondaryBtnCls(true)}
               >
                 Cancel
               </button>
@@ -964,7 +1093,7 @@ function ManageRolesPageContent() {
                 type="button"
                 disabled={deleteSaving}
                 onClick={() => void confirmDelete()}
-                className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg bg-[#D93025] px-4 py-2 text-[15px] font-medium text-white transition hover:bg-[#B71C1C] disabled:opacity-50 sm:w-auto sm:bg-red-600 sm:text-sm sm:font-bold sm:hover:bg-red-700"
+                className="inline-flex min-h-[42px] w-full items-center justify-center gap-2 rounded-lg bg-[#D93025] px-4 py-2.5 text-[14px] font-medium text-white shadow-sm transition hover:bg-[#B71C1C] disabled:opacity-50 sm:w-auto"
               >
                 {deleteSaving ? (
                   <>

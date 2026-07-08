@@ -412,7 +412,7 @@ export default function HeaderFeatureSearch() {
               setOpen(true);
             }}
             onFocus={() => setOpen(true)}
-            placeholder="Search organization & assigned features…"
+            placeholder="Search anything…"
             className="w-full rounded-xl border border-[#E4E7EC] bg-[#F9FAFB]/90 py-2 pl-9 pr-20 text-[14px] text-[#1F2937] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:bg-white focus:ring-2 focus:ring-[#008CD3]/15"
             autoComplete="off"
             aria-label="Search organization features"

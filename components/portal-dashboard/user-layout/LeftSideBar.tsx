@@ -1,133 +1,45 @@
 "use client";
 
-import { type ComponentType, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useParams, usePathname, useRouter } from "next/navigation";
+import { MdCalendarMonth, MdClose, MdLogout, MdMenu } from "react-icons/md";
+import { useManagementShellOptional } from "@/components/portal-dashboard/Layout/ManagementShellContext";
+import { btnBrandCls } from "@/components/portal-dashboard/home/dashboardTokens";
 import {
-  MdCalendarMonth,
-  MdClose,
-  MdDashboard,
-  MdExitToApp,
-  MdGroups,
-  MdInventory2,
-  MdLogout,
-  MdMenu,
-  MdOutlineChat,
-} from "react-icons/md";
-import { BiTask } from "react-icons/bi";
-import { LuFileSpreadsheet } from "react-icons/lu";
-
-type NavIcon = ComponentType<{ className?: string }>;
-
-const navigationItems: { id: string; label: string; icon: NavIcon; href: string }[] =
-  [
-    {
-      id: "dashboard",
-      label: "Dashboard",
-      icon: MdDashboard,
-      href: "/user-dashboard/[org_id]/home",
-    },
-    {
-      id: "my-team",
-      label: "My team",
-      icon: MdGroups,
-      href: "/user-dashboard/[org_id]/my-team",
-    },
-    {
-      id: "asset-handover",
-      label: "Asset handover",
-      icon: MdInventory2,
-      href: "/user-dashboard/[org_id]/asset-handover",
-    },
-    {
-      id: "my-leaves",
-      label: "My Leaves",
-      icon: MdCalendarMonth,
-      href: "/user-dashboard/[org_id]/my-leaves",
-    },
-    {
-      id: "attendance-history",
-      label: "Attendance History",
-      icon: LuFileSpreadsheet,
-      href: "/user-dashboard/[org_id]/attendance-history",
-    },
-    {
-      id: "tasks-management",
-      label: "Tasks Management",
-      icon: BiTask,
-      href: "/user-dashboard/[org_id]/tasks-management",
-    },
-    {
-      id: "chat",
-      label: "Chat",
-      icon: MdOutlineChat,
-      href: "/user-dashboard/[org_id]/sync-connection",
-    },
-    {
-      id: "exit-process",
-      label: "Exit Process",
-      icon: MdExitToApp,
-      href: "/user-dashboard/[org_id]/exit-process",
-    },
-  ];
-
-/** Quick-access tabs on the bottom bar; last slot is Menu (< lg). */
-const MAX_MOBILE_BOTTOM_NAV_SLOTS = 3;
+  MAX_USER_MOBILE_BOTTOM_SLOTS,
+  USER_DASHBOARD_NAV_ITEMS,
+  resolveUserDashboardHref,
+  userBottomTabShortLabel,
+  userDashboardRouteActive,
+  userNavIconBadgeCls,
+} from "@/lib/userDashboardNav";
 
 const MOBILE_BOTTOM_LIGHT =
-  "border-t border-slate-200 bg-[#FAFAF8] text-slate-700 shadow-[0_-1px_0_0_rgba(15,23,42,0.06)]";
+  "border-t border-slate-200/90 bg-white/95 text-slate-700 shadow-[0_-1px_0_0_rgba(15,23,42,0.06)] backdrop-blur-md";
 
-function resolveHref(template: string, orgId: string): string {
-  return template.replace("[org_id]", orgId);
-}
-
-function routeActive(pathname: string | null, href: string): boolean {
-  if (!pathname) return false;
-  if (pathname === href) return true;
-  return pathname.startsWith(`${href}/`);
-}
-
-function bottomTabShortLabel(item: (typeof navigationItems)[number]): string {
-  switch (item.id) {
-    case "dashboard":
-      return "Home";
-    case "my-team":
-      return "Team";
-    case "asset-handover":
-      return "Handover";
-    case "my-leaves":
-      return "Leaves";
-    case "attendance-history":
-      return "History";
-    case "tasks-management":
-      return "Tasks";
-    case "chat":
-      return "Chat";
-    case "exit-process":
-      return "Exit";
-    default:
-      return item.label.length > 11 ? `${item.label.slice(0, 10)}…` : item.label;
-  }
-}
+const LG_ICON = "shrink-0 text-[17px] leading-none";
 
 function LeftSideBar() {
   const params = useParams();
   const router = useRouter();
   const pathname = usePathname();
-  const orgIdParam = params?.org_id;
-  const orgSlug = String(orgIdParam ?? "");
+  const orgSlug = String(params?.org_id ?? "");
+  const managementShell = useManagementShellOptional();
+  const appsPanelOpen = managementShell?.appsPanelOpen ?? false;
+  const closeAppsPanel = managementShell?.closeAppsPanel;
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
-  const myLeavesHref = resolveHref(
+  const myLeavesHref = resolveUserDashboardHref(
     "/user-dashboard/[org_id]/my-leaves",
     orgSlug,
   );
   const applyLeaveHref = `${myLeavesHref}?apply=1`;
 
   const bottomNavItems = useMemo(
-    () => navigationItems.slice(0, MAX_MOBILE_BOTTOM_NAV_SLOTS),
+    () => USER_DASHBOARD_NAV_ITEMS.slice(0, MAX_USER_MOBILE_BOTTOM_SLOTS),
     [],
   );
 
@@ -135,10 +47,11 @@ function LeftSideBar() {
     function onKey(e: KeyboardEvent) {
       if (e.key !== "Escape") return;
       setMobileMenuOpen(false);
+      closeAppsPanel?.();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [closeAppsPanel]);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -148,18 +61,46 @@ function LeftSideBar() {
     };
   }, [mobileMenuOpen]);
 
-  const closeMobileMenu = useCallback(() => setMobileMenuOpen(false), []);
+  useEffect(() => {
+    if (!managementShell) return;
+    if (typeof window === "undefined") return;
+    const isDesktop = window.matchMedia("(min-width: 1024px)").matches;
+    if (!isDesktop && !mobileMenuOpen && appsPanelOpen) {
+      closeAppsPanel?.();
+    }
+  }, [mobileMenuOpen, appsPanelOpen, managementShell, closeAppsPanel]);
+
+  useEffect(() => {
+    if (!managementShell) return;
+    if (typeof window === "undefined") return;
+    const isDesktop = window.matchMedia("(min-width: 1024px)").matches;
+    if (!isDesktop) {
+      setMobileMenuOpen(appsPanelOpen);
+    }
+  }, [appsPanelOpen, managementShell]);
+
+  const closeMobileMenu = useCallback(() => {
+    setMobileMenuOpen(false);
+    closeAppsPanel?.();
+  }, [closeAppsPanel]);
 
   const toggleMobileMenu = useCallback(() => {
-    setMobileMenuOpen((open) => !open);
-  }, []);
+    setMobileMenuOpen((open) => {
+      const next = !open;
+      if (managementShell) {
+        managementShell.setAppsPanelOpen(next);
+      }
+      return next;
+    });
+  }, [managementShell]);
 
   const pushNav = useCallback(
     (href: string) => {
       router.push(href);
       closeMobileMenu();
+      closeAppsPanel?.();
     },
-    [router, closeMobileMenu],
+    [router, closeMobileMenu, closeAppsPanel],
   );
 
   function confirmLogout() {
@@ -174,29 +115,33 @@ function LeftSideBar() {
   }
 
   function openLeaveFromMenu() {
-    setMobileMenuOpen(false);
+    closeMobileMenu();
     router.push(applyLeaveHref);
   }
 
   function openLogoutFromMenu() {
-    setMobileMenuOpen(false);
+    closeMobileMenu();
     setShowLogoutConfirm(true);
   }
 
-  const navButtonClass = useCallback(
-    (active: boolean) =>
-      `flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition ${
-        active
-          ? "bg-indigo-50 text-indigo-700"
-          : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-      }`,
-    [],
-  );
+  const desktopNavButtonCls = (active: boolean) =>
+    `group mb-0.5 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[14px] font-medium transition-all duration-200 ${
+      active
+        ? "bg-[#E8F4FB]/90 text-[#0077B6] shadow-[inset_3px_0_0_0_#008CD3]"
+        : "text-slate-700 hover:bg-slate-50 hover:text-[#008CD3]"
+    }`;
+
+  const mobileDrawerItemCls = (active: boolean) =>
+    `flex w-full items-center gap-3 border-b border-slate-100 px-4 py-3 text-left text-sm font-medium transition-colors duration-150 ${
+      active
+        ? "bg-sky-50/80 text-[#0077B6]"
+        : "text-slate-800 active:bg-slate-50"
+    }`;
 
   const logoutDialog =
     showLogoutConfirm && typeof document !== "undefined" ? (
       <div
-        className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900/40 p-4"
+        className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-[2px]"
         role="dialog"
         aria-modal="true"
         aria-labelledby="user-logout-dialog-title"
@@ -204,31 +149,28 @@ function LeftSideBar() {
           e.target === e.currentTarget && setShowLogoutConfirm(false)
         }
       >
-        <div className="relative w-full max-w-md rounded-xl border border-slate-200 bg-white shadow-xl">
-          <div className="border-b border-slate-100 px-5 py-4">
-            <h3
-              id="user-logout-dialog-title"
-              className="text-base font-semibold text-slate-800"
-            >
-              Sign out?
-            </h3>
-            <p className="mt-1 text-sm text-slate-600">
-              You will be signed out of the portal. Unsaved work may be lost. You must
-              sign in again to continue.
-            </p>
-          </div>
-          <div className="flex justify-end gap-2 px-5 py-4">
+        <div className="relative w-full max-w-md rounded-2xl border border-slate-200/90 bg-white p-5 shadow-2xl">
+          <h3
+            id="user-logout-dialog-title"
+            className="text-base font-semibold text-slate-900"
+          >
+            Sign out?
+          </h3>
+          <p className="mt-2 text-sm text-slate-500">
+            You will be signed out of the portal. You must sign in again to continue.
+          </p>
+          <div className="mt-5 flex justify-end gap-2">
             <button
               type="button"
               onClick={() => setShowLogoutConfirm(false)}
-              className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
               Cancel
             </button>
             <button
               type="button"
               onClick={confirmLogout}
-              className="rounded-md bg-rose-600 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-700"
+              className="rounded-lg bg-rose-600 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-700"
             >
               Sign out
             </button>
@@ -239,62 +181,84 @@ function LeftSideBar() {
 
   return (
     <>
-      {/* Desktop / tablet landscape: fixed sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden h-screen w-[250px] flex-col border-r border-slate-200 bg-white lg:flex">
-        <div className="border-b border-slate-200 px-6 py-5">
-          <div className="flex min-w-0 flex-shrink-0 items-center">
-            <img
-              src="/portal/layout/logo.png"
-              alt="Company"
-              className="h-8 w-auto max-w-[160px] object-contain object-left sm:h-9"
-            />
-          </div>
-        </div>
+      {/* Desktop (lg+): floating apps panel — toggled from header */}
+      <div className="pointer-events-none hidden lg:block" aria-hidden={!appsPanelOpen}>
+        <div
+          className={`fixed inset-0 z-[10015] bg-slate-900/25 backdrop-blur-[3px] transition-opacity duration-300 ${
+            appsPanelOpen
+              ? "pointer-events-auto opacity-100"
+              : "pointer-events-none opacity-0"
+          }`}
+          onClick={() => closeAppsPanel?.()}
+          aria-hidden={!appsPanelOpen}
+        />
+        <div
+          className={`fixed left-4 top-[calc(3.75rem+0.75rem)] z-[10020] transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] ${
+            appsPanelOpen
+              ? "pointer-events-auto translate-x-0 opacity-100"
+              : "pointer-events-none -translate-x-4 opacity-0"
+          }`}
+        >
+          <aside
+            className={`flex max-h-[min(78vh,640px)] w-[min(19rem,88vw)] flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_24px_64px_rgba(15,23,42,0.14)] ${
+              appsPanelOpen ? "apps-panel-enter" : ""
+            }`}
+            role="dialog"
+            aria-modal={appsPanelOpen}
+            aria-label="Your workspace"
+            aria-hidden={!appsPanelOpen}
+          >
+            <div className="border-b border-slate-100 bg-gradient-to-r from-[#F8FAFC] via-white to-[#F0F9FF]/40 px-4 py-3.5">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400">
+                Your workspace
+              </p>
+              <p className="mt-0.5 text-[13px] font-medium text-slate-600">
+                Jump to any feature below
+              </p>
+            </div>
 
-        <nav className="flex flex-1 flex-col space-y-1 overflow-y-auto px-3 py-4">
-          {navigationItems.map((item) => {
-            const Icon = item.icon;
-            const href = resolveHref(
-              item.href ?? "/user-dashboard/[org_id]/home",
-              orgSlug,
-            );
-            const isActive = routeActive(pathname, href);
-            return (
+            <nav className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-2 [scrollbar-width:thin]">
+              {USER_DASHBOARD_NAV_ITEMS.map((item) => {
+                const Icon = item.icon;
+                const href = resolveUserDashboardHref(item.href, orgSlug);
+                const isActive = userDashboardRouteActive(pathname, href);
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => pushNav(href)}
+                    className={desktopNavButtonCls(isActive)}
+                  >
+                    <span className={userNavIconBadgeCls(item.id, isActive)}>
+                      <Icon className={LG_ICON} aria-hidden />
+                    </span>
+                    <span className="min-w-0 flex-1 leading-snug">{item.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+
+            <div className="space-y-2 border-t border-slate-100 p-3">
               <button
-                key={item.id}
                 type="button"
-                onClick={() => router.push(href)}
-                className={navButtonClass(isActive)}
+                onClick={openLeaveFromMenu}
+                className={`${btnBrandCls()} w-full`}
               >
-                <Icon className="text-[18px] shrink-0" />
-                <span>{item.label}</span>
+                <MdCalendarMonth className="h-4 w-4" aria-hidden />
+                Apply leave
               </button>
-            );
-          })}
-        </nav>
-
-        <div className="px-3 pb-3">
-          <button
-            type="button"
-            onClick={() => router.push(applyLeaveHref)}
-            className="flex w-full items-center justify-center gap-2 rounded-md bg-indigo-700 px-3 py-2.5 text-sm font-medium text-white hover:bg-indigo-800"
-          >
-            <MdCalendarMonth className="text-[18px]" />
-            Apply Leave
-          </button>
+              <button
+                type="button"
+                onClick={openLogoutFromMenu}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-rose-200/80 bg-rose-50/50 px-3 py-2.5 text-sm font-medium text-rose-600 transition hover:bg-rose-50"
+              >
+                <MdLogout className="text-[18px]" aria-hidden />
+                Sign out
+              </button>
+            </div>
+          </aside>
         </div>
-
-        <div className="space-y-1 border-t border-slate-200 px-3 py-4">
-          <button
-            type="button"
-            onClick={() => setShowLogoutConfirm(true)}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm text-rose-600 transition hover:bg-rose-50 hover:text-rose-700"
-          >
-            <MdLogout className="text-[18px]" />
-            Log out
-          </button>
-        </div>
-      </aside>
+      </div>
 
       {/* Bottom tab bar: quick tabs + Menu */}
       <nav
@@ -307,20 +271,23 @@ function LeftSideBar() {
         <div className="mx-auto flex max-w-xl items-stretch">
           {bottomNavItems.map((item) => {
             const Icon = item.icon;
-            const href = resolveHref(item.href, orgSlug);
-            const isActive = routeActive(pathname, href);
+            const href = resolveUserDashboardHref(item.href, orgSlug);
+            const isActive = userDashboardRouteActive(pathname, href);
+            const theme = isActive;
             return (
               <button
                 key={item.id}
                 type="button"
                 onClick={() => pushNav(href)}
-                className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 border-r border-slate-200 px-1 py-2 transition-colors duration-200 ${
-                  isActive ? "text-indigo-700" : "text-slate-600"
+                className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 border-r border-slate-100 px-1 py-2 transition-colors duration-200 ${
+                  theme ? "text-[#008CD3]" : "text-slate-600"
                 }`}
               >
-                <Icon className="text-[22px] shrink-0 text-slate-700" />
-                <span className="line-clamp-2 w-full text-center text-[10px] font-medium leading-tight">
-                  {bottomTabShortLabel(item)}
+                <span className={userNavIconBadgeCls(item.id, isActive, "sm")}>
+                  <Icon className="text-[15px]" aria-hidden />
+                </span>
+                <span className="line-clamp-2 w-full text-center text-[10px] font-semibold leading-tight">
+                  {userBottomTabShortLabel(item)}
                 </span>
               </button>
             );
@@ -329,40 +296,42 @@ function LeftSideBar() {
             type="button"
             onClick={toggleMobileMenu}
             className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 py-2 transition-colors duration-200 ${
-              mobileMenuOpen
-                ? "bg-indigo-50/90 text-indigo-800"
-                : "text-slate-600"
+              mobileMenuOpen ? "text-[#008CD3]" : "text-slate-600"
             }`}
             aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
             aria-expanded={mobileMenuOpen}
           >
             <span
-              className={`text-[22px] leading-none transition-transform duration-300 ${
-                mobileMenuOpen ? "rotate-90 text-indigo-700" : "text-slate-700"
+              className={`flex h-9 w-9 items-center justify-center rounded-xl transition-all duration-300 ${
+                mobileMenuOpen
+                  ? "bg-[#E8F4FB] text-[#008CD3] ring-2 ring-[#008CD3]/15"
+                  : "bg-slate-50 text-slate-600"
               }`}
             >
-              {mobileMenuOpen ? <MdClose /> : <MdMenu />}
+              <span className={`text-[20px] leading-none transition-transform duration-300 ${mobileMenuOpen ? "rotate-90" : ""}`}>
+                {mobileMenuOpen ? <MdClose /> : <MdMenu />}
+              </span>
             </span>
-            <span className="line-clamp-2 w-full text-center text-[10px] font-medium leading-tight">
+            <span className="line-clamp-2 w-full text-center text-[10px] font-semibold leading-tight">
               Menu
             </span>
           </button>
         </div>
       </nav>
 
-      {/* Drawer: all routes + Apply leave + Sign out (animated) */}
+      {/* Mobile drawer: all routes */}
       <div className="lg:hidden" aria-hidden={!mobileMenuOpen}>
         <div
-          className={`fixed inset-0 z-[10045] bg-slate-900/30 transition-opacity duration-300 ease-out ${
+          className={`fixed inset-0 z-[10045] bg-slate-900/30 backdrop-blur-[2px] transition-opacity duration-300 ease-out ${
             mobileMenuOpen
               ? "pointer-events-auto opacity-100"
               : "pointer-events-none opacity-0"
           }`}
-          onClick={() => setMobileMenuOpen(false)}
+          onClick={closeMobileMenu}
           aria-hidden={!mobileMenuOpen}
         />
         <div
-          className={`fixed left-0 top-0 z-[10046] flex h-full w-[min(20rem,88vw)] flex-col border-r border-slate-200 bg-[#FAFAF8] shadow-xl transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] will-change-transform ${
+          className={`fixed left-0 top-0 z-[10046] flex h-full w-[min(20rem,88vw)] flex-col border-r border-slate-200/90 bg-white shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] will-change-transform ${
             mobileMenuOpen
               ? "pointer-events-auto translate-x-0"
               : "pointer-events-none -translate-x-full"
@@ -372,59 +341,70 @@ function LeftSideBar() {
           aria-label="Navigation menu"
           aria-hidden={!mobileMenuOpen}
         >
-          <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
-            <span className="truncate text-sm font-semibold text-slate-900">
-              All features
-            </span>
+          <div className="flex items-center justify-between gap-2 border-b border-slate-100 bg-gradient-to-r from-[#F8FAFC] via-white to-[#F0F9FF]/40 px-4 py-3">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+                Workspace
+              </p>
+              <span className="truncate text-sm font-semibold text-slate-900">
+                All features
+              </span>
+            </div>
             <button
               type="button"
-              onClick={() => setMobileMenuOpen(false)}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition active:scale-95"
+              onClick={closeMobileMenu}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200/90 text-slate-600 transition active:scale-95 hover:bg-slate-50"
               aria-label="Close menu"
             >
               <MdClose className="text-xl" />
             </button>
           </div>
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
-            <div className="border-b border-slate-200 px-4 py-4">
+            <div className="border-b border-slate-100 px-4 py-4">
               <img
                 src="/portal/layout/logo.png"
                 alt="Company"
                 className="h-8 w-auto max-w-[180px] object-contain object-left"
               />
             </div>
-            {navigationItems.map((item) => {
+            {USER_DASHBOARD_NAV_ITEMS.map((item, index) => {
               const Icon = item.icon;
-              const href = resolveHref(item.href, orgSlug);
-              const isActive = routeActive(pathname, href);
+              const href = resolveUserDashboardHref(item.href, orgSlug);
+              const isActive = userDashboardRouteActive(pathname, href);
               return (
                 <button
                   key={item.id}
                   type="button"
                   onClick={() => pushNav(href)}
-                  className={`flex w-full items-center gap-3 border-b border-slate-200 px-4 py-3 text-left text-sm font-medium transition-colors duration-150 ${
-                    isActive
-                      ? "bg-indigo-50 text-indigo-800"
-                      : "text-slate-800 active:bg-slate-100"
-                  }`}
+                  className={`${mobileDrawerItemCls(isActive)} apps-subitem-enter`}
+                  style={{ animationDelay: `${index * 30}ms` }}
                 >
-                  <Icon className="shrink-0 text-xl text-slate-600" />
-                  <span className="min-w-0">{item.label}</span>
+                  <span className={userNavIconBadgeCls(item.id, isActive)}>
+                    <Icon className="text-[15px]" aria-hidden />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block">{item.label}</span>
+                    <span className="text-[11px] font-normal text-slate-500">
+                      {item.description}
+                    </span>
+                  </span>
                 </button>
               );
             })}
             <button
               type="button"
               onClick={openLeaveFromMenu}
-              className="flex w-full items-center gap-3 border-b border-slate-200 px-4 py-3 text-left text-sm font-medium text-slate-800 transition-colors duration-150 active:bg-slate-100"
+              className="flex w-full items-center gap-3 border-b border-slate-100 px-4 py-3 text-left text-sm font-medium text-[#008CD3] transition active:bg-sky-50"
             >
-              <MdCalendarMonth className="shrink-0 text-xl text-indigo-700" />
-              Apply Leave
+              <span className={userNavIconBadgeCls("my-leaves", false)}>
+                <MdCalendarMonth className="text-[15px]" aria-hidden />
+              </span>
+              Apply leave
             </button>
             <button
               type="button"
               onClick={openLogoutFromMenu}
-              className="flex w-full items-center gap-3 border-b border-slate-200 px-4 py-3 text-left text-sm font-medium text-rose-700 transition-colors duration-150 active:bg-rose-50"
+              className="flex w-full items-center gap-3 border-b border-slate-100 px-4 py-3 text-left text-sm font-medium text-rose-600 transition active:bg-rose-50"
             >
               <MdLogout className="shrink-0 text-xl" />
               Sign out

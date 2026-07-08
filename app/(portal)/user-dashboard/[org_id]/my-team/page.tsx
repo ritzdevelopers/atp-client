@@ -132,56 +132,64 @@ function attendanceStatusTone(
 }
 
 const toneChip: Record<"emerald" | "rose" | "amber", string> = {
-  emerald: "bg-[#E6F4EA] text-[#0F9D58]",
-  rose: "bg-[#FCE8E6] text-[#D93025]",
-  amber: "bg-[#FFF8E1] text-[#F9A825]",
+  emerald: "bg-[#E8F5E9] text-[#1B7F3B]",
+  rose: "bg-[#FDECEA] text-[#C5221F]",
+  amber: "bg-[#FEF7E0] text-[#E37400]",
 };
 
 const accentBar: Record<"emerald" | "rose" | "amber", string> = {
-  emerald: "border-l-4 border-l-[#0F9D58]",
-  rose: "border-l-4 border-l-[#D93025]",
-  amber: "border-l-4 border-l-[#F9A825]",
+  emerald: "border-l-[3px] border-l-[#1B7F3B]",
+  rose: "border-l-[3px] border-l-[#C5221F]",
+  amber: "border-l-[3px] border-l-[#E37400]",
 };
 
 const panelClass =
-  "overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-sm";
+  "overflow-hidden rounded-md border border-[#DDE4EE] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)]";
 
 const desktopLabelCls =
-  "text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]";
-const desktopCaptionCls = "text-[12px] leading-snug text-[#6B7280]";
-const desktopValueCls = "text-[14px] font-semibold text-[#1F2937]";
+  "text-[11px] font-medium uppercase tracking-[0.04em] text-[#8A94A6]";
+const desktopCaptionCls = "text-[13px] leading-relaxed text-[#5C6978]";
+const desktopValueCls = "text-[15px] font-semibold text-[#2B2B2B]";
 
 function zohoPrimaryBtnCls(full = false) {
-  return `inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-lg bg-[#008CD3] px-4 py-2.5 text-[14px] font-medium text-white transition active:scale-[0.98] hover:bg-[#0070AA] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full flex-1" : ""}`;
+  return `inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-md bg-[#0088DD] px-4 py-2 text-[14px] font-medium text-white shadow-sm transition hover:bg-[#0070B8] active:scale-[0.99] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full flex-1" : ""}`;
 }
 
 function zohoSecondaryBtnCls(full = false) {
-  return `inline-flex min-h-[44px] items-center justify-center rounded-lg border border-[#E4E7EC] bg-white px-4 py-2.5 text-[14px] font-medium text-[#1F2937] transition active:scale-[0.98] hover:bg-[#F5F7FA] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full flex-1" : ""}`;
+  return `inline-flex min-h-[40px] items-center justify-center rounded-md border border-[#DDE4EE] bg-white px-4 py-2 text-[14px] font-medium text-[#2B2B2B] shadow-sm transition hover:border-[#C5CED9] hover:bg-[#F8FAFC] active:scale-[0.99] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full flex-1" : ""}`;
 }
 
 /** Sits above the layout bottom tab bar (z-[55]) on mobile/tablet. */
 const mobileActionBarCls =
-  "fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] z-[54] border-t border-[#E4E7EC] bg-white/95 px-3 py-3 shadow-[0_-6px_20px_rgba(0,0,0,0.08)] backdrop-blur-sm";
+  "fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] z-[54] border-t border-[#DDE4EE] bg-white/98 px-3 py-3 shadow-[0_-4px_16px_rgba(16,24,40,0.08)] backdrop-blur-md";
 const mobileContentBottomPad = "pb-[calc(7.5rem+env(safe-area-inset-bottom,0px))]";
 const mobileCardCls =
-  "overflow-hidden rounded-xl border border-[#E4E7EC] bg-white shadow-sm";
-const mobileCardInnerCls = "p-3.5 sm:p-4";
-const mobileSectionGap = "space-y-3";
+  "overflow-hidden rounded-md border border-[#DDE4EE] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)]";
+const mobileCardInnerCls = "p-4 sm:p-5";
+const mobileSectionGap = "space-y-3 sm:space-y-4";
 const mobileLabelCls =
-  "text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]";
-const mobileCaptionCls = "text-[11px] leading-snug text-[#6B7280]";
-const mobileValueCls = "text-[13px] font-semibold text-[#1F2937]";
+  "text-[11px] font-medium uppercase tracking-[0.04em] text-[#8A94A6]";
+const mobileCaptionCls = "text-[12px] leading-relaxed text-[#5C6978]";
+const mobileValueCls = "text-[14px] font-semibold text-[#2B2B2B]";
 
 function mobileActionPrimaryBtnCls(full = false) {
-  return `inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg bg-[#008CD3] px-3 py-2 text-[13px] font-semibold text-white shadow-sm transition active:scale-[0.98] hover:bg-[#0070AA] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full flex-1" : ""}`;
+  return `inline-flex min-h-[42px] items-center justify-center gap-1.5 rounded-md bg-[#0088DD] px-3.5 py-2 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#0070B8] active:scale-[0.99] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full flex-1" : ""}`;
 }
 
 function mobileActionSecondaryBtnCls(full = false) {
-  return `inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg border border-[#E4E7EC] bg-white px-3 py-2 text-[13px] font-semibold text-[#1F2937] transition active:scale-[0.98] hover:bg-[#F5F7FA] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full flex-1" : ""}`;
+  return `inline-flex min-h-[42px] items-center justify-center gap-1.5 rounded-md border border-[#DDE4EE] bg-white px-3.5 py-2 text-[13px] font-semibold text-[#2B2B2B] shadow-sm transition hover:bg-[#F8FAFC] active:scale-[0.99] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full flex-1" : ""}`;
 }
 
 function zohoInputCls() {
-  return "mt-1 w-full rounded-md border border-[#E4E7EC] bg-white px-3 py-2 text-[14px] text-[#1F2937] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15 lg:mt-1.5 lg:rounded-lg lg:px-3.5 lg:py-2.5 lg:text-[15px] lg:text-sm";
+  return "mt-1.5 w-full rounded-md border border-[#DDE4EE] bg-white px-3 py-2.5 text-[14px] text-[#2B2B2B] outline-none transition placeholder:text-[#8A94A6] focus:border-[#0088DD] focus:ring-2 focus:ring-[#0088DD]/15 lg:text-[15px]";
+}
+
+function zohoUnderlineTabCls(active: boolean) {
+  return `relative flex min-w-0 flex-1 items-center justify-center gap-1.5 px-2 py-3 text-[13px] font-medium transition sm:px-3 sm:text-[14px] ${
+    active
+      ? "text-[#0088DD] after:absolute after:inset-x-2 after:bottom-0 after:h-[2px] after:rounded-full after:bg-[#0088DD] sm:after:inset-x-3"
+      : "text-[#5C6978] hover:text-[#2B2B2B]"
+  }`;
 }
 
 function jwtUserId(token: string | null): number | null {
@@ -244,7 +252,7 @@ function ProfilePhotoZoomModal({
         <button
           type="button"
           onClick={onClose}
-          className="absolute -right-1 -top-1 z-[2] flex h-9 w-9 items-center justify-center rounded-full border border-[#E4E7EC] bg-white text-[#1F2937] shadow-lg active:scale-95"
+          className="absolute -right-1 -top-1 z-[2] flex h-9 w-9 items-center justify-center rounded-full border border-[#DDE4EE] bg-white text-[#2B2B2B] shadow-lg active:scale-95"
           aria-label="Close"
         >
           <X className="h-5 w-5" aria-hidden />
@@ -253,7 +261,7 @@ function ProfilePhotoZoomModal({
         <img
           src={imageUrl}
           alt={alt}
-          className="max-h-[min(78vh,560px)] w-full rounded-xl bg-white object-contain shadow-2xl ring-1 ring-[#E4E7EC]"
+          className="max-h-[min(78vh,560px)] w-full rounded-md bg-white object-contain shadow-2xl ring-1 ring-[#DDE4EE]"
         />
         <p
           id="team-photo-zoom-title"
@@ -306,17 +314,17 @@ function MemberAvatarButton({
 }
 
 function mobileStatusCls(tone: "emerald" | "rose" | "amber"): string {
-  if (tone === "emerald") return "bg-[#E6F4EA] text-[#0F9D58]";
-  if (tone === "rose") return "bg-[#FCE8E6] text-[#D93025]";
-  return "bg-[#FFF8E1] text-[#F9A825]";
+  if (tone === "emerald") return "bg-[#E8F5E9] text-[#1B7F3B]";
+  if (tone === "rose") return "bg-[#FDECEA] text-[#C5221F]";
+  return "bg-[#FEF7E0] text-[#E37400]";
 }
 
 const MOBILE_ICON_COLORS = [
-  "bg-[#E8F4FB] text-[#008CD3]",
-  "bg-[#E6F4EA] text-[#0F9D58]",
-  "bg-[#FEF3E6] text-[#E8710A]",
+  "bg-[#E8F4FC] text-[#0088DD]",
+  "bg-[#E8F5E9] text-[#1B7F3B]",
+  "bg-[#FEF3E6] text-[#E37400]",
   "bg-[#F3E8FD] text-[#7B1FA2]",
-  "bg-[#FCE8E6] text-[#D93025]",
+  "bg-[#FDECEA] text-[#C5221F]",
 ];
 
 function memberColorClass(name: string) {
@@ -336,7 +344,7 @@ function MobileMemberRow({
 }) {
   return (
     <li>
-      <div className="flex items-center gap-3 px-3 py-3.5 active:bg-[#F9FAFB] sm:px-4">
+      <div className="flex items-center gap-3 px-4 py-3.5 transition hover:bg-[#F8FAFC] sm:px-5">
         <MemberAvatarButton
           name={member.user_name}
           userImage={member.user_image}
@@ -346,13 +354,13 @@ function MobileMemberRow({
         <div className="min-w-0 flex-1">
           <p className={`truncate ${mobileValueCls}`}>{member.user_name}</p>
           {member.user_email ? (
-            <p className="mt-0.5 flex items-center gap-1 truncate text-[11px] text-[#6B7280]">
-              <Mail className="h-3 w-3 shrink-0 text-[#9CA3AF]" aria-hidden />
+            <p className="mt-0.5 flex items-center gap-1 truncate text-[11px] text-[#5C6978]">
+              <Mail className="h-3 w-3 shrink-0 text-[#8A94A6]" aria-hidden />
               {member.user_email}
             </p>
           ) : null}
           <p className={`mt-1 flex items-center gap-1 ${mobileCaptionCls}`}>
-            <Calendar className="h-3 w-3 shrink-0 text-[#9CA3AF]" aria-hidden />
+            <Calendar className="h-3 w-3 shrink-0 text-[#8A94A6]" aria-hidden />
             Joined {formatDate(member.joined_date)}
           </p>
         </div>
@@ -365,14 +373,14 @@ function MobileLeaveRow({ row }: { row: LeaveQueryRow }) {
   const tone = leaveStatusTone(row.status);
   const accentBorder =
     tone === "emerald"
-      ? "border-l-[#0F9D58]"
+      ? "border-l-[#1B7F3B]"
       : tone === "rose"
-        ? "border-l-[#D93025]"
-        : "border-l-[#F9A825]";
+        ? "border-l-[#C5221F]"
+        : "border-l-[#E37400]";
   return (
-    <li className="px-3 py-2 sm:px-4">
+    <li className="px-3 py-1.5 sm:px-4">
       <div
-        className={`rounded-xl border border-[#E4E7EC] border-l-4 bg-white p-3.5 shadow-sm ${accentBorder}`}
+        className={`rounded-md border border-[#DDE4EE] border-l-[3px] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)] ${accentBorder}`}
       >
         <div className="flex items-start justify-between gap-2">
           <span
@@ -381,22 +389,22 @@ function MobileLeaveRow({ row }: { row: LeaveQueryRow }) {
             {row.status}
           </span>
           <time
-            className="text-[10px] tabular-nums text-[#9CA3AF]"
+            className="text-[10px] tabular-nums text-[#8A94A6]"
             dateTime={row.created_at ?? undefined}
           >
             {formatDate(row.created_at)}
           </time>
         </div>
-        <p className="mt-2 text-[14px] font-semibold capitalize text-[#1F2937]">
+        <p className="mt-2 text-[14px] font-semibold capitalize text-[#2B2B2B]">
           {row.leave_type.replace(/_/g, " ")}
         </p>
         <p className={`mt-1 flex items-center gap-1 ${mobileCaptionCls}`}>
-          <CalendarDays className="h-3 w-3 shrink-0 text-[#008CD3]" aria-hidden />
+          <CalendarDays className="h-3 w-3 shrink-0 text-[#0088DD]" aria-hidden />
           {formatDate(row.start_date)}
           {row.end_date ? ` → ${formatDate(row.end_date)}` : ""}
         </p>
         {row.reason ? (
-          <p className={`mt-2 line-clamp-2 rounded-lg bg-[#F9FAFB] px-2.5 py-2 ${mobileCaptionCls}`}>
+          <p className={`mt-2 line-clamp-2 rounded-md bg-[#F8FAFC] px-2.5 py-2 ${mobileCaptionCls}`}>
             {row.reason}
           </p>
         ) : null}
@@ -416,14 +424,14 @@ function MobileAttendanceRow({
   const pending = String(row.query_status).toLowerCase() === "pending";
   const accentBorder =
     tone === "emerald"
-      ? "border-l-[#0F9D58]"
+      ? "border-l-[#1B7F3B]"
       : tone === "rose"
-        ? "border-l-[#D93025]"
-        : "border-l-[#F9A825]";
+        ? "border-l-[#C5221F]"
+        : "border-l-[#E37400]";
   return (
-    <li className="px-3 py-2 sm:px-4">
+    <li className="px-3 py-1.5 sm:px-4">
       <div
-        className={`rounded-xl border border-[#E4E7EC] border-l-4 bg-white p-3.5 shadow-sm ${accentBorder}`}
+        className={`rounded-md border border-[#DDE4EE] border-l-[3px] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)] ${accentBorder}`}
       >
         <div className="flex items-start justify-between gap-2">
           <span
@@ -435,7 +443,7 @@ function MobileAttendanceRow({
             <button
               type="button"
               onClick={onEdit}
-              className="inline-flex items-center gap-1 rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] px-2 py-1 text-[11px] font-semibold text-[#008CD3] transition active:bg-[#E8F4FB]"
+              className="inline-flex items-center gap-1 rounded-md border border-[#DDE4EE] bg-[#F8FAFC] px-2.5 py-1 text-[11px] font-semibold text-[#0088DD] transition hover:border-[#0088DD]/30 hover:bg-[#E8F4FC]"
             >
               <Pencil className="h-3 w-3" aria-hidden />
               Edit
@@ -444,15 +452,15 @@ function MobileAttendanceRow({
         </div>
         <p className={`mt-2 ${mobileValueCls}`}>{attendanceCategoryLabel(row.category)}</p>
         <p className={`mt-1 flex items-center gap-1 ${mobileCaptionCls}`}>
-          <Calendar className="h-3 w-3 shrink-0 text-[#008CD3]" aria-hidden />
+          <Calendar className="h-3 w-3 shrink-0 text-[#0088DD]" aria-hidden />
           {formatDate(row.attendance_date)}
         </p>
-        <p className={`mt-2 line-clamp-3 rounded-lg bg-[#F9FAFB] px-2.5 py-2 ${mobileCaptionCls}`}>
+        <p className={`mt-2 line-clamp-3 rounded-md bg-[#F8FAFC] px-2.5 py-2 ${mobileCaptionCls}`}>
           {row.query_message}
         </p>
         {row.admin_response ? (
-          <div className="mt-2 rounded-lg border border-[#E4E7EC] bg-[#F5F7FA] px-2.5 py-2">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
+          <div className="mt-2 rounded-md border border-[#DDE4EE] bg-[#F4F6F9] px-2.5 py-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-[#8A94A6]">
               Response
             </p>
             <p className={`mt-0.5 ${mobileCaptionCls}`}>{row.admin_response}</p>
@@ -467,8 +475,8 @@ export default function UserMyTeamPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-[50vh] items-center justify-center text-[#6B7280]">
-          <Loader2 className="h-8 w-8 animate-spin text-[#008CD3]" />
+        <div className="flex min-h-[50vh] items-center justify-center text-[#5C6978]">
+          <Loader2 className="h-8 w-8 animate-spin text-[#0088DD]" />
         </div>
       }
     >
@@ -738,16 +746,14 @@ function UserMyTeamPageContent() {
   ];
 
   return (
-    <div className="min-h-full bg-[#F5F7FA]">
-      {/* Mobile & tablet: Zoho attendance portal style */}
+    <div className="min-h-full bg-[#F4F6F9] [font-family:var(--font-inter),system-ui,sans-serif]">
+      {/* Mobile & tablet: Zoho People style */}
       <div className="lg:hidden">
-        <div className="sticky top-0 z-20 border-b border-[#E4E7EC] bg-white shadow-sm">
-          <div className="h-[3px] bg-[#008CD3]" aria-hidden />
-
-          <div className="flex items-center gap-2.5 px-3 py-2.5 sm:px-4">
+        <div className="sticky top-0 z-20 border-b border-[#DDE4EE] bg-white shadow-[0_1px_3px_rgba(16,24,40,0.06)]">
+          <div className="flex items-center gap-2.5 px-3 py-2.5 sm:px-4 md:px-5">
             <Link
               href={`/user-dashboard/${orgIdParam}/home`}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#6B7280] transition active:bg-[#F5F7FA]"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[#DDE4EE] text-[#5C6978] transition hover:bg-[#F8FAFC] hover:text-[#2B2B2B]"
               aria-label="Back to dashboard"
             >
               <ArrowLeft className="h-4 w-4" />
@@ -758,7 +764,7 @@ function UserMyTeamPageContent() {
                 onClick={() =>
                   openPhotoZoom(myProfileImage, myTeamMember?.user_name ?? "You")
                 }
-                className="h-9 w-9 shrink-0 overflow-hidden rounded-full ring-2 ring-[#E8F4FB] active:opacity-90"
+                className="h-9 w-9 shrink-0 overflow-hidden rounded-full ring-2 ring-[#E8F4FC] active:opacity-90"
                 aria-label="View your profile photo"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -769,12 +775,15 @@ function UserMyTeamPageContent() {
                 />
               </button>
             ) : (
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#E8F4FB] text-[#008CD3]">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#E8F4FC] text-[#0088DD]">
                 <Users className="h-4 w-4" />
               </span>
             )}
             <div className="min-w-0 flex-1">
-              <h1 className="truncate text-[15px] font-semibold text-[#1F2937] sm:text-[16px]">
+              <p className="truncate text-[11px] font-medium text-[#0088DD]">
+                Home / My Team
+              </p>
+              <h1 className="truncate text-[16px] font-semibold text-[#2B2B2B] sm:text-[17px]">
                 My team
               </h1>
               <p className={`truncate ${mobileCaptionCls}`}>
@@ -791,7 +800,7 @@ function UserMyTeamPageContent() {
               type="button"
               onClick={() => void loadData(true)}
               disabled={loading || refreshing}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#008CD3] transition active:bg-[#F5F7FA] disabled:opacity-50"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[#DDE4EE] text-[#0088DD] transition hover:bg-[#F8FAFC] disabled:opacity-50"
               aria-label="Refresh"
             >
               <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
@@ -799,54 +808,50 @@ function UserMyTeamPageContent() {
           </div>
 
           {!loading ? (
-            <div className="grid grid-cols-3 gap-2 px-3 pb-2 sm:px-4">
-              <div className="rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] px-2 py-1.5 text-center sm:px-2.5 sm:py-2">
-                <p className="truncate text-[9px] font-semibold uppercase tracking-wide text-[#9CA3AF] sm:text-[10px]">
+            <div className="grid grid-cols-3 gap-2 px-3 pb-3 sm:px-4 md:grid-cols-3 md:gap-3 md:px-5">
+              <div className="rounded-md border border-[#DDE4EE] border-l-[3px] border-l-[#2B2B2B] bg-white px-2.5 py-2 text-center shadow-sm sm:px-3 sm:py-2.5">
+                <p className="truncate text-[10px] font-medium uppercase tracking-wide text-[#8A94A6]">
                   Members
                 </p>
-                <p className="text-base font-semibold text-[#1F2937] sm:text-lg">
+                <p className="text-lg font-semibold text-[#2B2B2B] sm:text-xl">
                   {team?.members.length ?? 0}
                 </p>
               </div>
-              <div className="rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] px-2 py-1.5 text-center sm:px-2.5 sm:py-2">
-                <p className="truncate text-[9px] font-semibold uppercase tracking-wide text-[#9CA3AF] sm:text-[10px]">
+              <div className="rounded-md border border-[#DDE4EE] border-l-[3px] border-l-[#E37400] bg-white px-2.5 py-2 text-center shadow-sm sm:px-3 sm:py-2.5">
+                <p className="truncate text-[10px] font-medium uppercase tracking-wide text-[#8A94A6]">
                   Leave
                 </p>
-                <p className="text-base font-semibold text-[#008CD3] sm:text-lg">
+                <p className="text-lg font-semibold text-[#E37400] sm:text-xl">
                   {pendingLeaveCount}
                 </p>
               </div>
-              <div className="rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] px-2 py-1.5 text-center sm:px-2.5 sm:py-2">
-                <p className="truncate text-[9px] font-semibold uppercase tracking-wide text-[#9CA3AF] sm:text-[10px]">
+              <div className="rounded-md border border-[#DDE4EE] border-l-[3px] border-l-[#0088DD] bg-white px-2.5 py-2 text-center shadow-sm sm:px-3 sm:py-2.5">
+                <p className="truncate text-[10px] font-medium uppercase tracking-wide text-[#8A94A6]">
                   Corrections
                 </p>
-                <p className="text-base font-semibold text-[#0F9D58] sm:text-lg">
+                <p className="text-lg font-semibold text-[#0088DD] sm:text-xl">
                   {pendingAttCount}
                 </p>
               </div>
             </div>
           ) : null}
 
-          <div className="px-3 pb-2.5 sm:px-4">
-            <div className="flex w-full rounded-lg bg-[#F5F7FA] p-0.5">
+          <div className="border-t border-[#DDE4EE] px-3 sm:px-4 md:px-5">
+            <div className="flex w-full">
               {mobileTabs.map((tab) => (
                 <button
                   key={tab.id}
                   type="button"
                   onClick={() => setMobileMainTab(tab.id)}
-                  className={`flex min-w-0 flex-1 items-center justify-center gap-1 rounded-md px-1.5 py-2 text-[12px] font-semibold transition active:scale-[0.98] sm:text-[13px] ${
-                    mobileMainTab === tab.id
-                      ? "bg-white text-[#008CD3] shadow-sm"
-                      : "text-[#6B7280]"
-                  }`}
+                  className={zohoUnderlineTabCls(mobileMainTab === tab.id)}
                 >
                   {tab.label}
                   {"count" in tab && tab.count != null ? (
                     <span
-                      className={`inline-flex h-4 min-w-4 items-center justify-center rounded-full px-0.5 text-[10px] ${
+                      className={`inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-semibold ${
                         mobileMainTab === tab.id
-                          ? "bg-[#E8F4FB] text-[#008CD3]"
-                          : "bg-[#E4E7EC] text-[#6B7280]"
+                          ? "bg-[#E8F4FC] text-[#0088DD]"
+                          : "bg-[#EEF2F6] text-[#5C6978]"
                       }`}
                     >
                       {tab.count > 99 ? "99+" : tab.count}
@@ -859,16 +864,16 @@ function UserMyTeamPageContent() {
         </div>
 
         {!loading && (pendingLeaveCount > 0 || pendingAttCount > 0) ? (
-          <div className="mx-3 mt-2 flex flex-wrap gap-1.5 sm:mx-4">
+          <div className="mx-3 mt-3 flex flex-wrap gap-2 sm:mx-4 md:mx-5">
             {pendingLeaveCount > 0 ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-[#FFF8E1] px-2.5 py-1 text-[11px] font-semibold text-[#F9A825]">
-                <CalendarDays className="h-3 w-3" aria-hidden />
+              <span className="inline-flex items-center gap-1.5 rounded-md border border-[#F9E4B2] bg-[#FEF7E0] px-2.5 py-1 text-[11px] font-semibold text-[#E37400]">
+                <CalendarDays className="h-3.5 w-3.5" aria-hidden />
                 {pendingLeaveCount} leave pending
               </span>
             ) : null}
             {pendingAttCount > 0 ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-[#E8F4FB] px-2.5 py-1 text-[11px] font-semibold text-[#008CD3]">
-                <ClipboardList className="h-3 w-3" aria-hidden />
+              <span className="inline-flex items-center gap-1.5 rounded-md border border-[#B8DAF2] bg-[#E8F4FC] px-2.5 py-1 text-[11px] font-semibold text-[#0088DD]">
+                <ClipboardList className="h-3.5 w-3.5" aria-hidden />
                 {pendingAttCount} correction pending
               </span>
             ) : null}
@@ -876,26 +881,26 @@ function UserMyTeamPageContent() {
         ) : null}
 
         {teamError && !loading && !noTeam ? (
-          <div className="mx-3 mt-2 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2.5 text-[12px] text-[#D93025] sm:mx-4">
+          <div className="mx-3 mt-3 rounded-md border border-[#F5C6C2] bg-[#FDECEA] px-3.5 py-3 text-[13px] text-[#C5221F] sm:mx-4 md:mx-5">
             <span>{teamError}</span>
           </div>
         ) : null}
 
         {loading ? (
-          <div className="flex flex-col items-center justify-center gap-3 py-20 text-[#6B7280]">
-            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#E8F4FB]">
-              <Loader2 className="h-6 w-6 animate-spin text-[#008CD3]" aria-hidden />
+          <div className="flex flex-col items-center justify-center gap-3 py-20 text-[#5C6978]">
+            <span className="flex h-12 w-12 items-center justify-center rounded-md bg-[#E8F4FC]">
+              <Loader2 className="h-6 w-6 animate-spin text-[#0088DD]" aria-hidden />
             </span>
-            <p className="text-[13px] font-medium">Loading your team…</p>
+            <p className="text-[14px] font-medium">Loading your team…</p>
           </div>
         ) : null}
 
         {!loading && mobileMainTab === "team" && noTeam ? (
-          <div className="mx-3 mt-3 rounded-xl border border-dashed border-[#E4E7EC] bg-white px-4 py-14 text-center sm:mx-4">
-            <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#F5F7FA] text-[#9CA3AF]">
+          <div className="mx-3 mt-4 rounded-md border border-dashed border-[#DDE4EE] bg-white px-5 py-14 text-center sm:mx-4 md:mx-5">
+            <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-md bg-[#F4F6F9] text-[#8A94A6]">
               <Building2 className="h-6 w-6" aria-hidden />
             </span>
-            <p className="mt-3 text-[15px] font-semibold text-[#1F2937]">No team yet</p>
+            <p className="mt-3 text-[16px] font-semibold text-[#2B2B2B]">No team yet</p>
             <p className={`mt-1.5 max-w-xs mx-auto ${mobileCaptionCls}`}>
               When HR adds you to a roster, it will appear here. You can still submit leave and
               corrections from other tabs.
@@ -910,22 +915,22 @@ function UserMyTeamPageContent() {
         ) : null}
 
         {!loading && mobileMainTab === "team" && team ? (
-          <div className={`${mobileSectionGap} px-3 pt-3 sm:px-4 ${mobileContentBottomPad}`}>
+          <div className={`${mobileSectionGap} px-3 pt-4 sm:px-4 md:px-5 ${mobileContentBottomPad}`}>
             <div className={mobileCardCls}>
-              <div className={`${mobileCardInnerCls} border-b border-[#E4E7EC] bg-gradient-to-br from-[#E8F4FB]/40 to-white`}>
+              <div className={`${mobileCardInnerCls} border-b border-[#DDE4EE] bg-[#F8FAFC]`}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#008CD3]">
+                    <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[#0088DD]">
                       Team overview
                     </p>
-                    <p className={`mt-1 ${mobileValueCls} text-[16px]`}>{team.team_name}</p>
+                    <p className={`mt-1 ${mobileValueCls} text-[17px]`}>{team.team_name}</p>
                   </div>
                   {team.is_admin ? (
-                    <span className="shrink-0 rounded-full bg-[#008CD3] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-white">
+                    <span className="shrink-0 rounded-md bg-[#0088DD] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-white">
                       Admin
                     </span>
                   ) : (
-                    <span className="shrink-0 inline-flex items-center gap-1 rounded-full border border-[#E4E7EC] bg-[#F9FAFB] px-2.5 py-1 text-[10px] font-semibold text-[#6B7280]">
+                    <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[#DDE4EE] bg-white px-2.5 py-1 text-[10px] font-semibold text-[#5C6978]">
                       <Shield className="h-3 w-3" aria-hidden />
                       Member
                     </span>
@@ -938,16 +943,16 @@ function UserMyTeamPageContent() {
                     Collaboration hub for your organization.
                   </p>
                 )}
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  <div className="rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] px-2.5 py-2">
+                <div className="mt-3 grid grid-cols-2 gap-2 sm:gap-3">
+                  <div className="rounded-md border border-[#DDE4EE] bg-white px-3 py-2.5">
                     <p className={mobileLabelCls}>Members</p>
-                    <p className="mt-0.5 text-[14px] font-semibold text-[#1F2937]">
+                    <p className="mt-0.5 text-[15px] font-semibold text-[#2B2B2B]">
                       {team.members.length}
                     </p>
                   </div>
-                  <div className="rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] px-2.5 py-2">
+                  <div className="rounded-md border border-[#DDE4EE] bg-white px-3 py-2.5">
                     <p className={mobileLabelCls}>Created</p>
-                    <p className="mt-0.5 text-[12px] font-semibold text-[#1F2937]">
+                    <p className="mt-0.5 text-[13px] font-semibold text-[#2B2B2B]">
                       {formatDate(team.created_at ?? null)}
                     </p>
                   </div>
@@ -958,14 +963,14 @@ function UserMyTeamPageContent() {
             <div className={mobileCardCls}>
               <div className={mobileCardInnerCls}>
                 <div className="flex items-center gap-2">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#008CD3] text-white">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[#0088DD] text-white">
                     <UserRound className="h-3.5 w-3.5" aria-hidden />
                   </span>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                  <p className="text-[12px] font-semibold uppercase tracking-wide text-[#5C6978]">
                     Team lead
                   </p>
                 </div>
-                <div className="mt-3 flex items-center gap-3 rounded-xl border border-[#E4E7EC] bg-[#F9FAFB] p-3">
+                <div className="mt-3 flex items-center gap-3 rounded-md border border-[#DDE4EE] bg-[#F8FAFC] p-3.5">
                   <MemberAvatarButton
                     name={team.admin_name ?? "Team lead"}
                     userImage={adminMember?.user_image}
@@ -990,9 +995,9 @@ function UserMyTeamPageContent() {
             </div>
 
             <div className={mobileCardCls}>
-              <div className="border-b border-[#E4E7EC] px-3.5 py-3 sm:px-4">
+              <div className="border-b border-[#DDE4EE] px-4 py-3.5 sm:px-5">
                 <div className="flex items-center gap-2">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#0F9D58] text-white">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[#1B7F3B] text-white">
                     <Users className="h-3.5 w-3.5" aria-hidden />
                   </span>
                   <div>
@@ -1006,7 +1011,7 @@ function UserMyTeamPageContent() {
                   No other members on this roster yet.
                 </p>
               ) : (
-                <ul className="divide-y divide-[#E4E7EC]">
+                <ul className="divide-y divide-[#EEF2F6]">
                   {otherMembers.map((m) => (
                     <MobileMemberRow
                       key={m.team_member_id}
@@ -1021,9 +1026,9 @@ function UserMyTeamPageContent() {
         ) : null}
 
         {!loading && mobileMainTab === "leave" ? (
-          <div className={`pt-3 ${mobileContentBottomPad}`}>
-            <div className="mx-3 mb-3 flex items-center gap-2 sm:mx-4">
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#E8F4FB] text-[#008CD3]">
+          <div className={`pt-4 ${mobileContentBottomPad}`}>
+            <div className="mx-3 mb-3 flex items-center gap-2.5 sm:mx-4 md:mx-5">
+              <span className="flex h-8 w-8 items-center justify-center rounded-md bg-[#E8F4FC] text-[#0088DD]">
                 <CalendarDays className="h-4 w-4" aria-hidden />
               </span>
               <div>
@@ -1032,11 +1037,11 @@ function UserMyTeamPageContent() {
               </div>
             </div>
             {leaveRows.length === 0 ? (
-              <div className="mx-3 mt-2 rounded-xl border border-dashed border-[#E4E7EC] bg-white px-4 py-14 text-center sm:mx-4">
-                <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#F5F7FA] text-[#9CA3AF]">
+              <div className="mx-3 mt-2 rounded-md border border-dashed border-[#DDE4EE] bg-white px-5 py-14 text-center sm:mx-4 md:mx-5">
+                <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-md bg-[#F4F6F9] text-[#8A94A6]">
                   <CalendarDays className="h-6 w-6" aria-hidden />
                 </span>
-                <p className="mt-3 text-[15px] font-semibold text-[#1F2937]">No leave requests</p>
+                <p className="mt-3 text-[16px] font-semibold text-[#2B2B2B]">No leave requests</p>
                 <p className={`mt-1.5 max-w-xs mx-auto ${mobileCaptionCls}`}>
                   Leave raised for this team will appear here.
                 </p>
@@ -1052,9 +1057,9 @@ function UserMyTeamPageContent() {
         ) : null}
 
         {!loading && mobileMainTab === "corrections" ? (
-          <div className={`pt-3 ${mobileContentBottomPad}`}>
-            <div className="mx-3 mb-3 flex items-center gap-2 sm:mx-4">
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#E6F4EA] text-[#0F9D58]">
+          <div className={`pt-4 ${mobileContentBottomPad}`}>
+            <div className="mx-3 mb-3 flex items-center gap-2.5 sm:mx-4 md:mx-5">
+              <span className="flex h-8 w-8 items-center justify-center rounded-md bg-[#E8F5E9] text-[#1B7F3B]">
                 <ClipboardList className="h-4 w-4" aria-hidden />
               </span>
               <div>
@@ -1063,11 +1068,11 @@ function UserMyTeamPageContent() {
               </div>
             </div>
             {attendanceRows.length === 0 ? (
-              <div className="mx-3 mt-2 rounded-xl border border-dashed border-[#E4E7EC] bg-white px-4 py-14 text-center sm:mx-4">
-                <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#F5F7FA] text-[#9CA3AF]">
+              <div className="mx-3 mt-2 rounded-md border border-dashed border-[#DDE4EE] bg-white px-5 py-14 text-center sm:mx-4 md:mx-5">
+                <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-md bg-[#F4F6F9] text-[#8A94A6]">
                   <ClipboardList className="h-6 w-6" aria-hidden />
                 </span>
-                <p className="mt-3 text-[15px] font-semibold text-[#1F2937]">No corrections yet</p>
+                <p className="mt-3 text-[16px] font-semibold text-[#2B2B2B]">No corrections yet</p>
                 <p className={`mt-1.5 max-w-xs mx-auto ${mobileCaptionCls}`}>
                   Attendance queries raised for this team will appear here.
                 </p>
@@ -1110,30 +1115,27 @@ function UserMyTeamPageContent() {
         ) : null}
       </div>
 
-      {/* Desktop layout — Zoho attendance portal */}
-      <section
-        className="hidden min-h-full [font-family:var(--font-inter),system-ui,sans-serif] lg:block lg:p-6"
-        style={{ backgroundColor: "#F5F7FA" }}
-      >
-        <div className="mx-auto max-w-7xl space-y-5">
+      {/* Desktop layout — Zoho People style */}
+      <section className="hidden min-h-full lg:block lg:p-5 xl:p-6">
+        <div className="mx-auto max-w-7xl space-y-4 xl:space-y-5">
           <div className={panelClass}>
-            <div className="h-[3px] bg-[#008CD3]" aria-hidden />
-            <div className="px-5 py-4">
-              <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="border-b border-[#DDE4EE] px-5 py-4 xl:px-6">
+              <p className="text-[12px] font-medium text-[#0088DD]">Home / My Team</p>
+              <div className="mt-2 flex flex-wrap items-start justify-between gap-4">
                 <div className="flex min-w-0 items-start gap-3">
                   <Link
                     href={`/user-dashboard/${orgIdParam}/home`}
-                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#6B7280] transition hover:bg-[#F9FAFB] hover:text-[#1F2937]"
+                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-[#DDE4EE] text-[#5C6978] transition hover:bg-[#F8FAFC] hover:text-[#2B2B2B]"
                     aria-label="Back to dashboard"
                   >
                     <ArrowLeft className="h-4 w-4" aria-hidden />
                   </Link>
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#E8F4FB] text-[#008CD3]">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[#E8F4FC] text-[#0088DD]">
                     <Users className="h-5 w-5" aria-hidden />
                   </span>
                   <div className="min-w-0">
-                    <h1 className="text-[18px] font-semibold text-[#1F2937]">My team</h1>
-                    <p className="mt-0.5 text-[13px] text-[#6B7280]">
+                    <h1 className="text-[20px] font-semibold text-[#2B2B2B]">My team</h1>
+                    <p className="mt-0.5 text-[14px] text-[#5C6978]">
                       {loading
                         ? "Loading your roster and requests…"
                         : team
@@ -1155,7 +1157,7 @@ function UserMyTeamPageContent() {
                     type="button"
                     onClick={() => void loadData(true)}
                     disabled={loading || refreshing}
-                    className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border border-[#E4E7EC] bg-white px-3 py-1.5 text-[13px] font-medium text-[#374151] transition hover:bg-[#F9FAFB] disabled:opacity-50"
+                    className="inline-flex min-h-[38px] items-center gap-1.5 rounded-md border border-[#DDE4EE] bg-white px-3.5 py-2 text-[13px] font-medium text-[#2B2B2B] shadow-sm transition hover:bg-[#F8FAFC] disabled:opacity-50"
                   >
                     <RefreshCw
                       className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
@@ -1166,7 +1168,7 @@ function UserMyTeamPageContent() {
                   <button
                     type="button"
                     onClick={openLeaveApplication}
-                    className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg bg-[#008CD3] px-3 py-1.5 text-[13px] font-semibold text-white transition hover:bg-[#0070AA]"
+                    className="inline-flex min-h-[38px] items-center gap-1.5 rounded-md bg-[#0088DD] px-3.5 py-2 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#0070B8]"
                   >
                     <CalendarDays className="h-4 w-4" aria-hidden />
                     Request time off
@@ -1174,7 +1176,7 @@ function UserMyTeamPageContent() {
                   <button
                     type="button"
                     onClick={openNewAttendanceModal}
-                    className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border border-[#E4E7EC] bg-white px-3 py-1.5 text-[13px] font-semibold text-[#374151] transition hover:bg-[#F9FAFB]"
+                    className="inline-flex min-h-[38px] items-center gap-1.5 rounded-md border border-[#DDE4EE] bg-white px-3.5 py-2 text-[13px] font-semibold text-[#2B2B2B] shadow-sm transition hover:bg-[#F8FAFC]"
                   >
                     <ClipboardList className="h-4 w-4" aria-hidden />
                     Correction
@@ -1183,30 +1185,34 @@ function UserMyTeamPageContent() {
               </div>
 
               {!loading ? (
-                <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4 xl:gap-3">
                   {[
                     {
                       label: "Members",
                       value: team?.members.length ?? 0,
-                      color: "text-[#1F2937]",
+                      color: "text-[#2B2B2B]",
+                      border: "border-l-[#2B2B2B]",
                       icon: Users,
                     },
                     {
                       label: "Leave pending",
                       value: pendingLeaveCount,
-                      color: "text-[#F9A825]",
+                      color: "text-[#E37400]",
+                      border: "border-l-[#E37400]",
                       icon: CalendarDays,
                     },
                     {
                       label: "Corrections pending",
                       value: pendingAttCount,
-                      color: "text-[#008CD3]",
+                      color: "text-[#0088DD]",
+                      border: "border-l-[#0088DD]",
                       icon: ClipboardList,
                     },
                     {
                       label: "Total requests",
                       value: leaveRows.length + attendanceRows.length,
-                      color: "text-[#0F9D58]",
+                      color: "text-[#1B7F3B]",
+                      border: "border-l-[#1B7F3B]",
                       icon: Calendar,
                     },
                   ].map((item) => {
@@ -1214,13 +1220,13 @@ function UserMyTeamPageContent() {
                     return (
                       <div
                         key={item.label}
-                        className="rounded-xl border border-[#E4E7EC] bg-[#F9FAFB] px-3 py-2.5"
+                        className={`rounded-md border border-[#DDE4EE] border-l-[3px] bg-white px-3 py-2.5 shadow-sm ${item.border}`}
                       >
-                        <p className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
-                          <Icon className="h-3 w-3" aria-hidden />
+                        <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-[#8A94A6]">
+                          <Icon className="h-3.5 w-3.5" aria-hidden />
                           {item.label}
                         </p>
-                        <p className={`mt-1 text-lg font-semibold ${item.color}`}>
+                        <p className={`mt-1 text-xl font-semibold ${item.color}`}>
                           {item.value}
                         </p>
                       </div>
@@ -1233,8 +1239,8 @@ function UserMyTeamPageContent() {
 
           {loading ? (
             <div className={`flex min-h-[40vh] flex-col items-center justify-center gap-3 ${panelClass} p-14`}>
-              <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#E8F4FB]">
-                <Loader2 className="h-7 w-7 animate-spin text-[#008CD3]" aria-hidden />
+              <span className="flex h-14 w-14 items-center justify-center rounded-md bg-[#E8F4FC]">
+                <Loader2 className="h-7 w-7 animate-spin text-[#0088DD]" aria-hidden />
               </span>
               <div className="text-center">
                 <p className={desktopValueCls}>Preparing your workspace</p>
@@ -1246,19 +1252,19 @@ function UserMyTeamPageContent() {
           ) : null}
 
           {!loading && teamError && !noTeam ? (
-            <div className="rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-4 py-3 text-[13px] text-[#D93025]">
+            <div className="rounded-md border border-[#F5C6C2] bg-[#FDECEA] px-4 py-3 text-[13px] text-[#C5221F]">
               <p className="font-semibold">Something went wrong</p>
               <p className="mt-1">{teamError}</p>
             </div>
           ) : null}
 
           {!loading && noTeam ? (
-            <div className="grid items-start gap-4 lg:grid-cols-[1fr_minmax(380px,420px)]">
+            <div className="grid items-start gap-4 lg:grid-cols-1 xl:grid-cols-[1fr_minmax(380px,420px)]">
               <section className={`${panelClass} flex flex-col items-center px-8 py-14 text-center`}>
-                <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#F5F7FA] text-[#9CA3AF]">
+                <span className="flex h-16 w-16 items-center justify-center rounded-md bg-[#F4F6F9] text-[#8A94A6]">
                   <Building2 className="h-8 w-8" aria-hidden />
                 </span>
-                <h2 className="mt-5 text-[18px] font-semibold text-[#1F2937]">
+                <h2 className="mt-5 text-[18px] font-semibold text-[#2B2B2B]">
                   You&apos;re not on a team yet
                 </h2>
                 <p className={`mx-auto mt-2 max-w-md ${desktopCaptionCls}`}>
@@ -1268,7 +1274,7 @@ function UserMyTeamPageContent() {
                 </p>
                 <Link
                   href={`/user-dashboard/${orgIdParam}/home`}
-                  className="mt-6 inline-flex min-h-[40px] items-center rounded-lg bg-[#008CD3] px-5 py-2 text-[13px] font-semibold text-white transition hover:bg-[#0070AA]"
+                  className="mt-6 inline-flex min-h-[40px] items-center rounded-md bg-[#0088DD] px-5 py-2 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#0070B8]"
                 >
                   Back to dashboard
                 </Link>
@@ -1282,16 +1288,16 @@ function UserMyTeamPageContent() {
           ) : null}
 
           {!loading && team ? (
-            <div className="grid items-start gap-4 lg:grid-cols-[1fr_minmax(380px,420px)]">
+            <div className="grid items-start gap-4 lg:grid-cols-1 xl:grid-cols-[1fr_minmax(380px,420px)]">
               <div className="min-w-0 space-y-4">
                 <section className={panelClass}>
-                  <div className="border-b border-[#E4E7EC] bg-gradient-to-br from-[#E8F4FB]/40 to-white px-5 py-5">
+                  <div className="border-b border-[#DDE4EE] bg-[#F8FAFC] px-5 py-5 xl:px-6">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#008CD3]">
+                        <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[#0088DD]">
                           Team overview
                         </p>
-                        <h2 className="mt-1 text-[20px] font-semibold text-[#1F2937]">
+                        <h2 className="mt-1 text-[22px] font-semibold text-[#2B2B2B]">
                           {team.team_name}
                         </h2>
                         {team.team_info?.trim() ? (
@@ -1305,11 +1311,11 @@ function UserMyTeamPageContent() {
                         )}
                       </div>
                       {team.is_admin ? (
-                        <span className="shrink-0 rounded-full bg-[#008CD3] px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-white">
+                        <span className="shrink-0 rounded-md bg-[#0088DD] px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-white">
                           Team admin
                         </span>
                       ) : (
-                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[#E4E7EC] bg-[#F9FAFB] px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                        <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[#DDE4EE] bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-[#5C6978]">
                           <Shield className="h-3 w-3" aria-hidden />
                           Member
                         </span>
@@ -1322,7 +1328,7 @@ function UserMyTeamPageContent() {
                           label: "Created",
                           value: formatDate(team.created_at ?? null),
                           icon: Calendar,
-                          soft: "bg-[#E8F4FB] text-[#008CD3]",
+                          soft: "bg-[#E8F4FC] text-[#0088DD]",
                         },
                         {
                           label: "Created by",
@@ -1334,23 +1340,23 @@ function UserMyTeamPageContent() {
                           label: "Members",
                           value: `${team.members.length} active`,
                           icon: Users,
-                          soft: "bg-[#E6F4EA] text-[#0F9D58]",
+                          soft: "bg-[#E8F5E9] text-[#1B7F3B]",
                         },
                         {
                           label: "Last updated",
                           value: formatDate(team.updated_at ?? null),
                           icon: RefreshCw,
-                          soft: "bg-[#F5F7FA] text-[#6B7280]",
+                          soft: "bg-[#F4F6F9] text-[#5C6978]",
                         },
                       ].map((stat) => {
                         const Icon = stat.icon;
                         return (
                           <div
                             key={stat.label}
-                            className="flex gap-3 rounded-xl border border-[#E4E7EC] bg-white px-3 py-2.5"
+                            className="flex gap-3 rounded-md border border-[#DDE4EE] bg-white px-3 py-2.5"
                           >
                             <span
-                              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${stat.soft}`}
+                              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md ${stat.soft}`}
                             >
                               <Icon className="h-4 w-4" aria-hidden />
                             </span>
@@ -1366,16 +1372,16 @@ function UserMyTeamPageContent() {
                     </dl>
                   </div>
 
-                  <div className="px-5 py-5">
+                  <div className="px-5 py-5 xl:px-6">
                     <div className="flex items-center gap-2">
-                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#008CD3] text-white">
+                      <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[#0088DD] text-white">
                         <UserRound className="h-3.5 w-3.5" aria-hidden />
                       </span>
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                      <p className="text-[12px] font-semibold uppercase tracking-wide text-[#5C6978]">
                         Team lead
                       </p>
                     </div>
-                    <div className="mt-3 flex items-center gap-4 rounded-xl border border-[#E4E7EC] bg-[#F9FAFB] p-4">
+                    <div className="mt-3 flex items-center gap-4 rounded-md border border-[#DDE4EE] bg-[#F8FAFC] p-4">
                       <MemberAvatarButton
                         name={team.admin_name ?? "Team lead"}
                         userImage={adminMember?.user_image}
@@ -1385,7 +1391,7 @@ function UserMyTeamPageContent() {
                       <div className="min-w-0">
                         <p className={desktopValueCls}>{team.admin_name ?? "—"}</p>
                         <p className={`mt-1 flex items-center gap-1 ${desktopCaptionCls}`}>
-                          <Calendar className="h-3.5 w-3.5 shrink-0 text-[#9CA3AF]" aria-hidden />
+                          <Calendar className="h-3.5 w-3.5 shrink-0 text-[#8A94A6]" aria-hidden />
                           Joined {formatDate(adminMember?.joined_date ?? null)}
                           {adminMember?.added_by_name
                             ? ` · Added by ${adminMember.added_by_name}`
@@ -1393,7 +1399,7 @@ function UserMyTeamPageContent() {
                         </p>
                         {adminMember?.user_email ? (
                           <p className={`mt-0.5 flex items-center gap-1 truncate ${desktopCaptionCls}`}>
-                            <Mail className="h-3.5 w-3.5 shrink-0 text-[#9CA3AF]" aria-hidden />
+                            <Mail className="h-3.5 w-3.5 shrink-0 text-[#8A94A6]" aria-hidden />
                             {adminMember.user_email}
                           </p>
                         ) : null}
@@ -1402,7 +1408,7 @@ function UserMyTeamPageContent() {
 
                     <div className="mt-5">
                       <div className="flex items-center gap-2">
-                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#0F9D58] text-white">
+                        <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[#1B7F3B] text-white">
                           <Users className="h-3.5 w-3.5" aria-hidden />
                         </span>
                         <div>
@@ -1412,26 +1418,61 @@ function UserMyTeamPageContent() {
                           </p>
                         </div>
                       </div>
-                      <div className="mt-3 overflow-hidden rounded-xl border border-[#E4E7EC]">
+
+                      {/* Card list for narrower desktop widths */}
+                      <div className="mt-3 space-y-2 xl:hidden">
+                        {otherMembers.length === 0 ? (
+                          <p className={`rounded-md border border-dashed border-[#DDE4EE] px-4 py-10 text-center ${desktopCaptionCls}`}>
+                            No other members on this roster yet.
+                          </p>
+                        ) : (
+                          otherMembers.map((m) => (
+                            <div
+                              key={m.team_member_id}
+                              className="flex items-start gap-3 rounded-md border border-[#DDE4EE] bg-white p-3.5 shadow-sm"
+                            >
+                              <MemberAvatarButton
+                                name={m.user_name}
+                                userImage={m.user_image}
+                                size="sm"
+                                onZoom={openPhotoZoom}
+                              />
+                              <div className="min-w-0 flex-1">
+                                <p className="font-semibold text-[#2B2B2B]">{m.user_name}</p>
+                                <p className={`mt-1 flex items-center gap-1 break-all ${desktopCaptionCls}`}>
+                                  <Mail className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                                  {m.user_email}
+                                </p>
+                                <p className={`mt-1 ${desktopCaptionCls}`}>
+                                  Joined {formatDate(m.joined_date)}
+                                  {m.added_by_name ? ` · Added by ${m.added_by_name}` : ""}
+                                </p>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+
+                      <div className="mt-3 hidden overflow-hidden rounded-md border border-[#DDE4EE] xl:block">
                         <div className="overflow-x-auto">
                           <table className="min-w-full text-[13px]">
                             <thead>
-                              <tr className="border-b border-[#E4E7EC] bg-[#F9FAFB] text-left">
-                                <th className="whitespace-nowrap px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
+                              <tr className="border-b border-[#DDE4EE] bg-[#F8FAFC] text-left">
+                                <th className="whitespace-nowrap px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-[#8A94A6]">
                                   Member
                                 </th>
-                                <th className="whitespace-nowrap px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
+                                <th className="whitespace-nowrap px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-[#8A94A6]">
                                   Contact
                                 </th>
-                                <th className="whitespace-nowrap px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
+                                <th className="whitespace-nowrap px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-[#8A94A6]">
                                   Joined
                                 </th>
-                                <th className="whitespace-nowrap px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
+                                <th className="whitespace-nowrap px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-[#8A94A6]">
                                   Added by
                                 </th>
                               </tr>
                             </thead>
-                            <tbody className="divide-y divide-[#E4E7EC] bg-white">
+                            <tbody className="divide-y divide-[#EEF2F6] bg-white">
                               {otherMembers.length === 0 ? (
                                 <tr>
                                   <td
@@ -1445,7 +1486,7 @@ function UserMyTeamPageContent() {
                                 otherMembers.map((m) => (
                                   <tr
                                     key={m.team_member_id}
-                                    className="transition hover:bg-[#F9FAFB]"
+                                    className="transition hover:bg-[#F8FAFC]"
                                   >
                                     <td className="px-4 py-3.5">
                                       <div className="flex items-center gap-3">
@@ -1455,14 +1496,14 @@ function UserMyTeamPageContent() {
                                           size="sm"
                                           onZoom={openPhotoZoom}
                                         />
-                                        <span className="font-semibold text-[#1F2937]">
+                                        <span className="font-semibold text-[#2B2B2B]">
                                           {m.user_name}
                                         </span>
                                       </div>
                                     </td>
                                     <td className="px-4 py-3.5">
-                                      <div className="flex items-center gap-1.5 text-[#1F2937]">
-                                        <Mail className="h-3.5 w-3.5 shrink-0 text-[#9CA3AF]" aria-hidden />
+                                      <div className="flex items-center gap-1.5 text-[#2B2B2B]">
+                                        <Mail className="h-3.5 w-3.5 shrink-0 text-[#8A94A6]" aria-hidden />
                                         <span className="break-all">{m.user_email}</span>
                                       </div>
                                       {m.user_phone ? (
@@ -1471,10 +1512,10 @@ function UserMyTeamPageContent() {
                                         </p>
                                       ) : null}
                                     </td>
-                                    <td className="whitespace-nowrap px-4 py-3.5 text-[#374151]">
+                                    <td className="whitespace-nowrap px-4 py-3.5 text-[#5C6978]">
                                       {formatDate(m.joined_date)}
                                     </td>
-                                    <td className="px-4 py-3.5 text-[#374151]">
+                                    <td className="px-4 py-3.5 text-[#5C6978]">
                                       {m.added_by_name ?? "—"}
                                     </td>
                                   </tr>
@@ -1514,18 +1555,18 @@ function UserMyTeamPageContent() {
             setAttEditRow(null);
           }}
         >
-          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white shadow-[0_24px_80px_-12px_rgba(15,23,42,0.35)] ring-1 ring-slate-900/10 lg:rounded-2xl lg:[border-top:3px_solid_#008CD3]">
-            <div className="flex justify-center pt-2 pb-0 lg:hidden" aria-hidden>
-              <span className="h-1 w-10 rounded-full bg-[#E4E7EC]" />
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-xl bg-white shadow-[0_24px_80px_-12px_rgba(16,24,40,0.28)] ring-1 ring-[#DDE4EE] lg:rounded-md lg:border-t-[3px] lg:border-t-[#0088DD]">
+            <div className="flex justify-center pt-2.5 pb-0 lg:hidden" aria-hidden>
+              <span className="h-1 w-10 rounded-full bg-[#DDE4EE]" />
             </div>
-            <div className="sticky top-0 z-[1] flex items-center justify-between border-b border-[#E4E7EC] bg-white px-4 py-4 lg:px-6">
+            <div className="sticky top-0 z-[1] flex items-center justify-between border-b border-[#DDE4EE] bg-white px-4 py-4 lg:px-6">
               <div>
-                <h2 className="text-lg font-semibold text-[#1F2937]">
+                <h2 className="text-lg font-semibold text-[#2B2B2B]">
                   {attEditRow
                     ? "Edit attendance request"
                     : "Attendance correction"}
                 </h2>
-                <p className="text-xs text-[#6B7280]">
+                <p className="text-xs text-[#5C6978]">
                   {attEditRow
                     ? "Only pending requests can be updated."
                     : "Report missed punch or timing issues for a specific day."}
@@ -1537,7 +1578,7 @@ function UserMyTeamPageContent() {
                   setAttModalOpen(false);
                   setAttEditRow(null);
                 }}
-                className="rounded-lg p-2 text-[#9CA3AF] hover:bg-[#F5F7FA] hover:text-[#1F2937]"
+                className="rounded-md p-2 text-[#8A94A6] hover:bg-[#F8FAFC] hover:text-[#2B2B2B]"
                 aria-label="Close"
               >
                 <X className="h-5 w-5" />
@@ -1545,17 +1586,17 @@ function UserMyTeamPageContent() {
             </div>
             <form onSubmit={onSubmitAttendance} className="space-y-4 p-4 lg:p-6">
               {attFormError ? (
-                <p className="rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] p-3 text-[14px] text-[#D93025] lg:rounded-xl lg:bg-red-50 lg:text-red-800 lg:ring-1 lg:ring-red-100">
+                <p className="rounded-md border border-[#F5C6C2] bg-[#FDECEA] p-3 text-[14px] text-[#C5221F]">
                   {attFormError}
                 </p>
               ) : null}
               {attFormSuccess ? (
-                <p className="rounded-lg border border-[#C8E6C9] bg-[#E6F4EA] p-3 text-[14px] text-[#0F9D58] lg:rounded-xl lg:bg-emerald-50 lg:text-emerald-900 lg:ring-1 lg:ring-emerald-100">
+                <p className="rounded-md border border-[#B7DFC3] bg-[#E8F5E9] p-3 text-[14px] text-[#1B7F3B]">
                   {attFormSuccess}
                 </p>
               ) : null}
               <label className="block">
-                <span className="text-[13px] font-medium text-[#374151] lg:text-xs lg:font-semibold lg:text-slate-600">
+                <span className="text-[13px] font-medium text-[#2B2B2B]">
                   Issue type
                 </span>
                 <select
@@ -1571,7 +1612,7 @@ function UserMyTeamPageContent() {
                 </select>
               </label>
               <label className="block">
-                <span className="text-[13px] font-medium text-[#374151] lg:text-xs lg:font-semibold lg:text-slate-600">
+                <span className="text-[13px] font-medium text-[#2B2B2B]">
                   Attendance date
                 </span>
                 <input
@@ -1583,7 +1624,7 @@ function UserMyTeamPageContent() {
                 />
               </label>
               <label className="block">
-                <span className="text-[13px] font-medium text-[#374151] lg:text-xs lg:font-semibold lg:text-slate-600">
+                <span className="text-[13px] font-medium text-[#2B2B2B]">
                   Explanation
                 </span>
                 <textarea
@@ -1595,7 +1636,7 @@ function UserMyTeamPageContent() {
                   className={zohoInputCls()}
                 />
               </label>
-              <div className="flex flex-col-reverse gap-2 border-t border-[#E4E7EC] pt-4 lg:flex-row lg:gap-3 lg:border-0 lg:pt-2">
+              <div className="flex flex-col-reverse gap-2 border-t border-[#DDE4EE] pt-4 lg:flex-row lg:gap-3 lg:border-0 lg:pt-2">
                 <button
                   type="button"
                   onClick={() => {
@@ -1635,7 +1676,7 @@ function ModalScrim({
 }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-[#1F2937]/45 p-0 backdrop-blur-[1px] lg:items-center lg:p-4 lg:backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-[#2B2B2B]/40 p-0 backdrop-blur-[2px] lg:items-center lg:p-4 lg:backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
     >
@@ -1660,10 +1701,10 @@ function ActivityColumn({
   onEditAttendance: (row: AttendanceQueryRow) => void;
 }) {
   return (
-    <aside className="min-w-0 space-y-4 xl:sticky xl:top-6 xl:self-start">
+    <aside className="grid min-w-0 gap-4 lg:grid-cols-2 xl:sticky xl:top-6 xl:grid-cols-1 xl:self-start">
       <div className={panelClass}>
-        <div className="flex items-start gap-3 border-b border-[#E4E7EC] bg-gradient-to-r from-[#E8F4FB]/50 to-white px-5 py-4">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#E8F4FB] text-[#008CD3]">
+        <div className="flex items-start gap-3 border-b border-[#DDE4EE] bg-[#F8FAFC] px-5 py-4">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[#E8F4FC] text-[#0088DD]">
             <CalendarDays className="h-5 w-5" aria-hidden />
           </span>
           <div className="min-w-0">
@@ -1676,7 +1717,7 @@ function ActivityColumn({
         <div className="max-h-[min(48vh,400px)] overflow-y-auto p-4">
           {leaveRows.length === 0 ? (
             <div className="flex flex-col items-center py-10 text-center">
-              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#F5F7FA] text-[#9CA3AF]">
+              <span className="flex h-12 w-12 items-center justify-center rounded-md bg-[#F4F6F9] text-[#8A94A6]">
                 <CalendarDays className="h-6 w-6" aria-hidden />
               </span>
               <p className={`mt-3 ${desktopValueCls}`}>No leave requests yet</p>
@@ -1691,31 +1732,31 @@ function ActivityColumn({
               return (
                 <li
                   key={row.id}
-                  className={`rounded-xl border border-[#E4E7EC] bg-white p-3.5 shadow-sm ${accentBar[tone]}`}
+                  className={`rounded-md border border-[#DDE4EE] bg-white p-3.5 shadow-[0_1px_2px_rgba(16,24,40,0.04)] ${accentBar[tone]}`}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <span
-                      className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${toneChip[tone]}`}
+                      className={`inline-flex rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${toneChip[tone]}`}
                     >
                       {row.status}
                     </span>
                     <time
-                      className="text-[10px] tabular-nums text-[#9CA3AF]"
+                      className="text-[10px] tabular-nums text-[#8A94A6]"
                       dateTime={row.created_at ?? undefined}
                     >
                       {formatDate(row.created_at)}
                     </time>
                   </div>
-                  <p className="mt-2 text-[14px] font-semibold capitalize text-[#1F2937]">
+                  <p className="mt-2 text-[14px] font-semibold capitalize text-[#2B2B2B]">
                     {row.leave_type.replace(/_/g, " ")}
                   </p>
                   <p className={`mt-1 flex items-center gap-1 ${desktopCaptionCls}`}>
-                    <CalendarDays className="h-3 w-3 shrink-0 text-[#008CD3]" aria-hidden />
+                    <CalendarDays className="h-3 w-3 shrink-0 text-[#0088DD]" aria-hidden />
                     {formatDate(row.start_date)}
                     {row.end_date ? ` → ${formatDate(row.end_date)}` : ""}
                   </p>
                   {row.reason ? (
-                    <p className={`mt-2 line-clamp-3 rounded-lg bg-[#F9FAFB] px-2.5 py-2 ${desktopCaptionCls}`}>
+                    <p className={`mt-2 line-clamp-3 rounded-md bg-[#F8FAFC] px-2.5 py-2 ${desktopCaptionCls}`}>
                       {row.reason}
                     </p>
                   ) : null}
@@ -1732,8 +1773,8 @@ function ActivityColumn({
       </div>
 
       <div className={panelClass}>
-        <div className="flex items-start gap-3 border-b border-[#E4E7EC] bg-gradient-to-r from-[#E6F4EA]/50 to-white px-5 py-4">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#E6F4EA] text-[#0F9D58]">
+        <div className="flex items-start gap-3 border-b border-[#DDE4EE] bg-[#F8FAFC] px-5 py-4">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[#E8F5E9] text-[#1B7F3B]">
             <ClipboardList className="h-5 w-5" aria-hidden />
           </span>
           <div className="min-w-0">
@@ -1746,7 +1787,7 @@ function ActivityColumn({
         <div className="max-h-[min(48vh,400px)] overflow-y-auto p-4">
           {attendanceRows.length === 0 ? (
             <div className="flex flex-col items-center py-10 text-center">
-              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#F5F7FA] text-[#9CA3AF]">
+              <span className="flex h-12 w-12 items-center justify-center rounded-md bg-[#F4F6F9] text-[#8A94A6]">
                 <ClipboardList className="h-6 w-6" aria-hidden />
               </span>
               <p className={`mt-3 ${desktopValueCls}`}>No corrections yet</p>
@@ -1763,11 +1804,11 @@ function ActivityColumn({
               return (
                 <li
                   key={row.id}
-                  className={`rounded-xl border border-[#E4E7EC] bg-white p-3.5 shadow-sm ${accentBar[tone]}`}
+                  className={`rounded-md border border-[#DDE4EE] bg-white p-3.5 shadow-[0_1px_2px_rgba(16,24,40,0.04)] ${accentBar[tone]}`}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <span
-                      className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${toneChip[tone]}`}
+                      className={`inline-flex rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${toneChip[tone]}`}
                     >
                       {row.query_status}
                     </span>
@@ -1775,7 +1816,7 @@ function ActivityColumn({
                       <button
                         type="button"
                         onClick={() => onEditAttendance(row)}
-                        className="inline-flex items-center gap-1 rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] px-2 py-1 text-[11px] font-semibold text-[#008CD3] transition hover:bg-[#E8F4FB]"
+                        className="inline-flex items-center gap-1 rounded-md border border-[#DDE4EE] bg-[#F8FAFC] px-2.5 py-1 text-[11px] font-semibold text-[#0088DD] transition hover:border-[#0088DD]/30 hover:bg-[#E8F4FC]"
                       >
                         <Pencil className="h-3 w-3" aria-hidden />
                         Edit
@@ -1786,15 +1827,15 @@ function ActivityColumn({
                     {attendanceCategoryLabel(row.category)}
                   </p>
                   <p className={`mt-1 flex items-center gap-1 ${desktopCaptionCls}`}>
-                    <Calendar className="h-3 w-3 shrink-0 text-[#008CD3]" aria-hidden />
+                    <Calendar className="h-3 w-3 shrink-0 text-[#0088DD]" aria-hidden />
                     {formatDate(row.attendance_date)}
                   </p>
-                  <p className={`mt-2 line-clamp-3 rounded-lg bg-[#F9FAFB] px-2.5 py-2 ${desktopCaptionCls}`}>
+                  <p className={`mt-2 line-clamp-3 rounded-md bg-[#F8FAFC] px-2.5 py-2 ${desktopCaptionCls}`}>
                     {row.query_message}
                   </p>
                   {row.admin_response ? (
-                    <div className="mt-2 rounded-lg border border-[#E4E7EC] bg-[#F5F7FA] px-2.5 py-2">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
+                    <div className="mt-2 rounded-md border border-[#DDE4EE] bg-[#F4F6F9] px-2.5 py-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-[#8A94A6]">
                         Response
                       </p>
                       <p className={`mt-0.5 ${desktopCaptionCls}`}>{row.admin_response}</p>
@@ -1808,7 +1849,7 @@ function ActivityColumn({
                       ) : null}
                     </div>
                   ) : null}
-                  <p className="mt-2 text-[10px] tabular-nums text-[#9CA3AF]">
+                  <p className="mt-2 text-[10px] tabular-nums text-[#8A94A6]">
                     Submitted {formatDateTime(row.created_at)}
                   </p>
                 </li>

@@ -16,7 +16,7 @@ export default function DashboardPanel({
     <div
       className={`h-full min-h-0 ${scrollable ? "overflow-y-auto overscroll-contain" : "overflow-hidden"}`}
     >
-      <div className="pb-2">{children}</div>
+      <div className="pb-2 pt-1 sm:pb-3">{children}</div>
     </div>
   );
 }

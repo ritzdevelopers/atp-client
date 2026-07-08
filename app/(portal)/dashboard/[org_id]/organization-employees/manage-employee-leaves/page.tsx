@@ -1,7 +1,7 @@
 "use client";
 
-import { useParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState, Suspense, type ReactNode } from "react";
 import {
   CalendarCheck,
   CalendarDays,
@@ -9,6 +9,7 @@ import {
   ClipboardList,
   Eye,
   Filter,
+  Loader2,
   RefreshCw,
   RotateCcw,
   Search,
@@ -60,6 +61,24 @@ import {
   writeLeaveRequestsCache,
   writeManageOrgUsersCache,
 } from "@/lib/employeeManagementCache";
+import {
+  buildManageLeavesHref,
+  compOffRequestDomId,
+  leaveRequestDomId,
+  parseManageLeavesTab,
+  regularizationRequestDomId,
+  type ManageLeavesTab,
+} from "@/lib/manageEmployeeLeavesDeepLink";
+import {
+  btnBrandCls,
+  btnGhostCls,
+  dashLabelCls,
+  dashPageCls,
+  dashSectionMetaCls,
+  dashSectionTitleCls,
+  iconBadgeCls,
+  statBoxCls,
+} from "@/components/portal-dashboard/home/dashboardTokens";
 
 type LeaveStatus = EmployeeLeaveStatus;
 type LeaveType = LeaveDuration;
@@ -173,37 +192,63 @@ function formatTimeShort(value: string | null | undefined): string {
 
 function statusBadgeClass(status: string): string {
   const s = String(status).toLowerCase();
-  if (s === "approved") return "bg-[#E6F4EA] text-[#0F9D58]";
-  if (s === "rejected") return "bg-[#FCE8E6] text-[#D93025]";
-  return "bg-[#FEF3E6] text-[#E8710A]";
+  if (s === "approved")
+    return "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200/60";
+  if (s === "rejected")
+    return "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold bg-rose-50 text-rose-700 ring-1 ring-rose-200/60";
+  return "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold bg-amber-50 text-amber-700 ring-1 ring-amber-200/60";
 }
 
 function labelCls() {
-  return "mb-1 block text-[12px] font-medium text-[#374151]";
+  return `mb-1.5 block ${dashLabelCls}`;
 }
 
 function filterFieldCls() {
-  return "w-full rounded-lg border border-[#E4E7EC] bg-white px-3 py-2 text-[14px] text-[#1F2937] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15";
+  return "w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-[14px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#008CD3] focus:ring-2 focus:ring-[#008CD3]/15";
 }
 
-function zohoPanelCls() {
-  return "overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-sm";
+function mainTabCls(active: boolean) {
+  return `inline-flex min-h-[40px] items-center gap-1.5 rounded-xl px-3.5 py-2 text-[13px] font-semibold transition-all duration-200 ${
+    active
+      ? "bg-[#008CD3] text-white shadow-[0_4px_14px_rgba(0,140,211,0.28)]"
+      : "border border-slate-200/90 bg-white text-slate-700 hover:border-[#008CD3]/25 hover:bg-slate-50 hover:text-[#008CD3]"
+  }`;
 }
 
-function zohoPrimaryBtnCls(full = false) {
-  return `inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg bg-[#008CD3] px-4 py-2 text-[14px] font-medium text-white transition active:scale-[0.98] hover:bg-[#0070AA] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full lg:w-auto" : ""}`;
-}
-
-function zohoSecondaryBtnCls(full = false) {
-  return `inline-flex min-h-[40px] items-center justify-center rounded-lg border border-[#E4E7EC] bg-white px-4 py-2 text-[14px] font-medium text-[#374151] transition hover:bg-[#F9FAFB] disabled:pointer-events-none disabled:opacity-50 ${full ? "w-full lg:w-auto" : ""}`;
+function mobileMainTabCls(active: boolean) {
+  return `flex min-h-[40px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-2 text-[10px] font-semibold transition-all duration-200 sm:flex-row sm:gap-1.5 sm:text-[11px] ${
+    active
+      ? "bg-white text-[#008CD3] shadow-sm ring-1 ring-[#008CD3]/15"
+      : "text-slate-500 hover:text-slate-700"
+  }`;
 }
 
 function zohoApproveBtnCls(full = false) {
-  return `inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg border border-[#A8DAB5] bg-[#E6F4EA] px-3 py-2 text-[13px] font-medium text-[#0F9D58] transition hover:bg-[#E6F4EA]/80 disabled:cursor-not-allowed disabled:opacity-40 ${full ? "w-full" : ""}`;
+  return `inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[13px] font-medium text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-40 ${full ? "w-full" : ""}`;
 }
 
 function zohoRejectBtnCls(full = false) {
-  return `inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2 text-[13px] font-medium text-[#D93025] transition hover:bg-[#FCE8E6]/80 disabled:cursor-not-allowed disabled:opacity-40 ${full ? "w-full" : ""}`;
+  return `inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[13px] font-medium text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-40 ${full ? "w-full" : ""}`;
+}
+
+function listCardCls() {
+  return "card-fade-in overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)]";
+}
+
+function mobileRowCardCls() {
+  return "rounded-2xl border border-slate-200/90 bg-white p-4 shadow-[0_1px_3px_rgba(15,23,42,0.04)] transition hover:shadow-[0_4px_16px_rgba(15,23,42,0.06)] active:scale-[0.995]";
+}
+
+function tableHeadCls() {
+  return "border-b border-slate-100 bg-slate-50/80 text-[10px] font-semibold uppercase tracking-wide text-slate-500";
+}
+
+function modalShellCls() {
+  return "fixed inset-0 z-[100000] flex items-end justify-center bg-slate-900/40 p-0 backdrop-blur-[2px] sm:items-center sm:p-4";
+}
+
+function modalPanelCls() {
+  return "w-full max-h-[90vh] overflow-y-auto rounded-t-2xl border border-slate-200/90 bg-white p-5 shadow-2xl sm:max-w-md sm:rounded-2xl";
 }
 
 function userDisplayName(
@@ -220,18 +265,23 @@ function userDisplayName(
   return { name: `User #${userId}`, email: "" };
 }
 
-function ManageEmployeeLeavesPage() {
+function ManageEmployeeLeavesPageContent() {
   const params = useParams();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const orgId = String(params?.org_id ?? "");
   const initialAttFilterKey = stableFilterKey(EMPTY_ATT_FILTERS);
   const cachedAttendance = orgId
     ? readAttendanceQueriesCache(orgId, initialAttFilterKey)
     : null;
   const cachedOrgUsers = orgId ? readManageOrgUsersCache(orgId) : null;
+  const deepLinkHandledRef = useRef<string | null>(null);
+  const deepLinkRetryRef = useRef(false);
 
   const [mainTab, setMainTab] = useState<
     "leaves" | "attendance" | "regularization" | "compoff"
-  >("attendance");
+  >(() => parseManageLeavesTab(searchParams.get("tab")) ?? "attendance");
+  const [highlightedLeaveId, setHighlightedLeaveId] = useState<number | null>(null);
 
   const [filters, setFilters] = useState<Filters>({ ...EMPTY_FILTERS });
   const [appliedFilters, setAppliedFilters] = useState<Filters>({
@@ -601,6 +651,18 @@ function ManageEmployeeLeavesPage() {
     setAppliedCompFilters({ ...EMPTY_COMP_FILTERS });
   };
 
+  const clearDeepLinkParams = useCallback(
+    (tab: ManageLeavesTab) => {
+      router.replace(buildManageLeavesHref(orgId, tab), { scroll: false });
+    },
+    [orgId, router],
+  );
+
+  useEffect(() => {
+    const tab = parseManageLeavesTab(searchParams.get("tab"));
+    if (tab) setMainTab(tab);
+  }, [searchParams]);
+
   const refresh = () => {
     if (mainTab === "leaves") void loadLeaves(appliedFilters, true);
     else if (mainTab === "attendance") void loadAttendance(appliedAttFilters, true);
@@ -854,6 +916,61 @@ function ManageEmployeeLeavesPage() {
   };
 
   useEffect(() => {
+    const tab = parseManageLeavesTab(searchParams.get("tab"));
+    const idRaw = searchParams.get("id");
+    if (!tab || !idRaw) return;
+    const id = Number(idRaw);
+    if (Number.isNaN(id)) return;
+
+    const key = `${tab}:${id}`;
+    if (deepLinkHandledRef.current === key) return;
+
+    if (tab === "regularization") {
+      if (mainTab !== "regularization") return;
+      deepLinkHandledRef.current = key;
+      void openRegDetail(id).finally(() => clearDeepLinkParams("regularization"));
+      return;
+    }
+
+    if (tab === "compoff") {
+      if (mainTab !== "compoff") return;
+      deepLinkHandledRef.current = key;
+      void openCompDetail(id).finally(() => clearDeepLinkParams("compoff"));
+      return;
+    }
+
+    if (tab === "leaves") {
+      if (mainTab !== "leaves" || loading) return;
+      const found = rows.some((row) => Number(row.id) === id);
+      if (!found && !deepLinkRetryRef.current) {
+        deepLinkRetryRef.current = true;
+        setFilters({ ...EMPTY_FILTERS });
+        setAppliedFilters({ ...EMPTY_FILTERS });
+        return;
+      }
+
+      const scrollToLeave = () => {
+        const el = document.getElementById(leaveRequestDomId(id));
+        if (!el) return false;
+        deepLinkHandledRef.current = key;
+        setHighlightedLeaveId(id);
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        window.setTimeout(() => setHighlightedLeaveId(null), 4500);
+        clearDeepLinkParams("leaves");
+        return true;
+      };
+
+      if (scrollToLeave()) return;
+      window.setTimeout(() => {
+        if (!scrollToLeave()) {
+          deepLinkHandledRef.current = key;
+          clearDeepLinkParams("leaves");
+        }
+      }, 350);
+    }
+  }, [mainTab, loading, rows, searchParams, clearDeepLinkParams]);
+
+  useEffect(() => {
     if (!notice || notice.type !== "ok") return;
     const t = window.setTimeout(() => setNotice(null), 4000);
     return () => window.clearTimeout(t);
@@ -931,19 +1048,24 @@ function ManageEmployeeLeavesPage() {
   const listTotal = activeCounts.total;
 
   return (
-    <section className="min-h-full space-y-3 bg-[#F5F7FA] p-0 max-lg:-mx-1 sm:max-lg:-mx-2 lg:mx-auto lg:max-w-6xl lg:space-y-4 lg:p-6">
+    <div className={`${dashPageCls} relative min-h-full pb-6`}>
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[360px] bg-gradient-to-b from-[#FDE8F3]/30 via-[#F4F6F9] to-transparent"
+        aria-hidden
+      />
+      <section className="flex flex-col gap-4 lg:gap-6">
       {/* Mobile & tablet: sticky app header */}
-      <div className="sticky top-0 z-20 border-b border-[#E4E7EC] bg-white shadow-sm px-3 pb-2.5 pt-2.5 sm:px-4 lg:hidden">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex min-w-0 flex-1 items-start gap-2">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#E8F4FB] text-[#008CD3]">
+      <div className="sticky top-0 z-20 -mx-3 border-b border-slate-200/80 bg-white/95 px-3 pb-3 pt-3 shadow-[0_1px_3px_rgba(15,23,42,0.06)] backdrop-blur-md sm:-mx-5 sm:px-4 lg:hidden">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 flex-1 items-start gap-3">
+            <span className={iconBadgeCls("violet")}>
               <ClipboardList className="h-4 w-4" aria-hidden />
             </span>
             <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-[#6B7280]">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">
                 Organization · Employees
               </p>
-              <h1 className="truncate text-[16px] font-semibold text-[#1F2937]">
+              <h1 className="truncate text-[17px] font-semibold tracking-tight text-slate-900">
                 Leave &amp; attendance
               </h1>
             </div>
@@ -952,7 +1074,7 @@ function ManageEmployeeLeavesPage() {
             type="button"
             onClick={refresh}
             disabled={isBusy}
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#E4E7EC] text-[#008CD3] active:bg-[#F5F7FA] disabled:opacity-50"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200/90 bg-white text-[#008CD3] shadow-sm transition hover:border-[#008CD3]/30 active:scale-95 disabled:opacity-50"
             aria-label="Refresh list"
           >
             <RefreshCw
@@ -969,18 +1091,14 @@ function ManageEmployeeLeavesPage() {
           </button>
         </div>
 
-        <div className="mt-2.5 grid grid-cols-4 gap-1 rounded-lg bg-[#F5F7FA] p-0.5">
+        <div className="mt-3 grid grid-cols-4 gap-1 rounded-2xl bg-slate-100/80 p-1">
           <button
             type="button"
             onClick={() => {
               setMainTab("attendance");
               setMobileFiltersOpen(false);
             }}
-            className={`flex min-h-[36px] flex-1 items-center justify-center gap-1 rounded-md px-0.5 py-1.5 text-[10px] font-medium transition sm:text-[11px] ${
-              mainTab === "attendance"
-                ? "bg-white text-[#008CD3] shadow-sm"
-                : "text-[#6B7280]"
-            }`}
+            className={mobileMainTabCls(mainTab === "attendance")}
           >
             <ClipboardList className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" aria-hidden />
             <span className="truncate">Attendance</span>
@@ -991,11 +1109,7 @@ function ManageEmployeeLeavesPage() {
               setMainTab("leaves");
               setMobileFiltersOpen(false);
             }}
-            className={`flex min-h-[36px] flex-1 items-center justify-center gap-1 rounded-md px-0.5 py-1.5 text-[10px] font-medium transition sm:text-[11px] ${
-              mainTab === "leaves"
-                ? "bg-white text-[#008CD3] shadow-sm"
-                : "text-[#6B7280]"
-            }`}
+            className={mobileMainTabCls(mainTab === "leaves")}
           >
             <CalendarDays className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" aria-hidden />
             <span className="truncate">Leave</span>
@@ -1006,11 +1120,7 @@ function ManageEmployeeLeavesPage() {
               setMainTab("regularization");
               setMobileFiltersOpen(false);
             }}
-            className={`flex min-h-[36px] flex-1 items-center justify-center gap-1 rounded-md px-0.5 py-1.5 text-[10px] font-medium transition sm:text-[11px] ${
-              mainTab === "regularization"
-                ? "bg-white text-[#008CD3] shadow-sm"
-                : "text-[#6B7280]"
-            }`}
+            className={mobileMainTabCls(mainTab === "regularization")}
           >
             <RotateCcw className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" aria-hidden />
             <span className="truncate">Reg.</span>
@@ -1021,23 +1131,19 @@ function ManageEmployeeLeavesPage() {
               setMainTab("compoff");
               setMobileFiltersOpen(false);
             }}
-            className={`flex min-h-[36px] flex-1 items-center justify-center gap-1 rounded-md px-0.5 py-1.5 text-[10px] font-medium transition sm:text-[11px] ${
-              mainTab === "compoff"
-                ? "bg-white text-[#008CD3] shadow-sm"
-                : "text-[#6B7280]"
-            }`}
+            className={mobileMainTabCls(mainTab === "compoff")}
           >
             <CalendarCheck className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" aria-hidden />
             <span className="truncate">Comp</span>
           </button>
         </div>
 
-        <div className="mt-2.5 grid grid-cols-3 gap-1.5">
+        <div className="mt-3 grid grid-cols-3 gap-2">
           <MobileStatTile label="Pending" value={activeCounts.pending} tone="amber" />
           <MobileStatTile label="Approved" value={activeCounts.approved} tone="emerald" />
           <MobileStatTile label="Rejected" value={activeCounts.rejected} tone="rose" />
         </div>
-        <p className="mt-1.5 text-center text-[11px] text-[#6B7280]">
+        <p className={`mt-2 text-center ${dashSectionMetaCls}`}>
           {listTotal}{" "}
           {mainTab === "leaves"
             ? `leave request${listTotal === 1 ? "" : "s"}`
@@ -1051,20 +1157,21 @@ function ManageEmployeeLeavesPage() {
       </div>
 
       {/* Desktop: page header */}
-      <header className={`${zohoPanelCls()} hidden p-4 lg:block`}>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex min-w-0 items-start gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#E8F4FB] text-[#008CD3]">
+      <header className={`${listCardCls()} hidden overflow-hidden lg:block`}>
+        <div className="border-b border-slate-100 bg-gradient-to-r from-[#F8FAFC] via-white to-[#F0F9FF]/40 px-5 py-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex min-w-0 items-start gap-4">
+            <span className={iconBadgeCls("violet")}>
               <ClipboardList className="h-5 w-5" aria-hidden />
             </span>
             <div className="min-w-0">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">
                 Organization · Employees
               </p>
-              <h1 className="text-[18px] font-semibold text-[#1F2937]">
+              <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">
                 Leave &amp; attendance requests
               </h1>
-              <p className="mt-0.5 max-w-2xl text-[13px] text-[#6B7280]">
+              <p className={`mt-1 max-w-2xl ${dashSectionMetaCls}`}>
                 Approve leave, attendance correction, regularization, and comp off queues.
                 Approved comp off credits employee balance (0.5 or 1.0 day).
               </p>
@@ -1074,7 +1181,7 @@ function ManageEmployeeLeavesPage() {
             type="button"
             onClick={refresh}
             disabled={isBusy}
-            className={zohoSecondaryBtnCls()}
+            className={btnGhostCls()}
           >
             <RefreshCw
               className={`h-4 w-4 ${
@@ -1096,19 +1203,16 @@ function ManageEmployeeLeavesPage() {
               : "Refresh"}
           </button>
         </div>
+        </div>
 
-        <div className="mt-4 flex flex-wrap gap-2 border-t border-[#E4E7EC] pt-4">
+        <div className="flex flex-wrap gap-2 px-5 py-4">
           <button
             type="button"
             onClick={() => {
               setMainTab("attendance");
               setMobileFiltersOpen(false);
             }}
-            className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-medium transition ${
-              mainTab === "attendance"
-                ? "bg-[#008CD3] text-white"
-                : "border border-[#E4E7EC] bg-white text-[#374151] hover:bg-[#F9FAFB]"
-            }`}
+            className={mainTabCls(mainTab === "attendance")}
           >
             <ClipboardList className="h-4 w-4" aria-hidden />
             Attendance queries
@@ -1119,11 +1223,7 @@ function ManageEmployeeLeavesPage() {
               setMainTab("leaves");
               setMobileFiltersOpen(false);
             }}
-            className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-medium transition ${
-              mainTab === "leaves"
-                ? "bg-[#008CD3] text-white"
-                : "border border-[#E4E7EC] bg-white text-[#374151] hover:bg-[#F9FAFB]"
-            }`}
+            className={mainTabCls(mainTab === "leaves")}
           >
             <CalendarDays className="h-4 w-4" aria-hidden />
             Leave queries
@@ -1134,11 +1234,7 @@ function ManageEmployeeLeavesPage() {
               setMainTab("regularization");
               setMobileFiltersOpen(false);
             }}
-            className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-medium transition ${
-              mainTab === "regularization"
-                ? "bg-[#008CD3] text-white"
-                : "border border-[#E4E7EC] bg-white text-[#374151] hover:bg-[#F9FAFB]"
-            }`}
+            className={mainTabCls(mainTab === "regularization")}
           >
             <RotateCcw className="h-4 w-4" aria-hidden />
             Regularization
@@ -1149,24 +1245,20 @@ function ManageEmployeeLeavesPage() {
               setMainTab("compoff");
               setMobileFiltersOpen(false);
             }}
-            className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-medium transition ${
-              mainTab === "compoff"
-                ? "bg-[#008CD3] text-white"
-                : "border border-[#E4E7EC] bg-white text-[#374151] hover:bg-[#F9FAFB]"
-            }`}
+            className={mainTabCls(mainTab === "compoff")}
           >
             <CalendarCheck className="h-4 w-4" aria-hidden />
             Comp off
           </button>
         </div>
 
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 border-t border-slate-100 bg-slate-50/50 px-5 py-3">
           {mainTab === "leaves" ? (
             <>
               <StatPill label="Pending" value={counts.pending} tone="amber" />
               <StatPill label="Approved" value={counts.approved} tone="emerald" />
               <StatPill label="Rejected" value={counts.rejected} tone="rose" />
-              <span className="inline-flex min-h-[32px] items-center rounded-lg bg-[#F5F7FA] px-2.5 text-[12px] font-medium text-[#6B7280]">
+              <span className={`inline-flex min-h-[32px] items-center rounded-xl bg-white px-3 text-[12px] font-medium text-slate-500 ring-1 ring-slate-200/80`}>
                 {counts.total} leave request{counts.total === 1 ? "" : "s"} in view
               </span>
             </>
@@ -1175,7 +1267,7 @@ function ManageEmployeeLeavesPage() {
               <StatPill label="Pending" value={attCounts.pending} tone="amber" />
               <StatPill label="Approved" value={attCounts.approved} tone="emerald" />
               <StatPill label="Rejected" value={attCounts.rejected} tone="rose" />
-              <span className="inline-flex min-h-[32px] items-center rounded-lg bg-[#F5F7FA] px-2.5 text-[12px] font-medium text-[#6B7280]">
+              <span className={`inline-flex min-h-[32px] items-center rounded-xl bg-white px-3 text-[12px] font-medium text-slate-500 ring-1 ring-slate-200/80`}>
                 {attCounts.total} attendance quer
                 {attCounts.total === 1 ? "y" : "ies"} in view
               </span>
@@ -1185,7 +1277,7 @@ function ManageEmployeeLeavesPage() {
               <StatPill label="Pending" value={regCounts.pending} tone="amber" />
               <StatPill label="Approved" value={regCounts.approved} tone="emerald" />
               <StatPill label="Rejected" value={regCounts.rejected} tone="rose" />
-              <span className="inline-flex min-h-[32px] items-center rounded-lg bg-[#F5F7FA] px-2.5 text-[12px] font-medium text-[#6B7280]">
+              <span className={`inline-flex min-h-[32px] items-center rounded-xl bg-white px-3 text-[12px] font-medium text-slate-500 ring-1 ring-slate-200/80`}>
                 {regCounts.total} regularization request
                 {regCounts.total === 1 ? "" : "s"} in view
               </span>
@@ -1195,7 +1287,7 @@ function ManageEmployeeLeavesPage() {
               <StatPill label="Pending" value={compCounts.pending} tone="amber" />
               <StatPill label="Approved" value={compCounts.approved} tone="emerald" />
               <StatPill label="Rejected" value={compCounts.rejected} tone="rose" />
-              <span className="inline-flex min-h-[32px] items-center rounded-lg bg-[#F5F7FA] px-2.5 text-[12px] font-medium text-[#6B7280]">
+              <span className={`inline-flex min-h-[32px] items-center rounded-xl bg-white px-3 text-[12px] font-medium text-slate-500 ring-1 ring-slate-200/80`}>
                 {compCounts.total} comp off request
                 {compCounts.total === 1 ? "" : "s"} in view
               </span>
@@ -1207,11 +1299,11 @@ function ManageEmployeeLeavesPage() {
       {notice ? (
         <div
           role="status"
-          className={`mx-3 sm:mx-4 lg:mx-0 ${
+          className={
             notice.type === "ok"
-              ? "rounded-lg border border-[#A8DAB5] bg-[#E6F4EA] px-3 py-2.5 text-[13px] text-[#1F2937]"
-              : "rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2.5 text-[13px] text-[#1F2937]"
-          }`}
+              ? "rounded-2xl border border-emerald-200/80 bg-emerald-50 px-4 py-3 text-[13px] text-emerald-900"
+              : "rounded-2xl border border-rose-200/80 bg-rose-50 px-4 py-3 text-[13px] text-rose-900"
+          }
         >
           {notice.text}
         </div>
@@ -1219,7 +1311,7 @@ function ManageEmployeeLeavesPage() {
 
       {mainTab === "leaves" ? (
        <>
-      <div className={`${zohoPanelCls()} p-3 sm:p-4 lg:p-5 mx-3 sm:mx-4 lg:mx-0`}>
+      <div className={`${listCardCls()} p-4 sm:p-5`}>
         <button
           type="button"
           onClick={() => setMobileFiltersOpen((v) => !v)}
@@ -1227,12 +1319,12 @@ function ManageEmployeeLeavesPage() {
           aria-expanded={mobileFiltersOpen}
         >
           <div className="flex items-center gap-2 text-[#1F2937]">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#008CD3] text-white">
+            <span className={iconBadgeCls("blue")}>
               <Filter className="h-3.5 w-3.5" aria-hidden />
             </span>
             <div>
-              <h2 className="text-[14px] font-semibold text-[#1F2937]">Filters</h2>
-              <p className="text-[11px] text-[#6B7280]">Tap to {mobileFiltersOpen ? "hide" : "show"}</p>
+              <h2 className={dashSectionTitleCls}>Filters</h2>
+              <p className={dashSectionMetaCls}>Tap to {mobileFiltersOpen ? "hide" : "show"}</p>
             </div>
           </div>
           <ChevronDown
@@ -1241,11 +1333,11 @@ function ManageEmployeeLeavesPage() {
           />
         </button>
         <div className="hidden items-center gap-2 text-[#1F2937] lg:flex">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#008CD3] text-white">
+          <span className={iconBadgeCls("blue")}>
             <Filter className="h-3.5 w-3.5" aria-hidden />
           </span>
           <div>
-            <h2 className="text-[15px] font-semibold text-[#1F2937]">Filters</h2>
+            <h2 className={dashSectionTitleCls}>Filters</h2>
             <p className="text-[12px] text-[#6B7280]">
               Leave requests assigned to you as a reviewer. Apply filters to reload from the server.
             </p>
@@ -1338,14 +1430,14 @@ function ManageEmployeeLeavesPage() {
             <button
               type="button"
               onClick={applyFilters}
-              className={zohoPrimaryBtnCls(true)}
+              className={btnBrandCls(true)}
             >
               Apply
             </button>
             <button
               type="button"
               onClick={resetFilters}
-              className={zohoSecondaryBtnCls(true)}
+              className={btnGhostCls(true)}
             >
               Reset
             </button>
@@ -1355,24 +1447,24 @@ function ManageEmployeeLeavesPage() {
       </div>
 
       {loading ? (
-        <div className={`${zohoPanelCls()} mx-3 p-10 text-center text-[14px] text-[#6B7280] sm:mx-4 lg:mx-0`}>
+        <div className={`${listCardCls()} p-10 text-center text-[14px] text-slate-500`}>
           <RefreshCw className="mx-auto mb-2 h-7 w-7 animate-spin text-[#008CD3]" aria-hidden />
           Loading leave requests…
         </div>
       ) : null}
 
       {error && !loading ? (
-        <div className="mx-3 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2.5 text-[13px] text-[#1F2937] sm:mx-4 lg:mx-0">
+        <div className="rounded-2xl border border-rose-200/80 bg-rose-50 px-4 py-3 text-[13px] text-rose-900">
           {error}
         </div>
       ) : null}
 
       {!loading && !error ? (
-        <div className={`${zohoPanelCls()} p-3 sm:p-4 lg:p-5 mx-3 overflow-hidden sm:mx-4 lg:mx-0 lg:p-0`}>
+        <div className={`${listCardCls()} p-4 sm:p-5 overflow-hidden lg:p-0`}>
           {/* Mobile & tablet: card list */}
-          <div className="space-y-2.5 lg:hidden lg:p-0">
+          <div className="space-y-3 lg:hidden lg:p-0">
             {rows.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-[#E4E7EC] bg-[#F9FAFB] px-4 py-10 text-center text-[#6B7280]">
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-12 text-center text-slate-500">
                 <p className="font-medium text-[#374151]">No leave requests match your filters.</p>
                 <p className="mt-1 text-[12px] text-[#6B7280]">
                   Adjust filters or refresh to see new submissions.
@@ -1382,6 +1474,8 @@ function ManageEmployeeLeavesPage() {
               rows.map((row) => (
                 <LeaveRowCard
                   key={row.id}
+                  domId={leaveRequestDomId(row.id)}
+                  highlighted={highlightedLeaveId === Number(row.id)}
                   row={row}
                   disabled={updatingId === row.id}
                   onApprove={() => void updateStatus(row.id, "approved")}
@@ -1395,7 +1489,7 @@ function ManageEmployeeLeavesPage() {
           <div className="hidden overflow-x-auto lg:block">
             <table className="min-w-[900px] w-full border-collapse text-left text-sm">
               <thead>
-                <tr className="border-b border-[#E4E7EC] bg-[#F9FAFB] text-[10px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                <tr className={tableHeadCls()}>
                   <th className="px-4 py-3.5 sm:px-5">Employee</th>
                   <th className="px-4 py-3.5 sm:px-5">Your role</th>
                   <th className="px-4 py-3.5 sm:px-5">Type</th>
@@ -1407,7 +1501,7 @@ function ManageEmployeeLeavesPage() {
                   <th className="px-4 py-3.5 text-right sm:px-5">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#E4E7EC]">
+              <tbody className="divide-y divide-slate-100">
                 {rows.length === 0 ? (
                   <tr>
                     <td colSpan={9} className="px-4 py-12 text-center text-[#6B7280]">
@@ -1421,7 +1515,12 @@ function ManageEmployeeLeavesPage() {
                   rows.map((row) => (
                     <tr
                       key={row.id}
-                      className="bg-white transition hover:bg-[#F9FAFB]"
+                      id={leaveRequestDomId(row.id)}
+                      className={`bg-white transition hover:bg-slate-50/80 ${
+                        highlightedLeaveId === Number(row.id)
+                          ? "bg-[#E8F4FB] ring-2 ring-inset ring-[#008CD3]/25"
+                          : ""
+                      }`}
                     >
                       <td className="px-4 py-4 sm:px-5">
                         <div className="text-[14px] font-semibold text-[#1F2937]">
@@ -1485,7 +1584,7 @@ function ManageEmployeeLeavesPage() {
       </>
       ) : mainTab === "attendance" ? (
         <>
-          <div className={`${zohoPanelCls()} p-3 sm:p-4 lg:p-5 mx-3 sm:mx-4 lg:mx-0`}>
+          <div className={`${listCardCls()} p-4 sm:p-5`}>
             <button
               type="button"
               onClick={() => setMobileFiltersOpen((v) => !v)}
@@ -1493,12 +1592,12 @@ function ManageEmployeeLeavesPage() {
               aria-expanded={mobileFiltersOpen}
             >
               <div className="flex items-center gap-2 text-[#1F2937]">
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#008CD3] text-white">
+                <span className={iconBadgeCls("blue")}>
                   <Filter className="h-3.5 w-3.5" aria-hidden />
                 </span>
                 <div>
-                  <h2 className="text-[14px] font-semibold text-[#1F2937]">Filters</h2>
-                  <p className="text-[11px] text-[#6B7280]">Tap to {mobileFiltersOpen ? "hide" : "show"}</p>
+                  <h2 className={dashSectionTitleCls}>Filters</h2>
+                  <p className={dashSectionMetaCls}>Tap to {mobileFiltersOpen ? "hide" : "show"}</p>
                 </div>
               </div>
               <ChevronDown
@@ -1507,11 +1606,11 @@ function ManageEmployeeLeavesPage() {
               />
             </button>
             <div className="hidden items-center gap-2 text-[#1F2937] lg:flex">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#008CD3] text-white">
+              <span className={iconBadgeCls("blue")}>
                 <Filter className="h-3.5 w-3.5" aria-hidden />
               </span>
               <div>
-                <h2 className="text-[15px] font-semibold text-[#1F2937]">Filters</h2>
+                <h2 className={dashSectionTitleCls}>Filters</h2>
                 <p className="text-[12px] text-[#6B7280]">
                   Scope attendance correction requests; results use the admin list API.
                 </p>
@@ -1593,14 +1692,14 @@ function ManageEmployeeLeavesPage() {
                 <button
                   type="button"
                   onClick={applyAttFilters}
-                  className={zohoPrimaryBtnCls(true)}
+                  className={btnBrandCls(true)}
                 >
                   Apply
                 </button>
                 <button
                   type="button"
                   onClick={resetAttFilters}
-                  className={zohoSecondaryBtnCls(true)}
+                  className={btnGhostCls(true)}
                 >
                   Reset
                 </button>
@@ -1610,24 +1709,24 @@ function ManageEmployeeLeavesPage() {
           </div>
 
           {attLoading ? (
-            <div className={`${zohoPanelCls()} mx-3 p-10 text-center text-[14px] text-[#6B7280] sm:mx-4 lg:mx-0`}>
+            <div className={`${listCardCls()} p-10 text-center text-[14px] text-slate-500`}>
               <RefreshCw className="mx-auto mb-2 h-7 w-7 animate-spin text-[#008CD3]" aria-hidden />
               Loading attendance queries…
             </div>
           ) : null}
 
           {attError && !attLoading ? (
-            <div className="mx-3 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2.5 text-[13px] text-[#1F2937] sm:mx-4 lg:mx-0">
+            <div className="rounded-2xl border border-rose-200/80 bg-rose-50 px-4 py-3 text-[13px] text-rose-900">
               {attError}
             </div>
           ) : null}
 
           {!attLoading && !attError ? (
-            <div className={`${zohoPanelCls()} p-3 sm:p-4 lg:p-5 mx-3 overflow-hidden sm:mx-4 lg:mx-0 lg:p-0`}>
+            <div className={`${listCardCls()} p-4 sm:p-5 overflow-hidden lg:p-0`}>
               {/* Mobile & tablet: card list */}
-              <div className="space-y-2.5 lg:hidden lg:p-0">
+              <div className="space-y-3 lg:hidden lg:p-0">
                 {attRows.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-[#E4E7EC] bg-[#F9FAFB] px-4 py-10 text-center text-[#6B7280]">
+                  <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-12 text-center text-slate-500">
                     <p className="font-medium text-[#374151]">
                       No attendance queries match your filters.
                     </p>
@@ -1664,7 +1763,7 @@ function ManageEmployeeLeavesPage() {
               <div className="hidden overflow-x-auto lg:block">
                 <table className="min-w-[960px] w-full border-collapse text-left text-sm">
                   <thead>
-                    <tr className="border-b border-[#E4E7EC] bg-[#F9FAFB] text-[10px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                    <tr className={tableHeadCls()}>
                       <th className="px-4 py-3.5 sm:px-5">Employee</th>
                       <th className="px-4 py-3.5 sm:px-5">Issue</th>
                       <th className="px-4 py-3.5 sm:px-5">Attendance date</th>
@@ -1674,7 +1773,7 @@ function ManageEmployeeLeavesPage() {
                       <th className="px-4 py-3.5 text-right sm:px-5">Actions / resolution</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#E4E7EC]">
+                  <tbody className="divide-y divide-slate-100">
                     {attRows.length === 0 ? (
                       <tr>
                         <td colSpan={7} className="px-4 py-12 text-center text-[#6B7280]">
@@ -1692,7 +1791,7 @@ function ManageEmployeeLeavesPage() {
                         const pending =
                           String(row.query_status).toLowerCase() === "pending";
                         return (
-                          <tr key={row.id} className="bg-white transition hover:bg-[#F9FAFB]">
+                          <tr key={row.id} className="bg-white transition hover:bg-slate-50/80">
                             <td className="px-4 py-3 sm:px-5">
                               <div className="text-[14px] font-semibold text-[#1F2937]">{emp.name}</div>
                               {emp.email ? (
@@ -1785,7 +1884,7 @@ function ManageEmployeeLeavesPage() {
         </>
       ) : mainTab === "regularization" ? (
         <>
-          <div className={`${zohoPanelCls()} p-3 sm:p-4 lg:p-5 mx-3 sm:mx-4 lg:mx-0`}>
+          <div className={`${listCardCls()} p-4 sm:p-5`}>
             <button
               type="button"
               onClick={() => setMobileFiltersOpen((v) => !v)}
@@ -1793,11 +1892,11 @@ function ManageEmployeeLeavesPage() {
               aria-expanded={mobileFiltersOpen}
             >
               <div className="flex items-center gap-2 text-[#1F2937]">
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#008CD3] text-white">
+                <span className={iconBadgeCls("blue")}>
                   <Filter className="h-3.5 w-3.5" aria-hidden />
                 </span>
                 <div>
-                  <h2 className="text-[14px] font-semibold text-[#1F2937]">Filters</h2>
+                  <h2 className={dashSectionTitleCls}>Filters</h2>
                   <p className="text-[11px] text-[#6B7280]">
                     Tap to {mobileFiltersOpen ? "hide" : "show"}
                   </p>
@@ -1809,11 +1908,11 @@ function ManageEmployeeLeavesPage() {
               />
             </button>
             <div className="hidden items-center gap-2 text-[#1F2937] lg:flex">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#008CD3] text-white">
+              <span className={iconBadgeCls("blue")}>
                 <Filter className="h-3.5 w-3.5" aria-hidden />
               </span>
               <div>
-                <h2 className="text-[15px] font-semibold text-[#1F2937]">Filters</h2>
+                <h2 className={dashSectionTitleCls}>Filters</h2>
                 <p className="text-[12px] text-[#6B7280]">
                   Regularization requests assigned to you as reporting manager.
                 </p>
@@ -1892,14 +1991,14 @@ function ManageEmployeeLeavesPage() {
                   <button
                     type="button"
                     onClick={applyRegFilters}
-                    className={zohoPrimaryBtnCls(true)}
+                    className={btnBrandCls(true)}
                   >
                     Apply
                   </button>
                   <button
                     type="button"
                     onClick={resetRegFilters}
-                    className={zohoSecondaryBtnCls(true)}
+                    className={btnGhostCls(true)}
                   >
                     Reset
                   </button>
@@ -1909,23 +2008,23 @@ function ManageEmployeeLeavesPage() {
           </div>
 
           {regLoading ? (
-            <div className={`${zohoPanelCls()} mx-3 p-10 text-center text-[14px] text-[#6B7280] sm:mx-4 lg:mx-0`}>
+            <div className={`${listCardCls()} p-10 text-center text-[14px] text-slate-500`}>
               <RefreshCw className="mx-auto mb-2 h-7 w-7 animate-spin text-[#008CD3]" aria-hidden />
               Loading regularization requests…
             </div>
           ) : null}
 
           {regError && !regLoading ? (
-            <div className="mx-3 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2.5 text-[13px] text-[#1F2937] sm:mx-4 lg:mx-0">
+            <div className="rounded-2xl border border-rose-200/80 bg-rose-50 px-4 py-3 text-[13px] text-rose-900">
               {regError}
             </div>
           ) : null}
 
           {!regLoading && !regError ? (
-            <div className={`${zohoPanelCls()} p-3 sm:p-4 lg:p-5 mx-3 overflow-hidden sm:mx-4 lg:mx-0 lg:p-0`}>
-              <div className="space-y-2.5 lg:hidden lg:p-0">
+            <div className={`${listCardCls()} p-4 sm:p-5 overflow-hidden lg:p-0`}>
+              <div className="space-y-3 lg:hidden lg:p-0">
                 {regRows.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-[#E4E7EC] bg-[#F9FAFB] px-4 py-10 text-center text-[#6B7280]">
+                  <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-12 text-center text-slate-500">
                     <p className="font-medium text-[#374151]">
                       No regularization requests match your filters.
                     </p>
@@ -1936,6 +2035,7 @@ function ManageEmployeeLeavesPage() {
                     return (
                       <RegularizationRequestCard
                         key={row.id}
+                        domId={regularizationRequestDomId(row.id)}
                         row={row}
                         pending={pending}
                         modalBusy={regModalSubmitting && regModal?.id === row.id}
@@ -1951,7 +2051,7 @@ function ManageEmployeeLeavesPage() {
               <div className="hidden overflow-x-auto lg:block">
                 <table className="min-w-[1040px] w-full border-collapse text-left text-sm">
                   <thead>
-                    <tr className="border-b border-[#E4E7EC] bg-[#F9FAFB] text-[10px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                    <tr className={tableHeadCls()}>
                       <th className="px-4 py-3.5 sm:px-5">Employee</th>
                       <th className="px-4 py-3.5 sm:px-5">Type</th>
                       <th className="px-4 py-3.5 sm:px-5">Action date</th>
@@ -1963,7 +2063,7 @@ function ManageEmployeeLeavesPage() {
                       <th className="px-4 py-3.5 text-right sm:px-5">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#E4E7EC]">
+                  <tbody className="divide-y divide-slate-100">
                     {regRows.length === 0 ? (
                       <tr>
                         <td colSpan={9} className="px-4 py-12 text-center text-[#6B7280]">
@@ -1976,7 +2076,11 @@ function ManageEmployeeLeavesPage() {
                       regRows.map((row) => {
                         const pending = String(row.reg_status).toLowerCase() === "pending";
                         return (
-                          <tr key={row.id} className="bg-white transition hover:bg-[#F9FAFB]">
+                          <tr
+                            key={row.id}
+                            id={regularizationRequestDomId(row.id)}
+                            className="bg-white transition hover:bg-slate-50/80"
+                          >
                             <td className="px-4 py-3 sm:px-5">
                               <div className="text-[14px] font-semibold text-[#1F2937]">
                                 {row.employee_name || `User #${row.user_id}`}
@@ -2032,7 +2136,7 @@ function ManageEmployeeLeavesPage() {
                                 <button
                                   type="button"
                                   onClick={() => void openRegDetail(row.id)}
-                                  className={zohoSecondaryBtnCls()}
+                                  className={btnGhostCls()}
                                 >
                                   <Eye className="h-3.5 w-3.5" aria-hidden />
                                   View
@@ -2088,7 +2192,7 @@ function ManageEmployeeLeavesPage() {
         </>
       ) : (
         <>
-          <div className={`${zohoPanelCls()} p-3 sm:p-4 lg:p-5 mx-3 sm:mx-4 lg:mx-0`}>
+          <div className={`${listCardCls()} p-4 sm:p-5`}>
             <button
               type="button"
               onClick={() => setMobileFiltersOpen((v) => !v)}
@@ -2096,11 +2200,11 @@ function ManageEmployeeLeavesPage() {
               aria-expanded={mobileFiltersOpen}
             >
               <div className="flex items-center gap-2 text-[#1F2937]">
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#008CD3] text-white">
+                <span className={iconBadgeCls("blue")}>
                   <Filter className="h-3.5 w-3.5" aria-hidden />
                 </span>
                 <div>
-                  <h2 className="text-[14px] font-semibold text-[#1F2937]">Filters</h2>
+                  <h2 className={dashSectionTitleCls}>Filters</h2>
                   <p className="text-[11px] text-[#6B7280]">
                     Tap to {mobileFiltersOpen ? "hide" : "show"}
                   </p>
@@ -2112,11 +2216,11 @@ function ManageEmployeeLeavesPage() {
               />
             </button>
             <div className="hidden items-center gap-2 text-[#1F2937] lg:flex">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#008CD3] text-white">
+              <span className={iconBadgeCls("blue")}>
                 <Filter className="h-3.5 w-3.5" aria-hidden />
               </span>
               <div>
-                <h2 className="text-[15px] font-semibold text-[#1F2937]">Filters</h2>
+                <h2 className={dashSectionTitleCls}>Filters</h2>
                 <p className="text-[12px] text-[#6B7280]">
                   Comp off requests assigned to you as reporting manager.
                 </p>
@@ -2177,14 +2281,14 @@ function ManageEmployeeLeavesPage() {
                   <button
                     type="button"
                     onClick={applyCompFilters}
-                    className={zohoPrimaryBtnCls(true)}
+                    className={btnBrandCls(true)}
                   >
                     Apply
                   </button>
                   <button
                     type="button"
                     onClick={resetCompFilters}
-                    className={zohoSecondaryBtnCls(true)}
+                    className={btnGhostCls(true)}
                   >
                     Reset
                   </button>
@@ -2194,23 +2298,23 @@ function ManageEmployeeLeavesPage() {
           </div>
 
           {compLoading ? (
-            <div className={`${zohoPanelCls()} mx-3 p-10 text-center text-[14px] text-[#6B7280] sm:mx-4 lg:mx-0`}>
+            <div className={`${listCardCls()} p-10 text-center text-[14px] text-slate-500`}>
               <RefreshCw className="mx-auto mb-2 h-7 w-7 animate-spin text-[#008CD3]" aria-hidden />
               Loading comp off requests…
             </div>
           ) : null}
 
           {compError && !compLoading ? (
-            <div className="mx-3 rounded-lg border border-[#F5C6C2] bg-[#FCE8E6] px-3 py-2.5 text-[13px] text-[#1F2937] sm:mx-4 lg:mx-0">
+            <div className="rounded-2xl border border-rose-200/80 bg-rose-50 px-4 py-3 text-[13px] text-rose-900">
               {compError}
             </div>
           ) : null}
 
           {!compLoading && !compError ? (
-            <div className={`${zohoPanelCls()} p-3 sm:p-4 lg:p-5 mx-3 overflow-hidden sm:mx-4 lg:mx-0 lg:p-0`}>
-              <div className="space-y-2.5 lg:hidden lg:p-0">
+            <div className={`${listCardCls()} p-4 sm:p-5 overflow-hidden lg:p-0`}>
+              <div className="space-y-3 lg:hidden lg:p-0">
                 {compRows.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-[#E4E7EC] bg-[#F9FAFB] px-4 py-10 text-center text-[#6B7280]">
+                  <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-12 text-center text-slate-500">
                     <p className="font-medium text-[#374151]">
                       No comp off requests match your filters.
                     </p>
@@ -2221,6 +2325,7 @@ function ManageEmployeeLeavesPage() {
                     return (
                       <CompOffRequestCard
                         key={row.id}
+                        domId={compOffRequestDomId(row.id)}
                         row={row}
                         pending={pending}
                         modalBusy={compModalSubmitting && compModal?.id === row.id}
@@ -2236,7 +2341,7 @@ function ManageEmployeeLeavesPage() {
               <div className="hidden overflow-x-auto lg:block">
                 <table className="min-w-[1040px] w-full border-collapse text-left text-sm">
                   <thead>
-                    <tr className="border-b border-[#E4E7EC] bg-[#F9FAFB] text-[10px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                    <tr className={tableHeadCls()}>
                       <th className="px-4 py-3.5 sm:px-5">Employee</th>
                       <th className="px-4 py-3.5 sm:px-5">Comp off date</th>
                       <th className="px-4 py-3.5 sm:px-5">Times</th>
@@ -2248,7 +2353,7 @@ function ManageEmployeeLeavesPage() {
                       <th className="px-4 py-3.5 text-right sm:px-5">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#E4E7EC]">
+                  <tbody className="divide-y divide-slate-100">
                     {compRows.length === 0 ? (
                       <tr>
                         <td colSpan={9} className="px-4 py-12 text-center text-[#6B7280]">
@@ -2261,7 +2366,11 @@ function ManageEmployeeLeavesPage() {
                       compRows.map((row) => {
                         const pending = String(row.query_status).toLowerCase() === "pending";
                         return (
-                          <tr key={row.id} className="bg-white transition hover:bg-[#F9FAFB]">
+                          <tr
+                            key={row.id}
+                            id={compOffRequestDomId(row.id)}
+                            className="bg-white transition hover:bg-slate-50/80"
+                          >
                             <td className="px-4 py-3 sm:px-5">
                               <div className="text-[14px] font-semibold text-[#1F2937]">
                                 {row.employee_name || `User #${row.user_id}`}
@@ -2312,7 +2421,7 @@ function ManageEmployeeLeavesPage() {
                                 <button
                                   type="button"
                                   onClick={() => void openCompDetail(row.id)}
-                                  className={zohoSecondaryBtnCls()}
+                                  className={btnGhostCls()}
                                 >
                                   <Eye className="h-3.5 w-3.5" aria-hidden />
                                   View
@@ -2359,7 +2468,7 @@ function ManageEmployeeLeavesPage() {
 
       {attModal ? (
         <div
-          className="fixed inset-0 z-[1000] flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
+          className={modalShellCls()}
           role="dialog"
           aria-modal="true"
           aria-labelledby="att-modal-title"
@@ -2370,10 +2479,10 @@ function ManageEmployeeLeavesPage() {
             aria-label="Close"
             onClick={() => !attModalSubmitting && setAttModal(null)}
           />
-          <div className="relative w-full max-w-md overflow-hidden rounded-t-xl border border-[#E4E7EC] bg-white shadow-xl sm:rounded-lg">
-            <div className="flex items-start justify-between border-b border-[#E4E7EC] px-4 py-3">
+          <div className={`relative ${modalPanelCls()}`}>
+            <div className="flex items-start justify-between border-b border-slate-100 px-1 pb-4">
               <div>
-                <h2 id="att-modal-title" className="text-[16px] font-semibold text-[#1F2937]">
+                <h2 id="att-modal-title" className={dashSectionTitleCls}>
                   {attModal.action === "approved"
                     ? "Approve attendance query"
                     : "Reject attendance query"}
@@ -2404,12 +2513,12 @@ function ManageEmployeeLeavesPage() {
                 />
               </label>
             </div>
-            <div className="flex flex-col gap-2 border-t border-[#E4E7EC] bg-[#F9FAFB] px-3 py-3 sm:flex-row sm:px-4">
+            <div className="flex flex-col gap-2 border-t border-slate-100 bg-slate-50/60 px-1 py-4 sm:flex-row">
               <button
                 type="button"
                 disabled={attModalSubmitting}
                 onClick={() => setAttModal(null)}
-                className={`${zohoSecondaryBtnCls(true)} sm:flex-1`}
+                className={`${btnGhostCls(true)} sm:flex-1`}
               >
                 Cancel
               </button>
@@ -2417,7 +2526,7 @@ function ManageEmployeeLeavesPage() {
                 type="button"
                 disabled={attModalSubmitting}
                 onClick={() => void submitAttModal()}
-                className={`${zohoPrimaryBtnCls(true)} sm:flex-1 ${
+                className={`${btnBrandCls(true)} sm:flex-1 ${
                   attModal.action === "rejected" ? "!bg-[#D93025] hover:!bg-[#B71C1C]" : ""
                 }`}
               >
@@ -2434,7 +2543,7 @@ function ManageEmployeeLeavesPage() {
 
       {regModal ? (
         <div
-          className="fixed inset-0 z-[1000000] flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
+          className={modalShellCls()}
           role="dialog"
           aria-modal="true"
           aria-labelledby="reg-modal-title"
@@ -2445,8 +2554,8 @@ function ManageEmployeeLeavesPage() {
             aria-label="Close"
             onClick={() => !regModalSubmitting && setRegModal(null)}
           />
-          <div className="relative w-full max-w-md overflow-hidden rounded-t-xl border border-[#E4E7EC] bg-white shadow-xl sm:rounded-lg">
-            <div className="flex items-start justify-between border-b border-[#E4E7EC] px-4 py-3">
+          <div className={`relative ${modalPanelCls()}`}>
+            <div className="flex items-start justify-between border-b border-slate-100 px-1 pb-4">
               <div>
                 <h2 id="reg-modal-title" className="text-[16px] font-semibold text-[#1F2937]">
                   {regModal.action === "approved"
@@ -2487,12 +2596,12 @@ function ManageEmployeeLeavesPage() {
                 />
               </label>
             </div>
-            <div className="flex flex-col gap-2 border-t border-[#E4E7EC] bg-[#F9FAFB] px-3 py-3 sm:flex-row sm:px-4">
+            <div className="flex flex-col gap-2 border-t border-slate-100 bg-slate-50/60 px-1 py-4 sm:flex-row">
               <button
                 type="button"
                 disabled={regModalSubmitting}
                 onClick={() => setRegModal(null)}
-                className={`${zohoSecondaryBtnCls(true)} sm:flex-1`}
+                className={`${btnGhostCls(true)} sm:flex-1`}
               >
                 Cancel
               </button>
@@ -2500,7 +2609,7 @@ function ManageEmployeeLeavesPage() {
                 type="button"
                 disabled={regModalSubmitting}
                 onClick={() => void submitRegModal()}
-                className={`${zohoPrimaryBtnCls(true)} sm:flex-1 ${
+                className={`${btnBrandCls(true)} sm:flex-1 ${
                   regModal.action === "rejected" ? "!bg-[#D93025] hover:!bg-[#B71C1C]" : ""
                 }`}
               >
@@ -2517,7 +2626,7 @@ function ManageEmployeeLeavesPage() {
 
       {regDetailLoading || (regDetail && !regModal) ? (
         <div
-          className="fixed inset-0 z-[999999] flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
+          className={modalShellCls()}
           role="dialog"
           aria-modal="true"
           aria-labelledby="reg-detail-title"
@@ -2528,7 +2637,7 @@ function ManageEmployeeLeavesPage() {
             aria-label="Close"
             onClick={() => !regDetailLoading && setRegDetail(null)}
           />
-          <div className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-xl border border-[#E4E7EC] bg-white shadow-xl sm:rounded-lg">
+          <div className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-slate-200/90 bg-white p-5 shadow-2xl sm:rounded-2xl">
             <div className="sticky top-0 flex items-start justify-between border-b border-[#E4E7EC] bg-white px-4 py-3">
               <div>
                 <h2 id="reg-detail-title" className="text-[16px] font-semibold text-[#1F2937]">
@@ -2637,7 +2746,7 @@ function ManageEmployeeLeavesPage() {
 
       {compModal ? (
         <div
-          className="fixed inset-0 z-[1000000] flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
+          className={modalShellCls()}
           role="dialog"
           aria-modal="true"
           aria-labelledby="comp-modal-title"
@@ -2648,8 +2757,8 @@ function ManageEmployeeLeavesPage() {
             aria-label="Close"
             onClick={() => !compModalSubmitting && setCompModal(null)}
           />
-          <div className="relative w-full max-w-md overflow-hidden rounded-t-xl border border-[#E4E7EC] bg-white shadow-xl sm:rounded-lg">
-            <div className="flex items-start justify-between border-b border-[#E4E7EC] px-4 py-3">
+          <div className={`relative ${modalPanelCls()}`}>
+            <div className="flex items-start justify-between border-b border-slate-100 px-1 pb-4">
               <div>
                 <h2 id="comp-modal-title" className="text-[16px] font-semibold text-[#1F2937]">
                   {compModal.action === "approved"
@@ -2690,12 +2799,12 @@ function ManageEmployeeLeavesPage() {
                 />
               </label>
             </div>
-            <div className="flex flex-col gap-2 border-t border-[#E4E7EC] bg-[#F9FAFB] px-3 py-3 sm:flex-row sm:px-4">
+            <div className="flex flex-col gap-2 border-t border-slate-100 bg-slate-50/60 px-1 py-4 sm:flex-row">
               <button
                 type="button"
                 disabled={compModalSubmitting}
                 onClick={() => setCompModal(null)}
-                className={`${zohoSecondaryBtnCls(true)} sm:flex-1`}
+                className={`${btnGhostCls(true)} sm:flex-1`}
               >
                 Cancel
               </button>
@@ -2703,7 +2812,7 @@ function ManageEmployeeLeavesPage() {
                 type="button"
                 disabled={compModalSubmitting}
                 onClick={() => void submitCompModal()}
-                className={`${zohoPrimaryBtnCls(true)} sm:flex-1 ${
+                className={`${btnBrandCls(true)} sm:flex-1 ${
                   compModal.action === "rejected" ? "!bg-[#D93025] hover:!bg-[#B71C1C]" : ""
                 }`}
               >
@@ -2720,7 +2829,7 @@ function ManageEmployeeLeavesPage() {
 
       {compDetailLoading || (compDetail && !compModal) ? (
         <div
-          className="fixed inset-0 z-[999999] flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
+          className={modalShellCls()}
           role="dialog"
           aria-modal="true"
           aria-labelledby="comp-detail-title"
@@ -2731,7 +2840,7 @@ function ManageEmployeeLeavesPage() {
             aria-label="Close"
             onClick={() => !compDetailLoading && setCompDetail(null)}
           />
-          <div className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-xl border border-[#E4E7EC] bg-white shadow-xl sm:rounded-lg">
+          <div className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-slate-200/90 bg-white p-5 shadow-2xl sm:rounded-2xl">
             <div className="sticky top-0 flex items-start justify-between border-b border-[#E4E7EC] bg-white px-4 py-3">
               <div>
                 <h2 id="comp-detail-title" className="text-[16px] font-semibold text-[#1F2937]">
@@ -2840,6 +2949,7 @@ function ManageEmployeeLeavesPage() {
         </div>
       ) : null}
     </section>
+    </div>
   );
 }
 
@@ -2853,14 +2963,14 @@ function MobileStatTile({
   tone: "amber" | "emerald" | "rose";
 }) {
   const tones = {
-    amber: "bg-[#FEF3E6] text-[#E8710A]",
-    emerald: "bg-[#E6F4EA] text-[#0F9D58]",
-    rose: "bg-[#FCE8E6] text-[#D93025]",
+    amber: statBoxCls("amber") + " text-amber-700",
+    emerald: statBoxCls("emerald") + " text-emerald-700",
+    rose: "rounded-xl bg-rose-50/70 px-2 py-2.5 text-center text-rose-700",
   };
   return (
-    <div className={`rounded-lg px-1.5 py-2 text-center ${tones[tone]}`}>
-      <p className="text-[9px] font-semibold uppercase tracking-wide">{label}</p>
-      <p className="mt-0.5 text-[16px] font-semibold tabular-nums">{value}</p>
+    <div className={tones[tone]}>
+      <p className="text-[9px] font-semibold uppercase tracking-wide opacity-80">{label}</p>
+      <p className="mt-0.5 text-[18px] font-semibold tabular-nums">{value}</p>
     </div>
   );
 }
@@ -2875,16 +2985,16 @@ function StatPill({
   tone: "amber" | "emerald" | "rose";
 }) {
   const tones = {
-    amber: "border-[#FEF3E6] bg-[#FEF3E6] text-[#E8710A]",
-    emerald: "border-[#E6F4EA] bg-[#E6F4EA] text-[#0F9D58]",
-    rose: "border-[#FCE8E6] bg-[#FCE8E6] text-[#D93025]",
+    amber: "border-amber-200/80 bg-amber-50 text-amber-700",
+    emerald: "border-emerald-200/80 bg-emerald-50 text-emerald-700",
+    rose: "border-rose-200/80 bg-rose-50 text-rose-700",
   };
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[12px] font-medium ${tones[tone]}`}
+      className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-[12px] font-semibold ${tones[tone]}`}
     >
       {label}
-      <span className="rounded bg-white/90 px-1.5 py-0.5 text-[11px] tabular-nums">
+      <span className="rounded-lg bg-white/90 px-1.5 py-0.5 text-[11px] tabular-nums shadow-sm">
         {value}
       </span>
     </span>
@@ -2902,28 +3012,35 @@ function CardField({
 }) {
   return (
     <div className={className}>
-      <dt className="text-[10px] font-semibold uppercase tracking-wide text-[#6B7280]">
-        {label}
-      </dt>
-      <dd className="mt-0.5 text-[13px] text-[#374151]">{children}</dd>
+      <dt className={dashLabelCls}>{label}</dt>
+      <dd className="mt-1 text-[13px] font-medium text-slate-800">{children}</dd>
     </div>
   );
 }
 
 function LeaveRowCard({
   row,
+  domId,
+  highlighted = false,
   disabled,
   onApprove,
   onReject,
 }: {
   row: LeaveRow;
+  domId?: string;
+  highlighted?: boolean;
   disabled: boolean;
   onApprove: () => void;
   onReject: () => void;
 }) {
   return (
-    <article className="rounded-lg border border-[#E4E7EC] bg-white p-3 transition active:bg-[#F9FAFB]">
-      <div className="flex items-start justify-between gap-2 border-b border-[#E4E7EC] pb-2.5">
+    <article
+      id={domId}
+      className={`${mobileRowCardCls()} ${
+        highlighted ? "ring-2 ring-[#008CD3]/40 shadow-md" : ""
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
         <div className="min-w-0 flex-1">
           <h3 className="truncate text-[15px] font-semibold text-[#1F2937]">
             {row.employee_name || `User #${row.user_id}`}
@@ -2966,7 +3083,7 @@ function LeaveRowCard({
           </p>
         </CardField>
       </dl>
-      <div className="mt-3 border-t border-[#E4E7EC] pt-2.5">
+      <div className="mt-4 border-t border-slate-100 pt-3">
         <LeaveActions
           layout="stacked"
           row={row}
@@ -2997,8 +3114,8 @@ function AttendanceQueryCard({
   onReject: () => void;
 }) {
   return (
-    <article className="rounded-lg border border-[#E4E7EC] bg-white p-3 transition active:bg-[#F9FAFB]">
-      <div className="flex items-start justify-between gap-2 border-b border-[#E4E7EC] pb-2.5">
+    <article className={mobileRowCardCls()}>
+      <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
         <div className="min-w-0 flex-1">
           <h3 className="truncate text-[15px] font-semibold text-[#1F2937]">{employeeName}</h3>
           {employeeEmail ? (
@@ -3021,7 +3138,7 @@ function AttendanceQueryCard({
           <p className="text-[13px] leading-relaxed text-[#6B7280]">{row.query_message}</p>
         </CardField>
       </dl>
-      <div className="mt-3 border-t border-[#E4E7EC] pt-2.5">
+      <div className="mt-4 border-t border-slate-100 pt-3">
         {pending ? (
           <div className="flex flex-col gap-2 sm:flex-row">
             <button
@@ -3069,6 +3186,7 @@ function AttendanceQueryCard({
 
 function CompOffRequestCard({
   row,
+  domId,
   pending,
   modalBusy,
   onView,
@@ -3076,6 +3194,7 @@ function CompOffRequestCard({
   onReject,
 }: {
   row: CompOffManagerRow;
+  domId?: string;
   pending: boolean;
   modalBusy: boolean;
   onView: () => void;
@@ -3083,8 +3202,8 @@ function CompOffRequestCard({
   onReject: () => void;
 }) {
   return (
-    <article className="rounded-lg border border-[#E4E7EC] bg-white p-3 transition active:bg-[#F9FAFB]">
-      <div className="flex items-start justify-between gap-2 border-b border-[#E4E7EC] pb-2.5">
+    <article id={domId} className={mobileRowCardCls()}>
+      <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
         <div className="min-w-0 flex-1">
           <h3 className="truncate text-[15px] font-semibold text-[#1F2937]">
             {row.employee_name || `User #${row.user_id}`}
@@ -3114,8 +3233,8 @@ function CompOffRequestCard({
           <p className="text-[13px] leading-relaxed text-[#6B7280]">{row.reason}</p>
         </CardField>
       </dl>
-      <div className="mt-3 flex flex-wrap gap-2 border-t border-[#E4E7EC] pt-2.5">
-        <button type="button" onClick={onView} className={zohoSecondaryBtnCls()}>
+      <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+        <button type="button" onClick={onView} className={btnGhostCls()}>
           <Eye className="h-4 w-4" aria-hidden />
           View
         </button>
@@ -3148,6 +3267,7 @@ function CompOffRequestCard({
 
 function RegularizationRequestCard({
   row,
+  domId,
   pending,
   modalBusy,
   onView,
@@ -3155,6 +3275,7 @@ function RegularizationRequestCard({
   onReject,
 }: {
   row: RegularizationManagerRow;
+  domId?: string;
   pending: boolean;
   modalBusy: boolean;
   onView: () => void;
@@ -3162,8 +3283,8 @@ function RegularizationRequestCard({
   onReject: () => void;
 }) {
   return (
-    <article className="rounded-lg border border-[#E4E7EC] bg-white p-3 transition active:bg-[#F9FAFB]">
-      <div className="flex items-start justify-between gap-2 border-b border-[#E4E7EC] pb-2.5">
+    <article id={domId} className={mobileRowCardCls()}>
+      <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
         <div className="min-w-0 flex-1">
           <h3 className="truncate text-[15px] font-semibold text-[#1F2937]">
             {row.employee_name || `User #${row.user_id}`}
@@ -3195,8 +3316,8 @@ function RegularizationRequestCard({
           <p className="text-[13px] leading-relaxed text-[#6B7280]">{row.reason}</p>
         </CardField>
       </dl>
-      <div className="mt-3 flex flex-wrap gap-2 border-t border-[#E4E7EC] pt-2.5">
-        <button type="button" onClick={onView} className={zohoSecondaryBtnCls()}>
+      <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+        <button type="button" onClick={onView} className={btnGhostCls()}>
           <Eye className="h-4 w-4" aria-hidden />
           View
         </button>
@@ -3293,4 +3414,17 @@ function LeaveActions({
   );
 }
 
-export default ManageEmployeeLeavesPage;
+export default function ManageEmployeeLeavesPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className={`${dashPageCls} flex flex-col items-center justify-center gap-3 py-24 text-slate-500`}>
+          <Loader2 className="h-8 w-8 animate-spin text-[#008CD3]" aria-hidden />
+          <p className="text-[14px]">Loading leave management…</p>
+        </div>
+      }
+    >
+      <ManageEmployeeLeavesPageContent />
+    </Suspense>
+  );
+}
